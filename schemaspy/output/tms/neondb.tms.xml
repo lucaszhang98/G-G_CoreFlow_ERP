@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?><database name="neondb" schema="tms" type="PostgreSQL - 17.5 (aa1f746)">
+   <tables>
+      <table name="container_legs" remarks="" schema="tms" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="container_leg_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="container_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="container_id" foreignKey="container_legs_container_id_fkey" implied="false" onDeleteCascade="true" schema="tms" table="containers"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="sequence_number" nullable="false" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="origin_location_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="location_id" foreignKey="container_legs_origin_location_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="locations"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="destination_location_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="location_id" foreignKey="container_legs_destination_location_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="locations"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="6" id="5" name="planned_departure" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="6" id="6" name="planned_arrival" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="6" id="7" name="actual_departure" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="6" id="8" name="actual_arrival" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="9" name="mode" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="10" name="carrier_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="carrier_id" foreignKey="container_legs_carrier_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="carriers"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="11" name="vehicle_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="vehicle_id" foreignKey="container_legs_vehicle_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="vehicles"/>
+         </column>
+         <column autoUpdated="false" defaultValue="'scheduled'::character varying" digits="0" id="12" name="status" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="13" name="notes" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="now()" digits="6" id="14" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="now()" digits="6" id="15" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="16" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="container_legs_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="17" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="container_legs_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="container_leg_id" sequenceNumberInPK="1"/>
+         <index name="container_legs_pkey" unique="true">
+            <column ascending="true" name="container_leg_id"/>
+         </index>
+         <index name="container_legs_container_id_sequence_number_key" unique="true">
+            <column ascending="true" name="container_id"/>
+            <column ascending="true" name="sequence_number"/>
+         </index>
+      </table>
+      <table name="containers" numRows="5" remarks="" schema="tms" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="container_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5">
+            <child column="container_id" foreignKey="container_legs_container_id_fkey" implied="false" onDeleteCascade="true" schema="tms" table="container_legs"/>
+         </column>
+         <column autoUpdated="false" defaultValue="'planned'::character varying" digits="0" id="1" name="status" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="notes" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="3" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="4" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="'sea_container'::character varying" digits="0" id="5" name="source_type" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="containers_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="7" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="containers_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="order_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="order_id" foreignKey="containers_order_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="orders"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="9" name="trailer_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="trailer_id" foreignKey="containers_trailer_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="trailers"/>
+         </column>
+         <primaryKey column="container_id" sequenceNumberInPK="1"/>
+         <index name="containers_pkey" unique="true">
+            <column ascending="true" name="container_id"/>
+         </index>
+         <checkConstraint constraint="((((source_type)::text = 'sea_container'::text) AND (order_id IS NOT NULL) AND (trailer_id IS NULL)) OR (((source_type)::text = 'company_trailer'::text) AND (trailer_id IS NOT NULL) AND (order_id IS NULL)))" name="containers_assignment_chk"/>
+         <checkConstraint constraint="((source_type)::text = ANY ((ARRAY['sea_container'::character varying, 'company_trailer'::character varying])::text[]))" name="containers_source_type_chk"/>
+      </table>
+      <table name="freight_bills" remarks="" schema="tms" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="freight_bill_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="reference_type" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="reference_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="carrier_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="carrier_id" foreignKey="freight_bills_carrier_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="carriers"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="bill_number" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="2" id="5" name="amount" nullable="true" remarks="" size="12" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="'USD'::character varying" digits="0" id="6" name="currency" nullable="true" remarks="" size="10" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="7" name="billing_date" nullable="true" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="due_date" nullable="true" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="'pending'::character varying" digits="0" id="9" name="status" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="10" name="notes" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="11" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="12" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="freight_bills_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="13" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="14" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="freight_bills_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="freight_bill_id" sequenceNumberInPK="1"/>
+         <index name="freight_bills_pkey" unique="true">
+            <column ascending="true" name="freight_bill_id"/>
+         </index>
+         <index name="freight_bills_bill_number_key" unique="true">
+            <column ascending="true" name="bill_number"/>
+         </index>
+      </table>
+   </tables>
+</database>

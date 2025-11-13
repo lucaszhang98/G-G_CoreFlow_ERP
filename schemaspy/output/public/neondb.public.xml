@@ -1,0 +1,707 @@
+<?xml version="1.0" encoding="UTF-8"?><database name="neondb" schema="public" type="PostgreSQL - 17.5 (aa1f746)">
+   <sequences>
+      <sequence increment="1" name="customers_id_seq" startValue="1"/>
+      <sequence increment="1" name="departments_id_seq" startValue="1"/>
+      <sequence increment="1" name="order_detail_id_seq" startValue="1"/>
+      <sequence increment="1" name="order_detail_item_id_seq" startValue="1"/>
+      <sequence increment="1" name="orders_order_id_seq" startValue="1"/>
+      <sequence increment="1" name="users_id_seq" startValue="1"/>
+   </sequences>
+   <tables>
+      <table name="appointment_types" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="false" defaultValue="null" digits="0" id="0" name="appointment_type_code" nullable="false" remarks="" size="50" type="varchar" typeCode="12">
+            <child column="appointment_type_code" foreignKey="delivery_appointments_appointment_type_code_fkey" implied="false" onDeleteCascade="false" schema="oms" table="delivery_appointments"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="description" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="default_duration_minutes" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="3" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="now()" digits="6" id="4" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="appointment_types_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="appointment_types_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="appointment_type_code" sequenceNumberInPK="1"/>
+         <index name="appointment_types_pkey" unique="true">
+            <column ascending="true" name="appointment_type_code"/>
+         </index>
+      </table>
+      <table name="calendar_dim" numRows="730" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="false" defaultValue="null" digits="0" id="0" name="calendar_date" nullable="false" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="year" nullable="false" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="quarter" nullable="false" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="month" nullable="false" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="month_name" nullable="true" remarks="" size="20" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="week_of_year" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="day_of_week" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="7" name="day_name" nullable="true" remarks="" size="20" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="is_weekend" nullable="true" remarks="" size="1" type="bool" typeCode="-7"/>
+         <column autoUpdated="false" defaultValue="false" digits="0" id="9" name="is_holiday" nullable="true" remarks="" size="1" type="bool" typeCode="-7"/>
+         <primaryKey column="calendar_date" sequenceNumberInPK="1"/>
+         <index name="calendar_dim_pkey" unique="true">
+            <column ascending="true" name="calendar_date"/>
+         </index>
+      </table>
+      <table name="carrier_service_levels" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="service_level_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="carrier_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="carrier_id" foreignKey="carrier_service_levels_carrier_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="carriers"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="service_level_code" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="description" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="transit_time_days" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="2" id="5" name="on_time_target" nullable="true" remarks="" size="5" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="effective_from" nullable="true" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="7" name="effective_to" nullable="true" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="8" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="now()" digits="6" id="9" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="10" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="carrier_service_levels_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="11" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="carrier_service_levels_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="service_level_id" sequenceNumberInPK="1"/>
+         <index name="carrier_service_levels_pkey" unique="true">
+            <column ascending="true" name="service_level_id"/>
+         </index>
+         <index name="carrier_service_levels_carrier_code_uniq" unique="true">
+            <column ascending="true" name="carrier_id"/>
+            <column ascending="true" name="service_level_code"/>
+         </index>
+      </table>
+      <table name="carriers" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="carrier_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5">
+            <child column="carrier_id" foreignKey="carrier_service_levels_carrier_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="carrier_service_levels"/>
+            <child column="carrier_id" foreignKey="drivers_carrier_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="drivers"/>
+            <child column="carrier_id" foreignKey="vehicles_carrier_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="vehicles"/>
+            <child column="carrier_id" foreignKey="container_legs_carrier_id_fkey" implied="false" onDeleteCascade="false" schema="tms" table="container_legs"/>
+            <child column="carrier_id" foreignKey="freight_bills_carrier_id_fkey" implied="false" onDeleteCascade="false" schema="tms" table="freight_bills"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="carrier_code" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="name" nullable="false" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="carrier_type" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="4" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="5" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="contact_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="contact_id" foreignKey="carriers_contact_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="contact_roles"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="7" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="carriers_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="carriers_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="carrier_id" sequenceNumberInPK="1"/>
+         <index name="carriers_pkey" unique="true">
+            <column ascending="true" name="carrier_id"/>
+         </index>
+         <index name="carriers_carrier_code_key" unique="true">
+            <column ascending="true" name="carrier_code"/>
+         </index>
+      </table>
+      <table name="contact_roles" numRows="138" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="contact_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5">
+            <child column="contact_id" foreignKey="carriers_contact_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="carriers"/>
+            <child column="contact_id" foreignKey="customers_contact_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="customers"/>
+            <child column="contact_id" foreignKey="drivers_contact_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="drivers"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="related_entity_type" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="related_entity_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="role" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="name" nullable="false" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="phone" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="email" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="7" name="notes" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="8" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="9" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="10" name="address_line1" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="11" name="address_line2" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="12" name="city" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="13" name="state" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="14" name="postal_code" nullable="true" remarks="" size="20" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="15" name="country" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="false" digits="0" id="16" name="is_primary" nullable="true" remarks="" size="1" type="bool" typeCode="-7"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="17" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="contact_roles_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="18" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="contact_roles_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="contact_id" sequenceNumberInPK="1"/>
+         <index name="contact_roles_pkey" unique="true">
+            <column ascending="true" name="contact_id"/>
+         </index>
+      </table>
+      <table name="customers" numRows="135" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="nextval('customers_id_seq'::regclass)" digits="0" id="0" name="id" nullable="false" remarks="" size="19" type="bigserial" typeCode="-5">
+            <child column="customer_id" foreignKey="orders_customer_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="orders"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="code" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="name" nullable="false" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="company_name" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="0" digits="2" id="4" name="credit_limit" nullable="true" remarks="" size="12" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="'active'::character varying" digits="0" id="5" name="status" nullable="true" remarks="" size="20" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="6" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="7" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="contact_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="contact_id" foreignKey="customers_contact_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="contact_roles"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="9" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="customers_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="10" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="customers_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="id" sequenceNumberInPK="1"/>
+         <index name="customers_pkey" unique="true">
+            <column ascending="true" name="id"/>
+         </index>
+         <index name="customers_code_key" unique="true">
+            <column ascending="true" name="code"/>
+         </index>
+      </table>
+      <table name="delivery_status_codes" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="false" defaultValue="null" digits="0" id="0" name="status_code" nullable="false" remarks="" size="50" type="varchar" typeCode="12">
+            <child column="status_code" foreignKey="events_log_status_code_fkey" implied="false" onDeleteCascade="false" schema="public" table="events_log"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="description" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="true" digits="0" id="2" name="is_active" nullable="true" remarks="" size="1" type="bool" typeCode="-7"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="3" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="now()" digits="6" id="4" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="delivery_status_codes_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="delivery_status_codes_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="status_code" sequenceNumberInPK="1"/>
+         <index name="delivery_status_codes_pkey" unique="true">
+            <column ascending="true" name="status_code"/>
+         </index>
+      </table>
+      <table name="departments" numRows="11" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="nextval('departments_id_seq'::regclass)" digits="0" id="0" name="id" nullable="false" remarks="" size="19" type="bigserial" typeCode="-5">
+            <child column="parent_id" foreignKey="departments_parent_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="departments"/>
+            <child column="department_id" foreignKey="trailers_department_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="trailers"/>
+            <child column="department_id" foreignKey="users_department_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="name" nullable="false" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="code" nullable="false" remarks="" size="20" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="parent_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="departments_parent_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="departments"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="manager_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="description" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="6" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="7" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="departments_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="9" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="departments_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="id" sequenceNumberInPK="1"/>
+         <index name="departments_pkey" unique="true">
+            <column ascending="true" name="id"/>
+         </index>
+         <index name="departments_code_key" unique="true">
+            <column ascending="true" name="code"/>
+         </index>
+      </table>
+      <table name="document_links" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="document_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5">
+            <child column="bol_document_id" foreignKey="outbound_shipments_bol_document_id_fkey" implied="false" onDeleteCascade="false" schema="wms" table="outbound_shipments"/>
+            <child column="load_sheet_document_id" foreignKey="outbound_shipments_load_sheet_document_id_fkey" implied="false" onDeleteCascade="false" schema="wms" table="outbound_shipments"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="entity_type" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="entity_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="document_type" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="document_name" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="document_url" nullable="false" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="metadata" nullable="true" remarks="" size="2147483647" type="jsonb" typeCode="1111"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="7" name="uploaded_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="uploaded_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="document_links_uploaded_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="now()" digits="6" id="9" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="now()" digits="6" id="10" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="11" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="document_links_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="12" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="document_links_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="document_id" sequenceNumberInPK="1"/>
+         <index name="document_links_pkey" unique="true">
+            <column ascending="true" name="document_id"/>
+         </index>
+      </table>
+      <table name="drivers" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="driver_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="carrier_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="carrier_id" foreignKey="drivers_carrier_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="carriers"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="driver_code" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="license_number" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="license_expiration" nullable="true" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="notes" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="'active'::character varying" digits="0" id="6" name="status" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="7" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="8" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="9" name="contact_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="contact_id" foreignKey="drivers_contact_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="contact_roles"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="10" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="drivers_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="11" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="drivers_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="driver_id" sequenceNumberInPK="1"/>
+         <index name="drivers_pkey" unique="true">
+            <column ascending="true" name="driver_id"/>
+         </index>
+         <index name="drivers_driver_code_key" unique="true">
+            <column ascending="true" name="driver_code"/>
+         </index>
+      </table>
+      <table name="events_log" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="event_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="entity_type" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="entity_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="event_type" nullable="false" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="6" id="4" name="event_time" nullable="false" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="location_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="location_id" foreignKey="events_log_location_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="locations"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="status_code" nullable="true" remarks="" size="50" type="varchar" typeCode="12">
+            <parent column="status_code" foreignKey="events_log_status_code_fkey" implied="false" onDeleteCascade="false" schema="public" table="delivery_status_codes"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="7" name="details" nullable="true" remarks="" size="2147483647" type="jsonb" typeCode="1111"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="8" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="9" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="events_log_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="now()" digits="6" id="10" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="11" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="events_log_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="event_id" sequenceNumberInPK="1"/>
+         <index name="events_log_pkey" unique="true">
+            <column ascending="true" name="event_id"/>
+         </index>
+         <index name="idx_events_log_entity" unique="false">
+            <column ascending="true" name="entity_type"/>
+            <column ascending="true" name="entity_id"/>
+         </index>
+         <index name="idx_shipment_events_entity" unique="false">
+            <column ascending="true" name="entity_type"/>
+            <column ascending="true" name="entity_id"/>
+         </index>
+         <index name="idx_shipment_events_time" unique="false">
+            <column ascending="true" name="event_time"/>
+         </index>
+      </table>
+      <table name="locations" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="location_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5">
+            <child column="location_id" foreignKey="delivery_appointments_location_id_fkey" implied="false" onDeleteCascade="false" schema="oms" table="delivery_appointments"/>
+            <child column="location_id" foreignKey="events_log_location_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="events_log"/>
+            <child column="location_id" foreignKey="warehouses_location_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="warehouses"/>
+            <child column="destination_location_id" foreignKey="container_legs_destination_location_id_fkey" implied="false" onDeleteCascade="false" schema="tms" table="container_legs"/>
+            <child column="origin_location_id" foreignKey="container_legs_origin_location_id_fkey" implied="false" onDeleteCascade="false" schema="tms" table="container_legs"/>
+            <child column="destination_location_id" foreignKey="outbound_shipments_destination_location_id_fkey" implied="false" onDeleteCascade="false" schema="wms" table="outbound_shipments"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="location_code" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="name" nullable="false" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="location_type" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="address_line1" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="address_line2" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="city" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="7" name="state" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="postal_code" nullable="true" remarks="" size="20" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="9" name="country" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="10" name="timezone" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="6" id="11" name="latitude" nullable="true" remarks="" size="10" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="null" digits="6" id="12" name="longitude" nullable="true" remarks="" size="10" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="13" name="notes" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="14" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="15" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="16" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="locations_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="17" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="locations_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="location_id" sequenceNumberInPK="1"/>
+         <index name="locations_pkey" unique="true">
+            <column ascending="true" name="location_id"/>
+         </index>
+         <index name="locations_location_code_key" unique="true">
+            <column ascending="true" name="location_code"/>
+         </index>
+      </table>
+      <table name="order_detail" numRows="10" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="nextval('order_detail_id_seq'::regclass)" digits="0" id="0" name="id" nullable="false" remarks="" size="19" type="bigserial" typeCode="-5">
+            <child column="detail_id" foreignKey="order_detail_item_detail_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="order_detail_item"/>
+            <child column="order_detail_id" foreignKey="inventory_lots_order_detail_id_fkey" implied="false" onDeleteCascade="true" schema="wms" table="inventory_lots"/>
+            <child column="order_detail_id" foreignKey="outbound_shipment_lines_order_detail_id_fkey" implied="false" onDeleteCascade="true" schema="wms" table="outbound_shipment_lines"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="order_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="order_id" foreignKey="order_detail_order_id_fkey" implied="false" onDeleteCascade="true" schema="public" table="orders"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="detail_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="order_detail_detail_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="order_detail_item"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="quantity" nullable="false" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="4" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="volume" nullable="true" remarks="" size="0" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="container_volume" nullable="true" remarks="" size="0" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="7" name="estimated_pallets" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="order_detail_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="9" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="10" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="order_detail_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="id" sequenceNumberInPK="1"/>
+         <index name="order_detail_pkey" unique="true">
+            <column ascending="true" name="id"/>
+         </index>
+         <index name="idx_order_detail_detail" unique="false">
+            <column ascending="true" name="detail_id"/>
+         </index>
+         <index name="idx_order_detail_order" unique="false">
+            <column ascending="true" name="order_id"/>
+         </index>
+      </table>
+      <table name="order_detail_item" numRows="8" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="nextval('order_detail_item_id_seq'::regclass)" digits="0" id="0" name="id" nullable="false" remarks="" size="19" type="bigserial" typeCode="-5">
+            <child column="detail_id" foreignKey="order_detail_detail_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="order_detail"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="detail_name" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="sku" nullable="false" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="description" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="0" digits="0" id="4" name="stock_quantity" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="'active'::character varying" digits="0" id="5" name="status" nullable="true" remarks="" size="20" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="6" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="7" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="fba" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="9" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="order_detail_item_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="10" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="order_detail_item_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="11" name="detail_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="order_detail_item_detail_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="order_detail"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="12" name="volume" nullable="true" remarks="" size="0" type="numeric" typeCode="2"/>
+         <primaryKey column="id" sequenceNumberInPK="1"/>
+         <index name="order_detail_item_pkey" unique="true">
+            <column ascending="true" name="id"/>
+         </index>
+         <index name="idx_order_detail_item_detail_code" unique="false">
+            <column ascending="true" name="detail_name"/>
+         </index>
+         <index name="order_detail_item_detail_code_key" unique="true">
+            <column ascending="true" name="detail_name"/>
+         </index>
+      </table>
+      <table name="orders" numRows="2" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="nextval('orders_order_id_seq'::regclass)" digits="0" id="0" name="order_id" nullable="false" remarks="" size="19" type="bigserial" typeCode="-5">
+            <child column="order_id" foreignKey="delivery_appointments_order_id_fkey" implied="false" onDeleteCascade="true" schema="oms" table="delivery_appointments"/>
+            <child column="order_id" foreignKey="order_allocations_order_id_fkey" implied="false" onDeleteCascade="true" schema="oms" table="order_allocations"/>
+            <child column="order_id" foreignKey="order_requirements_order_id_fkey" implied="false" onDeleteCascade="true" schema="oms" table="order_requirements"/>
+            <child column="order_id" foreignKey="order_detail_order_id_fkey" implied="false" onDeleteCascade="true" schema="public" table="order_detail"/>
+            <child column="order_id" foreignKey="containers_order_id_fkey" implied="false" onDeleteCascade="false" schema="tms" table="containers"/>
+            <child column="order_id" foreignKey="inbound_receipt_order_id_fkey" implied="false" onDeleteCascade="true" schema="wms" table="inbound_receipt"/>
+            <child column="order_id" foreignKey="inventory_lots_order_id_fkey" implied="false" onDeleteCascade="true" schema="wms" table="inventory_lots"/>
+            <child column="order_id" foreignKey="outbound_shipment_lines_order_id_fkey" implied="false" onDeleteCascade="true" schema="wms" table="outbound_shipment_lines"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="order_number" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="customer_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="orders_customer_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="customers"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="user_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="orders_user_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="order_date" nullable="false" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="'pending'::character varying" digits="0" id="5" name="status" nullable="true" remarks="" size="20" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="2" id="6" name="total_amount" nullable="false" remarks="" size="12" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="0" digits="2" id="7" name="discount_amount" nullable="true" remarks="" size="12" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="0" digits="2" id="8" name="tax_amount" nullable="true" remarks="" size="12" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="null" digits="2" id="9" name="final_amount" nullable="false" remarks="" size="12" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="10" name="notes" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="11" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="12" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="13" name="eta_date" nullable="true" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="14" name="lfd_date" nullable="true" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="15" name="pickup_date" nullable="true" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="16" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="orders_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="17" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="orders_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="order_id" sequenceNumberInPK="1"/>
+         <index name="orders_pkey" unique="true">
+            <column ascending="true" name="order_id"/>
+         </index>
+         <index name="idx_order_customer" unique="false">
+            <column ascending="true" name="customer_id"/>
+         </index>
+         <index name="idx_order_date" unique="false">
+            <column ascending="true" name="order_date"/>
+         </index>
+         <index name="idx_order_user" unique="false">
+            <column ascending="true" name="user_id"/>
+         </index>
+         <index name="orders_order_number_key" unique="true">
+            <column ascending="true" name="order_number"/>
+         </index>
+      </table>
+      <table name="shift_dim" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="shift_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="warehouse_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="warehouse_id" foreignKey="shift_dim_warehouse_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="warehouses"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="shift_code" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="description" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="6" id="4" name="start_time" nullable="true" remarks="" size="15" type="time" typeCode="92"/>
+         <column autoUpdated="false" defaultValue="null" digits="6" id="5" name="end_time" nullable="true" remarks="" size="15" type="time" typeCode="92"/>
+         <column autoUpdated="false" defaultValue="true" digits="0" id="6" name="is_active" nullable="true" remarks="" size="1" type="bool" typeCode="-7"/>
+         <primaryKey column="shift_id" sequenceNumberInPK="1"/>
+         <index name="shift_dim_pkey" unique="true">
+            <column ascending="true" name="shift_id"/>
+         </index>
+      </table>
+      <table name="trailers" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="trailer_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5">
+            <child column="trailer_id" foreignKey="containers_trailer_id_fkey" implied="false" onDeleteCascade="false" schema="tms" table="containers"/>
+            <child column="trailer_id" foreignKey="outbound_shipments_trailer_id_fkey" implied="false" onDeleteCascade="false" schema="wms" table="outbound_shipments"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="department_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="trailers_department_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="departments"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="trailer_code" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="trailer_type" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="2" id="4" name="length_feet" nullable="true" remarks="" size="5" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="null" digits="2" id="5" name="capacity_weight" nullable="true" remarks="" size="12" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="null" digits="2" id="6" name="capacity_volume" nullable="true" remarks="" size="12" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="'available'::character varying" digits="0" id="7" name="status" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="notes" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="9" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="10" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="11" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="trailers_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="12" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="trailers_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="trailer_id" sequenceNumberInPK="1"/>
+         <index name="trailers_pkey" unique="true">
+            <column ascending="true" name="trailer_id"/>
+         </index>
+         <index name="trailers_trailer_code_key" unique="true">
+            <column ascending="true" name="trailer_code"/>
+         </index>
+      </table>
+      <table name="unload_methods" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="false" defaultValue="null" digits="0" id="0" name="method_code" nullable="false" remarks="" size="50" type="varchar" typeCode="12">
+            <child column="unload_method_code" foreignKey="inbound_receipt_unload_method_code_fkey" implied="false" onDeleteCascade="false" schema="wms" table="inbound_receipt"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="description" nullable="true" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="true" digits="0" id="2" name="is_active" nullable="true" remarks="" size="1" type="bool" typeCode="-7"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="3" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="now()" digits="6" id="4" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="unload_methods_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="unload_methods_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="method_code" sequenceNumberInPK="1"/>
+         <index name="unload_methods_pkey" unique="true">
+            <column ascending="true" name="method_code"/>
+         </index>
+      </table>
+      <table name="users" numRows="10" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="nextval('users_id_seq'::regclass)" digits="0" id="0" name="id" nullable="false" remarks="" size="19" type="bigserial" typeCode="-5">
+            <child column="created_by" foreignKey="delivery_appointments_created_by_fkey" implied="false" onDeleteCascade="false" schema="oms" table="delivery_appointments"/>
+            <child column="updated_by" foreignKey="delivery_appointments_updated_by_fkey" implied="false" onDeleteCascade="false" schema="oms" table="delivery_appointments"/>
+            <child column="created_by" foreignKey="order_allocations_created_by_fkey" implied="false" onDeleteCascade="false" schema="oms" table="order_allocations"/>
+            <child column="updated_by" foreignKey="order_allocations_updated_by_fkey" implied="false" onDeleteCascade="false" schema="oms" table="order_allocations"/>
+            <child column="created_by" foreignKey="order_requirements_created_by_fkey" implied="false" onDeleteCascade="false" schema="oms" table="order_requirements"/>
+            <child column="updated_by" foreignKey="order_requirements_updated_by_fkey" implied="false" onDeleteCascade="false" schema="oms" table="order_requirements"/>
+            <child column="created_by" foreignKey="appointment_types_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="appointment_types"/>
+            <child column="updated_by" foreignKey="appointment_types_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="appointment_types"/>
+            <child column="created_by" foreignKey="carrier_service_levels_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="carrier_service_levels"/>
+            <child column="updated_by" foreignKey="carrier_service_levels_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="carrier_service_levels"/>
+            <child column="created_by" foreignKey="carriers_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="carriers"/>
+            <child column="updated_by" foreignKey="carriers_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="carriers"/>
+            <child column="created_by" foreignKey="contact_roles_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="contact_roles"/>
+            <child column="updated_by" foreignKey="contact_roles_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="contact_roles"/>
+            <child column="created_by" foreignKey="customers_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="customers"/>
+            <child column="updated_by" foreignKey="customers_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="customers"/>
+            <child column="created_by" foreignKey="delivery_status_codes_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="delivery_status_codes"/>
+            <child column="updated_by" foreignKey="delivery_status_codes_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="delivery_status_codes"/>
+            <child column="created_by" foreignKey="departments_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="departments"/>
+            <child column="updated_by" foreignKey="departments_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="departments"/>
+            <child column="created_by" foreignKey="document_links_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="document_links"/>
+            <child column="updated_by" foreignKey="document_links_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="document_links"/>
+            <child column="uploaded_by" foreignKey="document_links_uploaded_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="document_links"/>
+            <child column="created_by" foreignKey="drivers_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="drivers"/>
+            <child column="updated_by" foreignKey="drivers_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="drivers"/>
+            <child column="created_by" foreignKey="events_log_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="events_log"/>
+            <child column="updated_by" foreignKey="events_log_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="events_log"/>
+            <child column="created_by" foreignKey="locations_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="locations"/>
+            <child column="updated_by" foreignKey="locations_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="locations"/>
+            <child column="created_by" foreignKey="order_detail_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="order_detail"/>
+            <child column="updated_by" foreignKey="order_detail_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="order_detail"/>
+            <child column="created_by" foreignKey="order_detail_item_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="order_detail_item"/>
+            <child column="updated_by" foreignKey="order_detail_item_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="order_detail_item"/>
+            <child column="created_by" foreignKey="orders_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="orders"/>
+            <child column="updated_by" foreignKey="orders_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="orders"/>
+            <child column="user_id" foreignKey="orders_user_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="orders"/>
+            <child column="created_by" foreignKey="trailers_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="trailers"/>
+            <child column="updated_by" foreignKey="trailers_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="trailers"/>
+            <child column="created_by" foreignKey="unload_methods_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="unload_methods"/>
+            <child column="updated_by" foreignKey="unload_methods_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="unload_methods"/>
+            <child column="created_by" foreignKey="users_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+            <child column="updated_by" foreignKey="users_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+            <child column="created_by" foreignKey="vehicles_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="vehicles"/>
+            <child column="updated_by" foreignKey="vehicles_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="vehicles"/>
+            <child column="contact_user_id" foreignKey="warehouses_contact_user_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="warehouses"/>
+            <child column="created_by" foreignKey="warehouses_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="warehouses"/>
+            <child column="updated_by" foreignKey="warehouses_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="warehouses"/>
+            <child column="created_by" foreignKey="container_legs_created_by_fkey" implied="false" onDeleteCascade="false" schema="tms" table="container_legs"/>
+            <child column="updated_by" foreignKey="container_legs_updated_by_fkey" implied="false" onDeleteCascade="false" schema="tms" table="container_legs"/>
+            <child column="created_by" foreignKey="containers_created_by_fkey" implied="false" onDeleteCascade="false" schema="tms" table="containers"/>
+            <child column="updated_by" foreignKey="containers_updated_by_fkey" implied="false" onDeleteCascade="false" schema="tms" table="containers"/>
+            <child column="created_by" foreignKey="freight_bills_created_by_fkey" implied="false" onDeleteCascade="false" schema="tms" table="freight_bills"/>
+            <child column="updated_by" foreignKey="freight_bills_updated_by_fkey" implied="false" onDeleteCascade="false" schema="tms" table="freight_bills"/>
+            <child column="created_by" foreignKey="inbound_receipt_created_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="inbound_receipt"/>
+            <child column="received_by" foreignKey="inbound_receipt_received_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="inbound_receipt"/>
+            <child column="updated_by" foreignKey="inbound_receipt_updated_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="inbound_receipt"/>
+            <child column="created_by" foreignKey="inventory_lots_created_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="inventory_lots"/>
+            <child column="updated_by" foreignKey="inventory_lots_updated_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="inventory_lots"/>
+            <child column="created_by" foreignKey="outbound_shipment_lines_created_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="outbound_shipment_lines"/>
+            <child column="updated_by" foreignKey="outbound_shipment_lines_updated_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="outbound_shipment_lines"/>
+            <child column="created_by" foreignKey="outbound_shipments_created_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="outbound_shipments"/>
+            <child column="loaded_by" foreignKey="outbound_shipments_loaded_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="outbound_shipments"/>
+            <child column="updated_by" foreignKey="outbound_shipments_updated_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="outbound_shipments"/>
+            <child column="created_by" foreignKey="wms_labor_logs_created_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="wms_labor_logs"/>
+            <child column="updated_by" foreignKey="wms_labor_logs_updated_by_fkey" implied="false" onDeleteCascade="false" schema="wms" table="wms_labor_logs"/>
+            <child column="user_id" foreignKey="wms_labor_logs_user_id_fkey" implied="false" onDeleteCascade="false" schema="wms" table="wms_labor_logs"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="username" nullable="false" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="email" nullable="false" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="password_hash" nullable="false" remarks="" size="255" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="full_name" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="department_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="users_department_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="departments"/>
+         </column>
+         <column autoUpdated="false" defaultValue="'employee'::character varying" digits="0" id="6" name="role" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="'active'::character varying" digits="0" id="7" name="status" nullable="true" remarks="" size="20" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="8" name="phone" nullable="true" remarks="" size="20" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="9" name="avatar_url" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="10" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="11" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="12" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="users_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="13" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="users_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="id" sequenceNumberInPK="1"/>
+         <index name="users_pkey" unique="true">
+            <column ascending="true" name="id"/>
+         </index>
+         <index name="idx_users_department" unique="false">
+            <column ascending="true" name="department_id"/>
+         </index>
+         <index name="idx_users_email" unique="false">
+            <column ascending="true" name="email"/>
+         </index>
+         <index name="users_email_key" unique="true">
+            <column ascending="true" name="email"/>
+         </index>
+         <index name="users_username_key" unique="true">
+            <column ascending="true" name="username"/>
+         </index>
+      </table>
+      <table name="vehicles" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="vehicle_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5">
+            <child column="vehicle_id" foreignKey="container_legs_vehicle_id_fkey" implied="false" onDeleteCascade="false" schema="tms" table="container_legs"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="carrier_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="carrier_id" foreignKey="vehicles_carrier_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="carriers"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="vehicle_code" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="plate_number" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="vehicle_type" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="vin" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="2" id="6" name="capacity_weight" nullable="true" remarks="" size="12" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="null" digits="2" id="7" name="capacity_volume" nullable="true" remarks="" size="12" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="'active'::character varying" digits="0" id="8" name="status" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="9" name="notes" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="10" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="11" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="12" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="vehicles_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="13" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="vehicles_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="vehicle_id" sequenceNumberInPK="1"/>
+         <index name="vehicles_pkey" unique="true">
+            <column ascending="true" name="vehicle_id"/>
+         </index>
+         <index name="vehicles_plate_number_key" unique="true">
+            <column ascending="true" name="plate_number"/>
+         </index>
+         <index name="vehicles_vehicle_code_key" unique="true">
+            <column ascending="true" name="vehicle_code"/>
+         </index>
+      </table>
+      <table name="warehouses" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="null" digits="0" id="0" name="warehouse_id" nullable="false" remarks="" size="19" type="int8" typeCode="-5">
+            <child column="warehouse_id" foreignKey="shift_dim_warehouse_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="shift_dim"/>
+            <child column="warehouse_id" foreignKey="inbound_receipt_warehouse_id_fkey" implied="false" onDeleteCascade="false" schema="wms" table="inbound_receipt"/>
+            <child column="warehouse_id" foreignKey="inventory_lots_warehouse_id_fkey" implied="false" onDeleteCascade="false" schema="wms" table="inventory_lots"/>
+            <child column="warehouse_id" foreignKey="outbound_shipments_warehouse_id_fkey" implied="false" onDeleteCascade="false" schema="wms" table="outbound_shipments"/>
+            <child column="warehouse_id" foreignKey="putaway_tasks_warehouse_id_fkey" implied="false" onDeleteCascade="false" schema="wms" table="putaway_tasks"/>
+            <child column="warehouse_id" foreignKey="wms_labor_logs_warehouse_id_fkey" implied="false" onDeleteCascade="false" schema="wms" table="wms_labor_logs"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="location_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="location_id" foreignKey="warehouses_location_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="locations"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="warehouse_code" nullable="true" remarks="" size="50" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="name" nullable="false" remarks="" size="200" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="2" id="4" name="capacity_cbm" nullable="true" remarks="" size="12" type="numeric" typeCode="2"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="operating_hours" nullable="true" remarks="" size="2147483647" type="jsonb" typeCode="1111"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="notes" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="7" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="CURRENT_TIMESTAMP" digits="6" id="8" name="updated_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="9" name="contact_user_id" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="warehouses_contact_user_id_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="10" name="created_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="warehouses_created_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="11" name="updated_by" nullable="true" remarks="" size="19" type="int8" typeCode="-5">
+            <parent column="id" foreignKey="warehouses_updated_by_fkey" implied="false" onDeleteCascade="false" schema="public" table="users"/>
+         </column>
+         <primaryKey column="warehouse_id" sequenceNumberInPK="1"/>
+         <index name="warehouses_pkey" unique="true">
+            <column ascending="true" name="warehouse_id"/>
+         </index>
+         <index name="warehouses_warehouse_code_key" unique="true">
+            <column ascending="true" name="warehouse_code"/>
+         </index>
+      </table>
+   </tables>
+</database>

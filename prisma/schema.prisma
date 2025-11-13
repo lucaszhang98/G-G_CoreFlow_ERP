@@ -1,0 +1,354 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model appointment_types {
+  appointment_type_code    String    @id @db.VarChar(50)
+  description              String?   @db.VarChar(200)
+  default_duration_minutes Int?
+  created_at               DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model calendar_dim {
+  calendar_date DateTime @id @db.Date
+  year          Int
+  quarter       Int
+  month         Int
+  month_name    String?  @db.VarChar(20)
+  week_of_year  Int?
+  day_of_week   Int?
+  day_name      String?  @db.VarChar(20)
+  is_weekend    Boolean?
+  is_holiday    Boolean? @default(false)
+}
+
+model carrier_service_levels {
+  service_level_id   BigInt    @id @default(autoincrement())
+  carrier_id         BigInt?
+  service_level_code String    @db.VarChar(50)
+  description        String?   @db.VarChar(200)
+  transit_time_days  Int?
+  on_time_target     Decimal?  @db.Decimal(5, 2)
+  effective_from     DateTime? @db.Date
+  effective_to       DateTime? @db.Date
+  created_at         DateTime? @default(now()) @db.Timestamptz(6)
+  carriers           carriers? @relation(fields: [carrier_id], references: [carrier_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([carrier_id, service_level_code], map: "carrier_service_levels_carrier_code_uniq")
+}
+
+model carriers {
+  carrier_id             BigInt                   @id @default(autoincrement())
+  carrier_code           String?                  @unique @db.VarChar(50)
+  name                   String                   @db.VarChar(200)
+  carrier_type           String?                  @db.VarChar(50)
+  created_at             DateTime?                @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime?                @default(now()) @db.Timestamptz(6)
+  contact_id             BigInt?
+  carrier_service_levels carrier_service_levels[]
+  contact_roles          contact_roles?           @relation(fields: [contact_id], references: [contact_id], onDelete: NoAction, onUpdate: NoAction)
+  drivers                drivers[]
+  vehicles               vehicles[]
+}
+
+model contact_roles {
+  contact_id          BigInt      @id @default(autoincrement())
+  related_entity_type String      @db.VarChar(50)
+  related_entity_id   BigInt
+  role                String      @db.VarChar(50)
+  name                String      @db.VarChar(100)
+  phone               String?     @db.VarChar(50)
+  email               String?     @db.VarChar(200)
+  notes               String?
+  created_at          DateTime?   @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime?   @default(now()) @db.Timestamptz(6)
+  address_line1       String?     @db.VarChar(200)
+  address_line2       String?     @db.VarChar(200)
+  city                String?     @db.VarChar(100)
+  state               String?     @db.VarChar(100)
+  postal_code         String?     @db.VarChar(20)
+  country             String?     @db.VarChar(100)
+  is_primary          Boolean?    @default(false)
+  carriers            carriers[]
+  customers           customers[]
+  drivers             drivers[]
+}
+
+model customers {
+  id            BigInt         @id @default(autoincrement())
+  code          String         @unique @db.VarChar(50)
+  name          String         @db.VarChar(200)
+  company_name  String?        @db.VarChar(200)
+  credit_limit  Decimal?       @default(0) @db.Decimal(12, 2)
+  status        String?        @default("active") @db.VarChar(20)
+  created_at    DateTime?      @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime?      @default(now()) @db.Timestamptz(6)
+  contact_id    BigInt?
+  contact_roles contact_roles? @relation(fields: [contact_id], references: [contact_id], onDelete: NoAction, onUpdate: NoAction)
+  orders        orders[]
+}
+
+model delivery_status_codes {
+  status_code String       @id @db.VarChar(50)
+  description String?      @db.VarChar(200)
+  is_active   Boolean?     @default(true)
+  created_at  DateTime?    @default(now()) @db.Timestamptz(6)
+  events_log  events_log[]
+}
+
+model departments {
+  id                BigInt        @id @default(autoincrement())
+  name              String        @db.VarChar(100)
+  code              String        @unique @db.VarChar(20)
+  parent_id         BigInt?
+  manager_id        BigInt?
+  description       String?
+  created_at        DateTime?     @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime?     @default(now()) @db.Timestamptz(6)
+  departments       departments?  @relation("departmentsTodepartments", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_departments departments[] @relation("departmentsTodepartments")
+  trailers          trailers[]
+  users             users[]
+}
+
+model document_links {
+  document_id   BigInt    @id @default(autoincrement())
+  entity_type   String    @db.VarChar(50)
+  entity_id     BigInt
+  document_type String    @db.VarChar(50)
+  document_name String?   @db.VarChar(200)
+  document_url  String
+  metadata      Json?
+  uploaded_at   DateTime? @default(now()) @db.Timestamptz(6)
+  uploaded_by   BigInt?
+  users         users?    @relation(fields: [uploaded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model drivers {
+  driver_id          BigInt         @id @default(autoincrement())
+  carrier_id         BigInt?
+  driver_code        String?        @unique @db.VarChar(50)
+  license_number     String?        @db.VarChar(100)
+  license_expiration DateTime?      @db.Date
+  notes              String?
+  status             String?        @default("active") @db.VarChar(50)
+  created_at         DateTime?      @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime?      @default(now()) @db.Timestamptz(6)
+  contact_id         BigInt?
+  carriers           carriers?      @relation(fields: [carrier_id], references: [carrier_id], onDelete: NoAction, onUpdate: NoAction)
+  contact_roles      contact_roles? @relation(fields: [contact_id], references: [contact_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model events_log {
+  event_id              BigInt                 @id @default(autoincrement())
+  entity_type           String                 @db.VarChar(50)
+  entity_id             BigInt
+  event_type            String                 @db.VarChar(100)
+  event_time            DateTime               @db.Timestamptz(6)
+  location_id           BigInt?
+  status_code           String?                @db.VarChar(50)
+  details               Json?
+  created_at            DateTime?              @default(now()) @db.Timestamptz(6)
+  created_by            BigInt?
+  users                 users?                 @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  locations             locations?             @relation(fields: [location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
+  delivery_status_codes delivery_status_codes? @relation(fields: [status_code], references: [status_code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([entity_type, entity_id], map: "idx_events_log_entity")
+  @@index([entity_type, entity_id], map: "idx_shipment_events_entity")
+  @@index([event_time], map: "idx_shipment_events_time")
+}
+
+model locations {
+  location_id   BigInt       @id @default(autoincrement())
+  location_code String?      @unique @db.VarChar(50)
+  name          String       @db.VarChar(200)
+  location_type String       @db.VarChar(50)
+  address_line1 String?      @db.VarChar(200)
+  address_line2 String?      @db.VarChar(200)
+  city          String?      @db.VarChar(100)
+  state         String?      @db.VarChar(100)
+  postal_code   String?      @db.VarChar(20)
+  country       String?      @db.VarChar(100)
+  timezone      String?      @db.VarChar(100)
+  latitude      Decimal?     @db.Decimal(10, 6)
+  longitude     Decimal?     @db.Decimal(10, 6)
+  notes         String?
+  created_at    DateTime?    @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime?    @default(now()) @db.Timestamptz(6)
+  events_log    events_log[]
+  warehouses    warehouses[]
+}
+
+model order_detail {
+  id                                                          BigInt              @id @default(autoincrement())
+  order_id                                                    BigInt?
+  detail_id                                                   BigInt?
+  quantity                                                    Int
+  created_at                                                  DateTime?           @default(now()) @db.Timestamptz(6)
+  volume                                                      Decimal?            @db.Decimal
+  container_volume                                            Decimal?            @db.Decimal
+  estimated_pallets                                           Int?
+  created_by                                                  BigInt?
+  updated_at                                                  DateTime?           @default(now()) @db.Timestamptz(6)
+  updated_by                                                  BigInt?
+  users_order_detail_created_byTousers                        users?              @relation("order_detail_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_detail_item_order_detail_detail_idToorder_detail_item order_detail_item?  @relation("order_detail_detail_idToorder_detail_item", fields: [detail_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders                                                      orders?             @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)
+  users_order_detail_updated_byTousers                        users?              @relation("order_detail_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_detail_item_order_detail_item_detail_idToorder_detail order_detail_item[] @relation("order_detail_item_detail_idToorder_detail")
+
+  @@index([detail_id], map: "idx_order_detail_detail")
+  @@index([order_id], map: "idx_order_detail_order")
+}
+
+model order_detail_item {
+  id                                                     BigInt         @id @default(autoincrement())
+  detail_name                                            String         @unique(map: "order_detail_item_detail_code_key") @db.VarChar(50)
+  sku                                                    String         @db.VarChar(200)
+  description                                            String?
+  stock_quantity                                         Int?           @default(0)
+  status                                                 String?        @default("active") @db.VarChar(20)
+  created_at                                             DateTime?      @default(now()) @db.Timestamptz(6)
+  updated_at                                             DateTime?      @default(now()) @db.Timestamptz(6)
+  fba                                                    String?        @db.VarChar(100)
+  created_by                                             BigInt?
+  updated_by                                             BigInt?
+  detail_id                                              BigInt?
+  volume                                                 Decimal?       @db.Decimal
+  order_detail_order_detail_detail_idToorder_detail_item order_detail[] @relation("order_detail_detail_idToorder_detail_item")
+  users_order_detail_item_created_byTousers              users?         @relation("order_detail_item_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_detail_order_detail_item_detail_idToorder_detail order_detail?  @relation("order_detail_item_detail_idToorder_detail", fields: [detail_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_order_detail_item_updated_byTousers              users?         @relation("order_detail_item_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([detail_name], map: "idx_order_detail_item_detail_code")
+}
+
+model orders {
+  order_id                       BigInt         @id @default(autoincrement())
+  order_number                   String         @unique @db.VarChar(50)
+  customer_id                    BigInt?
+  user_id                        BigInt?
+  order_date                     DateTime       @db.Date
+  status                         String?        @default("pending") @db.VarChar(20)
+  total_amount                   Decimal        @db.Decimal(12, 2)
+  discount_amount                Decimal?       @default(0) @db.Decimal(12, 2)
+  tax_amount                     Decimal?       @default(0) @db.Decimal(12, 2)
+  final_amount                   Decimal        @db.Decimal(12, 2)
+  notes                          String?
+  created_at                     DateTime?      @default(now()) @db.Timestamptz(6)
+  updated_at                     DateTime?      @default(now()) @db.Timestamptz(6)
+  eta_date                       DateTime?      @db.Date
+  lfd_date                       DateTime?      @db.Date
+  pickup_date                    DateTime?      @db.Date
+  created_by                     BigInt?
+  updated_by                     BigInt?
+  order_detail                   order_detail[]
+  users_orders_created_byTousers users?         @relation("orders_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customers                      customers?     @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_orders_updated_byTousers users?         @relation("orders_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_orders_user_idTousers    users?         @relation("orders_user_idTousers", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([customer_id], map: "idx_order_customer")
+  @@index([order_date], map: "idx_order_date")
+  @@index([user_id], map: "idx_order_user")
+}
+
+model shift_dim {
+  shift_id     BigInt      @id @default(autoincrement())
+  warehouse_id BigInt?
+  shift_code   String      @db.VarChar(50)
+  description  String?     @db.VarChar(200)
+  start_time   DateTime?   @db.Time(6)
+  end_time     DateTime?   @db.Time(6)
+  is_active    Boolean?    @default(true)
+  warehouses   warehouses? @relation(fields: [warehouse_id], references: [warehouse_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model trailers {
+  trailer_id      BigInt       @id @default(autoincrement())
+  department_id   BigInt?
+  trailer_code    String?      @unique @db.VarChar(50)
+  trailer_type    String?      @db.VarChar(50)
+  length_feet     Decimal?     @db.Decimal(5, 2)
+  capacity_weight Decimal?     @db.Decimal(12, 2)
+  capacity_volume Decimal?     @db.Decimal(12, 2)
+  status          String?      @default("available") @db.VarChar(50)
+  notes           String?
+  created_at      DateTime?    @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?    @default(now()) @db.Timestamptz(6)
+  departments     departments? @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model unload_methods {
+  method_code String    @id @db.VarChar(50)
+  description String?   @db.VarChar(200)
+  is_active   Boolean?  @default(true)
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model users {
+  id                                                    BigInt              @id @default(autoincrement())
+  username                                              String              @unique @db.VarChar(50)
+  email                                                 String              @unique @db.VarChar(100)
+  password_hash                                         String              @db.VarChar(255)
+  full_name                                             String?             @db.VarChar(100)
+  department_id                                         BigInt?
+  role                                                  String?             @default("employee") @db.VarChar(50)
+  status                                                String?             @default("active") @db.VarChar(20)
+  phone                                                 String?             @db.VarChar(20)
+  avatar_url                                            String?
+  created_at                                            DateTime?           @default(now()) @db.Timestamptz(6)
+  updated_at                                            DateTime?           @default(now()) @db.Timestamptz(6)
+  document_links                                        document_links[]
+  events_log                                            events_log[]
+  order_detail_order_detail_created_byTousers           order_detail[]      @relation("order_detail_created_byTousers")
+  order_detail_order_detail_updated_byTousers           order_detail[]      @relation("order_detail_updated_byTousers")
+  order_detail_item_order_detail_item_created_byTousers order_detail_item[] @relation("order_detail_item_created_byTousers")
+  order_detail_item_order_detail_item_updated_byTousers order_detail_item[] @relation("order_detail_item_updated_byTousers")
+  orders_orders_created_byTousers                       orders[]            @relation("orders_created_byTousers")
+  orders_orders_updated_byTousers                       orders[]            @relation("orders_updated_byTousers")
+  orders_orders_user_idTousers                          orders[]            @relation("orders_user_idTousers")
+  departments                                           departments?        @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses                                            warehouses[]
+
+  @@index([department_id], map: "idx_users_department")
+  @@index([email], map: "idx_users_email")
+}
+
+model vehicles {
+  vehicle_id      BigInt    @id @default(autoincrement())
+  carrier_id      BigInt?
+  vehicle_code    String?   @unique @db.VarChar(50)
+  plate_number    String?   @unique @db.VarChar(50)
+  vehicle_type    String?   @db.VarChar(50)
+  vin             String?   @db.VarChar(100)
+  capacity_weight Decimal?  @db.Decimal(12, 2)
+  capacity_volume Decimal?  @db.Decimal(12, 2)
+  status          String?   @default("active") @db.VarChar(50)
+  notes           String?
+  created_at      DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime? @default(now()) @db.Timestamptz(6)
+  carriers        carriers? @relation(fields: [carrier_id], references: [carrier_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model warehouses {
+  warehouse_id    BigInt      @id @default(autoincrement())
+  location_id     BigInt?
+  warehouse_code  String?     @unique @db.VarChar(50)
+  name            String      @db.VarChar(200)
+  capacity_cbm    Decimal?    @db.Decimal(12, 2)
+  operating_hours Json?
+  notes           String?
+  created_at      DateTime?   @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?   @default(now()) @db.Timestamptz(6)
+  contact_user_id BigInt?
+  shift_dim       shift_dim[]
+  users           users?      @relation(fields: [contact_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  locations       locations?  @relation(fields: [location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
+}

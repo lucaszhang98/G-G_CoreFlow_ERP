@@ -1,0 +1,6 @@
+inbound_receipt
+outbound_shipments
+putaway_tasks
+wms_labor_logs
+outbound_shipment_lines
+inventory_lots
