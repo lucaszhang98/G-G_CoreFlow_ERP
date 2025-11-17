@@ -246,6 +246,8 @@ model orders {
   eta_date                       DateTime?      @db.Date
   lfd_date                       DateTime?      @db.Date
   pickup_date                    DateTime?      @db.Date
+  ready_date                     DateTime?      @db.Date
+  return_deadline                DateTime?      @db.Date
   created_by                     BigInt?
   updated_by                     BigInt?
   order_detail                   order_detail[]

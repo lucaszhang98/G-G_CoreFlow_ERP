@@ -368,12 +368,12 @@
                                 </thead>
                                 <tbody>
                                 <tr>
-                                    <td>containers_assignment_chk</td>
-                                    <td>((((source_type)::text &#61; &#39;sea_container&#39;::text) AND (order_id IS NOT NULL) AND (trailer_id IS NULL)) OR (((source_type)::text &#61; &#39;company_trailer&#39;::text) AND (trailer_id IS NOT NULL) AND (order_id IS NULL)))</td>
-                                </tr>
-                                <tr>
                                     <td>containers_source_type_chk</td>
                                     <td>((source_type)::text &#61; ANY ((ARRAY[&#39;sea_container&#39;::character varying, &#39;company_trailer&#39;::character varying])::text[]))</td>
+                                </tr>
+                                <tr>
+                                    <td>containers_assignment_chk</td>
+                                    <td>((((source_type)::text &#61; &#39;sea_container&#39;::text) AND (order_id IS NOT NULL) AND (trailer_id IS NULL)) OR (((source_type)::text &#61; &#39;company_trailer&#39;::text) AND (trailer_id IS NOT NULL) AND (order_id IS NULL)))</td>
                                 </tr>
                                 </tbody>
                             </table>
