@@ -12,12 +12,15 @@
   PRISMA_CLI_BINARY_TARGETS = "rhel-openssl-3.0.x"
 
 # Netlify Next.js 插件配置
-# 这个插件会自动处理 Next.js 的构建和部署
+# 这个插件会自动处理 Next.js 的构建和部署，包括函数打包和依赖管理
 # 注意：不需要添加任何 inputs 参数，插件会自动处理
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
 # 函数配置
+# 注意：不要使用 included_files = ["**"]，这会让函数包变得非常大
+# Netlify Next.js 插件会自动处理必要的文件打包
 [functions]
-  included_files = ["**"]
+  # 只包含必要的文件，避免打包整个 node_modules
+  # Prisma Client 和相关依赖会由插件自动处理
   node_bundler = "esbuild"
