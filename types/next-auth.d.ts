@@ -24,6 +24,7 @@ declare module "next-auth/jwt" {
     id?: string
     username?: string
     role?: string
+    name?: string // 添加 name 字段到 JWT token
   }
 }
 

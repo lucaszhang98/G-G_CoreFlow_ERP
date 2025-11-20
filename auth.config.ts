@@ -6,45 +6,54 @@ export const authConfig = {
   pages: {
     signIn: "/login",
   },
-  callbacks: {
-    authorized({ auth, request: { nextUrl } }) {
-      const isLoggedIn = !!auth?.user
-      const { pathname } = nextUrl
-      
-      // 公开路由（不需要登录）
-      const publicPaths = ["/login", "/api/auth"]
-      const isPublicPath = publicPaths.some((path) => pathname.startsWith(path))
-      
-      // 如果是公开路由，允许访问
-      if (isPublicPath) {
-        // 如果已登录用户访问登录页，重定向到仪表盘
-        if (isLoggedIn && pathname.startsWith("/login")) {
-          return Response.redirect(new URL("/dashboard", nextUrl))
-        }
-        return true
-      }
-      
-      // 如果未登录且不是公开路由，拒绝访问（会重定向到登录页）
-      if (!isLoggedIn) {
-        return false
-      }
-      
-      return true
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // 24 hours
+  },
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+      },
     },
+  },
+  callbacks: {
     async jwt({ token, user }) {
+      // 如果 user 存在，更新 token
       if (user) {
-        token.id = user.id
-        token.username = user.username
-        token.role = user.role
+        token.id = user.id || ""
+        token.username = user.username || undefined
+        token.role = user.role || undefined
+        // 确保 name 也被存储（用于 session 中显示）
+        token.name = user.name || user.username || user.id || ""
       }
-      return token
+      // 确保 token 始终返回
+      return token || {}
     },
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string
-        session.user.username = token.username as string
-        session.user.role = token.role as string
+      // 如果 session 不存在，返回空对象
+      if (!session) {
+        return { user: {} } as any
       }
+
+      // 如果 session.user 不存在，创建它
+      if (!session.user) {
+        session.user = {} as any
+      }
+
+      // 安全地填充用户信息
+      if (token) {
+        session.user.id = token.id ? String(token.id) : ""
+        session.user.username = token.username ? String(token.username) : undefined
+        session.user.role = token.role ? String(token.role) : undefined
+        session.user.name = token.name ? String(token.name) : (token.username ? String(token.username) : undefined)
+      }
+
       return session
     },
   },
@@ -57,40 +66,58 @@ export const authConfig = {
       },
       async authorize(credentials) {
         if (!credentials?.username || !credentials?.password) {
+          console.log("认证失败: 缺少用户名或密码")
           return null
         }
 
-        // 延迟加载 Prisma，避免在 Edge Middleware 中被检测到
-        const { default: prisma } = await import("./lib/prisma")
+        try {
+          // 延迟加载 Prisma，避免在 Edge Middleware 中被检测到
+          const { default: prisma } = await import("./lib/prisma")
 
-        const user = await prisma.users.findUnique({
-          where: {
-            username: credentials.username as string,
-          },
-        })
+          const user = await prisma.users.findUnique({
+            where: {
+              username: credentials.username as string,
+            },
+          })
 
-        if (!user || user.status !== "active") {
+          if (!user) {
+            console.log(`认证失败: 用户 ${credentials.username} 不存在`)
+            return null
+          }
+
+          if (user.status !== "active") {
+            console.log(`认证失败: 用户 ${credentials.username} 状态为 ${user.status}`)
+            return null
+          }
+
+          const passwordsMatch = await bcrypt.compare(
+            credentials.password as string,
+            user.password_hash
+          )
+
+          if (!passwordsMatch) {
+            console.log(`认证失败: 用户 ${credentials.username} 密码错误`)
+            return null
+          }
+
+          console.log(`认证成功: 用户 ${credentials.username} 登录成功`)
+          return {
+            id: user.id.toString(),
+            name: user.full_name || user.username,
+            email: user.email,
+            username: user.username,
+            role: user.role || undefined,
+          }
+        } catch (error) {
+          console.error("Authentication error:", error)
           return null
-        }
-
-        const passwordsMatch = await bcrypt.compare(
-          credentials.password as string,
-          user.password_hash
-        )
-
-        if (!passwordsMatch) {
-          return null
-        }
-
-        return {
-          id: user.id.toString(),
-          name: user.full_name || user.username,
-          email: user.email,
-          username: user.username,
-          role: user.role || undefined,
         }
       },
     }),
   ],
+  // 信任的主机（用于生产环境）
+  trustHost: true,
+  // 调试模式（生产环境也开启，帮助诊断）
+  debug: process.env.NODE_ENV === "production",
 } satisfies NextAuthConfig
 

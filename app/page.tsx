@@ -1,12 +1,7 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/auth"
 
 export default async function Home() {
-  const session = await auth()
-  
-  if (session) {
-    redirect("/dashboard")
-  } else {
-    redirect("/login")
-  }
+  // 根路径直接重定向到登录页
+  // middleware 会处理已登录用户的重定向
+  redirect("/login")
 }

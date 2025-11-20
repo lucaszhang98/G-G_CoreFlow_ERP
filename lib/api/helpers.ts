@@ -30,7 +30,7 @@ export async function checkAuth() {
 
 /**
  * 检查用户权限
- * @param allowedRoles 允许的角色列表
+ * @param allowedRoles 允许的角色列表（例如 ['admin'] 或 ['admin', 'oms_manager']）
  */
 export async function checkPermission(allowedRoles: string[]) {
   const authResult = await checkAuth();
@@ -38,12 +38,53 @@ export async function checkPermission(allowedRoles: string[]) {
     return authResult;
   }
 
-  const user = await prisma.users.findUnique({
-    where: { id: BigInt(authResult.user!.id) },
-    select: { role: true },
-  });
+  const user = authResult.user;
+  if (!user) {
+    return {
+      error: NextResponse.json(
+        { error: '请先登录' },
+        { status: 401 }
+      ),
+      user: null,
+    };
+  }
 
-  if (!user || !allowedRoles.includes(user.role || '')) {
+  // 如果允许的角色列表包含 'admin'，且用户角色是 'admin'，直接通过
+  // admin 用户拥有完整权限
+  if (allowedRoles.includes('admin') && user.role === 'admin') {
+    return {
+      error: null,
+      user: user,
+    };
+  }
+
+  try {
+    // 从数据库查询最新角色（以防 session 中的角色不是最新的）
+    const dbUser = await prisma.users.findUnique({
+      where: { id: BigInt(user.id) },
+      select: { role: true, status: true },
+    });
+
+    // 检查用户是否存在且状态为活跃
+    if (!dbUser || dbUser.status !== 'active') {
+      return {
+        error: NextResponse.json(
+          { error: '用户不存在或已被禁用' },
+          { status: 403 }
+        ),
+        user: null,
+      };
+    }
+
+    // admin 用户拥有所有权限
+    const userRole = dbUser.role || user.role;
+    if (userRole === 'admin' || allowedRoles.includes(userRole || '')) {
+      return {
+        error: null,
+        user: user,
+      };
+    }
+
     return {
       error: NextResponse.json(
         { error: '权限不足' },
@@ -51,12 +92,16 @@ export async function checkPermission(allowedRoles: string[]) {
       ),
       user: null,
     };
+  } catch (error) {
+    console.error('Permission check error:', error);
+    return {
+      error: NextResponse.json(
+        { error: '权限检查失败，请稍后重试' },
+        { status: 500 }
+      ),
+      user: null,
+    };
   }
-
-  return {
-    error: null,
-    user: authResult.user,
-  };
 }
 
 /**
