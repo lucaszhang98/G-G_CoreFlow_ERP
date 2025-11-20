@@ -1,7 +1,6 @@
 import type { NextAuthConfig } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
-import prisma from "./lib/prisma"
 
 export const authConfig = {
   pages: {
@@ -60,6 +59,9 @@ export const authConfig = {
         if (!credentials?.username || !credentials?.password) {
           return null
         }
+
+        // 延迟加载 Prisma，避免在 Edge Middleware 中被检测到
+        const { default: prisma } = await import("./lib/prisma")
 
         const user = await prisma.users.findUnique({
           where: {

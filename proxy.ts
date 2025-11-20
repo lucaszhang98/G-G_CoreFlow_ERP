@@ -3,6 +3,9 @@ import { NextResponse } from "next/server"
 
 // Next.js 16 使用 proxy.ts 替代 middleware.ts
 // NextAuth.js v5 的 auth() 函数返回的 middleware 可以直接作为 proxy 使用
+// 确保使用 Node.js 运行时，不使用 Edge Runtime（避免 Prisma 原生模块问题）
+export const runtime = 'nodejs'
+
 export default auth((req) => {
   // NextAuth.js v5 的 authorized callback 已经处理了路由保护
   // proxy 只需要调用 auth 函数即可
