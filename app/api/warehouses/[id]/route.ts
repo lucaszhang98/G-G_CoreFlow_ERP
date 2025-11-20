@@ -58,9 +58,9 @@ export async function GET(
       },
     });
 
-    const totalLots = inventoryStats.reduce((sum, stat) => sum + stat._count.inventory_lot_id, 0);
-    const availableLots = inventoryStats.find(s => s.status === 'available')?._count.inventory_lot_id || 0;
-    const reservedLots = inventoryStats.find(s => s.status === 'reserved')?._count.inventory_lot_id || 0;
+    const totalLots = inventoryStats.reduce((sum: number, stat: any) => sum + stat._count.inventory_lot_id, 0);
+    const availableLots = inventoryStats.find((s: any) => s.status === 'available')?._count.inventory_lot_id || 0;
+    const reservedLots = inventoryStats.find((s: any) => s.status === 'reserved')?._count.inventory_lot_id || 0;
 
     return NextResponse.json({
       data: {
