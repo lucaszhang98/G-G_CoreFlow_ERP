@@ -62,7 +62,7 @@ export async function GET(
     const drivers = serviceLevel.carriers?.drivers || [];
 
     return NextResponse.json({
-      data: serializeBigInt(drivers.map(driver => ({
+      data: serializeBigInt(drivers.map((driver: any) => ({
         driver_id: driver.driver_id,
         driver_code: driver.driver_code,
         license_number: driver.license_number,
