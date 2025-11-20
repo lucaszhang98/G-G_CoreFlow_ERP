@@ -1,9 +1,8 @@
 # Netlify 配置文件
 # 这个文件会被 Netlify 自动读取，用于配置构建和部署过程
-# 放在项目根目录（GitHub 仓库根目录）
 
 [build]
-  # 构建命令：直接在项目根目录执行构建
+  # 构建命令
   command = "npm run build"
 
 [build.environment]
@@ -14,16 +13,11 @@
 
 # Netlify Next.js 插件配置
 # 这个插件会自动处理 Next.js 的构建和部署
+# 注意：不需要添加任何 inputs 参数，插件会自动处理
 [[plugins]]
   package = "@netlify/plugin-nextjs"
-  [plugins.inputs]
-    # 跳过 middleware functions
-    # 原因：Prisma 的原生模块（libquery_engine）无法在 Edge Runtime 中运行
-    # 由于我们已经在每个页面中使用 auth() 进行认证检查，不需要 middleware 层面的保护
-    skipMiddlewareFunctions = true
 
-# 函数配置 - 确保使用 Node.js 运行时
+# 函数配置
 [functions]
   included_files = ["**"]
   node_bundler = "esbuild"
-
