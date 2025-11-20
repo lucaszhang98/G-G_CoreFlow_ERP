@@ -215,7 +215,7 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
           <CardContent>
             {customer.orders && customer.orders.length > 0 ? (
               <div className="space-y-4">
-                {customer.orders.map((order) => (
+                {customer.orders.map((order: any) => (
                   <div
                     key={order.order_id.toString()}
                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
