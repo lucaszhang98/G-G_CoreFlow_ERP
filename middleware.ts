@@ -5,11 +5,6 @@ export default auth((req) => {
   const { pathname } = req.nextUrl
   const session = req.auth
 
-  // 调试日志（仅在开发环境）
-  if (process.env.NODE_ENV === "development") {
-    console.log("Middleware:", { pathname, hasSession: !!session?.user, userId: session?.user?.id })
-  }
-
   // 处理根路径
   if (pathname === "/") {
     if (session?.user) {

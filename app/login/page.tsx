@@ -40,30 +40,14 @@ export default function LoginPage() {
         callbackUrl: "/dashboard",
       })
 
-      console.log("登录结果:", result) // 调试日志
-
-      // 严格检查：只有 result.ok === true 才算成功
-      if (result?.error) {
-        console.error("登录错误:", result.error)
+      if (result?.error || result?.ok !== true) {
         setError("用户名或密码错误，请重试")
-        setLoading(false)
-        return // 明确返回，防止继续执行
-      }
-      
-      // 必须明确检查 ok === true，不允许 undefined 或其他值
-      if (result?.ok !== true) {
-        console.error("登录失败 - result.ok 不是 true:", result)
-        setError("登录失败，请检查用户名和密码")
         setLoading(false)
         return
       }
       
-      // 登录成功，等待一下确保 cookie 已设置，然后跳转
-      setTimeout(() => {
-        window.location.href = "/dashboard"
-      }, 200)
+      window.location.href = "/dashboard"
     } catch (error) {
-      console.error("登录异常:", error)
       setError("登录失败，请稍后重试")
       setLoading(false)
     }

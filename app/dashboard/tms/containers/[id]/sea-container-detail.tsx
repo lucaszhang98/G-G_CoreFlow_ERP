@@ -2,11 +2,12 @@
 
 import * as React from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, XCircle } from "lucide-react"
+import { formatDate, getStatusBadge, formatCurrency, formatNumber } from "@/lib/utils"
 
 interface SeaContainerDetailProps {
   container: any
@@ -29,44 +30,6 @@ export function SeaContainerDetail({ container }: SeaContainerDetailProps) {
     )
   }
 
-  // 格式化函数
-  const formatDate = (date: Date | string | null) => {
-    if (!date) return "-"
-    const d = new Date(date)
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
-  const formatCurrency = (amount: string | number | null | any) => {
-    if (!amount) return "-"
-    const numValue = typeof amount === 'string' ? parseFloat(amount) : Number(amount)
-    if (isNaN(numValue)) return "-"
-    return `$${numValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`
-  }
-
-  const formatNumber = (value: number | null | string | any) => {
-    if (!value && value !== 0) return "-"
-    const numValue = typeof value === 'string' 
-      ? parseFloat(value) 
-      : Number(value)
-    if (isNaN(numValue)) return "-"
-    return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  }
-
-  const getStatusBadge = (status: string | null) => {
-    if (!status) return <Badge variant="secondary">-</Badge>
-    const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" }> = {
-      pending: { label: '待处理', variant: 'secondary' },
-      transit: { label: '运输中', variant: 'default' },
-      delivered: { label: '已交付', variant: 'default' },
-      canceled: { label: '已取消', variant: 'destructive' },
-      rejected: { label: '已拒绝', variant: 'destructive' },
-    }
-    const statusInfo = statusMap[status] || { label: status, variant: 'secondary' as const }
-    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
-  }
 
   // 获取日期颜色（用于ETA/LFD）
   const getDateColor = (date: Date | string | null, type: 'eta' | 'lfd') => {

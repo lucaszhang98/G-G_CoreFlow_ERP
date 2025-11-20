@@ -66,12 +66,10 @@ export const authConfig = {
       },
       async authorize(credentials) {
         if (!credentials?.username || !credentials?.password) {
-          console.log("认证失败: 缺少用户名或密码")
           return null
         }
 
         try {
-          // 延迟加载 Prisma，避免在 Edge Middleware 中被检测到
           const { default: prisma } = await import("./lib/prisma")
 
           const user = await prisma.users.findUnique({
@@ -80,13 +78,7 @@ export const authConfig = {
             },
           })
 
-          if (!user) {
-            console.log(`认证失败: 用户 ${credentials.username} 不存在`)
-            return null
-          }
-
-          if (user.status !== "active") {
-            console.log(`认证失败: 用户 ${credentials.username} 状态为 ${user.status}`)
+          if (!user || user.status !== "active") {
             return null
           }
 
@@ -96,11 +88,9 @@ export const authConfig = {
           )
 
           if (!passwordsMatch) {
-            console.log(`认证失败: 用户 ${credentials.username} 密码错误`)
             return null
           }
 
-          console.log(`认证成功: 用户 ${credentials.username} 登录成功`)
           return {
             id: user.id.toString(),
             name: user.full_name || user.username,
@@ -109,15 +99,11 @@ export const authConfig = {
             role: user.role || undefined,
           }
         } catch (error) {
-          console.error("Authentication error:", error)
           return null
         }
       },
     }),
   ],
-  // 信任的主机（用于生产环境）
   trustHost: true,
-  // 调试模式（生产环境也开启，帮助诊断）
-  debug: process.env.NODE_ENV === "production",
 } satisfies NextAuthConfig
 

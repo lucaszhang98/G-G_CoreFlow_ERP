@@ -14,16 +14,7 @@ interface ContainerDetailPageProps {
 export default async function ContainerDetailPage({ params }: ContainerDetailPageProps) {
   const session = await auth()
 
-  // 调试日志
-  console.log("ContainerDetailPage session check:", {
-    hasSession: !!session,
-    hasUser: !!session?.user,
-    userId: session?.user?.id,
-    username: session?.user?.username,
-  })
-
   if (!session?.user) {
-    console.error("ContainerDetailPage: 未找到 session 或 user，重定向到登录页")
     redirect("/login")
   }
 
@@ -125,7 +116,6 @@ export default async function ContainerDetailPage({ params }: ContainerDetailPag
       },
     })
   } catch (error: any) {
-    console.error('获取容器详情失败:', error)
     if (error?.code === 'P2025') {
       notFound()
     }

@@ -66,14 +66,6 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
     },
   })
   } catch (error: any) {
-    console.error('获取订单详情失败:', error)
-    console.error('错误详情:', {
-      id: resolvedParams.id,
-      errorMessage: error?.message,
-      errorCode: error?.code,
-      errorStack: error?.stack,
-    })
-    // 如果是 Prisma 错误，返回更友好的错误信息
     if (error?.code === 'P2025') {
       notFound()
     }

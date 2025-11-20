@@ -1,25 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/auth'
+import { checkAuth, parsePaginationParams, buildPaginationResponse, serializeBigInt } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
-import { serializeBigInt } from '@/lib/api/helpers'
 
 // GET - 获取容器列表
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth()
-    if (!session?.user) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 })
-    }
+    const authResult = await checkAuth()
+    if (authResult.error) return authResult.error
 
     const searchParams = request.nextUrl.searchParams
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)))
+    const { page, limit } = parsePaginationParams(searchParams, 'created_at', 'desc')
     const search = searchParams.get('search') || ''
     const sourceType = searchParams.get('source_type') || ''
     const status = searchParams.get('status') || ''
 
     // 构建查询条件
-    const where: any = {}
+    const where: {
+      OR?: Array<{ orders: { order_number: { contains: string; mode: 'insensitive' } } }>
+      source_type?: string
+      status?: string
+    } = {}
 
     // 搜索条件（搜索容器ID、订单号）
     if (search) {
@@ -105,17 +105,10 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({
-      data: serializedContainers,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    })
+    return NextResponse.json(
+      buildPaginationResponse(serializedContainers, total, page, limit)
+    )
   } catch (error: any) {
-    console.error('获取容器列表失败:', error)
     return NextResponse.json(
       { error: error.message || '获取容器列表失败' },
       { status: 500 }

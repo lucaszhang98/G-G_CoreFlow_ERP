@@ -139,16 +139,13 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
       const idField = getIdField()
       const id = (item as any)[idField]
       if (!id && id !== 0) {
-        console.error('无法获取ID字段:', { idField, item, config: config.idField })
         toast.error('无法获取ID，请刷新页面重试')
         return
       }
-      const idString = String(id) // 确保ID是字符串
+      const idString = String(id)
       const detailUrl = `${config.detailPath}/${idString}`
-      console.log('跳转到详情页:', { idField, id, idString, detailUrl, item })
       router.push(detailUrl)
     } catch (error) {
-      console.error('查看详情失败:', error)
       toast.error('查看详情失败，请刷新页面重试')
     }
   }

@@ -29,24 +29,8 @@ import prisma from "@/lib/prisma"
 export default async function DashboardPage() {
   const session = await auth()
 
-  // 调试日志（生产环境也记录，帮助诊断问题）
-  console.log("Dashboard session check:", {
-    hasSession: !!session,
-    hasUser: !!session?.user,
-    userId: session?.user?.id,
-    username: session?.user?.username,
-    name: session?.user?.name,
-    role: session?.user?.role,
-  })
-
   if (!session?.user) {
-    console.error("Dashboard: 未找到 session 或 user，重定向到登录页")
     redirect("/login")
-  }
-
-  // 确保 user 对象有必要的字段
-  if (!session.user.name && !session.user.username) {
-    console.error("Dashboard: user 缺少 name 和 username", session.user)
   }
 
   // 获取统计数据（这里先使用模拟数据，后续可以连接真实API）
@@ -506,7 +490,6 @@ async function getDashboardStats() {
       pendingOutbound: pendingOutboundCount,
     }
   } catch (error) {
-    console.error("获取仪表盘统计数据失败:", error)
     // 返回默认值
     return {
       todayOrders: 0,

@@ -12,13 +12,13 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Eye, Search } from "lucide-react"
 import { DataTable } from "@/components/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
+import { formatDate, getStatusBadge, getContainerTypeBadge } from "@/lib/utils"
 
 interface Container {
   container_id: string
@@ -80,8 +80,6 @@ export function ContainerTable() {
       setData(result.data || [])
       setTotal(result.pagination?.total || 0)
     } catch (error: any) {
-      console.error('获取容器列表失败:', error)
-      // 只在非网络错误时显示 toast（避免重复提示）
       if (!error.message?.includes('fetch')) {
         toast.error(error.message || '获取数据失败')
       }
@@ -94,60 +92,6 @@ export function ContainerTable() {
     fetchData()
   }, [fetchData])
 
-  const formatDate = React.useCallback((date: string | Date | null) => {
-    if (!date) return "-"
-    
-    // 尝试解析日期
-    let d: Date
-    if (date instanceof Date) {
-      d = date
-    } else if (typeof date === 'string') {
-      d = new Date(date)
-    } else {
-      return "-"
-    }
-    
-    // 检查日期是否有效
-    if (isNaN(d.getTime())) {
-      console.warn('无效的日期:', date)
-      return "-"
-    }
-    
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    
-    // 再次检查结果是否有效
-    if (isNaN(year) || isNaN(Number(month)) || isNaN(Number(day))) {
-      console.warn('日期格式化失败:', { date, year, month, day })
-      return "-"
-    }
-    
-    return `${year}-${month}-${day}`
-  }, [])
-
-  const getStatusBadge = React.useCallback((status: string | null) => {
-    if (!status) return <Badge variant="secondary">-</Badge>
-    const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-      pending: { label: '待处理', variant: 'secondary' },
-      transit: { label: '运输中', variant: 'default' },
-      delivered: { label: '已交付', variant: 'default' },
-      canceled: { label: '已取消', variant: 'destructive' },
-      rejected: { label: '已拒绝', variant: 'destructive' },
-    }
-    const statusInfo = statusMap[status] || { label: status, variant: 'outline' as const }
-    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
-  }, [])
-
-  const getSourceTypeBadge = React.useCallback((sourceType: string) => {
-    const typeMap: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
-      sea_container: { label: '海柜', variant: 'default' },
-      company_trailer: { label: '公司拖车', variant: 'secondary' },
-    }
-    const typeInfo = typeMap[sourceType] || { label: sourceType, variant: 'outline' as const }
-    return <Badge variant={typeInfo.variant}>{typeInfo.label}</Badge>
-  }, [])
-
   const columns: ColumnDef<Container>[] = React.useMemo(() => [
     {
       accessorKey: "container_id",
@@ -159,7 +103,7 @@ export function ContainerTable() {
     {
       accessorKey: "source_type",
       header: "容器类型",
-      cell: ({ row }) => getSourceTypeBadge(row.original.source_type),
+      cell: ({ row }) => getContainerTypeBadge(row.original.source_type),
     },
     {
       accessorKey: "status",
@@ -215,21 +159,16 @@ export function ContainerTable() {
           e.preventDefault()
           e.stopPropagation()
           
-          // 确保 containerId 是有效的字符串
           if (!containerId || containerId === 'undefined' || containerId === 'null' || containerId === '') {
-            console.error('无效的容器ID:', { containerId, container })
             toast.error('无法获取容器ID')
             return
           }
           
           const url = `/dashboard/tms/containers/${containerId}`
           
-          // Next.js App Router 的 router.push 不返回 Promise，直接调用即可
           try {
             router.push(url)
-          } catch (error) {
-            console.error('router.push 失败:', error)
-            // 如果 router.push 失败，使用 window.location 作为备选
+          } catch {
             window.location.href = url
           }
         }
@@ -249,7 +188,7 @@ export function ContainerTable() {
         )
       },
     },
-  ], [router, formatDate, getStatusBadge, getSourceTypeBadge])
+  ], [router])
 
   return (
     <div className="space-y-4">
