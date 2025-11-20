@@ -9,15 +9,18 @@ import prisma from '@/lib/prisma';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     // 检查登录
     const authResult = await checkAuth();
     if (authResult.error) return authResult.error;
 
+    // 处理 params（Next.js 15 中 params 可能是 Promise）
+    const resolvedParams = params instanceof Promise ? await params : params;
+
     const customer = await prisma.customers.findUnique({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
       include: {
         contact_roles: true,
         orders: {
@@ -29,6 +32,15 @@ export async function GET(
             order_date: true,
             status: true,
             total_amount: true,
+            container_type: true,
+            weight: true,
+            mbl_number: true,
+            do_issued: true,
+            eta_date: true,
+            lfd_date: true,
+            pickup_date: true,
+            ready_date: true,
+            return_deadline: true,
           },
         },
       },
@@ -55,16 +67,19 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     // 检查权限
     const permissionResult = await checkPermission(['admin', 'oms_manager']);
     if (permissionResult.error) return permissionResult.error;
 
+    // 处理 params（Next.js 15 中 params 可能是 Promise）
+    const resolvedParams = params instanceof Promise ? await params : params;
+
     // 检查客户是否存在
     const existing = await prisma.customers.findUnique({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
     });
 
     if (!existing) {
@@ -107,47 +122,57 @@ export async function PUT(
     if (data.status) updateData.status = data.status;
 
     // 处理联系人更新
+    // 注意：数据库要求 contact_roles.name 非空，所以只有当提供了 name 时才创建/更新联系人
     if (data.contact) {
-      if (existing.contact_id) {
-        // 更新现有联系人
-        await prisma.contact_roles.update({
+      if (data.contact.name) {
+        // 如果提供了联系人姓名，创建或更新联系人
+        if (existing.contact_id) {
+          // 更新现有联系人
+          await prisma.contact_roles.update({
+            where: { contact_id: existing.contact_id },
+            data: {
+              name: data.contact.name,
+              phone: data.contact.phone || null,
+              email: data.contact.email || null,
+              address_line1: data.contact.address_line1 || null,
+              address_line2: data.contact.address_line2 || null,
+              city: data.contact.city || null,
+              state: data.contact.state || null,
+              postal_code: data.contact.postal_code || null,
+              country: data.contact.country || null,
+            },
+          });
+        } else {
+          // 创建新联系人
+          const contact = await prisma.contact_roles.create({
+            data: {
+              related_entity_type: 'customer',
+              related_entity_id: existing.id,
+              role: 'primary',
+              name: data.contact.name,
+              phone: data.contact.phone || null,
+              email: data.contact.email || null,
+              address_line1: data.contact.address_line1 || null,
+              address_line2: data.contact.address_line2 || null,
+              city: data.contact.city || null,
+              state: data.contact.state || null,
+              postal_code: data.contact.postal_code || null,
+              country: data.contact.country || null,
+            },
+          });
+          updateData.contact_id = contact.contact_id;
+        }
+      } else if (existing.contact_id) {
+        // 如果联系人姓名为空，但存在现有联系人，删除联系人
+        await prisma.contact_roles.delete({
           where: { contact_id: existing.contact_id },
-          data: {
-            name: data.contact.name,
-            phone: data.contact.phone,
-            email: data.contact.email,
-            address_line1: data.contact.address_line1,
-            address_line2: data.contact.address_line2,
-            city: data.contact.city,
-            state: data.contact.state,
-            postal_code: data.contact.postal_code,
-            country: data.contact.country,
-          },
         });
-      } else {
-        // 创建新联系人
-        const contact = await prisma.contact_roles.create({
-          data: {
-            related_entity_type: 'customer',
-            related_entity_id: existing.id,
-            role: 'primary',
-            name: data.contact.name,
-            phone: data.contact.phone,
-            email: data.contact.email,
-            address_line1: data.contact.address_line1,
-            address_line2: data.contact.address_line2,
-            city: data.contact.city,
-            state: data.contact.state,
-            postal_code: data.contact.postal_code,
-            country: data.contact.country,
-          },
-        });
-        updateData.contact_id = contact.contact_id;
+        updateData.contact_id = null;
       }
     }
 
     const customer = await prisma.customers.update({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
       data: updateData,
       include: {
         contact_roles: true,
@@ -175,16 +200,19 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     // 检查权限
     const permissionResult = await checkPermission(['admin']);
     if (permissionResult.error) return permissionResult.error;
 
+    // 处理 params（Next.js 15 中 params 可能是 Promise）
+    const resolvedParams = params instanceof Promise ? await params : params;
+
     // 检查客户是否存在
     const customer = await prisma.customers.findUnique({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
       include: {
         orders: {
           take: 1,
@@ -216,7 +244,7 @@ export async function DELETE(
 
     // 删除客户
     await prisma.customers.delete({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
     });
 
     return NextResponse.json({

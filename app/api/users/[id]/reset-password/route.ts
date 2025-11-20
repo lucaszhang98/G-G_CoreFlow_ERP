@@ -10,16 +10,17 @@ import bcrypt from 'bcryptjs';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
+    const resolvedParams = await Promise.resolve(params);
     // 检查权限（只有 admin 可以重置密码）
     const permissionResult = await checkPermission(['admin']);
     if (permissionResult.error) return permissionResult.error;
 
     // 检查用户是否存在
     const user = await prisma.users.findUnique({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
     });
 
     if (!user) {
@@ -42,7 +43,7 @@ export async function POST(
 
     // 更新密码
     await prisma.users.update({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
       data: {
         password_hash: passwordHash,
       },

@@ -9,15 +9,16 @@ import prisma from '@/lib/prisma';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
+    const resolvedParams = await Promise.resolve(params);
     // 检查权限（只有 admin 可以查看用户详情）
     const permissionResult = await checkPermission(['admin']);
     if (permissionResult.error) return permissionResult.error;
 
     const user = await prisma.users.findUnique({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
       select: {
         id: true,
         username: true,
@@ -61,16 +62,17 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
+    const resolvedParams = await Promise.resolve(params);
     // 检查权限（只有 admin 可以更新用户）
     const permissionResult = await checkPermission(['admin']);
     if (permissionResult.error) return permissionResult.error;
 
     // 检查用户是否存在
     const existing = await prisma.users.findUnique({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
     });
 
     if (!existing) {
@@ -117,7 +119,7 @@ export async function PUT(
     if (data.avatar_url !== undefined) updateData.avatar_url = data.avatar_url;
 
     const user = await prisma.users.update({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
       data: updateData,
       select: {
         id: true,
@@ -154,16 +156,17 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
+    const resolvedParams = await Promise.resolve(params);
     // 检查权限（只有 admin 可以删除用户）
     const permissionResult = await checkPermission(['admin']);
     if (permissionResult.error) return permissionResult.error;
 
     // 检查用户是否存在
     const user = await prisma.users.findUnique({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
       include: {
         orders_orders_created_byTousers: { take: 1 },
         orders_orders_updated_byTousers: { take: 1 },
@@ -193,7 +196,7 @@ export async function DELETE(
 
     // 删除用户
     await prisma.users.delete({
-      where: { id: BigInt(params.id) },
+      where: { id: BigInt(resolvedParams.id) },
     });
 
     return NextResponse.json({

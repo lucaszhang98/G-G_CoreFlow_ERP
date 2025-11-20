@@ -1,92 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkAuth, checkPermission, parsePaginationParams, buildPaginationResponse, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers';
-import { userCreateSchema } from '@/lib/validations/user';
-import prisma from '@/lib/prisma';
+import { createListHandler } from '@/lib/crud/api-handler';
+import { userConfig } from '@/lib/crud/configs/users';
 import bcrypt from 'bcryptjs';
+import prisma from '@/lib/prisma';
+import { checkPermission, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers';
+import { userCreateSchema } from '@/lib/validations/user';
+
+// 使用通用框架处理 GET
+const baseListHandler = createListHandler(userConfig);
 
 /**
  * GET /api/users
  * 获取用户列表
  */
 export async function GET(request: NextRequest) {
-  try {
-    // 检查权限（只有 admin 可以查看用户列表）
-    const permissionResult = await checkPermission(['admin']);
-    if (permissionResult.error) return permissionResult.error;
-
-    const searchParams = request.nextUrl.searchParams;
-    const { page, limit, sort, order } = parsePaginationParams(searchParams);
-    const search = searchParams.get('search') || '';
-    const role = searchParams.get('role');
-    const status = searchParams.get('status');
-    const departmentId = searchParams.get('department_id');
-
-    // 构建查询条件
-    const where: any = {};
-    if (search) {
-      where.OR = [
-        { username: { contains: search, mode: 'insensitive' as const } },
-        { full_name: { contains: search, mode: 'insensitive' as const } },
-        { email: { contains: search, mode: 'insensitive' as const } },
-      ];
-    }
-    if (role) {
-      where.role = role;
-    }
-    if (status) {
-      where.status = status;
-    }
-    if (departmentId) {
-      where.department_id = BigInt(departmentId);
-    }
-
-    // 查询数据
-    const [users, total] = await Promise.all([
-      prisma.users.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { [sort]: order },
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          full_name: true,
-          department_id: true,
-          role: true,
-          status: true,
-          phone: true,
-          avatar_url: true,
-          created_at: true,
-          updated_at: true,
-          departments: {
-            select: {
-              id: true,
-              name: true,
-              code: true,
-            },
-          },
-        },
-      }),
-      prisma.users.count({ where }),
-    ]);
-
-    return NextResponse.json(
-      buildPaginationResponse(
-        serializeBigInt(users),
-        total,
-        page,
-        limit
-      )
-    );
-  } catch (error) {
-    return handleError(error, '获取用户列表失败');
-  }
+  return baseListHandler(request);
 }
 
 /**
  * POST /api/users
- * 创建用户
+ * 创建用户（需要特殊处理密码加密）
  */
 export async function POST(request: NextRequest) {
   try {
@@ -148,6 +81,13 @@ export async function POST(request: NextRequest) {
         role: true,
         status: true,
         created_at: true,
+        departments: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
       },
     });
 

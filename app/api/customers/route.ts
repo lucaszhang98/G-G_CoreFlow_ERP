@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     if (authResult.error) return authResult.error;
 
     const searchParams = request.nextUrl.searchParams;
-    const { page, limit, sort, order } = parsePaginationParams(searchParams);
+    const { page, limit, sort, order } = parsePaginationParams(searchParams, 'code', 'asc');
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status');
 
@@ -52,9 +52,44 @@ export async function GET(request: NextRequest) {
       prisma.customers.count({ where }),
     ]);
 
+    // 转换数据格式，将 contact_roles 转换为 contact，并处理 credit_limit
+    const transformedCustomers = customers.map((customer: any) => {
+      const transformed = serializeBigInt(customer);
+      // 将 contact_roles 转换为 contact（如果存在）
+      // 注意：contact_roles 可能是一个对象（一对一关系）
+      if (transformed.contact_roles) {
+        transformed.contact = {
+          name: transformed.contact_roles.name || "",
+          phone: transformed.contact_roles.phone || null,
+          email: transformed.contact_roles.email || null,
+        };
+        delete transformed.contact_roles;
+      } else {
+        // 如果没有 contact_roles，设置为 null
+        transformed.contact = null;
+      }
+      // 确保 credit_limit 是字符串或 null
+      // Decimal 类型在序列化后可能是对象，需要特殊处理
+      if (transformed.credit_limit !== null && transformed.credit_limit !== undefined) {
+        // 如果是对象（Decimal 类型），尝试获取其值
+        if (typeof transformed.credit_limit === 'object' && 'toString' in transformed.credit_limit) {
+          transformed.credit_limit = transformed.credit_limit.toString();
+        } else {
+          transformed.credit_limit = String(transformed.credit_limit);
+        }
+        // 如果转换后是 "null" 或 "undefined" 字符串，设置为 null
+        if (transformed.credit_limit === "null" || transformed.credit_limit === "undefined" || transformed.credit_limit === "") {
+          transformed.credit_limit = null;
+        }
+      } else {
+        transformed.credit_limit = null;
+      }
+      return transformed;
+    });
+
     return NextResponse.json(
       buildPaginationResponse(
-        serializeBigInt(customers),
+        transformedCustomers,
         total,
         page,
         limit
@@ -97,22 +132,23 @@ export async function POST(request: NextRequest) {
     }
 
     // 处理联系人信息
+    // 注意：数据库要求 contact_roles.name 非空，所以只有当提供了 name 时才创建联系人
     let contactId: bigint | null = null;
-    if (data.contact) {
+    if (data.contact && data.contact.name) {
       const contact = await prisma.contact_roles.create({
         data: {
           related_entity_type: 'customer',
           related_entity_id: BigInt(0), // 临时值，创建客户后会更新
           role: 'primary',
           name: data.contact.name,
-          phone: data.contact.phone,
-          email: data.contact.email,
-          address_line1: data.contact.address_line1,
-          address_line2: data.contact.address_line2,
-          city: data.contact.city,
-          state: data.contact.state,
-          postal_code: data.contact.postal_code,
-          country: data.contact.country,
+          phone: data.contact.phone || null,
+          email: data.contact.email || null,
+          address_line1: data.contact.address_line1 || null,
+          address_line2: data.contact.address_line2 || null,
+          city: data.contact.city || null,
+          state: data.contact.state || null,
+          postal_code: data.contact.postal_code || null,
+          country: data.contact.country || null,
         },
       });
       contactId = contact.contact_id;

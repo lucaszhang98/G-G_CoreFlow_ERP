@@ -14,7 +14,7 @@ export const warehouseCreateSchema = z.object({
   capacity_cbm: z.number()
     .min(0, '容量不能为负数')
     .optional(),
-  operating_hours: z.record(z.string()).optional(), // JSON 对象
+  operating_hours: z.record(z.string(), z.string()).optional(), // JSON 对象
   contact_user_id: z.number()
     .int()
     .positive()

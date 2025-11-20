@@ -5,19 +5,33 @@ import prisma from '@/lib/prisma';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     const authResult = await checkAuth();
     if (authResult.error) return authResult.error;
 
+    const resolvedParams = await Promise.resolve(params);
     const warehouse = await prisma.warehouses.findUnique({
-      where: { warehouse_id: BigInt(params.id) },
+      where: { warehouse_id: BigInt(resolvedParams.id) },
       include: {
-        locations: true,
+        locations: {
+          select: {
+            location_id: true,
+            location_code: true,
+            name: true,
+            address_line1: true,
+            address_line2: true,
+            city: true,
+            state: true,
+            postal_code: true,
+            country: true,
+          },
+        },
         users: {
           select: {
             id: true,
+            username: true,
             full_name: true,
             email: true,
             phone: true,
@@ -33,11 +47,30 @@ export async function GET(
       );
     }
 
-    // 获取库存统计（如果有 inventory_lots 表）
-    // 这里先返回空，后续可以添加实际统计
+    // 获取库存统计
+    const inventoryStats = await prisma.inventory_lots.groupBy({
+      by: ['status'],
+      where: {
+        warehouse_id: BigInt(resolvedParams.id),
+      },
+      _count: {
+        inventory_lot_id: true,
+      },
+    });
+
+    const totalLots = inventoryStats.reduce((sum, stat) => sum + stat._count.inventory_lot_id, 0);
+    const availableLots = inventoryStats.find(s => s.status === 'available')?._count.inventory_lot_id || 0;
+    const reservedLots = inventoryStats.find(s => s.status === 'reserved')?._count.inventory_lot_id || 0;
 
     return NextResponse.json({
-      data: serializeBigInt(warehouse),
+      data: {
+        ...serializeBigInt(warehouse),
+        inventory_stats: {
+          total_lots: totalLots,
+          available_lots: availableLots,
+          reserved_lots: reservedLots,
+        },
+      },
     });
   } catch (error) {
     return handleError(error, '获取仓库详情失败');
@@ -46,14 +79,15 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     const permissionResult = await checkPermission(['admin', 'wms_manager']);
     if (permissionResult.error) return permissionResult.error;
 
+    const resolvedParams = await Promise.resolve(params);
     const existing = await prisma.warehouses.findUnique({
-      where: { warehouse_id: BigInt(params.id) },
+      where: { warehouse_id: BigInt(resolvedParams.id) },
     });
 
     if (!existing) {
@@ -97,7 +131,7 @@ export async function PUT(
     if (data.notes !== undefined) updateData.notes = data.notes;
 
     const warehouse = await prisma.warehouses.update({
-      where: { warehouse_id: BigInt(params.id) },
+      where: { warehouse_id: BigInt(resolvedParams.id) },
       data: updateData,
     });
 
@@ -118,14 +152,15 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     const permissionResult = await checkPermission(['admin']);
     if (permissionResult.error) return permissionResult.error;
 
+    const resolvedParams = await Promise.resolve(params);
     const warehouse = await prisma.warehouses.findUnique({
-      where: { warehouse_id: BigInt(params.id) },
+      where: { warehouse_id: BigInt(resolvedParams.id) },
     });
 
     if (!warehouse) {
@@ -139,7 +174,7 @@ export async function DELETE(
     // 暂时先删除，后续可以添加检查
 
     await prisma.warehouses.delete({
-      where: { warehouse_id: BigInt(params.id) },
+      where: { warehouse_id: BigInt(resolvedParams.id) },
     });
 
     return NextResponse.json({

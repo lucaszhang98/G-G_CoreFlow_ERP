@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     if (authResult.error) return authResult.error;
 
     const searchParams = request.nextUrl.searchParams;
-    const { page, limit, sort, order } = parsePaginationParams(searchParams);
+    const { page, limit, sort, order } = parsePaginationParams(searchParams, 'warehouse_code', 'asc');
     const search = searchParams.get('search') || '';
     const locationId = searchParams.get('location_id');
 

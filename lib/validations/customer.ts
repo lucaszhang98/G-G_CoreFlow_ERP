@@ -12,13 +12,17 @@ export const customerCreateSchema = z.object({
     .optional(),
   credit_limit: z.number()
     .min(0, '信用额度不能为负数')
-    .optional(),  // 注意：如果不提供，数据库默认值为 0
+    .optional()
+    .nullable(),  // 数据库可以为空，默认值为 0
   status: z.enum(['active', 'inactive'])
     .default('active'),
   contact: z.object({
-    name: z.string().min(1, '联系人姓名不能为空').max(100),
-    phone: z.string().max(50).optional(),
-    email: z.string().email('邮箱格式不正确').max(200).optional(),
+    name: z.string().max(100).optional().nullable(),  // 联系人姓名可以为空（如果为空则不创建联系人）
+    phone: z.string().max(50).optional().nullable(),
+    email: z.string().max(200).optional().nullable().refine(
+      (val) => !val || val === '' || z.string().email().safeParse(val).success,
+      { message: '邮箱格式不正确' }
+    ),  // 邮箱可以为空，但如果有值必须是有效邮箱
     address_line1: z.string().max(200).optional(),
     address_line2: z.string().max(200).optional(),
     city: z.string().max(100).optional(),
