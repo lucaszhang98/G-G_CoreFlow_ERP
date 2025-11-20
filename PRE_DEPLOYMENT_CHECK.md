@@ -6,24 +6,43 @@
 
 ## ✅ 构建流程模拟结果
 
-### 1. TypeScript 类型检查 (`npm run type-check`)
+### 1. Prisma Client 生成 (`postinstall` 脚本)
+- ✅ **已配置** - `package.json` 中已添加 `postinstall` 脚本
+- ✅ `prisma generate` 将在 `npm install` 后自动运行
+- ✅ 确保 Netlify 构建时 Prisma Client 已正确初始化
+
+### 2. TypeScript 类型检查 (`npm run type-check`)
 - ✅ **通过** - 无类型错误
 - ✅ 所有隐式 `any` 类型已修复
 - ✅ `scripts` 目录已从类型检查中排除
 
-### 2. Next.js 完整构建 (`npm run build`)
+### 3. Next.js 完整构建 (`npm run build`)
 - ✅ **成功** - 编译成功
 - ✅ 所有路由生成成功 (30/30)
 - ✅ 静态页面生成成功
 - ✅ 无构建错误
 
-### 3. ESLint 代码质量检查
+### 4. ESLint 代码质量检查
 - ⚠️ **有警告** - 但不影响构建
   - 主要是一些 `explicit any` 类型警告（代码质量建议）
   - 未使用的导入警告（可清理，非阻塞）
 - ✅ Next.js 构建时不强制 ESLint 错误，这些警告不会导致部署失败
 
 ## ✅ 关键配置验证
+
+### Prisma Client 生成配置
+```json
+{
+  "scripts": {
+    "postinstall": "prisma generate",
+    "prebuild": "tsc --noEmit",
+    "build": "next build"
+  }
+}
+```
+- ✅ `postinstall` 脚本已添加
+- ✅ 确保在 Netlify 安装依赖后自动生成 Prisma Client
+- ✅ 避免 `@prisma/client did not initialize yet` 错误
 
 ### Netlify 配置 (`netlify.toml`)
 ```toml
