@@ -35,47 +35,16 @@ export async function GET(
                 company_name: true,
               },
             },
-            pickup_carrier_service_level: {
-              include: {
-                carriers: {
-                  include: {
-                    drivers: {
-                      include: {
-                        contact_roles: {
-                          select: {
-                            name: true,
-                            phone: true,
-                            email: true,
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            return_carrier_service_level: {
-              include: {
-                carriers: {
-                  include: {
-                    drivers: {
-                      include: {
-                        contact_roles: {
-                          select: {
-                            name: true,
-                            phone: true,
-                            email: true,
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
+            carriers: {
+              select: {
+                carrier_id: true,
+                name: true,
+                carrier_code: true,
               },
             },
             delivery_appointments: {
               include: {
-                users_created: {
+                users_delivery_appointments_created_byTousers: {
                   select: {
                     id: true,
                     full_name: true,
@@ -88,14 +57,14 @@ export async function GET(
         },
         container_legs: {
           include: {
-            locations_origin: {
+            locations_container_legs_origin_location_idTolocations: {
               select: {
                 location_id: true,
                 name: true,
                 location_type: true,
               },
             },
-            locations_destination: {
+            locations_container_legs_destination_location_idTolocations: {
               select: {
                 location_id: true,
                 name: true,

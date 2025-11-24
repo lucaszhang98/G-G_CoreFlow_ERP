@@ -3,18 +3,10 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, Eye, Trash2, Plus } from "lucide-react"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { createStandardTableConfig } from "@/lib/table/utils"
 import {
   Dialog,
   DialogContent,
@@ -151,7 +143,8 @@ export function CustomersTable() {
     fetchCustomers(page, pageSize, sort, order)
   }
 
-  const columns: ColumnDef<Customer>[] = [
+  // 定义基础列（不包含操作列，操作列由框架自动添加）
+  const baseColumns: ColumnDef<Customer>[] = [
     {
       accessorKey: "code",
       header: "客户代码",
@@ -249,39 +242,39 @@ export function CustomersTable() {
         )
       },
     },
-    {
-      id: "actions",
-      cell: ({ row }) => {
-        const customer = row.original
-
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">打开菜单</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>操作</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => handleView(customer)}>
-                <Eye className="mr-2 h-4 w-4" />
-                查看详情
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => handleDelete(customer)}
-                className="text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                删除
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )
-      },
-    },
   ]
+
+  // 使用新框架创建表格配置
+  const tableConfig = React.useMemo(() => {
+    return createStandardTableConfig<Customer>({
+      columns: baseColumns,
+      // 可排序列配置（这些列允许排序）
+      sortableColumns: [
+        "code",
+        "name",
+        "created_at",
+      ],
+      // 列标签映射（用于列可见性控制）
+      columnLabels: {
+        code: "客户代码",
+        name: "客户名称",
+        company_name: "公司名称",
+        status: "状态",
+        credit_limit: "信用额度",
+        contact: "联系人",
+        created_at: "创建时间",
+      },
+      // 显示操作列
+      showActions: true,
+      // 操作列配置
+      actionsConfig: {
+        onView: handleView,
+        onDelete: handleDelete,
+      },
+    })
+  }, [baseColumns, handleView, handleDelete])
+
+  const { columns, sortableColumns, columnLabels } = tableConfig
 
   if (loading) {
     return (
@@ -311,6 +304,9 @@ export function CustomersTable() {
           setPageSize(newPageSize)
           setPage(1) // 改变每页条数时重置到第一页
         }}
+        showColumnToggle={true}
+        columnLabels={columnLabels}
+        sortableColumns={sortableColumns}
       />
 
       {/* 创建对话框 */}

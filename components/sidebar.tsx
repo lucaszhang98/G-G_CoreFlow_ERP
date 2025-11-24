@@ -34,11 +34,9 @@ import {
   UserCog,
   FileCheck,
   Download,
-  BookOpen,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useState, useEffect, useMemo } from "react"
@@ -150,9 +148,9 @@ const menuItems: MenuItem[] = [
     roles: ["admin", "tms_manager", "oms_manager", "wms_manager", "employee", "user"],
     children: [
       {
-        title: "容器管理",
+        title: "海柜管理",
         icon: Container,
-        href: "/dashboard/tms/containers",
+        href: "/dashboard/tms/sea-containers",
       },
       {
         title: "运输段管理",
@@ -340,12 +338,6 @@ function findActiveMenuItems(items: MenuItem[], pathname: string): string[] {
 
 export function Sidebar({ userRole = "user" }: SidebarProps) {
   const pathname = usePathname()
-  const router = useRouter()
-  
-  // 根据当前路径自动计算应该展开的菜单（服务器端和客户端都使用这个）
-  const autoOpenMenus = useMemo(() => {
-    return findActiveMenuItems(menuItems, pathname)
-  }, [pathname])
   
   // 初始状态：只使用自动展开的菜单（确保服务器端和客户端一致）
   // 使用函数式初始化，基于当前 pathname 计算
@@ -511,7 +503,7 @@ export function Sidebar({ userRole = "user" }: SidebarProps) {
   }
 
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-background overflow-hidden">
+    <div className="flex h-full w-64 flex-col border-r bg-background overflow-hidden" suppressHydrationWarning>
       <div className="flex h-16 items-center border-b px-6 flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
@@ -523,7 +515,7 @@ export function Sidebar({ userRole = "user" }: SidebarProps) {
         </div>
       </div>
       <ScrollArea className="flex-1 overflow-hidden">
-        <div className="space-y-1 p-4">
+        <div className="space-y-1 p-4" suppressHydrationWarning>
           {menuItems.map((item) => renderMenuItem(item))}
         </div>
       </ScrollArea>

@@ -73,15 +73,8 @@ export async function POST(request: NextRequest) {
         phone: data.phone,
         avatar_url: data.avatar_url,
       },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        full_name: true,
-        role: true,
-        status: true,
-        created_at: true,
-        departments: {
+      include: {
+        departments_users_department_idTodepartments: {
           select: {
             id: true,
             name: true,
@@ -91,9 +84,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const serialized = serializeBigInt(user);
+    // 转换关系名称：departments_users_department_idTodepartments -> department
+    if (serialized?.departments_users_department_idTodepartments) {
+      serialized.department = serialized.departments_users_department_idTodepartments;
+      delete serialized.departments_users_department_idTodepartments;
+    }
+    
     return NextResponse.json(
       {
-        data: serializeBigInt(user),
+        data: serialized,
         message: '用户创建成功',
       },
       { status: 201 }

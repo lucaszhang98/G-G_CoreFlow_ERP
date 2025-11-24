@@ -98,7 +98,7 @@ export const warehouseConfig: EntityConfig = {
           city: true,
         },
       },
-      users: {
+      users_warehouses_contact_user_idTousers: {
         select: {
           id: true,
           full_name: true,

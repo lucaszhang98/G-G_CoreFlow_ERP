@@ -215,7 +215,14 @@ export function serializeBigInt(obj: any): any {
     if (isNaN(obj.getTime())) {
       return null;
     }
-    return obj.toISOString();
+    // 对于 DATE 类型（只有日期，没有时间），返回 YYYY-MM-DD 格式
+    // 对于 TIMESTAMPTZ 类型（有日期和时间），返回 ISO 字符串
+    // 如果时间是 00:00:00.000Z，说明是 DATE 类型，只返回日期部分
+    const iso = obj.toISOString();
+    if (iso.endsWith('T00:00:00.000Z')) {
+      return iso.split('T')[0]; // 返回 YYYY-MM-DD
+    }
+    return iso; // 返回完整的 ISO 字符串
   }
 
   if (typeof obj === 'bigint') {

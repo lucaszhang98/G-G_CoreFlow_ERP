@@ -7,20 +7,13 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, Eye, Trash2, Plus, Search } from "lucide-react"
+import { Plus, Search } from "lucide-react"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { createStandardTableConfig } from "@/lib/table/utils"
 import {
   Dialog,
   DialogContent,
@@ -81,18 +74,47 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
       if (currentSearch) {
         params.append('search', currentSearch)
       }
-      const response = await fetch(`${config.apiPath}?${params.toString()}`)
-      if (!response.ok) throw new Error(`获取${config.displayName}列表失败`)
+      
+      const apiUrl = `${config.apiPath}?${params.toString()}`
+      
+      const response = await fetch(apiUrl)
+      
+      if (!response.ok) {
+        let errorMessage = `获取${config.displayName}列表失败`
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+          if (process.env.NODE_ENV === 'development') {
+            console.error(`[EntityTable] API错误 (${response.status}):`, errorData)
+          }
+        } catch (e) {
+          if (process.env.NODE_ENV === 'development') {
+            console.error(`[EntityTable] API错误 (${response.status}):`, response.statusText)
+          }
+          errorMessage = `HTTP ${response.status}: ${response.statusText || '请求失败'}`
+        }
+        throw new Error(errorMessage)
+      }
+      
       const result = await response.json()
+      
+      if (!result || typeof result !== 'object') {
+        throw new Error('服务器返回数据格式错误')
+      }
+      
       setData(result.data || [])
       setTotal(result.pagination?.total || 0)
-    } catch (error) {
-      console.error(`获取${config.displayName}列表失败:`, error)
-      toast.error(`获取${config.displayName}列表失败`)
+    } catch (error: any) {
+      console.error(`[EntityTable] 获取${config.displayName}列表失败:`, error)
+      const errorMsg = error?.message || `获取${config.displayName}列表失败`
+      toast.error(errorMsg)
+      // 设置空数据，避免显示旧数据
+      setData([])
+      setTotal(0)
     } finally {
       setLoading(false)
     }
-  }, [config])
+  }, [config.apiPath, config.displayName])
 
   React.useEffect(() => {
     fetchData(page, pageSize, sort, order, search)
@@ -264,8 +286,8 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
     return 'min-w-[160px]'
   }
 
-  // 生成列定义
-  const columns: ColumnDef<T>[] = config.list.columns.map((fieldKey) => {
+  // 生成基础列定义（不包含操作列，操作列由框架自动添加）
+  const baseColumns: ColumnDef<T>[] = config.list.columns.map((fieldKey) => {
     const fieldConfig = config.fields[fieldKey]
     if (!fieldConfig) return null
 
@@ -332,41 +354,45 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
     return column
   }).filter(Boolean) as ColumnDef<T>[]
 
-  // 添加操作列
-  columns.push({
-    id: 'actions',
-    meta: {
-      widthClass: 'w-[90px]', // 操作列固定较小宽度，专业系统通常80-90px
-    },
-    cell: ({ row }) => {
-      const item = row.original
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">打开菜单</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>操作</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => handleView(item)}>
-              <Eye className="mr-2 h-4 w-4" />
-              查看详情
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => handleDelete(item)}
-              className="text-destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              删除
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )
-    },
-  })
+  // 使用新框架创建表格配置
+  const tableConfig = React.useMemo(() => {
+    // 获取可排序列（根据字段配置）
+    const sortableColumns = config.list.columns.filter(fieldKey => {
+      const fieldConfig = config.fields[fieldKey]
+      return fieldConfig?.sortable
+    })
+
+    // 创建列标签映射
+    const columnLabels = Object.fromEntries(
+      config.list.columns.map(fieldKey => {
+        const fieldConfig = config.fields[fieldKey]
+        return [fieldKey, fieldConfig?.label || fieldKey]
+      })
+    )
+
+    try {
+      return createStandardTableConfig<T>({
+        columns: baseColumns,
+        sortableColumns,
+        columnLabels,
+        showActions: true,
+        actionsConfig: {
+          onView: handleView,
+          onDelete: handleDelete,
+        },
+      })
+    } catch (error) {
+      console.error('创建表格配置失败:', error)
+      // 如果失败，返回基础配置，不包含操作列
+      return {
+        columns: baseColumns,
+        sortableColumns,
+        columnLabels,
+      }
+    }
+  }, [baseColumns, config.list.columns, config.fields, handleView, handleDelete])
+
+  const { columns, sortableColumns, columnLabels } = tableConfig
 
   // 获取搜索占位符（使用第一个可搜索字段）
   const searchPlaceholder = config.list.searchFields && config.list.searchFields.length > 0
@@ -448,12 +474,8 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
         serverSidePagination={true}
         initialSorting={sorting}
         showColumnToggle={true}
-        columnLabels={Object.fromEntries(
-          config.list.columns.map(fieldKey => {
-            const fieldConfig = config.fields[fieldKey]
-            return [fieldKey, fieldConfig?.label || fieldKey]
-          })
-        )}
+        columnLabels={columnLabels}
+        sortableColumns={sortableColumns}
       />
         </CardContent>
       </Card>

@@ -1,70 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkAuth, checkPermission, parsePaginationParams, buildPaginationResponse, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers';
+import { checkPermission, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers';
 import { warehouseCreateSchema, warehouseUpdateSchema } from '@/lib/validations/warehouse';
 import prisma from '@/lib/prisma';
+import { warehouseConfig } from '@/lib/crud/configs/warehouses';
+import { createListHandler } from '@/lib/crud/api-handler';
+
+// 使用通用框架处理 GET
+const baseListHandler = createListHandler(warehouseConfig);
 
 /**
  * GET /api/warehouses
- * 获取仓库列表
+ * 获取仓库列表 - 使用通用框架
  */
 export async function GET(request: NextRequest) {
-  try {
-    const authResult = await checkAuth();
-    if (authResult.error) return authResult.error;
-
-    const searchParams = request.nextUrl.searchParams;
-    const { page, limit, sort, order } = parsePaginationParams(searchParams, 'warehouse_code', 'asc');
-    const search = searchParams.get('search') || '';
-    const locationId = searchParams.get('location_id');
-
-    const where: any = {};
-    if (search) {
-      where.OR = [
-        { warehouse_code: { contains: search, mode: 'insensitive' as const } },
-        { name: { contains: search, mode: 'insensitive' as const } },
-      ];
-    }
-    if (locationId) {
-      where.location_id = BigInt(locationId);
-    }
-
-    const [warehouses, total] = await Promise.all([
-      prisma.warehouses.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { [sort]: order },
-        include: {
-          locations: {
-            select: {
-              location_id: true,
-              name: true,
-              address_line1: true,
-              city: true,
-            },
-          },
-          users: {
-            select: {
-              id: true,
-              full_name: true,
-            },
-          },
-        },
-      }),
-      prisma.warehouses.count({ where }),
-    ]);
-
-    return NextResponse.json(
-      buildPaginationResponse(
-        serializeBigInt(warehouses),
-        total,
-        page,
-        limit
-      )
-    );
-  } catch (error) {
-    return handleError(error, '获取仓库列表失败');
-  }
+  return baseListHandler(request);
 }
 
 /**

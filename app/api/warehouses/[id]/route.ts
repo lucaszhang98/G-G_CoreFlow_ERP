@@ -28,7 +28,7 @@ export async function GET(
             country: true,
           },
         },
-        users: {
+        users_warehouses_contact_user_idTousers: {
           select: {
             id: true,
             username: true,
@@ -62,9 +62,20 @@ export async function GET(
     const availableLots = inventoryStats.find((s: any) => s.status === 'available')?._count.inventory_lot_id || 0;
     const reservedLots = inventoryStats.find((s: any) => s.status === 'reserved')?._count.inventory_lot_id || 0;
 
+    const serialized = serializeBigInt(warehouse);
+    // 转换关系名称
+    if (serialized?.locations) {
+      serialized.location = serialized.locations;
+      delete serialized.locations;
+    }
+    if (serialized?.users_warehouses_contact_user_idTousers) {
+      serialized.contact_user = serialized.users_warehouses_contact_user_idTousers;
+      delete serialized.users_warehouses_contact_user_idTousers;
+    }
+    
     return NextResponse.json({
       data: {
-        ...serializeBigInt(warehouse),
+        ...serialized,
         inventory_stats: {
           total_lots: totalLots,
           available_lots: availableLots,

@@ -158,15 +158,45 @@ export const orderConfig: EntityConfig = {
       label: '仓库账户',
       type: 'text',
     },
-    pickup_driver_id: {
-      key: 'pickup_driver_id',
-      label: '提货司机ID',
+    container_number: {
+      key: 'container_number',
+      label: '柜号',
+      type: 'text',
+    },
+    appointment_time: {
+      key: 'appointment_time',
+      label: '预约时间',
+      type: 'date',
+    },
+    port_location: {
+      key: 'port_location',
+      label: '码头/查验站',
+      type: 'text',
+    },
+    operation_mode: {
+      key: 'operation_mode',
+      label: '操作方式',
+      type: 'text',
+    },
+    delivery_location: {
+      key: 'delivery_location',
+      label: '送货地',
+      type: 'text',
+    },
+    carrier_id: {
+      key: 'carrier_id',
+      label: '承运公司ID',
       type: 'number',
     },
-    return_driver_id: {
-      key: 'return_driver_id',
-      label: '归还司机ID',
-      type: 'number',
+    carrier: {
+      key: 'carrier',
+      label: '承运公司',
+      type: 'relation',
+      relation: {
+        model: 'carriers',
+        displayField: 'name',
+        valueField: 'carrier_id',
+      },
     },
     created_by: {
       key: 'created_by',
@@ -183,7 +213,7 @@ export const orderConfig: EntityConfig = {
   list: {
     defaultSort: 'order_date',
     defaultOrder: 'desc',
-    columns: ['order_id', 'order_number', 'customer', 'user_id', 'order_date', 'status', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'weight', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'warehouse_account', 'pickup_driver_id', 'return_driver_id', 'created_by', 'updated_by', 'created_at', 'updated_at'],
+    columns: ['order_id', 'order_number', 'customer', 'user_id', 'order_date', 'status', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'weight', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'warehouse_account', 'container_number', 'appointment_time', 'port_location', 'operation_mode', 'delivery_location', 'carrier_id', 'created_by', 'updated_by', 'created_at', 'updated_at'],
     searchFields: ['order_number', 'mbl_number'],
     pageSize: 10,
   },
@@ -206,6 +236,13 @@ export const orderConfig: EntityConfig = {
           code: true,
           name: true,
           company_name: true,
+        },
+      },
+      carriers: {
+        select: {
+          carrier_id: true,
+          name: true,
+          carrier_code: true,
         },
       },
     },

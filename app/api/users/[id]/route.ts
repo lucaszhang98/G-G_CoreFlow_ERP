@@ -19,19 +19,8 @@ export async function GET(
 
     const user = await prisma.users.findUnique({
       where: { id: BigInt(resolvedParams.id) },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        full_name: true,
-        department_id: true,
-        role: true,
-        status: true,
-        phone: true,
-        avatar_url: true,
-        created_at: true,
-        updated_at: true,
-        departments: {
+      include: {
+        departments_users_department_idTodepartments: {
           select: {
             id: true,
             name: true,
@@ -48,8 +37,15 @@ export async function GET(
       );
     }
 
+    const serialized = serializeBigInt(user);
+    // 转换关系名称：departments_users_department_idTodepartments -> department
+    if (serialized?.departments_users_department_idTodepartments) {
+      serialized.department = serialized.departments_users_department_idTodepartments;
+      delete serialized.departments_users_department_idTodepartments;
+    }
+    
     return NextResponse.json({
-      data: serializeBigInt(user),
+      data: serialized,
     });
   } catch (error) {
     return handleError(error, '获取用户详情失败');

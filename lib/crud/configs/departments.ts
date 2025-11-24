@@ -100,13 +100,6 @@ export const departmentConfig: EntityConfig = {
           code: true,
         },
       },
-      users: {
-        select: {
-          id: true,
-          full_name: true,
-          username: true,
-        },
-      },
     },
   },
 }

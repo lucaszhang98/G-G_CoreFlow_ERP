@@ -18,7 +18,9 @@ export const authConfig = {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        secure: true,
+        // 在 localhost (HTTP) 上设置为 false，在生产环境 (HTTPS) 上设置为 true
+        // Safari 对 cookie 处理更严格，localhost 必须使用 secure: false
+        secure: process.env.NODE_ENV === "production",
       },
     },
   },

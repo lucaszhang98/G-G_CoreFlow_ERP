@@ -3,11 +3,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { checkAuth, checkPermission, parsePaginationParams, buildPaginationResponse, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers'
+import { checkPermission, parsePaginationParams, buildPaginationResponse, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers'
 import { EntityConfig } from './types'
 import { getSchema } from './schema-loader'
 import prisma from '@/lib/prisma'
-import { z } from 'zod'
 
 /**
  * 获取 Prisma 模型
@@ -94,14 +93,25 @@ export function createListHandler(config: EntityConfig) {
       // 数据转换（根据配置的 prisma 模型处理）
       const transformedItems = items.map((item: any) => {
         const serialized = serializeBigInt(item)
-        // 处理订单数据：确保 order_id 是字符串
-        if (config.prisma?.model === 'orders' && serialized.order_id) {
-          serialized.order_id = String(serialized.order_id)
+        // 处理订单数据：确保 order_id 是字符串，处理 carriers 关联
+        if (config.prisma?.model === 'orders') {
+          if (serialized.order_id) {
+            serialized.order_id = String(serialized.order_id)
+          }
+          // 处理 carriers 关联：carriers -> carrier
+          if (serialized.carriers) {
+            serialized.carrier = serialized.carriers
+            delete serialized.carriers
+          }
         }
-        // 处理用户数据：departments -> department
-        if (config.prisma?.model === 'users' && serialized.departments) {
-          serialized.department = serialized.departments
-          delete serialized.departments
+        // 处理用户数据：departments_users_department_idTodepartments -> department
+        if (config.prisma?.model === 'users') {
+          if (serialized.departments_users_department_idTodepartments) {
+            serialized.department = serialized.departments_users_department_idTodepartments
+            delete serialized.departments_users_department_idTodepartments
+          } else {
+            serialized.department = null
+          }
         }
         // 处理客户数据：contact_roles -> contact, credit_limit 转换
         if (config.prisma?.model === 'customers') {
@@ -128,27 +138,32 @@ export function createListHandler(config: EntityConfig) {
             serialized.credit_limit = null
           }
         }
-        // 处理仓库数据：locations -> location, users -> contact_user
+        // 处理仓库数据：locations -> location, users_warehouses_contact_user_idTousers -> contact_user
         if (config.prisma?.model === 'warehouses') {
           if (serialized.locations) {
             serialized.location = serialized.locations
             delete serialized.locations
+          } else {
+            serialized.location = null
           }
-          if (serialized.users) {
-            serialized.contact_user = serialized.users
-            delete serialized.users
+          if (serialized.users_warehouses_contact_user_idTousers) {
+            serialized.contact_user = serialized.users_warehouses_contact_user_idTousers
+            delete serialized.users_warehouses_contact_user_idTousers
+          } else {
+            serialized.contact_user = null
           }
         }
-        // 处理部门数据：departments -> parent, users -> manager
+        // 处理部门数据：departments -> parent
+        // 注意：manager_id 字段存在，但在 schema 中没有定义关系，保留 manager_id 供前端使用
         if (config.prisma?.model === 'departments') {
           if (serialized.departments) {
             serialized.parent = serialized.departments
             delete serialized.departments
+          } else {
+            serialized.parent = null
           }
-          if (serialized.users) {
-            serialized.manager = serialized.users
-            delete serialized.users
-          }
+          // manager_id 保留在数据中，前端可以通过 manager_id 单独查询
+          serialized.manager = serialized.manager_id ? { id: serialized.manager_id } : null
         }
         // 处理承运商数据：contact_roles -> contact
         if (config.prisma?.model === 'carriers') {
@@ -247,15 +262,26 @@ export function createDetailHandler(config: EntityConfig) {
       let transformed = serialized
       
       // 处理部门数据：departments -> parent
-      if (config.prisma?.model === 'departments' && transformed.departments) {
-        transformed.parent = transformed.departments
-        delete transformed.departments
+      // 注意：manager_id 字段存在，但在 schema 中没有定义关系
+      if (config.prisma?.model === 'departments') {
+        if (transformed.departments) {
+          transformed.parent = transformed.departments
+          delete transformed.departments
+        } else {
+          transformed.parent = null
+        }
+        // manager_id 保留在数据中，前端可以通过 manager_id 单独查询
+        transformed.manager = transformed.manager_id ? { id: transformed.manager_id } : null
       }
       
-      // 处理用户数据：departments -> department
-      if (config.prisma?.model === 'users' && transformed.departments) {
-        transformed.department = transformed.departments
-        delete transformed.departments
+      // 处理用户数据：departments_users_department_idTodepartments -> department
+      if (config.prisma?.model === 'users') {
+        if (transformed.departments_users_department_idTodepartments) {
+          transformed.department = transformed.departments_users_department_idTodepartments
+          delete transformed.departments_users_department_idTodepartments
+        } else {
+          transformed.department = null
+        }
       }
       
       // 处理客户数据：contact_roles -> contact
@@ -272,15 +298,19 @@ export function createDetailHandler(config: EntityConfig) {
         }
       }
       
-      // 处理仓库数据：locations -> location, users -> contact_user
+      // 处理仓库数据：locations -> location, users_warehouses_contact_user_idTousers -> contact_user
       if (config.prisma?.model === 'warehouses') {
         if (transformed.locations) {
           transformed.location = transformed.locations
           delete transformed.locations
+        } else {
+          transformed.location = null
         }
-        if (transformed.users) {
-          transformed.contact_user = transformed.users
-          delete transformed.users
+        if (transformed.users_warehouses_contact_user_idTousers) {
+          transformed.contact_user = transformed.users_warehouses_contact_user_idTousers
+          delete transformed.users_warehouses_contact_user_idTousers
+        } else {
+          transformed.contact_user = null
         }
       }
       

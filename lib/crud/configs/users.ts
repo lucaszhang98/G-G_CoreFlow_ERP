@@ -105,25 +105,14 @@ export const userConfig: EntityConfig = {
   
   prisma: {
     model: 'users',
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      full_name: true,
-      department_id: true,
-      role: true,
-      status: true,
-      phone: true,
-      avatar_url: true,
-      created_at: true,
-      updated_at: true,
-      departments: {
+    include: {
+      departments_users_department_idTodepartments: {
         select: {
           id: true,
           name: true,
           code: true,
         },
-      } as any,
+      },
     },
   },
 }

@@ -58,6 +58,8 @@ interface DataTableProps<TData, TValue> {
   // 列显示控制
   showColumnToggle?: boolean
   columnLabels?: Record<string, string> // 列ID到显示标签的映射
+  // 可排序列配置（如果未指定，则所有列都可排序）
+  sortableColumns?: string[]
 }
 
 export function DataTable<TData, TValue>({
@@ -78,6 +80,7 @@ export function DataTable<TData, TValue>({
   loading = false,
   showColumnToggle = false,
   columnLabels = {},
+  sortableColumns = [],
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting)
 
@@ -269,6 +272,10 @@ export function DataTable<TData, TValue>({
                   const isActionsColumn = columnId === 'actions'
                   const isLastHeader = headerIndex === headerGroup.headers.length - 1
                   
+                  // 检查该列是否可以排序（根据 sortableColumns 配置）
+                  const canSortColumn = sortableColumns.length === 0 || sortableColumns.includes(columnId)
+                  const actualCanSort = canSort && canSortColumn && !isActionsColumn
+                  
                   // 获取当前列的排序状态（服务器端排序时从 sorting 状态获取）
                   let sortStatus: 'asc' | 'desc' | false = false
                   if (serverSidePagination) {
@@ -284,7 +291,7 @@ export function DataTable<TData, TValue>({
                   
                   // 处理排序点击（服务器端排序时手动处理）
                   const handleSortClick = () => {
-                    if (!canSort) return
+                    if (!actualCanSort) return
                     
                     if (serverSidePagination) {
                       // 服务器端排序：手动切换排序状态
@@ -312,40 +319,48 @@ export function DataTable<TData, TValue>({
                     }
                   }
                   
-                  // 如果是操作列，在表头显示列切换按钮
-                  if (isActionsColumn && showColumnToggle) {
+                  // 如果是操作列，在表头显示列切换按钮和"操作"标题
+                  if (isActionsColumn) {
                     return (
                       <TableHead key={header.id} className="font-semibold text-sm text-foreground/90 px-2 py-3 whitespace-nowrap">
                         <div className="flex items-center justify-center gap-2">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-accent">
-                                <Columns3 className="h-4 w-4" />
-                                <span className="sr-only">切换列</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuLabel>切换列显示</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              {table
-                                .getAllColumns()
-                                .filter((column) => column.getCanHide() && column.id !== 'actions')
-                                .map((column) => {
-                                  const colId = column.id
-                                  const colLabel = columnLabels[colId] || colId
-                                  return (
-                                    <DropdownMenuCheckboxItem
-                                      key={colId}
-                                      checked={column.getIsVisible()}
-                                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                                      className="capitalize"
-                                    >
-                                      {colLabel}
-                                    </DropdownMenuCheckboxItem>
-                                  )
-                                })}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {showColumnToggle && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-accent">
+                                  <Columns3 className="h-4 w-4" />
+                                  <span className="sr-only">切换列</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent 
+                                align="end" 
+                                className="w-56 max-h-[400px] overflow-hidden"
+                              >
+                                <DropdownMenuLabel className="sticky top-0 bg-popover z-10 py-2 border-b">切换列显示</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <div className="max-h-[320px] overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-border/80">
+                                  {table
+                                    .getAllColumns()
+                                    .filter((column) => column.getCanHide() && column.id !== 'actions')
+                                    .map((column) => {
+                                      const colId = column.id
+                                      const colLabel = columnLabels[colId] || colId
+                                      return (
+                                        <DropdownMenuCheckboxItem
+                                          key={colId}
+                                          checked={column.getIsVisible()}
+                                          onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                                          className="capitalize"
+                                        >
+                                          {colLabel}
+                                        </DropdownMenuCheckboxItem>
+                                      )
+                                    })}
+                                </div>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                          <span>操作</span>
                         </div>
                       </TableHead>
                     )
@@ -366,7 +381,7 @@ export function DataTable<TData, TValue>({
                               header.getContext()
                             )}
                             </span>
-                            {canSort && (
+                            {actualCanSort && (
                               <button
                                 onClick={handleSortClick}
                                 className="flex-shrink-0 p-0.5 hover:bg-accent rounded transition-all duration-200 hover:scale-110 cursor-pointer select-none"
