@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { formatDateDisplay } from "@/lib/utils"
 
 interface OrderDetailItem {
   id: bigint | string
@@ -189,8 +190,8 @@ export function OrderDetailTable({ orderDetails }: OrderDetailTableProps) {
                                 </TableCell>
                                 <TableCell>{item.fba || "-"}</TableCell>
                                 <TableCell>{item.detail_id ? item.detail_id.toString() : "-"}</TableCell>
-                                <TableCell>{item.created_at ? new Date(item.created_at).toLocaleDateString('zh-CN') : "-"}</TableCell>
-                                <TableCell>{item.updated_at ? new Date(item.updated_at).toLocaleDateString('zh-CN') : "-"}</TableCell>
+                                <TableCell>{item.created_at ? formatDateDisplay(item.created_at) : "-"}</TableCell>
+                                <TableCell>{item.updated_at ? formatDateDisplay(item.updated_at) : "-"}</TableCell>
                                 <TableCell>{item.created_by ? item.created_by.toString() : "-"}</TableCell>
                                 <TableCell>{item.updated_by ? item.updated_by.toString() : "-"}</TableCell>
                               </TableRow>

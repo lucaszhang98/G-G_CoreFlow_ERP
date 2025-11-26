@@ -58,6 +58,30 @@ export const trailerConfig: EntityConfig = {
         { label: '停用', value: 'inactive' },
       ],
     },
+    length_feet: {
+      key: 'length_feet',
+      label: '长度（英尺）',
+      type: 'number',
+      placeholder: '请输入长度（可选）',
+    },
+    capacity_weight: {
+      key: 'capacity_weight',
+      label: '载重容量',
+      type: 'number',
+      placeholder: '请输入载重容量（可选）',
+    },
+    capacity_volume: {
+      key: 'capacity_volume',
+      label: '体积容量',
+      type: 'number',
+      placeholder: '请输入体积容量（可选）',
+    },
+    notes: {
+      key: 'notes',
+      label: '备注',
+      type: 'textarea',
+      placeholder: '请输入备注（可选）',
+    },
     created_at: {
       key: 'created_at',
       label: '创建时间',
@@ -72,6 +96,55 @@ export const trailerConfig: EntityConfig = {
     columns: ['trailer_code', 'trailer_type', 'department', 'status', 'created_at'],
     searchFields: ['trailer_code', 'trailer_type'],
     pageSize: 10,
+    // 筛选配置（快速筛选）
+    filterFields: [
+      {
+        field: 'status',
+        label: '状态',
+        type: 'select',
+        options: [
+          { label: '可用', value: 'available' },
+          { label: '维修', value: 'maintenance' },
+          { label: '停用', value: 'inactive' },
+        ],
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 高级搜索配置（多条件组合）
+    advancedSearchFields: [
+      {
+        field: 'trailer_type',
+        label: '货柜类型',
+        type: 'text',
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 批量操作配置
+    batchOperations: {
+      enabled: true,
+      edit: {
+        enabled: true,
+        fields: ['status'],
+      },
+      delete: {
+        enabled: true,
+      },
+    },
+    // 行内编辑配置
+    inlineEdit: {
+      enabled: true,
+      fields: ['status'],
+    },
   },
   
   formFields: ['trailer_code', 'trailer_type', 'length_feet', 'capacity_weight', 'capacity_volume', 'status', 'department_id', 'notes'],

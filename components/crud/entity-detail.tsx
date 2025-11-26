@@ -12,6 +12,9 @@ import Link from "next/link"
 import prisma from "@/lib/prisma"
 import { EntityConfig } from "@/lib/crud/types"
 import { Decimal } from "@prisma/client/runtime/library"
+import { autoFormatDateField } from "@/lib/utils/date-format"
+import { EntityDetailClient } from "./entity-detail-client"
+import { serializeBigInt } from "@/lib/api/helpers"
 
 interface EntityDetailProps {
   config: EntityConfig
@@ -65,10 +68,9 @@ export async function EntityDetail({ config, id, data: providedData }: EntityDet
     }
   }
 
-  // 格式化函数
-  const formatDate = (date: Date | null) => {
-    if (!date) return "-"
-    return new Date(date).toLocaleDateString("zh-CN")
+  // 使用统一的日期格式化框架（不包含年份）
+  const formatDate = (date: Date | string | null) => {
+    return autoFormatDateField('', date)
   }
 
   const formatNumber = (value: number | null | string | Decimal) => {
@@ -104,7 +106,8 @@ export async function EntityDetail({ config, id, data: providedData }: EntityDet
     // 根据字段类型格式化
     switch (fieldConfig.type) {
       case 'date':
-        return formatDate(value)
+        // 使用统一的日期格式化框架
+        return autoFormatDateField(fieldKey, value)
       case 'number':
         return formatNumber(value)
       case 'currency':
@@ -205,6 +208,10 @@ export async function EntityDetail({ config, id, data: providedData }: EntityDet
             </p>
           </div>
         </div>
+        {/* 编辑按钮 - 如果有更新权限 */}
+        {config.permissions.update && config.permissions.update.length > 0 && (
+          <EntityDetailClient config={config} data={serializeBigInt(data)} />
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

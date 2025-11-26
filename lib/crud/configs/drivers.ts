@@ -66,6 +66,18 @@ export const driverConfig: EntityConfig = {
         { label: '停用', value: 'inactive' },
       ],
     },
+    license_expiration: {
+      key: 'license_expiration',
+      label: '驾驶证到期日',
+      type: 'date',
+      placeholder: '请输入驾驶证到期日（可选）',
+    },
+    notes: {
+      key: 'notes',
+      label: '备注',
+      type: 'textarea',
+      placeholder: '请输入备注（可选）',
+    },
     created_at: {
       key: 'created_at',
       label: '创建时间',
@@ -80,6 +92,54 @@ export const driverConfig: EntityConfig = {
     columns: ['driver_code', 'carrier', 'contact', 'license_number', 'status', 'created_at'],
     searchFields: ['driver_code', 'license_number'],
     pageSize: 10,
+    // 筛选配置（快速筛选）
+    filterFields: [
+      {
+        field: 'status',
+        label: '状态',
+        type: 'select',
+        options: [
+          { label: '可用', value: 'active' },
+          { label: '停用', value: 'inactive' },
+        ],
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 高级搜索配置（多条件组合）
+    advancedSearchFields: [
+      {
+        field: 'license_number',
+        label: '驾驶证号',
+        type: 'text',
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 批量操作配置
+    batchOperations: {
+      enabled: true,
+      edit: {
+        enabled: true,
+        fields: ['status'],
+      },
+      delete: {
+        enabled: true,
+      },
+    },
+    // 行内编辑配置
+    inlineEdit: {
+      enabled: true,
+      fields: ['status'],
+    },
   },
   
   formFields: ['driver_code', 'license_number', 'license_expiration', 'status', 'carrier_id', 'contact', 'notes'],

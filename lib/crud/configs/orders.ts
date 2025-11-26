@@ -63,6 +63,7 @@ export const orderConfig: EntityConfig = {
         { label: '已发货', value: 'shipped' },
         { label: '已交付', value: 'delivered' },
         { label: '已取消', value: 'cancelled' },
+        { label: '完成留档', value: 'archived' }, // 软删除状态
       ],
     },
     total_amount: {
@@ -216,6 +217,65 @@ export const orderConfig: EntityConfig = {
     columns: ['order_id', 'order_number', 'customer', 'user_id', 'order_date', 'status', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'weight', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'warehouse_account', 'container_number', 'appointment_time', 'port_location', 'operation_mode', 'delivery_location', 'carrier_id', 'created_by', 'updated_by', 'created_at', 'updated_at'],
     searchFields: ['order_number', 'mbl_number'],
     pageSize: 10,
+    // 筛选配置（快速筛选）
+    filterFields: [
+      {
+        field: 'status',
+        label: '状态',
+        type: 'select',
+        options: [
+          { label: '待处理', value: 'pending' },
+          { label: '已确认', value: 'confirmed' },
+          { label: '已发货', value: 'shipped' },
+          { label: '已交付', value: 'delivered' },
+          { label: '已取消', value: 'cancelled' },
+          { label: '完成留档', value: 'archived' },
+        ],
+      },
+      {
+        field: 'order_date',
+        label: '订单日期',
+        type: 'dateRange',
+        dateFields: ['order_date'],
+      },
+      {
+        field: 'eta_date',
+        label: 'ETA日期',
+        type: 'dateRange',
+        dateFields: ['eta_date'],
+      },
+    ],
+    // 高级搜索配置（多条件组合）
+    advancedSearchFields: [
+      {
+        field: 'mbl_number',
+        label: 'MBL号码',
+        type: 'text',
+      },
+      {
+        field: 'container_number',
+        label: '柜号',
+        type: 'text',
+      },
+      {
+        field: 'total_amount',
+        label: '订单金额',
+        type: 'numberRange',
+        numberFields: ['total_amount'],
+      },
+      {
+        field: 'final_amount',
+        label: '最终金额',
+        type: 'numberRange',
+        numberFields: ['final_amount'],
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
   },
   
   formFields: ['order_number', 'customer_id', 'order_date', 'status', 'total_amount', 'container_type', 'notes'],

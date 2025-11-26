@@ -14,6 +14,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table"
 import { ChevronDown, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Columns3 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 
 import {
   DropdownMenu,
@@ -34,6 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { cn } from "@/lib/utils"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -60,6 +62,12 @@ interface DataTableProps<TData, TValue> {
   columnLabels?: Record<string, string> // 列ID到显示标签的映射
   // 可排序列配置（如果未指定，则所有列都可排序）
   sortableColumns?: string[]
+  // 行选择相关
+  enableRowSelection?: boolean // 是否启用行选择
+  onRowSelectionChange?: (selectedRows: TData[]) => void // 行选择变化回调
+  getIdValue?: (row: TData) => string | number // 获取行的ID值（用于行选择）
+  // 行内编辑相关
+  isRowEditing?: (row: TData) => boolean // 检查行是否正在编辑
 }
 
 export function DataTable<TData, TValue>({
@@ -81,6 +89,10 @@ export function DataTable<TData, TValue>({
   showColumnToggle = false,
   columnLabels = {},
   sortableColumns = [],
+  enableRowSelection = false,
+  onRowSelectionChange,
+  getIdValue,
+  isRowEditing,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting)
 
@@ -120,9 +132,76 @@ export function DataTable<TData, TValue>({
     ? Math.ceil(total / currentPageSize)
     : undefined
 
+  // 如果启用行选择，在列前面添加复选框列
+  const finalColumns = React.useMemo(() => {
+    if (!enableRowSelection) {
+      return columns
+    }
+
+    const selectColumn: ColumnDef<TData, TValue> = {
+      id: 'select',
+      header: ({ table }) => {
+        const isAllSelected = table.getIsAllPageRowsSelected()
+        const isSomeSelected = table.getIsSomePageRowsSelected()
+        
+        // 专业系统的逻辑：
+        // - 全部选中：显示为选中状态
+        // - 部分选中：显示为半选状态（indeterminate）
+        // - 未选中：显示为未选中状态
+        const checkedState = isAllSelected 
+          ? true 
+          : isSomeSelected 
+          ? "indeterminate" 
+          : false
+        
+        return (
+          <div className="flex items-center justify-center h-full">
+            <Checkbox
+              checked={checkedState}
+              onCheckedChange={(value: boolean) => table.toggleAllPageRowsSelected(!!value)}
+              aria-label="选择全部"
+            />
+          </div>
+        )
+      },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-center h-full">
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value: boolean) => row.toggleSelected(!!value)}
+            aria-label="选择行"
+          />
+        </div>
+      ),
+      enableSorting: false,
+      enableHiding: false,
+      meta: {
+        widthClass: 'w-[60px]',
+        alignRight: false,
+      },
+    }
+
+    return [selectColumn, ...columns]
+  }, [enableRowSelection, columns])
+
+  // 行选择变化处理
+  const handleRowSelectionChange = React.useCallback((updater: any) => {
+    const newSelection = typeof updater === 'function' ? updater(rowSelection) : updater
+    setRowSelection(newSelection)
+    
+    // 通知外部行选择变化
+    if (onRowSelectionChange && getIdValue) {
+      const selectedRows = Object.keys(newSelection)
+        .filter(key => newSelection[key])
+        .map(key => data.find(row => String(getIdValue(row)) === key))
+        .filter(Boolean) as TData[]
+      onRowSelectionChange(selectedRows)
+    }
+  }, [rowSelection, onRowSelectionChange, getIdValue, data])
+
   const table = useReactTable({
     data,
-    columns,
+    columns: finalColumns,
     onSortingChange: handleSortingChange,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
@@ -130,7 +209,9 @@ export function DataTable<TData, TValue>({
     getSortedRowModel: serverSidePagination ? undefined : getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange: enableRowSelection ? handleRowSelectionChange : undefined,
+    enableRowSelection: enableRowSelection,
+    getRowId: enableRowSelection && getIdValue ? (row) => String(getIdValue(row)) : undefined,
     manualPagination: serverSidePagination,
     manualSorting: serverSidePagination, // 服务器端排序：禁用客户端排序
     pageCount: serverSidePagination ? calculatedPageCount : undefined,
@@ -138,7 +219,7 @@ export function DataTable<TData, TValue>({
       sorting,
       columnFilters,
       columnVisibility,
-      rowSelection,
+      rowSelection: enableRowSelection ? rowSelection : {},
       pagination: {
         pageIndex: currentPage,
         pageSize: currentPageSize,
@@ -420,12 +501,25 @@ export function DataTable<TData, TValue>({
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row, index) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                  className="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-blue-950/20 dark:hover:to-indigo-950/20 transition-all duration-200 border-b border-border/30 group"
-                >
+              table.getRowModel().rows.map((row, index) => {
+                // 只在客户端检查编辑状态，避免 hydration 错误
+                const isEditing = typeof window !== 'undefined' && (isRowEditing?.(row.original) || false)
+                const isSelected = row.getIsSelected()
+                
+                return (
+                  <TableRow
+                    key={row.id}
+                    data-state={(isSelected && "selected") || (isEditing && "editing")}
+                    suppressHydrationWarning={isEditing} // 编辑状态可能在服务器端和客户端不一致
+                    className={cn(
+                      "transition-all duration-200 border-b border-border/30 group",
+                      isEditing
+                        ? "bg-gradient-to-r from-amber-50 via-yellow-50/80 to-amber-50 dark:from-amber-950/40 dark:via-yellow-950/30 dark:to-amber-950/40 shadow-md shadow-amber-500/20 border-amber-300 dark:border-amber-700"
+                        : isSelected
+                        ? "bg-gradient-to-r from-blue-50 via-indigo-50/80 to-blue-50 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-blue-950/40 shadow-sm shadow-blue-500/10"
+                        : "hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-blue-950/20 dark:hover:to-indigo-950/20"
+                    )}
+                  >
                   {row.getVisibleCells().map((cell) => {
                     const isActionsCell = cell.column.id === 'actions'
                     const widthClass = (cell.column.columnDef.meta as any)?.widthClass || ''
@@ -440,8 +534,9 @@ export function DataTable<TData, TValue>({
                     </TableCell>
                     )
                   })}
-                </TableRow>
-              ))
+                  </TableRow>
+                )
+              })
             ) : (
               // 暂无数据状态
               <TableRow>

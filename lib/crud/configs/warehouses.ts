@@ -11,13 +11,14 @@ export const warehouseConfig: EntityConfig = {
   
   apiPath: '/api/warehouses',
   detailPath: '/dashboard/warehouses',
+  idField: 'warehouse_id',
   
   // Schema 名称，用于动态导入
   schemaName: 'warehouse',
   
   fields: {
-    id: {
-      key: 'id',
+    warehouse_id: {
+      key: 'warehouse_id',
       label: 'ID',
       type: 'text',
     },
@@ -62,6 +63,12 @@ export const warehouseConfig: EntityConfig = {
         displayField: 'full_name',
       },
     },
+    notes: {
+      key: 'notes',
+      label: '备注',
+      type: 'textarea',
+      placeholder: '请输入备注（可选）',
+    },
     created_at: {
       key: 'created_at',
       label: '创建时间',
@@ -76,6 +83,50 @@ export const warehouseConfig: EntityConfig = {
     columns: ['warehouse_code', 'name', 'location', 'capacity_cbm', 'contact_user', 'created_at'],
     searchFields: ['warehouse_code', 'name'],
     pageSize: 10,
+    // 筛选配置（快速筛选）
+    filterFields: [
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+      {
+        field: 'capacity_cbm',
+        label: '容量范围',
+        type: 'numberRange',
+        numberFields: ['capacity_cbm'],
+      },
+    ],
+    // 高级搜索配置（多条件组合）
+    advancedSearchFields: [
+      {
+        field: 'capacity_cbm',
+        label: '容量范围 (CBM)',
+        type: 'numberRange',
+        numberFields: ['capacity_cbm'],
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 批量操作配置
+    batchOperations: {
+      enabled: true,
+      edit: {
+        enabled: true,
+      },
+      delete: {
+        enabled: true,
+      },
+    },
+    // 行内编辑配置
+    inlineEdit: {
+      enabled: true,
+    },
   },
   
   formFields: ['warehouse_code', 'name', 'location_id', 'capacity_cbm', 'contact_user_id', 'notes'],

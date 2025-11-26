@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import { formatDateDisplay } from "@/lib/utils"
 
 interface OrderDetailItem {
   id: bigint | string
@@ -425,8 +426,8 @@ export function OrderDetailTableEditable({ orderId, orderDetails: initialOrderDe
                       <TableCell>{formatNumber(detail.volume)}</TableCell>
                       <TableCell>{formatNumber(detail.container_volume)}</TableCell>
                       <TableCell>{detail.estimated_pallets || "-"}</TableCell>
-                      <TableCell>{detail.created_at ? new Date(detail.created_at).toLocaleDateString('zh-CN') : "-"}</TableCell>
-                      <TableCell>{detail.updated_at ? new Date(detail.updated_at).toLocaleDateString('zh-CN') : "-"}</TableCell>
+                      <TableCell>{detail.created_at ? formatDateDisplay(detail.created_at) : "-"}</TableCell>
+                      <TableCell>{detail.updated_at ? formatDateDisplay(detail.updated_at) : "-"}</TableCell>
                       <TableCell>{detail.created_by ? detail.created_by.toString() : "-"}</TableCell>
                       <TableCell>{detail.updated_by ? detail.updated_by.toString() : "-"}</TableCell>
                       <TableCell>
@@ -664,8 +665,8 @@ export function OrderDetailTableEditable({ orderId, orderDetails: initialOrderDe
                                       </TableCell>
                                       <TableCell>{item.fba || "-"}</TableCell>
                                       <TableCell>{item.detail_id ? item.detail_id.toString() : "-"}</TableCell>
-                                      <TableCell>{item.created_at ? new Date(item.created_at).toLocaleDateString('zh-CN') : "-"}</TableCell>
-                                      <TableCell>{item.updated_at ? new Date(item.updated_at).toLocaleDateString('zh-CN') : "-"}</TableCell>
+                                      <TableCell>{item.created_at ? formatDateDisplay(item.created_at) : "-"}</TableCell>
+                                      <TableCell>{item.updated_at ? formatDateDisplay(item.updated_at) : "-"}</TableCell>
                                       <TableCell>{item.created_by ? item.created_by.toString() : "-"}</TableCell>
                                       <TableCell>{item.updated_by ? item.updated_by.toString() : "-"}</TableCell>
                                       <TableCell>

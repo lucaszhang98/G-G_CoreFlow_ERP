@@ -67,6 +67,30 @@ export const vehicleConfig: EntityConfig = {
         { label: '停用', value: 'inactive' },
       ],
     },
+    vin: {
+      key: 'vin',
+      label: 'VIN码',
+      type: 'text',
+      placeholder: '请输入VIN码（可选）',
+    },
+    capacity_weight: {
+      key: 'capacity_weight',
+      label: '载重容量',
+      type: 'number',
+      placeholder: '请输入载重容量（可选）',
+    },
+    capacity_volume: {
+      key: 'capacity_volume',
+      label: '体积容量',
+      type: 'number',
+      placeholder: '请输入体积容量（可选）',
+    },
+    notes: {
+      key: 'notes',
+      label: '备注',
+      type: 'textarea',
+      placeholder: '请输入备注（可选）',
+    },
     created_at: {
       key: 'created_at',
       label: '创建时间',
@@ -81,6 +105,55 @@ export const vehicleConfig: EntityConfig = {
     columns: ['vehicle_code', 'plate_number', 'vehicle_type', 'carrier', 'status', 'created_at'],
     searchFields: ['vehicle_code', 'plate_number', 'vehicle_type'],
     pageSize: 10,
+    // 筛选配置（快速筛选）
+    filterFields: [
+      {
+        field: 'status',
+        label: '状态',
+        type: 'select',
+        options: [
+          { label: '可用', value: 'active' },
+          { label: '维修', value: 'maintenance' },
+          { label: '停用', value: 'inactive' },
+        ],
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 高级搜索配置（多条件组合）
+    advancedSearchFields: [
+      {
+        field: 'vehicle_type',
+        label: '车辆类型',
+        type: 'text',
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 批量操作配置
+    batchOperations: {
+      enabled: true,
+      edit: {
+        enabled: true,
+        fields: ['status'],
+      },
+      delete: {
+        enabled: true,
+      },
+    },
+    // 行内编辑配置
+    inlineEdit: {
+      enabled: true,
+      fields: ['status', 'plate_number'],
+    },
   },
   
   formFields: ['vehicle_code', 'plate_number', 'vehicle_type', 'vin', 'capacity_weight', 'capacity_volume', 'status', 'carrier_id', 'notes'],

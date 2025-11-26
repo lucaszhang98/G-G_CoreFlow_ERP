@@ -79,6 +79,43 @@ export const departmentConfig: EntityConfig = {
     columns: ['code', 'name', 'parent', 'manager', 'created_at'],
     searchFields: ['code', 'name'],
     pageSize: 10,
+    // 筛选配置（快速筛选）
+    filterFields: [
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 高级搜索配置（多条件组合）
+    advancedSearchFields: [
+      {
+        field: 'description',
+        label: '描述',
+        type: 'text',
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 批量操作配置
+    batchOperations: {
+      enabled: true,
+      edit: {
+        enabled: true,
+      },
+      delete: {
+        enabled: true,
+      },
+    },
+    // 行内编辑配置
+    inlineEdit: {
+      enabled: true,
+    },
   },
   
   formFields: ['code', 'name', 'parent_id', 'manager_id', 'description'],

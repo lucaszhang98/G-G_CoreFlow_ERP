@@ -54,7 +54,10 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
     try {
       setLoading(true)
 
-      const url = isEditing ? `${config.apiPath}/${(data as any).id}` : config.apiPath
+      // 获取 ID 字段名（支持自定义 ID 字段）
+      const idField = config.idField || 'id'
+      const id = isEditing ? (data as any)[idField] : null
+      const url = isEditing ? `${config.apiPath}/${id}` : config.apiPath
       const method = isEditing ? 'PUT' : 'POST'
 
       const response = await fetch(url, {

@@ -2,15 +2,26 @@
 
 import * as React from "react"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 interface EditableCellProps {
-  value: string | number | null | undefined
+  value: string | number | Date | null | undefined
   onSave: (value: string | null) => Promise<void> | void
-  type?: "text" | "number" | "date" | "datetime-local"
+  type?: "text" | "number" | "date" | "datetime-local" | "select"
   className?: string
   disabled?: boolean
   placeholder?: string
+  // 下拉选择选项
+  options?: Array<{ label: string; value: string }>
+  // 选项加载函数（用于异步加载选项）
+  loadOptions?: () => Promise<Array<{ label: string; value: string }>>
 }
 
 export function EditableCell({
@@ -20,17 +31,22 @@ export function EditableCell({
   className,
   disabled = false,
   placeholder: _placeholder = "点击编辑",
+  options = [],
+  loadOptions,
 }: EditableCellProps) {
   const [isEditing, setIsEditing] = React.useState(false)
   const [editValue, setEditValue] = React.useState("")
   const [isSaving, setIsSaving] = React.useState(false)
+  const [selectOptions, setSelectOptions] = React.useState<Array<{ label: string; value: string }>>(options)
+  const [loadingOptions, setLoadingOptions] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
 
   // 初始化编辑值
   React.useEffect(() => {
     if (isEditing) {
       if (type === "date" && value) {
-        const date = new Date(value as string)
+        // 处理 Date 对象、字符串或数字
+        const date = (value instanceof Date) ? value : new Date(value as string | number)
         if (!isNaN(date.getTime())) {
           setEditValue(date.toISOString().split("T")[0])
         } else {
@@ -39,7 +55,9 @@ export function EditableCell({
       } else if (type === "datetime-local" && value) {
         // 处理 datetime-local 类型
         let date: Date
-        if (typeof value === 'string') {
+        if (value instanceof Date) {
+          date = value
+        } else if (typeof value === 'string') {
           // 如果已经是 datetime-local 格式 (YYYY-MM-DDTHH:mm)，直接使用
           if (value.includes('T')) {
             setEditValue(value)
@@ -76,9 +94,47 @@ export function EditableCell({
     }
   }, [isEditing])
 
+  // 加载选项（如果是异步加载）
+  React.useEffect(() => {
+    if (type === "select" && loadOptions && selectOptions.length === 0 && !loadingOptions) {
+      setLoadingOptions(true)
+      loadOptions()
+        .then((loadedOptions) => {
+          setSelectOptions(loadedOptions)
+        })
+        .catch((error) => {
+          console.error("加载选项失败:", error)
+        })
+        .finally(() => {
+          setLoadingOptions(false)
+        })
+    }
+  }, [type, loadOptions, selectOptions.length, loadingOptions])
+
+  // 同步 options prop 变化
+  React.useEffect(() => {
+    if (options.length > 0) {
+      setSelectOptions(options)
+    }
+  }, [options])
+
   const handleClick = () => {
     if (!disabled && !isEditing) {
       setIsEditing(true)
+      // 如果是select类型且需要异步加载，触发加载
+      if (type === "select" && loadOptions && selectOptions.length === 0) {
+        setLoadingOptions(true)
+        loadOptions()
+          .then((loadedOptions) => {
+            setSelectOptions(loadedOptions)
+          })
+          .catch((error) => {
+            console.error("加载选项失败:", error)
+          })
+          .finally(() => {
+            setLoadingOptions(false)
+          })
+      }
     }
   }
 
@@ -139,6 +195,48 @@ export function EditableCell({
   }
 
   if (isEditing) {
+    // Select 类型使用下拉框
+    if (type === "select") {
+      return (
+        <Select
+          value={editValue || undefined}
+          onValueChange={(val) => {
+            setEditValue(val)
+            // Select 类型保存后立即关闭编辑模式
+            onSave(val || null).then(() => {
+              setIsEditing(false)
+            }).catch((error) => {
+              console.error("保存失败:", error)
+              // 保存失败时保持编辑状态
+            })
+          }}
+          onOpenChange={(open) => {
+            // 当选择框关闭时，如果没有选择任何值，取消编辑
+            if (!open && !editValue && !isSaving) {
+              setIsEditing(false)
+            }
+          }}
+          disabled={isSaving || loadingOptions}
+        >
+          <SelectTrigger
+            className={cn("h-8 min-w-[150px] px-2", className)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <SelectValue placeholder={loadingOptions ? "加载中..." : "请选择"} />
+          </SelectTrigger>
+          <SelectContent onClick={(e) => e.stopPropagation()}>
+            <SelectItem value="">（无）</SelectItem>
+            {selectOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )
+    }
+
+    // 其他类型使用 Input
     return (
       <Input
         ref={inputRef}
@@ -154,38 +252,36 @@ export function EditableCell({
     )
   }
 
-  // 格式化显示值
+  // 格式化显示值（显示时不包含年份，节省空间）
   const getDisplayValue = () => {
     if (!value) return "-"
     
+    // Select 类型：显示选项的 label
+    if (type === "select") {
+      const option = selectOptions.find((opt) => opt.value === String(value))
+      return option ? option.label : value.toString()
+    }
+    
     if (type === "datetime-local") {
-      // 如果是 datetime-local 类型，格式化显示
-      const date = new Date(value as string)
+      // 如果是 datetime-local 类型，显示为 MM-DD HH:mm（不包含年份）
+      const date = value instanceof Date ? value : new Date(value as string | number)
       if (isNaN(date.getTime())) return value.toString()
       
-      const year = date.getFullYear()
       const month = String(date.getMonth() + 1).padStart(2, "0")
       const day = String(date.getDate()).padStart(2, "0")
       const hours = String(date.getHours()).padStart(2, "0")
       const minutes = String(date.getMinutes()).padStart(2, "0")
-      return `${year}-${month}-${day} ${hours}:${minutes}`
+      return `${month}-${day} ${hours}:${minutes}`
     } else if (type === "date") {
-      // 如果是 date 类型，格式化显示
-      // 如果已经是 YYYY-MM-DD 格式的字符串，直接返回
-      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        return value
-      }
-      // 如果是 ISO 字符串格式，提取日期部分
-      if (typeof value === 'string' && value.includes('T')) {
-        return value.split('T')[0]
-      }
-      // 否则解析为 Date 对象
-      const date = new Date(value as string)
+      // 如果是 date 类型，显示为 MM-DD（不包含年份）
+      const date = value instanceof Date ? value : new Date(value as string | number)
+      
       if (isNaN(date.getTime())) return value.toString()
       
-      // 使用与初始化编辑值时相同的逻辑：toISOString().split("T")[0]
-      // 这样显示和编辑使用完全相同的格式
-      return date.toISOString().split("T")[0]
+      // 显示时只显示月日，不显示年份
+      const month = String(date.getMonth() + 1).padStart(2, "0")
+      const day = String(date.getDate()).padStart(2, "0")
+      return `${month}-${day}`
     }
     
     return value.toString()

@@ -82,8 +82,56 @@ export const customerConfig: EntityConfig = {
     defaultSort: 'code',
     defaultOrder: 'asc',
     columns: ['code', 'name', 'company_name', 'status', 'credit_limit', 'contact', 'created_at'],
-    searchFields: ['name'],
+    searchFields: ['code', 'name', 'company_name'],
     pageSize: 10,
+    // 筛选配置（快速筛选）
+    filterFields: [
+      {
+        field: 'status',
+        label: '状态',
+        type: 'select',
+        options: [
+          { label: '活跃', value: 'active' },
+          { label: '停用', value: 'inactive' },
+        ],
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 高级搜索配置（多条件组合）
+    advancedSearchFields: [
+      {
+        field: 'contact',
+        label: '联系人',
+        type: 'text',
+      },
+      {
+        field: 'credit_limit',
+        label: '信用额度',
+        type: 'numberRange',
+        numberFields: ['credit_limit'],
+      },
+    ],
+    // 批量操作配置
+    batchOperations: {
+      enabled: true,
+      edit: {
+        enabled: true,
+        fields: ['status', 'credit_limit'], // 可批量编辑的字段
+      },
+      delete: {
+        enabled: true,
+      },
+    },
+    // 行内编辑配置
+    inlineEdit: {
+      enabled: true,
+      fields: ['status', 'credit_limit', 'company_name'], // 可编辑的字段
+    },
   },
   
   formFields: ['code', 'name', 'company_name', 'status', 'credit_limit', 'contact'],

@@ -7,13 +7,13 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { ColumnDef } from "@tanstack/react-table"
-import { Plus, Search } from "lucide-react"
+import { Plus, Trash2, Edit } from "lucide-react"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { createStandardTableConfig } from "@/lib/table/utils"
+import { ClickableColumnConfig } from "@/lib/table/config"
 import {
   Dialog,
   DialogContent,
@@ -25,13 +25,36 @@ import {
 import { EntityConfig, FieldConfig } from "@/lib/crud/types"
 import { toast } from "sonner"
 import { EntityForm } from "./entity-form"
+import { autoFormatDateField, formatDateDisplay, formatDateTimeDisplay } from "@/lib/utils/date-format"
+import { SearchModule } from "./search-module"
+import { InlineEditCell } from "./inline-edit-cell"
 
 interface EntityTableProps<T = any> {
   config: EntityConfig
   FormComponent?: React.ComponentType<any>
+  customColumns?: ColumnDef<T>[] // 自定义列定义（如果提供，则使用自定义列而不是自动生成）
+  customActions?: {
+    onView?: (item: T) => void
+    onDelete?: (item: T) => void
+  } // 自定义操作（如果提供，则使用自定义操作）
+  customSortableColumns?: string[] // 自定义可排序列
+  customColumnLabels?: Record<string, string> // 自定义列标签
+  customClickableColumns?: ClickableColumnConfig<T>[] // 自定义可点击列配置
+  fieldLoadOptions?: Record<string, () => Promise<Array<{ label: string; value: string }>>> // 字段选项加载函数（用于 select 类型字段）
+  customSaveHandler?: (row: T, updates: Record<string, any>) => Promise<void> // 自定义保存处理函数（如果提供，则使用自定义保存逻辑）
 }
 
-export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps<T>) {
+export function EntityTable<T = any>({ 
+  config, 
+  FormComponent,
+  customColumns,
+  customActions,
+  customSortableColumns,
+  customColumnLabels,
+  customClickableColumns,
+  fieldLoadOptions,
+  customSaveHandler,
+}: EntityTableProps<T>) {
   const router = useRouter()
   const [data, setData] = React.useState<T[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -54,6 +77,30 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
   // 搜索状态
   const [search, setSearch] = React.useState('')
   const [searchInput, setSearchInput] = React.useState('')
+  
+  // 筛选状态
+  const [filterValues, setFilterValues] = React.useState<Record<string, any>>({})
+  
+  // 高级搜索状态
+  const [advancedSearchOpen, setAdvancedSearchOpen] = React.useState(false)
+  const [advancedSearchValues, setAdvancedSearchValues] = React.useState<Record<string, any>>({})
+  const [advancedSearchLogic, setAdvancedSearchLogic] = React.useState<'AND' | 'OR'>('AND')
+  
+  // 批量操作状态
+  const [selectedRows, setSelectedRows] = React.useState<T[]>([])
+  const [batchEditDialogOpen, setBatchEditDialogOpen] = React.useState(false)
+  const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = React.useState(false)
+  const [batchEditValues, setBatchEditValues] = React.useState<Record<string, any>>({})
+  
+  // 行内编辑状态（只在客户端初始化，避免 hydration 错误）
+  const [editingRowId, setEditingRowId] = React.useState<string | number | null>(null)
+  const [editingValues, setEditingValues] = React.useState<Record<string, any>>({})
+  const [isMounted, setIsMounted] = React.useState(false)
+  
+  // 确保只在客户端渲染编辑相关功能
+  React.useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   // 获取列表数据
   const fetchData = React.useCallback(async (
@@ -61,7 +108,10 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
     currentPageSize: number,
     currentSort: string,
     currentOrder: 'asc' | 'desc',
-    currentSearch: string
+    currentSearch: string,
+    currentFilters?: Record<string, any>,
+    currentAdvancedSearch?: Record<string, any>,
+    currentLogic?: 'AND' | 'OR'
   ) => {
     try {
       setLoading(true)
@@ -73,6 +123,27 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
       })
       if (currentSearch) {
         params.append('search', currentSearch)
+      }
+      
+      // 添加筛选参数
+      if (currentFilters) {
+        Object.entries(currentFilters).forEach(([key, value]) => {
+          if (value !== null && value !== undefined && value !== '') {
+            params.append(`filter_${key}`, String(value))
+          }
+        })
+      }
+      
+      // 添加高级搜索参数
+      if (currentAdvancedSearch) {
+        Object.entries(currentAdvancedSearch).forEach(([key, value]) => {
+          if (value !== null && value !== undefined && value !== '') {
+            params.append(`advanced_${key}`, String(value))
+          }
+        })
+        if (currentLogic) {
+          params.append('advanced_logic', currentLogic)
+        }
       }
       
       const apiUrl = `${config.apiPath}?${params.toString()}`
@@ -117,8 +188,8 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
   }, [config.apiPath, config.displayName])
 
   React.useEffect(() => {
-    fetchData(page, pageSize, sort, order, search)
-  }, [fetchData, page, pageSize, sort, order, search])
+    fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
+  }, [fetchData, page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic])
   
   // 处理搜索（防抖）
   React.useEffect(() => {
@@ -154,6 +225,161 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
 
   // 获取ID字段名
   const getIdField = () => config.idField || 'id'
+  
+  // 获取行的ID值（用于行选择）
+  const getIdValue = React.useCallback((row: T): string | number => {
+    const idField = getIdField()
+    const id = (row as any)[idField]
+    return id !== null && id !== undefined ? String(id) : ''
+  }, [config.idField])
+  
+  // 检查是否启用批量操作（默认启用）
+  const batchOpsEnabled = config.list.batchOperations?.enabled !== false
+  // 如果批量操作启用，默认显示批量编辑和批量删除（除非明确禁用）
+  const batchEditEnabled = batchOpsEnabled && (config.list.batchOperations?.edit?.enabled !== false)
+  const batchDeleteEnabled = batchOpsEnabled && (config.list.batchOperations?.delete?.enabled !== false)
+  
+  // 检查是否启用行内编辑（默认启用，如果有 update 权限）
+  const inlineEditEnabled = config.list.inlineEdit?.enabled !== false && 
+    config.permissions.update && config.permissions.update.length > 0
+  
+  // 获取可编辑字段列表
+  const editableFields = React.useMemo(() => {
+    if (!inlineEditEnabled) return []
+    const configuredFields = config.list.inlineEdit?.fields
+    if (configuredFields && configuredFields.length > 0) {
+      return configuredFields
+    }
+    // 如果没有配置，则所有非主键、非关系字段都可编辑
+    return Object.keys(config.fields).filter(key => {
+      const field = config.fields[key]
+      return key !== getIdField() && field.type !== 'relation'
+    })
+  }, [inlineEditEnabled, config.list.inlineEdit?.fields, config.fields, config.idField])
+  
+  // 检查行是否正在编辑（只在客户端检查，避免 hydration 错误）
+  const isRowEditing = React.useCallback((row: T): boolean => {
+    if (!isMounted) return false // 服务器端始终返回 false
+    const idField = getIdField()
+    const rowId = (row as any)[idField]
+    return editingRowId !== null && String(editingRowId) === String(rowId)
+  }, [editingRowId, config.idField, isMounted])
+  
+  // 开始编辑行
+  const handleStartEdit = React.useCallback((row: T) => {
+    const idField = getIdField()
+    const rowId = (row as any)[idField]
+    setEditingRowId(rowId)
+    // 初始化编辑值（只包含可编辑字段）
+    const initialValues: Record<string, any> = {}
+    editableFields.forEach(fieldKey => {
+      initialValues[fieldKey] = (row as any)[fieldKey]
+    })
+    setEditingValues(initialValues)
+  }, [editingRowId, editableFields, config.idField])
+  
+  // 更新编辑值
+  const handleEditValueChange = React.useCallback((fieldKey: string, value: any) => {
+    setEditingValues(prev => ({
+      ...prev,
+      [fieldKey]: value
+    }))
+  }, [])
+  
+  // 保存编辑 - 使用 ref 存储最新的编辑值，确保获取到最新状态
+  const editingValuesRef = React.useRef<Record<string, any>>({})
+  React.useEffect(() => {
+    editingValuesRef.current = editingValues
+  }, [editingValues])
+  
+  // 保存编辑
+  const handleSaveEdit = React.useCallback(async (row: T) => {
+    if (!editingRowId) return
+    
+    try {
+      const idField = getIdField()
+      const id = (row as any)[idField]
+      
+      // 使用 ref 获取最新的 editingValues，确保获取到最新值
+      const currentEditingValues = editingValuesRef.current
+      
+      // 过滤掉未改变的字段，并处理日期字段
+      const updates: Record<string, any> = {}
+      Object.entries(currentEditingValues).forEach(([key, value]) => {
+        const originalValue = (row as any)[key]
+        const fieldConfig = config.fields[key]
+        
+        // 处理日期字段：将 YYYY-MM-DD 字符串转换为 Date 对象
+        let processedValue = value
+        if (fieldConfig?.type === 'date' && value && typeof value === 'string') {
+          // 日期字符串格式：YYYY-MM-DD，转换为 Date 对象（UTC）
+          const [year, month, day] = value.split('-').map(Number)
+          if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+            processedValue = new Date(Date.UTC(year, month - 1, day))
+          }
+        } else if (fieldConfig?.type === 'datetime' && value && typeof value === 'string') {
+          // 日期时间字符串，直接转换为 Date
+          processedValue = new Date(value)
+        }
+        
+        // 比较值是否改变
+        const originalStr = originalValue === null || originalValue === undefined ? '' : String(originalValue)
+        const newStr = processedValue === null || processedValue === undefined ? '' : String(processedValue)
+        if (originalStr !== newStr) {
+          updates[key] = processedValue
+        }
+      })
+      
+      if (Object.keys(updates).length === 0) {
+        // 没有变化，直接取消编辑
+        setEditingRowId(null)
+        setEditingValues({})
+        toast.info('没有需要保存的更改')
+        return
+      }
+      
+      // 如果提供了自定义保存处理函数，使用自定义逻辑
+      if (customSaveHandler) {
+        await customSaveHandler(row, updates)
+        toast.success(`更新${config.displayName}成功`)
+        setEditingRowId(null)
+        setEditingValues({})
+        // 刷新数据
+        fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
+        return
+      }
+      
+      // 默认保存逻辑：调用 API 更新
+      const response = await fetch(`${config.apiPath}/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `更新${config.displayName}失败`)
+      }
+      
+      toast.success(`更新${config.displayName}成功`)
+      setEditingRowId(null)
+      setEditingValues({})
+      
+      // 刷新数据
+      fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
+    } catch (error: any) {
+      console.error(`更新${config.displayName}失败:`, error)
+      toast.error(error.message || `更新${config.displayName}失败`)
+    }
+  }, [editingRowId, editingValues, config.apiPath, config.displayName, config.fields, config.idField, customSaveHandler, fetchData, page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic])
+  
+  // 取消编辑
+  const handleCancelEdit = React.useCallback(() => {
+    setEditingRowId(null)
+    setEditingValues({})
+  }, [])
 
   // 处理查看详情
   const handleView = (item: T) => {
@@ -197,7 +423,7 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
       toast.success(`删除${config.displayName}成功`)
       setDeleteDialogOpen(false)
       setItemToDelete(null)
-      fetchData(page, pageSize, sort, order, search)
+      fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
     } catch (error: any) {
       console.error(`删除${config.displayName}失败:`, error)
       toast.error(error.message || `删除${config.displayName}失败`)
@@ -208,7 +434,139 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
   const handleFormSuccess = () => {
     setOpenDialog(false)
     setEditingItem(null)
-    fetchData(page, pageSize, sort, order, search)
+    fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
+  }
+  
+  // 处理筛选变化
+  const handleFilterChange = (field: string, value: any) => {
+    setFilterValues((prev) => {
+      const newFilters = { ...prev, [field]: value }
+      // 如果值为空，删除该筛选
+      if (value === null || value === undefined || value === '') {
+        delete newFilters[field]
+      }
+      return newFilters
+    })
+    setPage(1) // 筛选时重置到第一页
+  }
+  
+  // 清除所有筛选
+  const handleClearFilters = () => {
+    setFilterValues({})
+    setPage(1)
+  }
+  
+  // 处理高级搜索变化
+  const handleAdvancedSearchChange = (field: string, value: any) => {
+    setAdvancedSearchValues((prev) => {
+      const newValues = { ...prev, [field]: value }
+      // 如果值为空，删除该条件
+      if (value === null || value === undefined || value === '') {
+        delete newValues[field]
+      }
+      return newValues
+    })
+  }
+  
+  // 执行高级搜索
+  const handleAdvancedSearch = () => {
+    setAdvancedSearchOpen(false)
+    setPage(1) // 搜索时重置到第一页
+  }
+  
+  // 重置高级搜索
+  const handleResetAdvancedSearch = () => {
+    setAdvancedSearchValues({})
+    setAdvancedSearchLogic('AND')
+  }
+  
+  // 批量删除
+  const handleBatchDelete = async () => {
+    if (selectedRows.length === 0) {
+      toast.error('请至少选择一条记录')
+      return
+    }
+    
+    try {
+      const idField = getIdField()
+      const ids = selectedRows.map(row => (row as any)[idField]).filter(Boolean)
+      
+      if (ids.length === 0) {
+        toast.error('无法获取选中记录的ID')
+        return
+      }
+      
+      const response = await fetch(`${config.apiPath}/batch-delete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ids }),
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `批量删除${config.displayName}失败`)
+      }
+      
+      toast.success(`成功删除 ${ids.length} 条${config.displayName}记录`)
+      setBatchDeleteDialogOpen(false)
+      setSelectedRows([])
+      fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
+    } catch (error: any) {
+      console.error(`批量删除${config.displayName}失败:`, error)
+      toast.error(error.message || `批量删除${config.displayName}失败`)
+    }
+  }
+  
+  // 批量编辑提交
+  const handleBatchEdit = async () => {
+    if (selectedRows.length === 0) {
+      toast.error('请至少选择一条记录')
+      return
+    }
+    
+    try {
+      const idField = getIdField()
+      const ids = selectedRows.map(row => (row as any)[idField]).filter(Boolean)
+      
+      if (ids.length === 0) {
+        toast.error('无法获取选中记录的ID')
+        return
+      }
+      
+      // 过滤掉空值
+      const updates = Object.fromEntries(
+        Object.entries(batchEditValues).filter(([_, value]) => value !== null && value !== undefined && value !== '')
+      )
+      
+      if (Object.keys(updates).length === 0) {
+        toast.error('请至少填写一个要修改的字段')
+        return
+      }
+      
+      const response = await fetch(`${config.apiPath}/batch-update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ids, updates }),
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `批量编辑${config.displayName}失败`)
+      }
+      
+      toast.success(`成功更新 ${ids.length} 条${config.displayName}记录`)
+      setBatchEditDialogOpen(false)
+      setBatchEditValues({})
+      setSelectedRows([])
+      fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
+    } catch (error: any) {
+      console.error(`批量编辑${config.displayName}失败:`, error)
+      toast.error(error.message || `批量编辑${config.displayName}失败`)
+    }
   }
 
   // 根据字段类型获取合适的列宽类（参考专业ERP系统标准）
@@ -287,7 +645,75 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
   }
 
   // 生成基础列定义（不包含操作列，操作列由框架自动添加）
-  const baseColumns: ColumnDef<T>[] = config.list.columns.map((fieldKey) => {
+  // 如果提供了自定义列，则使用自定义列；否则根据配置自动生成
+  const baseColumns: ColumnDef<T>[] = React.useMemo(() => {
+    if (customColumns) {
+      // 如果提供了自定义列，需要为可编辑字段添加行级编辑支持
+      return customColumns.map((col) => {
+        const columnId = col.id || ((col as any).accessorKey as string)
+        if (!columnId) return col
+        
+        // 检查字段是否可编辑
+        const isEditable = inlineEditEnabled && editableFields.includes(columnId)
+        if (!isEditable) return col
+        
+        // 获取字段配置
+        const fieldConfig = config.fields[columnId]
+        if (!fieldConfig) return col
+        
+        // 保存原始的 cell 渲染函数
+        const originalCell = col.cell
+        
+        // 创建新的 cell 渲染函数，支持行级编辑
+        const newCell = ({ row }: { row: any }) => {
+          // 只在客户端且已挂载时检查编辑状态，避免 hydration 错误
+          const rowIsEditing = isMounted && isRowEditing(row.original)
+          
+          // 如果正在编辑，使用 InlineEditCell
+          if (rowIsEditing) {
+            const currentValue = editingValues[columnId] !== undefined 
+              ? editingValues[columnId] 
+              : row.getValue(columnId)
+            // 获取字段的 loadOptions 函数（如果提供）
+            const loadOptions = fieldLoadOptions?.[columnId]
+            return (
+              <InlineEditCell
+                fieldKey={columnId}
+                fieldConfig={fieldConfig}
+                value={currentValue}
+                onChange={(value) => handleEditValueChange(columnId, value)}
+                loadOptions={loadOptions}
+              />
+            )
+          }
+          
+          // 显示模式：如果有原始 cell 函数，使用它；否则使用默认显示
+          if (originalCell) {
+            return typeof originalCell === 'function' 
+              ? originalCell({ row } as any)
+              : originalCell
+          }
+          
+          // 默认显示：根据字段类型格式化
+          const value = row.getValue(columnId)
+          if (fieldConfig.type === 'date') {
+            return <div>{formatDateDisplay(value)}</div>
+          }
+          if (fieldConfig.type === 'datetime') {
+            return <div>{formatDateTimeDisplay(value)}</div>
+          }
+          return <div>{value || '-'}</div>
+        }
+        
+        // 返回新的列定义，使用新的 cell 渲染函数
+        return {
+          ...col,
+          cell: newCell,
+        }
+      })
+    }
+    
+    return config.list.columns.map((fieldKey) => {
     const fieldConfig = config.fields[fieldKey]
     if (!fieldConfig) return null
 
@@ -302,73 +728,139 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
       },
     }
 
-    // 自定义 cell 渲染（根据字段类型）
-    if (fieldConfig.type === 'badge') {
-      column.cell = ({ row }) => {
-        const value = row.getValue(fieldKey) as string
-        return (
-          <Badge variant={value === 'active' ? 'default' : 'secondary'}>
-            {fieldConfig.options?.find(opt => opt.value === value)?.label || value}
-          </Badge>
-        )
-      }
-    } else if (fieldConfig.type === 'currency') {
-      column.cell = ({ row }) => {
-        const value = row.getValue(fieldKey)
-        if (!value && value !== 0) return <div className="text-muted-foreground">-</div>
-        const numValue = typeof value === 'number' ? value : parseFloat(String(value))
-        if (isNaN(numValue)) return <div className="text-muted-foreground">-</div>
-        return (
-          <div className="font-medium">
-            ${numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-        )
-      }
-    } else if (fieldConfig.type === 'date') {
-      column.cell = ({ row }) => {
-        const value = row.getValue(fieldKey) as string | null
-        return <div>{value ? new Date(value).toLocaleDateString('zh-CN') : '-'}</div>
-      }
-    } else if (fieldConfig.type === 'relation') {
-      column.cell = ({ row }) => {
-        const value = row.getValue(fieldKey)
-        const displayValue = fieldConfig.relation?.displayField
-          ? (value as any)?.[fieldConfig.relation.displayField]
-          : value
-        return <div>{displayValue || '-'}</div>
-      }
-    } else if (fieldConfig.type === 'number') {
-      column.cell = ({ row }) => {
-        const value = row.getValue(fieldKey)
-        if (value === null || value === undefined) return <div className="text-muted-foreground">-</div>
-        const numValue = typeof value === 'number' ? value : parseFloat(String(value))
-        if (isNaN(numValue)) return <div className="text-muted-foreground">-</div>
-        // 特殊处理：如果是 capacity_cbm，显示 CBM 单位
-        if (fieldKey === 'capacity_cbm') {
-          return <div>{numValue.toLocaleString()} CBM</div>
+    // 自定义 cell 渲染（根据字段类型和编辑状态）
+    // 检查字段是否可编辑
+    const isEditable = inlineEditEnabled && editableFields.includes(fieldKey)
+    
+    // 创建 cell 渲染函数
+    const createCellRenderer = () => {
+      return ({ row }: { row: any }) => {
+        // 只在客户端且已挂载时检查编辑状态，避免 hydration 错误
+        const rowIsEditing = isMounted && isEditable && isRowEditing(row.original)
+        
+        // 如果正在编辑且字段可编辑，使用 InlineEditCell
+        if (rowIsEditing) {
+          const currentValue = editingValues[fieldKey] !== undefined 
+            ? editingValues[fieldKey] 
+            : row.getValue(fieldKey)
+          // 获取字段的 loadOptions 函数（如果提供）
+          const loadOptions = fieldLoadOptions?.[fieldKey]
+          return (
+            <InlineEditCell
+              fieldKey={fieldKey}
+              fieldConfig={fieldConfig}
+              value={currentValue}
+              onChange={(value) => handleEditValueChange(fieldKey, value)}
+              loadOptions={loadOptions}
+            />
+          )
         }
-        return <div>{numValue.toLocaleString()}</div>
+        
+        // 显示模式：根据字段类型渲染
+        if (fieldConfig.type === 'badge') {
+          const value = row.getValue(fieldKey) as string
+          return (
+            <Badge variant={value === 'active' ? 'default' : 'secondary'}>
+              {fieldConfig.options?.find(opt => opt.value === value)?.label || value}
+            </Badge>
+          )
+        }
+        if (fieldConfig.type === 'currency') {
+          const value = row.getValue(fieldKey)
+          if (!value && value !== 0) return <div className="text-muted-foreground">-</div>
+          const numValue = typeof value === 'number' ? value : parseFloat(String(value))
+          if (isNaN(numValue)) return <div className="text-muted-foreground">-</div>
+          return (
+            <div className="font-medium">
+              ${numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          )
+        }
+        
+        if (fieldConfig.type === 'date') {
+          const value = row.getValue(fieldKey)
+          return <div>{autoFormatDateField(fieldKey, value)}</div>
+        }
+        
+        if (fieldConfig.type === 'relation') {
+          const value = row.getValue(fieldKey)
+          const displayValue = fieldConfig.relation?.displayField
+            ? (value as any)?.[fieldConfig.relation.displayField]
+            : value
+          return <div>{displayValue || '-'}</div>
+        }
+        
+        if (fieldConfig.type === 'number') {
+          const value = row.getValue(fieldKey)
+          if (value === null || value === undefined) return <div className="text-muted-foreground">-</div>
+          const numValue = typeof value === 'number' ? value : parseFloat(String(value))
+          if (isNaN(numValue)) return <div className="text-muted-foreground">-</div>
+          // 特殊处理：如果是 capacity_cbm，显示 CBM 单位
+          if (fieldKey === 'capacity_cbm') {
+            return <div>{numValue.toLocaleString()} CBM</div>
+          }
+          return <div>{numValue.toLocaleString()}</div>
+        }
+        
+        // 默认文本显示
+        const value = row.getValue(fieldKey)
+        return <div>{value?.toString() || '-'}</div>
       }
     }
+    
+    // 应用 cell 渲染器
+    column.cell = createCellRenderer()
 
-    return column
-  }).filter(Boolean) as ColumnDef<T>[]
+      return column
+    }).filter(Boolean) as ColumnDef<T>[]
+  }, [
+    customColumns,
+    config.list.columns,
+    config.fields,
+    inlineEditEnabled,
+    editableFields,
+    isMounted,
+    isRowEditing,
+    editingRowId,
+    editingValues,
+    handleEditValueChange,
+    fieldLoadOptions,
+  ])
 
   // 使用新框架创建表格配置
   const tableConfig = React.useMemo(() => {
-    // 获取可排序列（根据字段配置）
-    const sortableColumns = config.list.columns.filter(fieldKey => {
+    // 获取可排序列（如果提供了自定义，则使用自定义；否则根据字段配置）
+    const sortableColumns = customSortableColumns || config.list.columns.filter(fieldKey => {
       const fieldConfig = config.fields[fieldKey]
       return fieldConfig?.sortable
     })
 
-    // 创建列标签映射
-    const columnLabels = Object.fromEntries(
+    // 创建列标签映射（如果提供了自定义，则使用自定义；否则根据配置生成）
+    const columnLabels = customColumnLabels || Object.fromEntries(
       config.list.columns.map(fieldKey => {
         const fieldConfig = config.fields[fieldKey]
         return [fieldKey, fieldConfig?.label || fieldKey]
       })
     )
+
+    // 使用自定义操作或默认操作
+    const actionsConfig = customActions ? {
+      onView: customActions.onView,
+      onDelete: customActions.onDelete,
+      // 如果自定义操作没有提供行内编辑，则使用默认的
+      onEdit: inlineEditEnabled ? handleStartEdit : undefined,
+      onSave: inlineEditEnabled ? handleSaveEdit : undefined,
+      onCancelEdit: inlineEditEnabled ? handleCancelEdit : undefined,
+      isEditing: inlineEditEnabled ? isRowEditing : undefined,
+    } : {
+      onView: handleView,
+      onDelete: handleDelete,
+      // 行内编辑功能
+      onEdit: inlineEditEnabled ? handleStartEdit : undefined,
+      onSave: inlineEditEnabled ? handleSaveEdit : undefined,
+      onCancelEdit: inlineEditEnabled ? handleCancelEdit : undefined,
+      isEditing: inlineEditEnabled ? isRowEditing : undefined,
+    }
 
     try {
       return createStandardTableConfig<T>({
@@ -376,10 +868,8 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
         sortableColumns,
         columnLabels,
         showActions: true,
-        actionsConfig: {
-          onView: handleView,
-          onDelete: handleDelete,
-        },
+        actionsConfig,
+        clickableColumns: customClickableColumns,
       })
     } catch (error) {
       console.error('创建表格配置失败:', error)
@@ -390,7 +880,26 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
         columnLabels,
       }
     }
-  }, [baseColumns, config.list.columns, config.fields, handleView, handleDelete])
+  }, [
+    baseColumns, 
+    config.list.columns, 
+    config.fields, 
+    handleView, 
+    handleDelete, 
+    customSortableColumns, 
+    customColumnLabels, 
+    customActions,
+    inlineEditEnabled,
+    editableFields,
+    isMounted,
+    isRowEditing,
+    editingRowId,
+    editingValues,
+    handleStartEdit,
+    handleSaveEdit,
+    handleCancelEdit,
+    handleEditValueChange,
+  ])
 
   const { columns, sortableColumns, columnLabels } = tableConfig
 
@@ -411,49 +920,86 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
             管理系统中所有{config.pluralName}信息，支持搜索、筛选和批量操作
           </p>
         </div>
-        <div className="flex-shrink-0">
-          <Button 
-            onClick={handleCreate}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/40 transition-all duration-200 h-11 px-6 text-base font-medium"
-            size="lg"
-          >
-            <Plus className="mr-2 h-5 w-5" />
-            新建{config.displayName}
-          </Button>
-        </div>
+        {/* 只有配置了创建权限才显示新建按钮 */}
+        {config.permissions.create && config.permissions.create.length > 0 && (
+          <div className="flex-shrink-0">
+            <Button 
+              onClick={handleCreate}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/40 transition-all duration-200 h-11 px-6 text-base font-medium"
+              size="lg"
+            >
+              <Plus className="mr-2 h-5 w-5" />
+              新建{config.displayName}
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* 工具栏卡片 */}
-      <Card className="border border-border/50 shadow-md bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50">
-        <CardContent className="p-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            {/* 搜索框 */}
-            {config.list.searchFields && config.list.searchFields.length > 0 && (
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
-                <Input
-                  placeholder={searchPlaceholder}
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="pl-10 pr-20 h-10 text-sm bg-background border focus:border-blue-500/50 transition-all duration-200"
-                />
-                {searchInput && (
-                  <div className="absolute right-2.5 top-1/2 transform -translate-y-1/2">
-                    <Badge variant="secondary" className="text-xs font-medium bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 px-2 py-0.5 border-0">
-                      {total}
-                    </Badge>
-                  </div>
-                )}
-              </div>
+      {/* 专业搜索模块 */}
+      <SearchModule
+        searchPlaceholder={searchPlaceholder}
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        total={total}
+        filterFields={config.list.filterFields}
+        filterValues={filterValues}
+        onFilterChange={handleFilterChange}
+        onClearFilters={handleClearFilters}
+        advancedSearchFields={config.list.advancedSearchFields}
+        advancedSearchOpen={advancedSearchOpen}
+        onAdvancedSearchOpenChange={setAdvancedSearchOpen}
+        advancedSearchValues={advancedSearchValues}
+        advancedSearchLogic={advancedSearchLogic}
+        onAdvancedSearchChange={handleAdvancedSearchChange}
+        onAdvancedSearchLogicChange={setAdvancedSearchLogic}
+        onAdvancedSearch={handleAdvancedSearch}
+        onResetAdvancedSearch={handleResetAdvancedSearch}
+      />
+      
+      {/* 统计信息和批量操作工具栏 */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>共 <span className="font-semibold text-foreground">{total}</span> 条记录</span>
+          {batchOpsEnabled && selectedRows.length > 0 && (
+            <span className="ml-4 text-blue-600 dark:text-blue-400 font-medium">
+              已选择 <span className="font-bold">{selectedRows.length}</span> 条
+            </span>
+          )}
+        </div>
+        {/* 批量操作工具栏 */}
+        {batchOpsEnabled && selectedRows.length > 0 && (
+          <div className="flex items-center gap-2">
+            {batchEditEnabled && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setBatchEditDialogOpen(true)}
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+              >
+                <Edit className="mr-2 h-4 w-4" />
+                批量编辑
+              </Button>
             )}
-            
-            {/* 统计信息 */}
-            <div className="flex items-center text-sm text-muted-foreground">
-              <span>共 <span className="font-semibold text-foreground">{total}</span> 条</span>
-            </div>
+            {batchDeleteEnabled && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setBatchDeleteDialogOpen(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                批量删除
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedRows([])}
+            >
+              取消选择
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {/* 数据表格卡片 */}
       <Card className="border border-border/50 shadow-xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm overflow-hidden !py-0 !gap-0">
@@ -476,6 +1022,10 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
         showColumnToggle={true}
         columnLabels={columnLabels}
         sortableColumns={sortableColumns}
+        enableRowSelection={batchOpsEnabled}
+        onRowSelectionChange={setSelectedRows}
+        getIdValue={getIdValue}
+        isRowEditing={inlineEditEnabled ? isRowEditing : undefined}
       />
         </CardContent>
       </Card>
@@ -538,6 +1088,153 @@ export function EntityTable<T = any>({ config, FormComponent }: EntityTableProps
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
               删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量删除确认对话框 */}
+      <Dialog open={batchDeleteDialogOpen} onOpenChange={setBatchDeleteDialogOpen}>
+        <DialogContent className="border-0 shadow-2xl">
+          <DialogHeader className="space-y-3 pb-4 border-b">
+            <DialogTitle className="text-2xl font-bold text-destructive">确认批量删除</DialogTitle>
+            <DialogDescription className="text-base">
+              确定要删除选中的 <span className="font-semibold text-foreground">{selectedRows.length}</span> 条{config.displayName}记录吗？此操作无法撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBatchDeleteDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <Button variant="destructive" onClick={handleBatchDelete}>
+              确认删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量编辑对话框 */}
+      <Dialog open={batchEditDialogOpen} onOpenChange={setBatchEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto border-0 shadow-2xl">
+          <DialogHeader className="space-y-3 pb-4 border-b">
+            <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              批量编辑
+            </DialogTitle>
+            <DialogDescription className="text-base">
+              您正在编辑 <span className="font-semibold text-foreground">{selectedRows.length}</span> 条{config.displayName}记录。只填写需要修改的字段，留空的字段将保持不变。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {(() => {
+              // 获取可批量编辑的字段
+              const editableFields = config.list.batchOperations?.edit?.fields || 
+                Object.keys(config.fields).filter(key => {
+                  const field = config.fields[key]
+                  // 排除主键字段
+                  return key !== getIdField() && field.type !== 'relation'
+                })
+              
+              return editableFields.map((fieldKey) => {
+                const fieldConfig = config.fields[fieldKey]
+                if (!fieldConfig) return null
+
+                const fieldValue = batchEditValues[fieldKey]
+
+                // 根据字段类型渲染不同的输入控件
+                switch (fieldConfig.type) {
+                  case 'text':
+                  case 'email':
+                  case 'phone':
+                    return (
+                      <div key={fieldKey} className="space-y-2">
+                        <label className="text-sm font-medium">
+                          {fieldConfig.label}
+                        </label>
+                        <input
+                          type={fieldConfig.type === 'email' ? 'email' : fieldConfig.type === 'phone' ? 'tel' : 'text'}
+                          value={fieldValue || ''}
+                          onChange={(e) => setBatchEditValues({ ...batchEditValues, [fieldKey]: e.target.value })}
+                          placeholder={`输入新的${fieldConfig.label}（留空则不修改）`}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                      </div>
+                    )
+
+                  case 'number':
+                  case 'currency':
+                    return (
+                      <div key={fieldKey} className="space-y-2">
+                        <label className="text-sm font-medium">
+                          {fieldConfig.label}
+                        </label>
+                        <input
+                          type="number"
+                          step={fieldConfig.type === 'currency' ? '0.01' : '1'}
+                          value={fieldValue || ''}
+                          onChange={(e) => setBatchEditValues({ ...batchEditValues, [fieldKey]: e.target.value ? Number(e.target.value) : '' })}
+                          placeholder={`输入新的${fieldConfig.label}（留空则不修改）`}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                      </div>
+                    )
+
+                  case 'date':
+                    return (
+                      <div key={fieldKey} className="space-y-2">
+                        <label className="text-sm font-medium">
+                          {fieldConfig.label}
+                        </label>
+                        <input
+                          type="date"
+                          value={fieldValue || ''}
+                          onChange={(e) => setBatchEditValues({ ...batchEditValues, [fieldKey]: e.target.value })}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                      </div>
+                    )
+
+                  case 'select':
+                    return (
+                      <div key={fieldKey} className="space-y-2">
+                        <label className="text-sm font-medium">
+                          {fieldConfig.label}
+                        </label>
+                        <select
+                          value={fieldValue || ''}
+                          onChange={(e) => setBatchEditValues({ ...batchEditValues, [fieldKey]: e.target.value || '' })}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <option value="">不修改</option>
+                          {fieldConfig.options?.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )
+
+                  default:
+                    return null
+                }
+              })
+            })()}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBatchEditDialogOpen(false)
+                setBatchEditValues({})
+              }}
+            >
+              取消
+            </Button>
+            <Button onClick={handleBatchEdit}>
+              确认修改
             </Button>
           </DialogFooter>
         </DialogContent>

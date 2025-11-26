@@ -18,6 +18,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import { EditableCell } from "@/components/ui/editable-cell"
 import { createStandardTableConfig } from "@/lib/table/utils"
+import { formatDateDisplay, formatDateTimeDisplay } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 
 interface SeaContainer {
@@ -128,33 +129,6 @@ export function SeaContainerTable() {
     }
   }, [fetchData])
 
-  // 格式化日期 - 使用与 EditableCell 完全相同的逻辑
-  // 如果已经是 YYYY-MM-DD 格式的字符串，直接返回
-  // 否则使用 toISOString().split("T")[0] 提取日期部分
-  const formatDateDisplay = (date: Date | string | null) => {
-    if (!date) return "-"
-    // 如果已经是 YYYY-MM-DD 格式的字符串，直接返回
-    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return date
-    }
-    // 如果是 ISO 字符串格式，提取日期部分
-    if (typeof date === 'string' && date.includes('T')) {
-      return date.split('T')[0]
-    }
-    // 否则解析为 Date 对象，使用 toISOString().split("T")[0]
-    // 这样与 EditableCell 的显示逻辑完全一致
-    const d = date instanceof Date ? date : new Date(date)
-    if (isNaN(d.getTime())) return "-"
-    return d.toISOString().split("T")[0]
-  }
-
-  // 格式化日期时间
-  const formatDateTime = (date: Date | string | null) => {
-    if (!date) return "-"
-    const d = date instanceof Date ? date : new Date(date)
-    if (isNaN(d.getTime())) return "-"
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
-  }
 
   // 处理查看详情
   const handleView = React.useCallback((container: SeaContainer) => {
@@ -191,9 +165,7 @@ export function SeaContainerTable() {
     {
       accessorKey: "container_number",
       header: "柜号",
-      cell: ({ row }) => (
-        <span className="font-medium">{row.original.container_number}</span>
-      ),
+      // 使用框架的 clickableColumns 配置，不需要自定义 cell
     },
     {
       accessorKey: "mbl",
@@ -251,14 +223,19 @@ export function SeaContainerTable() {
     {
       accessorKey: "order_date",
       header: "订单日期",
-      cell: ({ row }) => formatDateDisplay(row.original.order_date),
+      cell: ({ row }) => {
+        const date = row.original.order_date
+        if (!date) return "-"
+        // 显示时使用不包含年份的格式
+        return formatDateDisplay(date)
+      },
     },
     {
       accessorKey: "eta_date",
       header: "ETA",
       cell: ({ row }) => (
         <EditableCell
-          value={row.original.eta_date ? formatDateDisplay(row.original.eta_date) : null}
+          value={row.original.eta_date}
           onSave={(value) => handleCellSave(
             row.original.container_id,
             row.original.order_id,
@@ -306,7 +283,7 @@ export function SeaContainerTable() {
       header: "LFD",
       cell: ({ row }) => (
         <EditableCell
-          value={row.original.lfd_date ? formatDateDisplay(row.original.lfd_date) : null}
+          value={row.original.lfd_date}
           onSave={(value) => handleCellSave(
             row.original.container_id,
             row.original.order_id,
@@ -322,7 +299,7 @@ export function SeaContainerTable() {
       header: "提柜日期",
       cell: ({ row }) => (
         <EditableCell
-          value={row.original.pickup_date ? formatDateDisplay(row.original.pickup_date) : null}
+          value={row.original.pickup_date}
           onSave={(value) => handleCellSave(
             row.original.container_id,
             row.original.order_id,
@@ -338,7 +315,7 @@ export function SeaContainerTable() {
       header: "还柜日期",
       cell: ({ row }) => (
         <EditableCell
-          value={row.original.return_date ? formatDateDisplay(row.original.return_date) : null}
+          value={row.original.return_date}
           onSave={(value) => handleCellSave(
             row.original.container_id,
             row.original.order_id,
@@ -357,7 +334,7 @@ export function SeaContainerTable() {
     {
       accessorKey: "appointment_time",
       header: "预约时间",
-      cell: ({ row }) => formatDateTime(row.original.appointment_time),
+      cell: ({ row }) => formatDateTimeDisplay(row.original.appointment_time),
     },
     {
       accessorKey: "warehouse_account",
@@ -367,7 +344,7 @@ export function SeaContainerTable() {
       ),
     },
   ]
-  }, [handleCellSave])
+  }, [handleCellSave, handleView])
 
   // 使用新框架创建表格配置
   const tableConfig = React.useMemo(() => {
@@ -414,6 +391,26 @@ export function SeaContainerTable() {
         onView: handleView,
         onDelete: handleDelete,
       },
+      // 可点击列配置：柜号列可点击跳转到详情
+      clickableColumns: [
+        {
+          columnId: "container_number",
+          onClick: (container) => {
+            if (container.order_id) {
+              handleView(container)
+            } else {
+              toast.error("无法查看详情：缺少订单ID")
+            }
+          },
+          disabled: (container) => !container.order_id,
+          showIcon: true,
+          bold: true,
+          getTitle: (container) =>
+            container.order_id
+              ? `点击查看订单详情 (订单ID: ${container.order_id})`
+              : "无法查看详情：缺少订单ID",
+        },
+      ],
     })
   }, [baseColumns, handleView, handleDelete])
 

@@ -4,6 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { getOrderStatusBadge } from "@/lib/utils/badges"
 import { OrderBasicInfoCard } from "./order-basic-info-card"
 import { OrderDetailsTable } from "./order-details-table"
 
@@ -20,14 +21,14 @@ export function OrderDetailPageClient({
 }: OrderDetailPageClientProps) {
   const router = useRouter()
 
-  // 格式化函数 - 使用固定格式避免 hydration 错误
+  // 格式化日期（不包含年份，节省空间）
   const formatDate = (date: Date | string | null) => {
     if (!date) return "-"
     const d = new Date(date)
-    const year = d.getFullYear()
+    if (isNaN(d.getTime())) return "-"
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
+    return `${month}-${day}`
   }
 
   const formatCurrency = (amount: string | number | null | any) => {
@@ -48,17 +49,9 @@ export function OrderDetailPageClient({
     return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   }
 
+  // 使用统一的订单状态 Badge 函数，确保与配置一致
   const getStatusBadge = (status: string | null) => {
-    if (!status) return <Badge variant="secondary">-</Badge>
-    const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" }> = {
-      pending: { label: '待处理', variant: 'secondary' },
-      confirmed: { label: '已确认', variant: 'default' },
-      shipped: { label: '已发货', variant: 'default' },
-      delivered: { label: '已交付', variant: 'default' },
-      cancelled: { label: '已取消', variant: 'destructive' },
-    }
-    const statusInfo = statusMap[status] || { label: status, variant: 'secondary' as const }
-    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+    return getOrderStatusBadge(status)
   }
 
   const handleRefresh = () => {

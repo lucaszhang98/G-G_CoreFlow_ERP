@@ -49,7 +49,8 @@ export async function PATCH(
       'lfd_date': 'lfd_date',
       'pickup_date': 'pickup_date',
       'return_date': 'return_deadline',
-      'port_location': 'port_location',
+      'port_location': 'port_location', // 保留兼容性（文本字段）
+      'port_location_id': 'port_location_id', // 新字段：存储 location_id（暂时禁用，等数据库添加字段）
       'operation_mode': 'operation_mode',
       'delivery_location': 'delivery_location',
     }
@@ -58,9 +59,10 @@ export async function PATCH(
     if (!dbField) {
       return NextResponse.json({ 
         error: `字段 ${field} 不允许编辑`,
-        allowedFields: Object.keys(fieldMap)
+        allowedFields: Object.keys(fieldMap).filter(k => k !== 'port_location_id') // 暂时不显示 port_location_id
       }, { status: 400 })
     }
+    
 
     // 构建更新数据对象
     // 使用 Prisma 期望的类型，但允许动态字段访问
@@ -133,12 +135,79 @@ export async function PATCH(
           return NextResponse.json({ error: `解析日期失败: ${String(e)}` }, { status: 400 })
         }
       }
+    } else if (dbField === 'port_location_id') {
+      // port_location_id 字段：存储 location_id（BigInt），并验证 location 是否存在且类型正确
+      // 注意：需要在数据库添加 port_location_id 字段后才能使用
+      if (value === null || value === undefined || value === '') {
+        // 暂时只更新 port_location 文本字段（兼容性）
+        updateData['port_location'] = null
+        // updateData['port_location_id'] = null // 等数据库添加字段后再启用
+      } else {
+        // 验证 location_id 格式
+        let locationIdBigInt: bigint
+        try {
+          locationIdBigInt = BigInt(String(value))
+        } catch (e) {
+          return NextResponse.json({ error: '无效的码头/查验站ID格式' }, { status: 400 })
+        }
+
+        // 验证 location 是否存在且类型正确
+        const location = await prisma.locations.findUnique({
+          where: { location_id: locationIdBigInt },
+          select: { location_id: true, name: true, location_type: true },
+        })
+
+        if (!location) {
+          return NextResponse.json({ error: '选择的码头/查验站不存在' }, { status: 400 })
+        }
+
+        if (location.location_type !== 'port' && location.location_type !== 'inspection') {
+          return NextResponse.json({ 
+            error: '选择的位置类型不正确，必须是码头或查验站' 
+          }, { status: 400 })
+        }
+
+        // 暂时只更新 port_location 文本字段（兼容性），等数据库添加 port_location_id 字段后再启用
+        updateData['port_location'] = location.name
+        // updateData['port_location_id'] = locationIdBigInt // 等数据库添加字段后再启用
+      }
     } else {
       // 字符串字段 (port_location, operation_mode, delivery_location)
       if (value === null || value === undefined) {
         updateData[dbField] = null
       } else {
         const strValue = String(value).trim()
+        
+        // 验证字符串长度
+        if (dbField === 'port_location') {
+          // port_location 最大长度为 200 字符
+          if (strValue.length > 200) {
+            return NextResponse.json({ 
+              error: `码头/查验站名称过长，最大长度为200个字符，当前长度为${strValue.length}` 
+            }, { status: 400 })
+          }
+          // 验证非空
+          if (strValue.length === 0) {
+            return NextResponse.json({ 
+              error: '码头/查验站不能为空' 
+            }, { status: 400 })
+          }
+        } else if (dbField === 'operation_mode') {
+          // operation_mode 验证
+          if (strValue.length > 100) {
+            return NextResponse.json({ 
+              error: `操作方式过长，最大长度为100个字符，当前长度为${strValue.length}` 
+            }, { status: 400 })
+          }
+        } else if (dbField === 'delivery_location') {
+          // delivery_location 验证
+          if (strValue.length > 200) {
+            return NextResponse.json({ 
+              error: `送货地名称过长，最大长度为200个字符，当前长度为${strValue.length}` 
+            }, { status: 400 })
+          }
+        }
+        
         updateData[dbField] = strValue || null
       }
     }

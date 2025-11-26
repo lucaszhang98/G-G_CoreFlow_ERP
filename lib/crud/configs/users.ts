@@ -78,6 +78,19 @@ export const userConfig: EntityConfig = {
         displayField: 'name',
       },
     },
+    phone: {
+      key: 'phone',
+      label: '电话',
+      type: 'phone',
+      placeholder: '请输入电话（可选）',
+    },
+    password: {
+      key: 'password',
+      label: '密码',
+      type: 'text',
+      required: false, // 更新时可选
+      placeholder: '请输入密码（留空则不修改）',
+    },
     created_at: {
       key: 'created_at',
       label: '创建时间',
@@ -92,6 +105,66 @@ export const userConfig: EntityConfig = {
     columns: ['username', 'email', 'full_name', 'role', 'status', 'department', 'created_at'],
     searchFields: ['username', 'email', 'full_name'],
     pageSize: 10,
+    // 筛选配置（快速筛选）
+    filterFields: [
+      {
+        field: 'role',
+        label: '角色',
+        type: 'select',
+        options: [
+          { label: '管理员', value: 'admin' },
+          { label: 'OMS经理', value: 'oms_manager' },
+          { label: 'TMS经理', value: 'tms_manager' },
+          { label: 'WMS经理', value: 'wms_manager' },
+          { label: '员工', value: 'employee' },
+          { label: '用户', value: 'user' },
+        ],
+      },
+      {
+        field: 'status',
+        label: '状态',
+        type: 'select',
+        options: [
+          { label: '活跃', value: 'active' },
+          { label: '停用', value: 'inactive' },
+        ],
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 高级搜索配置（多条件组合）
+    advancedSearchFields: [
+      {
+        field: 'email',
+        label: '邮箱',
+        type: 'text',
+      },
+      {
+        field: 'full_name',
+        label: '姓名',
+        type: 'text',
+      },
+    ],
+    // 批量操作配置
+    batchOperations: {
+      enabled: true,
+      edit: {
+        enabled: true,
+        fields: ['role', 'status'],
+      },
+      delete: {
+        enabled: true,
+      },
+    },
+    // 行内编辑配置
+    inlineEdit: {
+      enabled: true,
+      fields: ['role', 'status', 'full_name'],
+    },
   },
   
   formFields: ['username', 'email', 'password', 'full_name', 'role', 'status', 'department_id', 'phone'],

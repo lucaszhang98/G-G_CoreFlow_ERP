@@ -1,0 +1,616 @@
+"use client"
+
+/**
+ * 专业搜索模块组件
+ * 统一整合简单搜索、筛选和高级搜索功能
+ * 现代化、专业的UI设计
+ */
+
+import * as React from "react"
+import { Search, Filter, X, ChevronDown, SlidersHorizontal, Sparkles } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Label } from "@/components/ui/label"
+import { FilterFieldConfig, AdvancedSearchFieldConfig } from "@/lib/crud/types"
+import { AdvancedSearchDialog } from "./advanced-search-dialog"
+
+interface SearchModuleProps {
+  // 简单搜索
+  searchPlaceholder?: string
+  searchValue: string
+  onSearchChange: (value: string) => void
+  total?: number
+  
+  // 筛选
+  filterFields?: FilterFieldConfig[]
+  filterValues: Record<string, any>
+  onFilterChange: (field: string, value: any) => void
+  onClearFilters: () => void
+  
+  // 高级搜索
+  advancedSearchFields?: AdvancedSearchFieldConfig[]
+  advancedSearchOpen: boolean
+  onAdvancedSearchOpenChange: (open: boolean) => void
+  advancedSearchValues: Record<string, any>
+  advancedSearchLogic: 'AND' | 'OR'
+  onAdvancedSearchChange: (field: string, value: any) => void
+  onAdvancedSearchLogicChange: (logic: 'AND' | 'OR') => void
+  onAdvancedSearch: () => void
+  onResetAdvancedSearch: () => void
+}
+
+export function SearchModule({
+  searchPlaceholder = "搜索...",
+  searchValue,
+  onSearchChange,
+  total = 0,
+  filterFields = [],
+  filterValues,
+  onFilterChange,
+  onClearFilters,
+  advancedSearchFields = [],
+  advancedSearchOpen,
+  onAdvancedSearchOpenChange,
+  advancedSearchValues,
+  advancedSearchLogic,
+  onAdvancedSearchChange,
+  onAdvancedSearchLogicChange,
+  onAdvancedSearch,
+  onResetAdvancedSearch,
+}: SearchModuleProps) {
+  // 维护筛选选项映射（用于显示标签）
+  const [filterOptionsMap, setFilterOptionsMap] = React.useState<Record<string, Record<string, string>>>({})
+
+  // 计算活跃的筛选数量（考虑范围类型）
+  const activeFilterCount = React.useMemo(() => {
+    if (!filterFields.length) return 0
+    
+    let count = 0
+    filterFields.forEach((filter) => {
+      if (filter.type === 'select') {
+        const value = filterValues[filter.field]
+        if (value && value !== '__all__') {
+          count++
+        }
+      } else if (filter.type === 'dateRange') {
+        const from = filterValues[`${filter.field}_from`]
+        const to = filterValues[`${filter.field}_to`]
+        if (from || to) {
+          count++
+        }
+      } else if (filter.type === 'numberRange') {
+        const min = filterValues[`${filter.field}_min`]
+        const max = filterValues[`${filter.field}_max`]
+        if (min || max) {
+          count++
+        }
+      }
+    })
+    return count
+  }, [filterValues, filterFields])
+
+  // 计算活跃的高级搜索条件数量
+  const activeAdvancedSearchCount = React.useMemo(() => {
+    return Object.values(advancedSearchValues).filter(
+      (v) => v !== null && v !== undefined && v !== '' && (Array.isArray(v) ? v.length > 0 : true)
+    ).length
+  }, [advancedSearchValues])
+
+  const hasActiveFilters = activeFilterCount > 0
+  const hasActiveAdvancedSearch = activeAdvancedSearchCount > 0
+  const hasAnyFilters = hasActiveFilters || hasActiveAdvancedSearch || searchValue
+
+  return (
+    <div className="space-y-4">
+      {/* 主搜索区域 */}
+      <div className="relative group">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        <div className="relative bg-white dark:bg-gray-900/50 border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-lg shadow-gray-900/5 dark:shadow-gray-900/20 p-6 backdrop-blur-sm">
+          {/* 搜索框行 */}
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-3">
+            {/* 主要搜索框 */}
+            <div className="relative flex-1 group/search">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-indigo-500/5 to-purple-500/5 rounded-xl opacity-0 group-hover/search:opacity-100 transition-opacity duration-200" />
+              <div className="relative flex items-center">
+                <div className="absolute left-4 z-10 pointer-events-none">
+                  <Search className="h-5 w-5 text-gray-400 dark:text-gray-500 transition-colors group-hover/search:text-blue-500" />
+                </div>
+                <Input
+                  placeholder={searchPlaceholder}
+                  value={searchValue}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  className="pl-12 pr-4 h-14 text-base border-2 border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 rounded-xl focus:border-blue-500 focus:bg-white dark:focus:bg-gray-900/50 focus:ring-4 focus:ring-blue-500/10 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-300 dark:hover:border-gray-700"
+                />
+                {searchValue && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onSearchChange('')}
+                      className="h-8 w-8 rounded-lg hover:bg-gray-200/80 dark:hover:bg-gray-800/80"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {/* 搜索结果提示 */}
+              {searchValue && (
+                <div className="absolute left-4 top-full mt-2 text-xs text-gray-500 dark:text-gray-400 animate-in fade-in slide-in-from-top-1">
+                  找到 <span className="font-semibold text-blue-600 dark:text-blue-400">{total}</span> 条结果
+                </div>
+              )}
+            </div>
+
+            {/* 操作按钮组 */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* 高级搜索按钮 */}
+              {advancedSearchFields.length > 0 && (
+                <Button
+                  variant={hasActiveAdvancedSearch ? "default" : "outline"}
+                  onClick={() => onAdvancedSearchOpenChange(true)}
+                  className={`
+                    h-14 px-6 rounded-xl font-medium transition-all duration-200
+                    ${hasActiveAdvancedSearch 
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25" 
+                      : "border-2 border-gray-200 dark:border-gray-800 hover:border-blue-500 dark:hover:border-blue-600 bg-white dark:bg-gray-900/50 hover:bg-blue-50/50 dark:hover:bg-blue-950/20"
+                    }
+                  `}
+                >
+                  <SlidersHorizontal className={`h-4 w-4 mr-2 ${hasActiveAdvancedSearch ? 'text-white' : 'text-gray-600 dark:text-gray-400'}`} />
+                  <span className={hasActiveAdvancedSearch ? 'text-white' : 'text-gray-700 dark:text-gray-300'}>
+                    高级搜索
+                  </span>
+                  {hasActiveAdvancedSearch && (
+                    <Badge 
+                      variant="secondary" 
+                      className="ml-2 h-5 min-w-5 px-1.5 bg-white/20 text-white border-0"
+                    >
+                      {activeAdvancedSearchCount}
+                    </Badge>
+                  )}
+                </Button>
+              )}
+
+              {/* 清除所有筛选按钮 */}
+              {hasAnyFilters && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    onSearchChange('')
+                    onClearFilters()
+                    onResetAdvancedSearch()
+                  }}
+                  className="h-14 px-4 rounded-xl border-2 border-gray-200 dark:border-gray-800 hover:border-red-400 dark:hover:border-red-600 hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-all duration-200"
+                >
+                  <X className="h-4 w-4 mr-2 text-gray-600 dark:text-gray-400" />
+                  <span className="text-gray-700 dark:text-gray-300">清除</span>
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* 快速筛选区域 */}
+          {filterFields.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-200/60 dark:border-gray-800/60">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 shrink-0">
+                  <Filter className="h-4 w-4" />
+                  <span className="font-medium">快速筛选</span>
+                </div>
+                
+                {filterFields.map((filter) => {
+                  if (filter.type === 'select') {
+                    const currentValue = filterValues[filter.field]
+                    const isActive = currentValue && currentValue !== '__all__'
+                    
+                    // 动态加载选项的状态
+                    const [selectOptions, setSelectOptions] = React.useState<Array<{ label: string; value: string }>>(filter.options || [])
+                    const [loadingOptions, setLoadingOptions] = React.useState(false)
+                    const [optionsLoaded, setOptionsLoaded] = React.useState(!filter.loadOptions) // 如果有静态选项，则已经加载
+                    
+                    // 加载选项
+                    React.useEffect(() => {
+                      if (filter.loadOptions && !optionsLoaded && !loadingOptions) {
+                        setLoadingOptions(true)
+                        filter.loadOptions()
+                          .then((loadedOptions) => {
+                            setSelectOptions(loadedOptions)
+                            setOptionsLoaded(true)
+                            // 更新选项映射，用于显示标签
+                            const valueToLabelMap: Record<string, string> = {}
+                            loadedOptions.forEach((opt) => {
+                              valueToLabelMap[opt.value] = opt.label
+                            })
+                            setFilterOptionsMap((prev) => ({
+                              ...prev,
+                              [filter.field]: valueToLabelMap,
+                            }))
+                          })
+                          .catch((error) => {
+                            console.error(`加载筛选选项失败 (${filter.field}):`, error)
+                          })
+                          .finally(() => {
+                            setLoadingOptions(false)
+                          })
+                      } else if (filter.options && filter.options.length > 0) {
+                        // 静态选项，也更新映射
+                        const valueToLabelMap: Record<string, string> = {}
+                        filter.options.forEach((opt) => {
+                          valueToLabelMap[opt.value] = opt.label
+                        })
+                        setFilterOptionsMap((prev) => ({
+                          ...prev,
+                          [filter.field]: valueToLabelMap,
+                        }))
+                      }
+                    }, [filter.loadOptions, filter.options, filter.field, optionsLoaded, loadingOptions])
+                    
+                    // 使用 DropdownMenu，Button 显示标签，点击后直接显示选项列表
+                    const selectedLabel = React.useMemo(() => {
+                      if (!currentValue || currentValue === '__all__') {
+                        return null
+                      }
+                      const option = filter.options?.find(opt => opt.value === currentValue)
+                      return option?.label || filterOptionsMap[filter.field]?.[currentValue] || currentValue
+                    }, [currentValue, filter.options, filter.field, filterOptionsMap])
+                    
+                    return (
+                      <DropdownMenu key={filter.field}>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant={isActive ? "default" : "outline"}
+                            className={`
+                              h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+                              ${isActive
+                                ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
+                                : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
+                              }
+                            `}
+                            disabled={loadingOptions}
+                          >
+                            <span className="truncate">
+                              {loadingOptions ? "加载中..." : (selectedLabel || filter.label)}
+                            </span>
+                            <ChevronDown className="ml-2 h-3 w-3 opacity-70 shrink-0" />
+                            {isActive && (
+                              <Badge 
+                                variant="secondary" 
+                                className="ml-2 h-4 min-w-4 px-1 bg-white/20 text-white border-0 shrink-0"
+                              >
+                                1
+                              </Badge>
+                            )}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="max-h-[300px] overflow-y-auto">
+                          <DropdownMenuItem
+                            onClick={() => onFilterChange(filter.field, null)}
+                            className={!currentValue || currentValue === '__all__' ? "bg-accent" : ""}
+                          >
+                            全部
+                          </DropdownMenuItem>
+                          {selectOptions.map((option) => (
+                            <DropdownMenuItem
+                              key={option.value}
+                              onClick={() => onFilterChange(filter.field, option.value)}
+                              className={currentValue === option.value ? "bg-accent" : ""}
+                            >
+                              {option.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )
+                  }
+
+                  if (filter.type === 'dateRange') {
+                    const fromValue = filterValues[`${filter.field}_from`]
+                    const toValue = filterValues[`${filter.field}_to`]
+                    const isActive = fromValue || toValue
+
+                    return (
+                      <Popover key={filter.field}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={isActive ? "default" : "outline"}
+                            className={`
+                              h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+                              ${isActive
+                                ? "bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white shadow-md shadow-cyan-500/20"
+                                : "border-gray-200 dark:border-gray-800 hover:border-cyan-400 dark:hover:border-cyan-600 hover:bg-cyan-50/50 dark:hover:bg-cyan-950/20"
+                              }
+                            `}
+                          >
+                            {filter.label}
+                            <ChevronDown className="ml-2 h-3 w-3 opacity-70" />
+                            {isActive && (
+                              <Badge 
+                                variant="secondary" 
+                                className="ml-2 h-4 min-w-4 px-1 bg-white/20 text-white border-0"
+                              >
+                                1
+                              </Badge>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-4" align="start">
+                          <div className="space-y-3">
+                            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">{filter.label}</div>
+                            <div className="flex items-center gap-3">
+                              <div className="space-y-2">
+                                <Label className="text-xs text-gray-500">开始日期</Label>
+                                <Input
+                                  type="date"
+                                  value={fromValue || ''}
+                                  onChange={(e) => onFilterChange(`${filter.field}_from`, e.target.value || null)}
+                                  className="h-9 w-[160px]"
+                                />
+                              </div>
+                              <div className="pt-6 text-gray-400">至</div>
+                              <div className="space-y-2">
+                                <Label className="text-xs text-gray-500">结束日期</Label>
+                                <Input
+                                  type="date"
+                                  value={toValue || ''}
+                                  onChange={(e) => onFilterChange(`${filter.field}_to`, e.target.value || null)}
+                                  className="h-9 w-[160px]"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2 border-t">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  onFilterChange(`${filter.field}_from`, null)
+                                  onFilterChange(`${filter.field}_to`, null)
+                                }}
+                                className="h-8 text-xs"
+                              >
+                                清除
+                              </Button>
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )
+                  }
+
+                  if (filter.type === 'numberRange') {
+                    const minValue = filterValues[`${filter.field}_min`]
+                    const maxValue = filterValues[`${filter.field}_max`]
+                    const isActive = minValue || maxValue
+
+                    return (
+                      <Popover key={filter.field}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={isActive ? "default" : "outline"}
+                            className={`
+                              h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+                              ${isActive
+                                ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md shadow-emerald-500/20"
+                                : "border-gray-200 dark:border-gray-800 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20"
+                              }
+                            `}
+                          >
+                            {filter.label}
+                            <ChevronDown className="ml-2 h-3 w-3 opacity-70" />
+                            {isActive && (
+                              <Badge 
+                                variant="secondary" 
+                                className="ml-2 h-4 min-w-4 px-1 bg-white/20 text-white border-0"
+                              >
+                                1
+                              </Badge>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-4" align="start">
+                          <div className="space-y-3">
+                            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">{filter.label}</div>
+                            <div className="flex items-center gap-3">
+                              <div className="space-y-2">
+                                <Label className="text-xs text-gray-500">最小值</Label>
+                                <Input
+                                  type="number"
+                                  value={minValue || ''}
+                                  onChange={(e) => onFilterChange(`${filter.field}_min`, e.target.value || null)}
+                                  className="h-9 w-[140px]"
+                                  placeholder="最小值"
+                                />
+                              </div>
+                              <div className="pt-6 text-gray-400">至</div>
+                              <div className="space-y-2">
+                                <Label className="text-xs text-gray-500">最大值</Label>
+                                <Input
+                                  type="number"
+                                  value={maxValue || ''}
+                                  onChange={(e) => onFilterChange(`${filter.field}_max`, e.target.value || null)}
+                                  className="h-9 w-[140px]"
+                                  placeholder="最大值"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2 border-t">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  onFilterChange(`${filter.field}_min`, null)
+                                  onFilterChange(`${filter.field}_max`, null)
+                                }}
+                                className="h-8 text-xs"
+                              >
+                                清除
+                              </Button>
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )
+                  }
+
+                  return null
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 活跃筛选标签显示区域 */}
+      {hasAnyFilters && (
+        <div className="flex flex-wrap items-center gap-2 px-1">
+          {searchValue && (
+            <Badge 
+              variant="secondary" 
+              className="px-3 py-1.5 text-sm font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg"
+            >
+              <Search className="h-3 w-3 mr-1.5" />
+              搜索: {searchValue}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onSearchChange('')}
+                className="h-4 w-4 ml-2 -mr-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-full"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </Badge>
+          )}
+          
+          {filterFields.map((filter) => {
+            if (filter.type === 'select') {
+              const value = filterValues[filter.field]
+              if (!value || value === '__all__') return null
+              // 优先从静态选项查找，然后从动态加载的选项映射查找
+              const option = filter.options?.find(opt => opt.value === value)
+              const label = option?.label || filterOptionsMap[filter.field]?.[value] || value
+              return (
+                <Badge
+                  key={filter.field}
+                  variant="secondary"
+                  className="px-3 py-1.5 text-sm font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg"
+                >
+                  <Filter className="h-3 w-3 mr-1.5" />
+                  {filter.label}: {label}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onFilterChange(filter.field, null)}
+                    className="h-4 w-4 ml-2 -mr-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-full"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              )
+            }
+            
+            if (filter.type === 'dateRange') {
+              const from = filterValues[`${filter.field}_from`]
+              const to = filterValues[`${filter.field}_to`]
+              if (!from && !to) return null
+              return (
+                <Badge
+                  key={filter.field}
+                  variant="secondary"
+                  className="px-3 py-1.5 text-sm font-medium bg-cyan-50 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 rounded-lg"
+                >
+                  <Filter className="h-3 w-3 mr-1.5" />
+                  {filter.label}: {from || '...'} 至 {to || '...'}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      onFilterChange(`${filter.field}_from`, null)
+                      onFilterChange(`${filter.field}_to`, null)
+                    }}
+                    className="h-4 w-4 ml-2 -mr-1 hover:bg-cyan-100 dark:hover:bg-cyan-900/50 rounded-full"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              )
+            }
+            
+            if (filter.type === 'numberRange') {
+              const min = filterValues[`${filter.field}_min`]
+              const max = filterValues[`${filter.field}_max`]
+              if (!min && !max) return null
+              return (
+                <Badge
+                  key={filter.field}
+                  variant="secondary"
+                  className="px-3 py-1.5 text-sm font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg"
+                >
+                  <Filter className="h-3 w-3 mr-1.5" />
+                  {filter.label}: {min || '...'} 至 {max || '...'}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      onFilterChange(`${filter.field}_min`, null)
+                      onFilterChange(`${filter.field}_max`, null)
+                    }}
+                    className="h-4 w-4 ml-2 -mr-1 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-full"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              )
+            }
+            
+            return null
+          })}
+          
+          {hasActiveAdvancedSearch && (
+            <Badge 
+              variant="secondary" 
+              className="px-3 py-1.5 text-sm font-medium bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-lg"
+            >
+              <Sparkles className="h-3 w-3 mr-1.5" />
+              高级搜索 ({activeAdvancedSearchCount} 个条件)
+            </Badge>
+          )}
+        </div>
+      )}
+
+      {/* 高级搜索对话框 */}
+      {advancedSearchFields.length > 0 && (
+        <AdvancedSearchDialog
+          open={advancedSearchOpen}
+          onOpenChange={onAdvancedSearchOpenChange}
+          fields={advancedSearchFields}
+          searchValues={advancedSearchValues}
+          logic={advancedSearchLogic}
+          onSearchChange={onAdvancedSearchChange}
+          onLogicChange={onAdvancedSearchLogicChange}
+          onSearch={onAdvancedSearch}
+          onReset={onResetAdvancedSearch}
+        />
+      )}
+    </div>
+  )
+}
+

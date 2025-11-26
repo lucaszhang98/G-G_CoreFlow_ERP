@@ -69,6 +69,43 @@ export const carrierConfig: EntityConfig = {
     columns: ['carrier_code', 'name', 'carrier_type', 'contact', 'created_at'],
     searchFields: ['carrier_code', 'name'],
     pageSize: 10,
+    // 筛选配置（快速筛选）
+    filterFields: [
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 高级搜索配置（多条件组合）
+    advancedSearchFields: [
+      {
+        field: 'carrier_type',
+        label: '承运商类型',
+        type: 'text',
+      },
+      {
+        field: 'created_at',
+        label: '创建日期',
+        type: 'dateRange',
+        dateFields: ['created_at'],
+      },
+    ],
+    // 批量操作配置
+    batchOperations: {
+      enabled: true,
+      edit: {
+        enabled: true,
+      },
+      delete: {
+        enabled: true,
+      },
+    },
+    // 行内编辑配置
+    inlineEdit: {
+      enabled: true,
+    },
   },
   
   formFields: ['carrier_code', 'name', 'carrier_type', 'contact'],

@@ -46,7 +46,7 @@ export function createListHandler(config: EntityConfig) {
       // 构建查询条件
       const where: any = {}
       
-      // 搜索条件
+      // 简单搜索条件（模糊搜索）
       if (search && config.list.searchFields) {
         where.OR = config.list.searchFields.map(field => {
           const fieldConfig = config.fields[field]
@@ -60,12 +60,177 @@ export function createListHandler(config: EntityConfig) {
         }).filter(Boolean)
       }
 
+      // 筛选条件（快速筛选）
+      if (config.list.filterFields) {
+        config.list.filterFields.forEach((filterField) => {
+          if (filterField.type === 'select') {
+            const filterValue = searchParams.get(`filter_${filterField.field}`)
+            // 忽略 "__all__" 值（表示清除筛选）
+            if (filterValue && filterValue !== '__all__') {
+              where[filterField.field] = filterValue
+            }
+          } else if (filterField.type === 'dateRange') {
+            const dateFrom = searchParams.get(`filter_${filterField.field}_from`)
+            const dateTo = searchParams.get(`filter_${filterField.field}_to`)
+            if (dateFrom || dateTo) {
+              const dateCondition: any = {}
+              if (dateFrom) {
+                dateCondition.gte = new Date(dateFrom)
+              }
+              if (dateTo) {
+                // 结束日期应该包含整天，所以设置为当天的 23:59:59
+                const endDate = new Date(dateTo)
+                endDate.setHours(23, 59, 59, 999)
+                dateCondition.lte = endDate
+              }
+              // 如果指定了多个日期字段，使用 OR 逻辑
+              if (filterField.dateFields && filterField.dateFields.length > 0) {
+                if (!where.OR) where.OR = []
+                filterField.dateFields.forEach((dateField) => {
+                  where.OR!.push({ [dateField]: dateCondition })
+                })
+              } else {
+                // 默认使用 filterField.field
+                where[filterField.field] = dateCondition
+              }
+            }
+          } else if (filterField.type === 'numberRange') {
+            const numMin = searchParams.get(`filter_${filterField.field}_min`)
+            const numMax = searchParams.get(`filter_${filterField.field}_max`)
+            if (numMin || numMax) {
+              const numCondition: any = {}
+              if (numMin) {
+                numCondition.gte = Number(numMin)
+              }
+              if (numMax) {
+                numCondition.lte = Number(numMax)
+              }
+              // 如果指定了多个数值字段，使用 OR 逻辑
+              if (filterField.numberFields && filterField.numberFields.length > 0) {
+                if (!where.OR) where.OR = []
+                filterField.numberFields.forEach((numField) => {
+                  where.OR!.push({ [numField]: numCondition })
+                })
+              } else {
+                // 默认使用 filterField.field
+                where[filterField.field] = numCondition
+              }
+            }
+          }
+        })
+      }
+
+      // 高级搜索条件（多条件组合）
+      const advancedLogic = searchParams.get('advanced_logic') || 'AND'
+      if (config.list.advancedSearchFields) {
+        const advancedConditions: any[] = []
+        
+        config.list.advancedSearchFields.forEach((searchField) => {
+          if (searchField.type === 'text' || searchField.type === 'number') {
+            const value = searchParams.get(`advanced_${searchField.field}`)
+            if (value) {
+              if (searchField.type === 'text') {
+                advancedConditions.push({
+                  [searchField.field]: { contains: value, mode: 'insensitive' as const }
+                })
+              } else {
+                advancedConditions.push({
+                  [searchField.field]: Number(value)
+                })
+              }
+            }
+          } else if (searchField.type === 'date' || searchField.type === 'datetime') {
+            const value = searchParams.get(`advanced_${searchField.field}`)
+            if (value) {
+              advancedConditions.push({
+                [searchField.field]: new Date(value)
+              })
+            }
+          } else if (searchField.type === 'select') {
+            const value = searchParams.get(`advanced_${searchField.field}`)
+            // 忽略 "__all__" 值（表示清除条件）
+            if (value && value !== '__all__') {
+              advancedConditions.push({
+                [searchField.field]: value
+              })
+            }
+          } else if (searchField.type === 'dateRange') {
+            const dateFrom = searchParams.get(`advanced_${searchField.field}_from`)
+            const dateTo = searchParams.get(`advanced_${searchField.field}_to`)
+            if (dateFrom || dateTo) {
+              const dateCondition: any = {}
+              if (dateFrom) {
+                dateCondition.gte = new Date(dateFrom)
+              }
+              if (dateTo) {
+                const endDate = new Date(dateTo)
+                endDate.setHours(23, 59, 59, 999)
+                dateCondition.lte = endDate
+              }
+              if (searchField.dateFields && searchField.dateFields.length > 0) {
+                searchField.dateFields.forEach((dateField) => {
+                  advancedConditions.push({ [dateField]: dateCondition })
+                })
+              } else {
+                advancedConditions.push({ [searchField.field]: dateCondition })
+              }
+            }
+          } else if (searchField.type === 'numberRange') {
+            const numMin = searchParams.get(`advanced_${searchField.field}_min`)
+            const numMax = searchParams.get(`advanced_${searchField.field}_max`)
+            if (numMin || numMax) {
+              const numCondition: any = {}
+              if (numMin) {
+                numCondition.gte = Number(numMin)
+              }
+              if (numMax) {
+                numCondition.lte = Number(numMax)
+              }
+              if (searchField.numberFields && searchField.numberFields.length > 0) {
+                searchField.numberFields.forEach((numField) => {
+                  advancedConditions.push({ [numField]: numCondition })
+                })
+              } else {
+                advancedConditions.push({ [searchField.field]: numCondition })
+              }
+            }
+          }
+        })
+        
+        // 根据逻辑组合高级搜索条件
+        if (advancedConditions.length > 0) {
+          if (advancedLogic === 'OR') {
+            // OR 逻辑：与现有的 where.OR 合并
+            if (where.OR) {
+              where.OR = [...where.OR, ...advancedConditions]
+            } else {
+              where.OR = advancedConditions
+            }
+          } else {
+            // AND 逻辑：所有条件都必须满足
+            if (advancedConditions.length === 1) {
+              Object.assign(where, advancedConditions[0])
+            } else {
+              where.AND = advancedConditions
+            }
+          }
+        }
+      }
+
       // 状态筛选（如果有 status 字段）
       if (config.fields.status) {
         const status = searchParams.get('status')
+        const includeArchived = searchParams.get('includeArchived') === 'true'
+        
         if (status) {
           where.status = status
+        } else if (!includeArchived && config.prisma?.model === 'orders') {
+          // 对于订单表，默认排除"完成留档"状态（除非明确要求包含）
+          where.status = { not: 'archived' }
         }
+      } else if (!searchParams.get('includeArchived') && config.prisma?.model === 'orders') {
+        // 如果没有 status 字段配置但需要过滤归档订单
+        where.status = { not: 'archived' }
       }
 
       // 查询数据
@@ -490,6 +655,7 @@ export function createUpdateHandler(config: EntityConfig) {
 
 /**
  * 创建通用 DELETE 处理函数
+ * 对于 orders 表，使用软删除（将状态改为 'archived'）
  */
 export function createDeleteHandler(config: EntityConfig) {
   return async (
@@ -506,6 +672,19 @@ export function createDeleteHandler(config: EntityConfig) {
       // 获取主键字段名（默认为 'id'）
       const idField = config.idField || 'id'
       
+      // 对于订单表，使用软删除（更新状态为 'archived'）
+      if (config.prisma?.model === 'orders' && config.fields.status) {
+        const item = await prismaModel.update({
+          where: { [idField]: BigInt(resolvedParams.id) },
+          data: { status: 'archived' },
+        })
+        return NextResponse.json({ 
+          message: `${config.displayName}已归档`,
+          data: serializeBigInt(item)
+        })
+      }
+      
+      // 其他表使用硬删除
       await prismaModel.delete({
         where: { [idField]: BigInt(resolvedParams.id) },
       })
@@ -519,6 +698,155 @@ export function createDeleteHandler(config: EntityConfig) {
         )
       }
       return handleError(error, `删除${config.displayName}失败`)
+    }
+  }
+}
+
+/**
+ * 创建批量删除处理函数
+ * 对于 orders 表，使用软删除（将状态改为 'archived'）
+ */
+export function createBatchDeleteHandler(config: EntityConfig) {
+  return async (request: NextRequest) => {
+    try {
+      const permissionResult = await checkPermission(config.permissions.delete)
+      if (permissionResult.error) return permissionResult.error
+
+      const body = await request.json()
+      const { ids } = body
+
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return NextResponse.json(
+          { error: '请提供要删除的记录ID列表' },
+          { status: 400 }
+        )
+      }
+
+      const prismaModel = getPrismaModel(config)
+      const idField = config.idField || 'id'
+
+      // 转换为 BigInt（如果是数字字符串）
+      const bigIntIds = ids.map((id: string | number) => {
+        try {
+          return BigInt(id)
+        } catch {
+          throw new Error(`无效的ID: ${id}`)
+        }
+      })
+
+      // 对于订单表，使用软删除（批量更新状态为 'archived'）
+      if (config.prisma?.model === 'orders' && config.fields.status) {
+        const result = await prismaModel.updateMany({
+          where: {
+            [idField]: {
+              in: bigIntIds,
+            },
+          },
+          data: { status: 'archived' },
+        })
+
+        return NextResponse.json({
+          message: `成功归档 ${result.count} 条${config.displayName}记录`,
+          count: result.count,
+        })
+      }
+
+      // 其他表使用硬删除
+      const result = await prismaModel.deleteMany({
+        where: {
+          [idField]: {
+            in: bigIntIds,
+          },
+        },
+      })
+
+      return NextResponse.json({
+        message: `成功删除 ${result.count} 条${config.displayName}记录`,
+        count: result.count,
+      })
+    } catch (error: any) {
+      return handleError(error, `批量删除${config.displayName}失败`)
+    }
+  }
+}
+
+/**
+ * 创建批量更新处理函数
+ */
+export function createBatchUpdateHandler(config: EntityConfig) {
+  return async (request: NextRequest) => {
+    try {
+      const permissionResult = await checkPermission(config.permissions.update)
+      if (permissionResult.error) return permissionResult.error
+
+      const body = await request.json()
+      const { ids, updates } = body
+
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return NextResponse.json(
+          { error: '请提供要更新的记录ID列表' },
+          { status: 400 }
+        )
+      }
+
+      if (!updates || typeof updates !== 'object' || Object.keys(updates).length === 0) {
+        return NextResponse.json(
+          { error: '请提供要更新的字段' },
+          { status: 400 }
+        )
+      }
+
+      const prismaModel = getPrismaModel(config)
+      const idField = config.idField || 'id'
+
+      // 转换为 BigInt（如果是数字字符串）
+      const bigIntIds = ids.map((id: string | number) => {
+        try {
+          return BigInt(id)
+        } catch {
+          throw new Error(`无效的ID: ${id}`)
+        }
+      })
+
+      // 处理日期字段
+      const processedUpdates: any = {}
+      Object.entries(updates).forEach(([key, value]) => {
+        const fieldConfig = config.fields[key]
+        if (fieldConfig && value !== null && value !== undefined && value !== '') {
+          // 处理日期字段
+          if (fieldConfig.type === 'date' && typeof value === 'string') {
+            // 日期字符串格式：YYYY-MM-DD，转换为 Date 对象（UTC）
+            const [year, month, day] = value.split('-').map(Number)
+            processedUpdates[key] = new Date(Date.UTC(year, month - 1, day))
+          } else if (fieldConfig.type === 'datetime' && typeof value === 'string') {
+            // 日期时间字符串，直接转换为 Date
+            processedUpdates[key] = new Date(value)
+          } else if (fieldConfig.type === 'number' || fieldConfig.type === 'currency') {
+            // 数值字段，确保是数字类型
+            processedUpdates[key] = typeof value === 'string' ? parseFloat(value) : value
+          } else {
+            processedUpdates[key] = value
+          }
+        }
+      })
+
+      // 执行批量更新
+      const result = await prismaModel.updateMany({
+        where: {
+          [idField]: {
+            in: bigIntIds,
+          },
+        },
+        data: processedUpdates,
+      })
+
+      return NextResponse.json({
+        message: `成功更新 ${result.count} 条${config.displayName}记录`,
+        count: result.count,
+        data: serializeBigInt(result),
+      })
+    } catch (error: any) {
+      return handleError(error, `批量更新${config.displayName}失败`)
     }
   }
 }

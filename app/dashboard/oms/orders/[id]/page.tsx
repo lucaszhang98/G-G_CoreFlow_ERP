@@ -8,6 +8,7 @@ import Link from "next/link"
 import prisma from "@/lib/prisma"
 import { Decimal } from "@prisma/client/runtime/library"
 import { OrderDetailPageClient } from "./order-detail-page-client"
+import { getOrderStatusBadge } from "@/lib/utils/badges"
 
 interface OrderDetailPageProps {
   params: Promise<{ id: string }> | { id: string }
@@ -76,10 +77,14 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
     notFound()
   }
 
-  // 格式化函数
+  // 格式化日期（不包含年份，节省空间）
   const formatDate = (date: Date | null) => {
     if (!date) return "-"
-    return new Date(date).toLocaleDateString("zh-CN")
+    const d = new Date(date)
+    if (isNaN(d.getTime())) return "-"
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${month}-${day}`
   }
 
   const formatCurrency = (amount: string | null | Decimal) => {
@@ -101,17 +106,9 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
   }
 
   // 获取状态标签
+  // 使用统一的订单状态 Badge 函数，确保与配置一致
   const getStatusBadge = (status: string | null) => {
-    if (!status) return <Badge variant="secondary">-</Badge>
-    const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" }> = {
-      pending: { label: '待处理', variant: 'secondary' },
-      confirmed: { label: '已确认', variant: 'default' },
-      shipped: { label: '已发货', variant: 'default' },
-      delivered: { label: '已交付', variant: 'default' },
-      cancelled: { label: '已取消', variant: 'destructive' },
-    }
-    const statusInfo = statusMap[status] || { label: status, variant: 'secondary' as const }
-    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+    return getOrderStatusBadge(status)
   }
 
   return (

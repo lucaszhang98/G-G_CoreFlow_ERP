@@ -94,13 +94,14 @@ export function OrderDetailsTable({
     return numValue.toLocaleString()
   }
 
+  // 格式化日期（不包含年份，节省空间）
   const formatDate = (date: string | Date | null) => {
     if (!date) return "-"
-    const d = new Date(date)
-    const year = d.getFullYear()
+    const d = date instanceof Date ? date : new Date(date)
+    if (isNaN(d.getTime())) return "-"
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
+    return `${month}-${day}`
   }
 
   // 切换展开/收起
