@@ -203,12 +203,20 @@ export function EditableCell({
           onValueChange={(val) => {
             setEditValue(val)
             // Select 类型保存后立即关闭编辑模式
-            onSave(val || null).then(() => {
+            const saveResult = onSave(val || null)
+            if (saveResult instanceof Promise) {
+              saveResult
+                .then(() => {
+                  setIsEditing(false)
+                })
+                .catch((error: any) => {
+                  console.error("保存失败:", error)
+                  // 保存失败时保持编辑状态
+                })
+            } else {
+              // 如果 onSave 返回 void，直接关闭编辑模式
               setIsEditing(false)
-            }).catch((error) => {
-              console.error("保存失败:", error)
-              // 保存失败时保持编辑状态
-            })
+            }
           }}
           onOpenChange={(open) => {
             // 当选择框关闭时，如果没有选择任何值，取消编辑
