@@ -6,10 +6,11 @@ import prisma from '@/lib/prisma';
 // GET - 获取单个库存管理记录
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const id = BigInt(params.id);
+    const resolvedParams = params instanceof Promise ? await params : params;
+    const id = BigInt(resolvedParams.id);
 
     const item = await prisma.inventory_lots.findUnique({
       where: { inventory_lot_id: id },
@@ -87,10 +88,11 @@ export async function GET(
 // PUT - 更新库存管理记录
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const id = BigInt(params.id);
+    const resolvedParams = params instanceof Promise ? await params : params;
+    const id = BigInt(resolvedParams.id);
     const body = await request.json();
 
     // 验证输入
@@ -236,10 +238,11 @@ export async function PUT(
 // DELETE - 删除库存管理记录
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const id = BigInt(params.id);
+    const resolvedParams = params instanceof Promise ? await params : params;
+    const id = BigInt(resolvedParams.id);
 
     const existing = await prisma.inventory_lots.findUnique({
       where: { inventory_lot_id: id },
