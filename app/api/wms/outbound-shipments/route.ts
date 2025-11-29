@@ -31,8 +31,10 @@ export async function GET(request: NextRequest) {
 
     // 排序
     const orderBy: any = {};
-    if (sort === 'reference_number' || sort === 'appointment_type') {
-      // 这些字段来自关联表，先按创建时间排序
+    if (sort === 'shipment_number' || sort === 'appointment_type' || sort === 'loaded_by_name' || 
+        sort === 'origin_location' || sort === 'driver_name' || sort === 'trailer_code' || 
+        sort === 'destination_location') {
+      // 这些字段来自关联表或计算字段，先按创建时间排序
       orderBy.created_at = 'desc';
     } else {
       orderBy[sort] = order;

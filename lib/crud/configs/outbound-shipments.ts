@@ -124,94 +124,21 @@ export const outboundShipmentConfig: EntityConfig = {
     ],
   },
   
-  form: {
-    fields: [
-      {
-        key: 'shipment_number',
-        label: '预约号码',
-        type: 'text',
-        required: false,
-      },
-      {
-        key: 'delivery_method',
-        label: '派送方式',
-        type: 'text',
-        required: false,
-      },
-      {
-        key: 'is_rejected',
-        label: '拒收',
-        type: 'checkbox',
-        required: false,
-      },
-      {
-        key: 'appointment_account',
-        label: '预约账号',
-        type: 'text',
-        required: false,
-      },
-      {
-        key: 'appointment_type_code',
-        label: '预约类型',
-        type: 'select',
-        required: false,
-        options: [], // 动态加载
-      },
-      {
-        key: 'loaded_by',
-        label: '装车人',
-        type: 'select',
-        required: false,
-        options: [], // 动态加载
-      },
-      {
-        key: 'origin_location_id',
-        label: '起始地',
-        type: 'select',
-        required: false,
-        options: [], // 动态加载
-      },
-      {
-        key: 'driver_id',
-        label: '司机',
-        type: 'select',
-        required: false,
-        options: [], // 动态加载
-      },
-      {
-        key: 'trailer_id',
-        label: 'Trailer',
-        type: 'select',
-        required: false,
-        options: [], // 动态加载
-      },
-      {
-        key: 'scheduled_load_time',
-        label: '送货时间',
-        type: 'datetime',
-        required: false,
-      },
-      {
-        key: 'destination_location_id',
-        label: '目的地',
-        type: 'select',
-        required: false,
-        options: [], // 动态加载
-      },
-      {
-        key: 'total_pallets',
-        label: '板数',
-        type: 'number',
-        required: false,
-      },
-      {
-        key: 'notes',
-        label: '备注',
-        type: 'textarea',
-        required: false,
-      },
-    ],
-  },
+  formFields: [
+    'shipment_number',
+    'delivery_method',
+    'is_rejected',
+    'appointment_account',
+    'appointment_type_code',
+    'loaded_by',
+    'origin_location_id',
+    'driver_id',
+    'trailer_id',
+    'scheduled_load_time',
+    'destination_location_id',
+    'total_pallets',
+    'notes',
+  ],
   
   permissions: {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
