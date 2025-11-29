@@ -20,9 +20,11 @@ interface EntityDetailProps {
   config: EntityConfig
   id: string | bigint
   data?: any // 如果已经获取了数据，直接传入
+  rightCard?: React.ReactNode // 可选的右侧卡片内容
+  editComponent?: React.ComponentType<{ config: EntityConfig; data: any }> // 自定义编辑组件
 }
 
-export async function EntityDetail({ config, id, data: providedData }: EntityDetailProps) {
+export async function EntityDetail({ config, id, data: providedData, rightCard, editComponent: EditComponent }: EntityDetailProps) {
   // 如果没有提供数据，则从数据库获取
   let data = providedData
 
@@ -159,34 +161,48 @@ export async function EntityDetail({ config, id, data: providedData }: EntityDet
     return idValue ? idValue.toString() : String(id)
   }
 
-  // 分组字段（基本信息和其他）
-  const basicFields: string[] = []
-  const otherFields: string[] = []
+  // 分组字段：左侧显示列表中的字段，右侧显示不在列表中但应该显示的字段
+  const listFields: string[] = [] // 列表中的字段（左侧）
+  const detailFields: string[] = [] // 不在列表中但详情页应该显示的字段（右侧）
   
-  // 使用 formFields 或 list.columns 来确定要显示的字段
-  const fieldsToShow = config.formFields.length > 0 
+  // 获取列表中的字段（排除ID字段）
+  const listColumns = config.list.columns.filter(col => col !== (config.idField || 'id'))
+  
+  // 确定要显示的所有字段（使用 formFields 或 list.columns）
+  const allFieldsToShow = config.formFields.length > 0 
     ? config.formFields 
     : config.list.columns.filter(col => col !== (config.idField || 'id'))
   
-  fieldsToShow.forEach(fieldKey => {
+  // 分类字段
+  allFieldsToShow.forEach(fieldKey => {
     const field = config.fields[fieldKey]
     if (!field) return
     
     // ID 字段不显示
     if (fieldKey === (config.idField || 'id')) return
     
-    // 备注字段单独处理
-    if (fieldKey === 'notes' || fieldKey.includes('note') || fieldKey.includes('remark')) {
-      otherFields.push(fieldKey)
+    // 关联字段（如 contact）不在这里显示，由 rightCard 处理
+    if (field.type === 'relation' && fieldKey === 'contact' && config.name === 'customer') {
+      return
+    }
+    
+    // 如果字段在列表中，放在左侧；否则放在右侧
+    if (listColumns.includes(fieldKey)) {
+      listFields.push(fieldKey)
     } else {
-      basicFields.push(fieldKey)
+      // 备注字段放在右侧
+      if (fieldKey === 'notes' || fieldKey.includes('note') || fieldKey.includes('remark')) {
+        detailFields.push(fieldKey)
+      } else {
+        detailFields.push(fieldKey)
+      }
     }
   })
   
-  // 如果没有其他字段，确保至少显示基本信息
-  if (basicFields.length === 0 && otherFields.length > 0) {
-    basicFields.push(...otherFields)
-    otherFields.length = 0
+  // 如果没有列表字段，确保至少显示一些字段
+  if (listFields.length === 0 && detailFields.length > 0) {
+    listFields.push(...detailFields)
+    detailFields.length = 0
   }
 
   return (
@@ -210,12 +226,16 @@ export async function EntityDetail({ config, id, data: providedData }: EntityDet
         </div>
         {/* 编辑按钮 - 如果有更新权限 */}
         {config.permissions.update && config.permissions.update.length > 0 && (
-          <EntityDetailClient config={config} data={serializeBigInt(data)} />
+          EditComponent ? (
+            <EditComponent config={config} data={serializeBigInt(data)} />
+          ) : (
+            <EntityDetailClient config={config} data={serializeBigInt(data)} />
+          )
         )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {/* 基本信息 */}
+        {/* 左侧：列表中的字段 */}
         <Card className="border-0 shadow-lg">
           <CardHeader>
             <CardTitle>基本信息</CardTitle>
@@ -223,7 +243,7 @@ export async function EntityDetail({ config, id, data: providedData }: EntityDet
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              {basicFields.map((fieldKey) => {
+              {listFields.map((fieldKey) => {
                 const field = config.fields[fieldKey]
                 if (!field) return null
 
@@ -248,32 +268,46 @@ export async function EntityDetail({ config, id, data: providedData }: EntityDet
           </CardContent>
         </Card>
 
-        {/* 其他信息（备注等） */}
-        {otherFields.length > 0 && (
+        {/* 右侧：优先显示自定义卡片，否则显示不在列表中的详情字段 */}
+        {rightCard ? (
+          rightCard
+        ) : detailFields.length > 0 ? (
           <Card className="border-0 shadow-lg">
             <CardHeader>
-              <CardTitle>其他信息</CardTitle>
-              <CardDescription>{config.displayName}的备注和说明</CardDescription>
+              <CardTitle>详细信息</CardTitle>
+              <CardDescription>{config.displayName}的详细信息</CardDescription>
             </CardHeader>
-            <CardContent>
-              {otherFields.map((fieldKey) => {
-                const field = config.fields[fieldKey]
-                if (!field) return null
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {detailFields.map((fieldKey) => {
+                  const field = config.fields[fieldKey]
+                  if (!field) return null
 
-                const value = getFieldValue(fieldKey, field)
+                  const value = getFieldValue(fieldKey, field)
 
-                return (
-                  <div key={fieldKey} className="mb-4 last:mb-0">
-                    <p className="text-sm font-medium text-muted-foreground mb-2">{field.label}</p>
-                    <p className="text-base whitespace-pre-wrap">
-                      {value || "暂无"}
-                    </p>
-                  </div>
-                )
-              })}
+                  return (
+                    <div key={fieldKey}>
+                      <p className="text-sm font-medium text-muted-foreground">{field.label}</p>
+                      {field.type === 'badge' ? (
+                        <div className="mt-1">
+                          <Badge variant={value === 'active' || value === 'available' ? 'default' : 'secondary'}>
+                            {value || "-"}
+                          </Badge>
+                        </div>
+                      ) : field.type === 'notes' || fieldKey.includes('note') || fieldKey.includes('remark') ? (
+                        <p className="text-base whitespace-pre-wrap mt-1">
+                          {value || "暂无"}
+                        </p>
+                      ) : (
+                        <p className="text-base font-semibold">{value || "-"}</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
       </div>
     </div>
   )

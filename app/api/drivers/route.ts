@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createListHandler } from '@/lib/crud/api-handler'
 import { driverConfig } from '@/lib/crud/configs/drivers'
 import prisma from '@/lib/prisma'
-import { checkPermission, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers'
+import { checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers'
 import { getSchema } from '@/lib/crud/schema-loader'
 
 // 使用通用框架处理 GET
@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
   try {
     const permissionResult = await checkPermission(driverConfig.permissions.create)
     if (permissionResult.error) return permissionResult.error
+    const currentUser = permissionResult.user
 
     const body = await request.json()
     const createSchema = getSchema(driverConfig.schemaName, 'create')
@@ -54,35 +55,43 @@ export async function POST(request: NextRequest) {
     // 处理联系人
     let contactId: bigint | null = null
     if (data.contact) {
+      const contactData: any = {
+        related_entity_type: 'driver',
+        related_entity_id: BigInt(0),
+        role: 'primary',
+        name: data.contact.name,
+        phone: data.contact.phone,
+        email: data.contact.email,
+        address_line1: data.contact.address_line1,
+        address_line2: data.contact.address_line2,
+        city: data.contact.city,
+        state: data.contact.state,
+        postal_code: data.contact.postal_code,
+        country: data.contact.country,
+      };
+      // 自动添加系统维护字段
+      addSystemFields(contactData, currentUser, true);
+      
       const contact = await prisma.contact_roles.create({
-        data: {
-          related_entity_type: 'driver',
-          related_entity_id: BigInt(0),
-          role: 'primary',
-          name: data.contact.name,
-          phone: data.contact.phone,
-          email: data.contact.email,
-          address_line1: data.contact.address_line1,
-          address_line2: data.contact.address_line2,
-          city: data.contact.city,
-          state: data.contact.state,
-          postal_code: data.contact.postal_code,
-          country: data.contact.country,
-        },
+        data: contactData,
       })
       contactId = contact.contact_id
     }
 
+    const driverData: any = {
+      driver_code: data.driver_code,
+      license_number: data.license_number,
+      license_expiration: data.license_expiration ? new Date(data.license_expiration) : null,
+      status: data.status,
+      carrier_id: data.carrier_id ? BigInt(data.carrier_id) : null,
+      contact_id: contactId,
+      notes: data.notes,
+    };
+    // 自动添加系统维护字段
+    addSystemFields(driverData, currentUser, true);
+    
     const driver = await prisma.drivers.create({
-      data: {
-        driver_code: data.driver_code,
-        license_number: data.license_number,
-        license_expiration: data.license_expiration ? new Date(data.license_expiration) : null,
-        status: data.status,
-        carrier_id: data.carrier_id ? BigInt(data.carrier_id) : null,
-        contact_id: contactId,
-        notes: data.notes,
-      },
+      data: driverData,
       include: {
         carriers: {
           select: {

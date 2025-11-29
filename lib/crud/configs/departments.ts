@@ -63,7 +63,7 @@ export const departmentConfig: EntityConfig = {
       key: 'description',
       label: '描述',
       type: 'textarea',
-      placeholder: '请输入部门描述（可选）',
+      placeholder: '请输入部门描述',
     },
     created_at: {
       key: 'created_at',

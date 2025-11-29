@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Menu, LogOut, Bell, Package2 } from "lucide-react"
 import dynamic from "next/dynamic"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 // 动态导入 Sidebar，禁用 SSR 以避免 Radix UI 的 hydration 错误
 const Sidebar = dynamic(() => import("@/components/sidebar").then(mod => ({ default: mod.Sidebar })), {
@@ -42,24 +42,23 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  // 只在客户端渲染 Sheet，避免 hydration 错误
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleSignOut = async () => {
     await signOut({ redirect: true, callbackUrl: "/login" })
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
+    <div className="flex h-screen w-full overflow-hidden bg-background" suppressHydrationWarning>
       {/* 桌面端侧边栏 */}
       <aside className="hidden lg:flex h-full">
         <Sidebar userRole={user.role || "user"} />
       </aside>
-
-      {/* 移动端侧边栏 */}
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="w-64 p-0">
-          <Sidebar userRole={user.role || "user"} />
-        </SheetContent>
-      </Sheet>
 
       {/* 主内容区 */}
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -68,18 +67,32 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
           <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
             {/* 左侧：移动端菜单按钮 */}
             <div className="flex items-center gap-4">
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="lg:hidden"
-                    onClick={() => setSidebarOpen(true)}
-                  >
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-              </Sheet>
+              {/* 移动端侧边栏 - 只在客户端渲染以避免 hydration 错误 */}
+              {mounted ? (
+                <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="lg:hidden"
+                    >
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-64 p-0">
+                    <Sidebar userRole={user.role || "user"} />
+                  </SheetContent>
+                </Sheet>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="lg:hidden"
+                  onClick={() => setSidebarOpen(true)}
+                >
+                  <Menu className="h-5 w-5" />
+                </Button>
+              )}
 
               {/* 面包屑导航（可选） */}
               <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
@@ -158,6 +171,7 @@ function getPageTitle(pathname: string): string {
     "/dashboard/wms/inventory": "库存管理",
     "/dashboard/wms/outbound": "出库管理",
     "/dashboard/wms/labor": "劳动力管理",
+    "/dashboard/wms/inbound-receipts": "入库管理",
     "/dashboard/settings": "系统设置",
     "/dashboard/reports/orders": "订单报表",
     "/dashboard/reports/inventory": "库存报表",

@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createListHandler } from '@/lib/crud/api-handler'
 import { carrierConfig } from '@/lib/crud/configs/carriers'
 import prisma from '@/lib/prisma'
-import { checkPermission, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers'
+import { checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers'
 import { getSchema } from '@/lib/crud/schema-loader'
 
 // 使用通用框架处理 GET
@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
   try {
     const permissionResult = await checkPermission(carrierConfig.permissions.create)
     if (permissionResult.error) return permissionResult.error
+    const currentUser = permissionResult.user
 
     const body = await request.json()
     const createSchema = getSchema(carrierConfig.schemaName, 'create')
@@ -54,32 +55,40 @@ export async function POST(request: NextRequest) {
     // 处理联系人
     let contactId: bigint | null = null
     if (data.contact) {
+      const contactData: any = {
+        related_entity_type: 'carrier',
+        related_entity_id: BigInt(0),
+        role: 'primary',
+        name: data.contact.name,
+        phone: data.contact.phone,
+        email: data.contact.email,
+        address_line1: data.contact.address_line1,
+        address_line2: data.contact.address_line2,
+        city: data.contact.city,
+        state: data.contact.state,
+        postal_code: data.contact.postal_code,
+        country: data.contact.country,
+      };
+      // 自动添加系统维护字段
+      addSystemFields(contactData, currentUser, true);
+      
       const contact = await prisma.contact_roles.create({
-        data: {
-          related_entity_type: 'carrier',
-          related_entity_id: BigInt(0),
-          role: 'primary',
-          name: data.contact.name,
-          phone: data.contact.phone,
-          email: data.contact.email,
-          address_line1: data.contact.address_line1,
-          address_line2: data.contact.address_line2,
-          city: data.contact.city,
-          state: data.contact.state,
-          postal_code: data.contact.postal_code,
-          country: data.contact.country,
-        },
+        data: contactData,
       })
       contactId = contact.contact_id
     }
 
+    const carrierData: any = {
+      carrier_code: data.carrier_code,
+      name: data.name,
+      carrier_type: data.carrier_type,
+      contact_id: contactId,
+    };
+    // 自动添加系统维护字段
+    addSystemFields(carrierData, currentUser, true);
+    
     const carrier = await prisma.carriers.create({
-      data: {
-        carrier_code: data.carrier_code,
-        name: data.name,
-        carrier_type: data.carrier_type,
-        contact_id: contactId,
-      },
+      data: carrierData,
       include: {
         contact_roles: {
           select: {

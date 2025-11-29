@@ -145,7 +145,8 @@ export function createTableColumns<TData>(
       } else {
         // 如果没有自定义 cell，创建新的可点击 cell
         cell = ({ row }) => {
-          const value = row.getValue(columnId)
+          // 尝试多种方式获取值
+          const value = row.getValue(columnId) ?? row.original[columnId] ?? null
           const isDisabled = clickableConfig.disabled
             ? clickableConfig.disabled(row.original)
             : false
@@ -155,7 +156,15 @@ export function createTableColumns<TData>(
             : undefined
           
           // 格式化显示值
-          let displayValue: React.ReactNode = value?.toString() || "-"
+          let displayValue: React.ReactNode = "-"
+          if (value !== null && value !== undefined && value !== '') {
+            if (typeof value === 'object') {
+              displayValue = JSON.stringify(value)
+            } else {
+              displayValue = String(value)
+            }
+          }
+          
           if (isDateField(columnId, value)) {
             displayValue = autoFormatDateField(columnId, value)
           }

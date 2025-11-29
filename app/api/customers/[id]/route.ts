@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkAuth, checkPermission, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers';
+import { checkAuth, checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import { customerUpdateSchema } from '@/lib/validations/customer';
 import prisma from '@/lib/prisma';
 
@@ -73,6 +73,7 @@ export async function PUT(
     // 检查权限
     const permissionResult = await checkPermission(['admin', 'oms_manager']);
     if (permissionResult.error) return permissionResult.error;
+    const currentUser = permissionResult.user;
 
     // 处理 params（Next.js 15 中 params 可能是 Promise）
     const resolvedParams = params instanceof Promise ? await params : params;
@@ -128,37 +129,45 @@ export async function PUT(
         // 如果提供了联系人姓名，创建或更新联系人
         if (existing.contact_id) {
           // 更新现有联系人
+          const contactUpdateData: any = {
+            name: data.contact.name,
+            phone: data.contact.phone || null,
+            email: data.contact.email || null,
+            address_line1: data.contact.address_line1 || null,
+            address_line2: data.contact.address_line2 || null,
+            city: data.contact.city || null,
+            state: data.contact.state || null,
+            postal_code: data.contact.postal_code || null,
+            country: data.contact.country || null,
+          };
+          // 自动添加系统维护字段（只更新修改人/时间）
+          addSystemFields(contactUpdateData, currentUser, false);
+          
           await prisma.contact_roles.update({
             where: { contact_id: existing.contact_id },
-            data: {
-              name: data.contact.name,
-              phone: data.contact.phone || null,
-              email: data.contact.email || null,
-              address_line1: data.contact.address_line1 || null,
-              address_line2: data.contact.address_line2 || null,
-              city: data.contact.city || null,
-              state: data.contact.state || null,
-              postal_code: data.contact.postal_code || null,
-              country: data.contact.country || null,
-            },
+            data: contactUpdateData,
           });
         } else {
           // 创建新联系人
+          const contactData: any = {
+            related_entity_type: 'customer',
+            related_entity_id: existing.id,
+            role: 'primary',
+            name: data.contact.name,
+            phone: data.contact.phone || null,
+            email: data.contact.email || null,
+            address_line1: data.contact.address_line1 || null,
+            address_line2: data.contact.address_line2 || null,
+            city: data.contact.city || null,
+            state: data.contact.state || null,
+            postal_code: data.contact.postal_code || null,
+            country: data.contact.country || null,
+          };
+          // 自动添加系统维护字段
+          addSystemFields(contactData, currentUser, true);
+          
           const contact = await prisma.contact_roles.create({
-            data: {
-              related_entity_type: 'customer',
-              related_entity_id: existing.id,
-              role: 'primary',
-              name: data.contact.name,
-              phone: data.contact.phone || null,
-              email: data.contact.email || null,
-              address_line1: data.contact.address_line1 || null,
-              address_line2: data.contact.address_line2 || null,
-              city: data.contact.city || null,
-              state: data.contact.state || null,
-              postal_code: data.contact.postal_code || null,
-              country: data.contact.country || null,
-            },
+            data: contactData,
           });
           updateData.contact_id = contact.contact_id;
         }
@@ -171,6 +180,9 @@ export async function PUT(
       }
     }
 
+    // 自动添加系统维护字段（只更新修改人/时间）
+    addSystemFields(updateData, currentUser, false);
+    
     const customer = await prisma.customers.update({
       where: { id: BigInt(resolvedParams.id) },
       data: updateData,

@@ -46,9 +46,23 @@ export function EditableCell({
     if (isEditing) {
       if (type === "date" && value) {
         // 处理 Date 对象、字符串或数字
+        // 使用 UTC 方法提取日期部分，避免时区转换问题
+        if (typeof value === 'string') {
+          // 如果是字符串，直接提取日期部分（YYYY-MM-DD）
+          const dateMatch = value.match(/^(\d{4}-\d{2}-\d{2})/)
+          if (dateMatch) {
+            setEditValue(dateMatch[1])
+            return
+          }
+        }
+        
         const date = (value instanceof Date) ? value : new Date(value as string | number)
         if (!isNaN(date.getTime())) {
-          setEditValue(date.toISOString().split("T")[0])
+          // 使用 UTC 方法提取日期，避免时区转换
+          const year = date.getUTCFullYear()
+          const month = String(date.getUTCMonth() + 1).padStart(2, "0")
+          const day = String(date.getUTCDate()).padStart(2, "0")
+          setEditValue(`${year}-${month}-${day}`)
         } else {
           setEditValue("")
         }
@@ -282,13 +296,28 @@ export function EditableCell({
       return `${month}-${day} ${hours}:${minutes}`
     } else if (type === "date") {
       // 如果是 date 类型，显示为 MM-DD（不包含年份）
-      const date = value instanceof Date ? value : new Date(value as string | number)
+      // 使用 UTC 方法避免时区转换问题，直接显示数据库存储的日期
+      if (typeof value === 'string') {
+        // 如果是字符串，直接提取日期部分（YYYY-MM-DD）
+        const dateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+        if (dateMatch) {
+          const [, year, month, day] = dateMatch
+          return `${month}-${day}`
+        }
+        // 如果是 ISO 格式（包含 T），提取日期部分
+        const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})T/)
+        if (isoMatch) {
+          const [, year, month, day] = isoMatch
+          return `${month}-${day}`
+        }
+      }
       
+      const date = value instanceof Date ? value : new Date(value as string | number)
       if (isNaN(date.getTime())) return value.toString()
       
-      // 显示时只显示月日，不显示年份
-      const month = String(date.getMonth() + 1).padStart(2, "0")
-      const day = String(date.getDate()).padStart(2, "0")
+      // 使用 UTC 方法，直接显示数据库存储的日期，不进行时区转换
+      const month = String(date.getUTCMonth() + 1).padStart(2, "0")
+      const day = String(date.getUTCDate()).padStart(2, "0")
       return `${month}-${day}`
     }
     

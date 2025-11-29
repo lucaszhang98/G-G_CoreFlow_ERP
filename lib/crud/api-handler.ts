@@ -570,6 +570,10 @@ export function createCreateHandler(config: EntityConfig) {
         }
       }
 
+      // 自动添加系统维护字段（创建人/时间、修改人/时间）
+      const { addSystemFields } = await import('@/lib/api/helpers')
+      addSystemFields(processedData, permissionResult.user, true)
+
       const prismaModel = getPrismaModel(config)
       const item = await prismaModel.create({
         data: processedData,
@@ -633,6 +637,10 @@ export function createUpdateHandler(config: EntityConfig) {
           processedData[key] = value
         }
       }
+
+      // 自动添加系统维护字段（只更新修改人/时间）
+      const { addSystemFields } = await import('@/lib/api/helpers')
+      addSystemFields(processedData, permissionResult.user, false)
 
       const prismaModel = getPrismaModel(config)
       const item = await prismaModel.update({

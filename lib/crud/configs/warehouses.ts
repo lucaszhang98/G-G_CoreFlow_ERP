@@ -67,7 +67,7 @@ export const warehouseConfig: EntityConfig = {
       key: 'notes',
       label: '备注',
       type: 'textarea',
-      placeholder: '请输入备注（可选）',
+      placeholder: '请输入备注',
     },
     created_at: {
       key: 'created_at',

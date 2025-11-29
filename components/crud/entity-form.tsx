@@ -196,7 +196,101 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
         )
 
       case 'relation':
-        // 关系字段需要特殊处理，这里先跳过，后续实现
+        // 处理关联字段（如 contact）
+        if (fieldKey === 'contact' && fieldConfig.relation?.model === 'contact_roles') {
+          const contactValue = watch(fieldKey) || {}
+          return (
+            <div key={fieldKey} className="space-y-4 border-t pt-4 mt-4">
+              <h3 className="text-lg font-semibold">联系人信息</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor={`${fieldKey}_name`}>联系人姓名</Label>
+                  <Input
+                    id={`${fieldKey}_name`}
+                    {...register(`${fieldKey}.name`)}
+                    placeholder="请输入联系人姓名"
+                  />
+                  {errors[fieldKey] && (errors[fieldKey] as any).name && (
+                    <p className="text-sm text-red-500">{(errors[fieldKey] as any).name.message}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`${fieldKey}_phone`}>联系电话</Label>
+                  <Input
+                    id={`${fieldKey}_phone`}
+                    type="tel"
+                    {...register(`${fieldKey}.phone`)}
+                    placeholder="请输入联系电话"
+                  />
+                  {errors[fieldKey] && (errors[fieldKey] as any).phone && (
+                    <p className="text-sm text-red-500">{(errors[fieldKey] as any).phone.message}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`${fieldKey}_email`}>邮箱</Label>
+                  <Input
+                    id={`${fieldKey}_email`}
+                    type="email"
+                    {...register(`${fieldKey}.email`)}
+                    placeholder="请输入邮箱"
+                  />
+                  {errors[fieldKey] && (errors[fieldKey] as any).email && (
+                    <p className="text-sm text-red-500">{(errors[fieldKey] as any).email.message}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`${fieldKey}_address_line1`}>地址（第一行）</Label>
+                  <Input
+                    id={`${fieldKey}_address_line1`}
+                    {...register(`${fieldKey}.address_line1`)}
+                    placeholder="请输入地址"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`${fieldKey}_address_line2`}>地址（第二行）</Label>
+                  <Input
+                    id={`${fieldKey}_address_line2`}
+                    {...register(`${fieldKey}.address_line2`)}
+                    placeholder="请输入地址（可选）"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`${fieldKey}_city`}>城市</Label>
+                  <Input
+                    id={`${fieldKey}_city`}
+                    {...register(`${fieldKey}.city`)}
+                    placeholder="请输入城市"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`${fieldKey}_state`}>省/州</Label>
+                  <Input
+                    id={`${fieldKey}_state`}
+                    {...register(`${fieldKey}.state`)}
+                    placeholder="请输入省/州"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`${fieldKey}_postal_code`}>邮编</Label>
+                  <Input
+                    id={`${fieldKey}_postal_code`}
+                    {...register(`${fieldKey}.postal_code`)}
+                    placeholder="请输入邮编"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`${fieldKey}_country`}>国家</Label>
+                  <Input
+                    id={`${fieldKey}_country`}
+                    {...register(`${fieldKey}.country`)}
+                    placeholder="请输入国家"
+                  />
+                </div>
+              </div>
+            </div>
+          )
+        }
+        // 其他关联字段暂时跳过
         return null
 
       default:
@@ -204,9 +298,15 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
     }
   }
 
+  // 系统维护字段，用户不能手动更改
+  const systemFields = ['created_at', 'created_by', 'updated_at', 'updated_by']
+  
+  // 过滤掉系统维护字段
+  const userEditableFields = config.formFields.filter(fieldKey => !systemFields.includes(fieldKey))
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {config.formFields.map((fieldKey) => {
+      {userEditableFields.map((fieldKey) => {
         // 编辑模式下，某些字段可能不需要显示（如 password）
         if (isEditing && fieldKey === 'password') {
           return null

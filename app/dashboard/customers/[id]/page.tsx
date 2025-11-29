@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import prisma from "@/lib/prisma"
 import { Decimal } from "@prisma/client/runtime/library"
+import { CustomerDetailClient } from "./customer-detail-client"
 
 interface CustomerDetailPageProps {
   params: Promise<{ id: string }> | { id: string }
@@ -75,8 +76,62 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50/30 dark:from-gray-950 dark:via-gray-900 dark:to-blue-950/20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12 max-w-7xl">
           <div className="space-y-6">
-            {/* 使用框架的详情页 */}
-            <EntityDetail config={customerConfig} id={resolvedParams.id} />
+            {/* 使用框架的详情页，联系人信息作为右侧卡片 */}
+            <EntityDetail 
+              config={customerConfig} 
+              id={resolvedParams.id}
+              editComponent={CustomerDetailClient}
+              rightCard={
+                customer && customer.contact_roles ? (
+                  <Card className="border-0 shadow-lg">
+                    <CardHeader>
+                      <CardTitle>联系人信息</CardTitle>
+                      <CardDescription>客户联系人详细信息</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        {customer.contact_roles.name && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">姓名</p>
+                            <p className="text-base font-semibold">{customer.contact_roles.name}</p>
+                          </div>
+                        )}
+                        {customer.contact_roles.phone && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">电话</p>
+                            <p className="text-base font-semibold">{customer.contact_roles.phone}</p>
+                          </div>
+                        )}
+                        {customer.contact_roles.email && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">邮箱</p>
+                            <p className="text-base font-semibold">{customer.contact_roles.email}</p>
+                          </div>
+                        )}
+                        {(customer.contact_roles.address_line1 || customer.contact_roles.address_line2 || customer.contact_roles.city || customer.contact_roles.state || customer.contact_roles.postal_code || customer.contact_roles.country) && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">地址</p>
+                            <div className="text-base font-semibold space-y-1">
+                              {customer.contact_roles.address_line1 && <p>{customer.contact_roles.address_line1}</p>}
+                              {customer.contact_roles.address_line2 && <p>{customer.contact_roles.address_line2}</p>}
+                              <p>
+                                {[customer.contact_roles.city, customer.contact_roles.state, customer.contact_roles.postal_code].filter(Boolean).join(', ')}
+                                {customer.contact_roles.country && `, ${customer.contact_roles.country}`}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        {!customer.contact_roles.name && !customer.contact_roles.phone && !customer.contact_roles.email && !customer.contact_roles.address_line1 && (
+                          <div className="col-span-2">
+                            <p className="text-muted-foreground">暂无联系人信息</p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : null
+              }
+            />
 
             {/* 最近订单（客户管理特有功能） */}
             {customer && (

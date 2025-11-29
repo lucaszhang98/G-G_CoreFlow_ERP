@@ -106,14 +106,42 @@ export async function PATCH(
           if (!dateStr) {
             updateData[dbField] = null
           } else {
-            // 验证日期格式 (YYYY-MM-DD)
-            const dateRegex = /^\d{4}-\d{2}-\d{2}$/
-            if (!dateRegex.test(dateStr)) {
-              return NextResponse.json({ error: `无效的日期格式: ${value}，期望格式: YYYY-MM-DD` }, { status: 400 })
-            }
+            let year: number, month: number, day: number
             
-            // 解析日期部分（年、月、日）
-            const [year, month, day] = dateStr.split('-').map(Number)
+            // 支持多种日期格式：
+            // 1. YYYY-MM-DD 格式
+            // 2. ISO 日期时间字符串 (YYYY-MM-DDTHH:mm:ss.sssZ)
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+            const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/
+            
+            if (dateRegex.test(dateStr)) {
+              // 纯日期格式 YYYY-MM-DD
+              [year, month, day] = dateStr.split('-').map(Number)
+            } else if (isoDateRegex.test(dateStr) || dateStr.includes('T')) {
+              // ISO 日期时间字符串，提取日期部分
+              const datePart = dateStr.split('T')[0]
+              if (dateRegex.test(datePart)) {
+                [year, month, day] = datePart.split('-').map(Number)
+              } else {
+                // 尝试使用 Date 对象解析
+                const parsedDate = new Date(dateStr)
+                if (isNaN(parsedDate.getTime())) {
+                  return NextResponse.json({ error: `无效的日期格式: ${value}，期望格式: YYYY-MM-DD` }, { status: 400 })
+                }
+                year = parsedDate.getUTCFullYear()
+                month = parsedDate.getUTCMonth() + 1
+                day = parsedDate.getUTCDate()
+              }
+            } else {
+              // 尝试使用 Date 对象解析其他格式
+              const parsedDate = new Date(dateStr)
+              if (isNaN(parsedDate.getTime())) {
+                return NextResponse.json({ error: `无效的日期格式: ${value}，期望格式: YYYY-MM-DD` }, { status: 400 })
+              }
+              year = parsedDate.getUTCFullYear()
+              month = parsedDate.getUTCMonth() + 1
+              day = parsedDate.getUTCDate()
+            }
             
             // 验证日期有效性
             const testDate = new Date(year, month - 1, day)

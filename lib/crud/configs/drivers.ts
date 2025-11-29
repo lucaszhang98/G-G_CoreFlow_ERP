@@ -28,7 +28,7 @@ export const driverConfig: EntityConfig = {
       type: 'text',
       sortable: true,
       searchable: true,
-      placeholder: '请输入司机代码（可选）',
+      placeholder: '请输入司机代码',
     },
     carrier: {
       key: 'carrier',
@@ -54,7 +54,7 @@ export const driverConfig: EntityConfig = {
       label: '驾驶证号',
       type: 'text',
       searchable: true,
-      placeholder: '请输入驾驶证号（可选）',
+      placeholder: '请输入驾驶证号',
     },
     status: {
       key: 'status',
@@ -70,13 +70,13 @@ export const driverConfig: EntityConfig = {
       key: 'license_expiration',
       label: '驾驶证到期日',
       type: 'date',
-      placeholder: '请输入驾驶证到期日（可选）',
+      placeholder: '请输入驾驶证到期日',
     },
     notes: {
       key: 'notes',
       label: '备注',
       type: 'textarea',
-      placeholder: '请输入备注（可选）',
+      placeholder: '请输入备注',
     },
     created_at: {
       key: 'created_at',

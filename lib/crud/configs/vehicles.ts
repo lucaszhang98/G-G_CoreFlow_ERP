@@ -28,7 +28,7 @@ export const vehicleConfig: EntityConfig = {
       type: 'text',
       sortable: true,
       searchable: true,
-      placeholder: '请输入车辆代码（可选）',
+      placeholder: '请输入车辆代码',
     },
     plate_number: {
       key: 'plate_number',
@@ -44,7 +44,7 @@ export const vehicleConfig: EntityConfig = {
       label: '车辆类型',
       type: 'text',
       searchable: true,
-      placeholder: '请输入车辆类型（可选）',
+      placeholder: '请输入车辆类型',
     },
     carrier: {
       key: 'carrier',
@@ -71,25 +71,25 @@ export const vehicleConfig: EntityConfig = {
       key: 'vin',
       label: 'VIN码',
       type: 'text',
-      placeholder: '请输入VIN码（可选）',
+      placeholder: '请输入VIN码',
     },
     capacity_weight: {
       key: 'capacity_weight',
       label: '载重容量',
       type: 'number',
-      placeholder: '请输入载重容量（可选）',
+      placeholder: '请输入载重容量',
     },
     capacity_volume: {
       key: 'capacity_volume',
       label: '体积容量',
       type: 'number',
-      placeholder: '请输入体积容量（可选）',
+      placeholder: '请输入体积容量',
     },
     notes: {
       key: 'notes',
       label: '备注',
       type: 'textarea',
-      placeholder: '请输入备注（可选）',
+      placeholder: '请输入备注',
     },
     created_at: {
       key: 'created_at',

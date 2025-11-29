@@ -265,6 +265,7 @@ model drivers {
   contact_roles                   contact_roles? @relation(fields: [contact_id], references: [contact_id], onDelete: NoAction, onUpdate: NoAction)
   users_drivers_created_byTousers users?         @relation("drivers_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users_drivers_updated_byTousers users?         @relation("drivers_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  outbound_shipments               outbound_shipments[]
 
   @@schema("public")
 }
@@ -320,6 +321,7 @@ model locations {
   container_legs_container_legs_destination_location_idTolocations container_legs[]        @relation("container_legs_destination_location_idTolocations")
   container_legs_container_legs_origin_location_idTolocations      container_legs[]        @relation("container_legs_origin_location_idTolocations")
   outbound_shipments                                               outbound_shipments[]
+  outbound_shipments_outbound_shipments_origin_location_idTolocations outbound_shipments[] @relation("outbound_shipments_origin_location_idTolocations")
 
   @@schema("public")
 }
@@ -333,6 +335,7 @@ model order_detail {
   volume                                                      Decimal?                  @db.Decimal
   container_volume                                            Decimal?                  @db.Decimal
   estimated_pallets                                           Int?
+  delivery_nature                                             String?                   @db.VarChar(50)
   created_by                                                  BigInt?
   updated_at                                                  DateTime?                 @default(now()) @db.Timestamptz(6)
   updated_by                                                  BigInt?
@@ -707,6 +710,7 @@ model inbound_receipt {
   updated_by                               BigInt?
   planned_unload_at                        DateTime?        @db.Date
   unload_method_code                       String?          @db.VarChar(50)
+  delivery_progress                         Decimal?         @db.Decimal(5, 2)
   users_inbound_receipt_created_byTousers  users?           @relation("inbound_receipt_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   orders                                   orders           @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)
   users_inbound_receipt_received_byTousers users?           @relation("inbound_receipt_received_byTousers", fields: [received_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -735,6 +739,10 @@ model inventory_lots {
   lot_number                             String?          @db.VarChar(50)
   received_date                          DateTime?        @db.Date
   pallet_count                           Int              @default(1)
+  remaining_pallet_count                 Int?             @default(0)
+  unbooked_pallet_count                  Int?             @default(0)
+  unload_transfer_notes                 String?
+  delivery_progress                      Decimal?          @db.Decimal(5, 2)
   users_inventory_lots_created_byTousers users?           @relation("inventory_lots_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   inbound_receipt                        inbound_receipt? @relation(fields: [inbound_receipt_id], references: [inbound_receipt_id], onDelete: NoAction, onUpdate: NoAction)
   order_detail                           order_detail     @relation(fields: [order_detail_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -789,6 +797,11 @@ model outbound_shipments {
   updated_by                                                               BigInt?
   bol_document_id                                                          BigInt?
   load_sheet_document_id                                                   BigInt?
+  delivery_method                                                          String?                   @db.VarChar(50)
+  is_rejected                                                              Boolean?                  @default(false)
+  appointment_account                                                      String?                   @db.VarChar(100)
+  driver_id                                                                BigInt?
+  origin_location_id                                                       BigInt?
   outbound_shipment_lines                                                  outbound_shipment_lines[]
   document_links_outbound_shipments_bol_document_idTodocument_links        document_links?           @relation("outbound_shipments_bol_document_idTodocument_links", fields: [bol_document_id], references: [document_id], onDelete: NoAction, onUpdate: NoAction)
   users_outbound_shipments_created_byTousers                               users?                    @relation("outbound_shipments_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -798,6 +811,8 @@ model outbound_shipments {
   trailers                                                                 trailers?                 @relation(fields: [trailer_id], references: [trailer_id], onDelete: NoAction, onUpdate: NoAction)
   users_outbound_shipments_updated_byTousers                               users?                    @relation("outbound_shipments_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   warehouses                                                               warehouses                @relation(fields: [warehouse_id], references: [warehouse_id], onDelete: NoAction, onUpdate: NoAction)
+  drivers                                                                  drivers?                 @relation(fields: [driver_id], references: [driver_id], onDelete: NoAction, onUpdate: NoAction)
+  locations_outbound_shipments_origin_location_idTolocations                locations?                @relation("outbound_shipments_origin_location_idTolocations", fields: [origin_location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
 
   @@schema("wms")
 }

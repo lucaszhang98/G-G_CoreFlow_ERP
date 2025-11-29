@@ -77,15 +77,34 @@ export function isDateTimeField(fieldKey: string, value: any): boolean {
  * 格式化日期显示（不包含年份，节省空间）
  * @param value 日期值（Date对象、ISO字符串或YYYY-MM-DD格式字符串）
  * @returns 格式化的日期字符串（MM-DD）或 "-"
+ * 注意：使用 UTC 方法避免时区转换问题，直接显示数据库存储的日期
  */
 export function formatDateDisplay(value: Date | string | null | undefined): string {
   if (!value) return "-"
   
+  // 如果是字符串，尝试直接提取日期部分（YYYY-MM-DD）
+  if (typeof value === 'string') {
+    // 如果是 YYYY-MM-DD 格式，直接提取
+    const dateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (dateMatch) {
+      const [, year, month, day] = dateMatch
+      return `${month}-${day}`
+    }
+    // 如果是 ISO 格式（包含 T），提取日期部分
+    const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})T/)
+    if (isoMatch) {
+      const [, year, month, day] = isoMatch
+      return `${month}-${day}`
+    }
+  }
+  
+  // 如果是 Date 对象，使用 UTC 方法避免时区转换
   const date = value instanceof Date ? value : new Date(value)
   if (isNaN(date.getTime())) return "-"
   
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
+  // 使用 UTC 方法，直接显示数据库存储的日期，不进行时区转换
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
   return `${month}-${day}`
 }
 

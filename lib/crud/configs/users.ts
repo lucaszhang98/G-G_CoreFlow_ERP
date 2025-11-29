@@ -82,7 +82,7 @@ export const userConfig: EntityConfig = {
       key: 'phone',
       label: '电话',
       type: 'phone',
-      placeholder: '请输入电话（可选）',
+      placeholder: '请输入电话',
     },
     password: {
       key: 'password',

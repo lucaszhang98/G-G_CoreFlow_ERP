@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createListHandler } from '@/lib/crud/api-handler';
 import { customerConfig } from '@/lib/crud/configs/customers';
-import { checkPermission, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers';
+import { checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import { customerCreateSchema } from '@/lib/validations/customer';
 import prisma from '@/lib/prisma';
 
@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
     // 检查权限
     const permissionResult = await checkPermission(['admin', 'oms_manager']);
     if (permissionResult.error) return permissionResult.error;
+    const currentUser = permissionResult.user;
 
     const body = await request.json();
 
@@ -43,35 +44,43 @@ export async function POST(request: NextRequest) {
     // 注意：数据库要求 contact_roles.name 非空，所以只有当提供了 name 时才创建联系人
     let contactId: bigint | null = null;
     if (data.contact && data.contact.name) {
+      const contactData: any = {
+        related_entity_type: 'customer',
+        related_entity_id: BigInt(0), // 临时值，创建客户后会更新
+        role: 'primary',
+        name: data.contact.name,
+        phone: data.contact.phone || null,
+        email: data.contact.email || null,
+        address_line1: data.contact.address_line1 || null,
+        address_line2: data.contact.address_line2 || null,
+        city: data.contact.city || null,
+        state: data.contact.state || null,
+        postal_code: data.contact.postal_code || null,
+        country: data.contact.country || null,
+      };
+      // 自动添加系统维护字段
+      addSystemFields(contactData, currentUser, true);
+      
       const contact = await prisma.contact_roles.create({
-        data: {
-          related_entity_type: 'customer',
-          related_entity_id: BigInt(0), // 临时值，创建客户后会更新
-          role: 'primary',
-          name: data.contact.name,
-          phone: data.contact.phone || null,
-          email: data.contact.email || null,
-          address_line1: data.contact.address_line1 || null,
-          address_line2: data.contact.address_line2 || null,
-          city: data.contact.city || null,
-          state: data.contact.state || null,
-          postal_code: data.contact.postal_code || null,
-          country: data.contact.country || null,
-        },
+        data: contactData,
       });
       contactId = contact.contact_id;
     }
 
     // 创建客户
+    const customerData: any = {
+      code: data.code,
+      name: data.name,
+      company_name: data.company_name,
+      credit_limit: data.credit_limit,
+      status: data.status,
+      contact_id: contactId,
+    };
+    // 自动添加系统维护字段
+    addSystemFields(customerData, currentUser, true);
+    
     const customer = await prisma.customers.create({
-      data: {
-        code: data.code,
-        name: data.name,
-        company_name: data.company_name,
-        credit_limit: data.credit_limit,
-        status: data.status,
-        contact_id: contactId,
-      },
+      data: customerData,
       include: {
         contact_roles: true,
       },

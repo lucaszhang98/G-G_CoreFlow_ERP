@@ -171,18 +171,18 @@ const menuItems: MenuItem[] = [
     children: [
       {
         title: "入库管理",
-        icon: Inbox,
-        href: "/dashboard/wms/inbound",
+        icon: ClipboardList,
+        href: "/dashboard/wms/inbound-receipts",
       },
       {
         title: "库存管理",
         icon: Package,
-        href: "/dashboard/wms/inventory",
+        href: "/dashboard/wms/inventory-lots",
       },
       {
         title: "出库管理",
         icon: PackageCheck,
-        href: "/dashboard/wms/outbound",
+        href: "/dashboard/wms/outbound-shipments",
       },
       {
         title: "劳动力管理",

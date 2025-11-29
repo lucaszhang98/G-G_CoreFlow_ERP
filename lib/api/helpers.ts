@@ -202,6 +202,45 @@ export function handleError(error: any, defaultMessage: string = '操作失败')
 }
 
 /**
+ * 自动添加系统维护字段（创建人/时间、修改人/时间）
+ * @param data 要处理的数据对象
+ * @param user 当前用户对象
+ * @param isCreate 是否为创建操作（true: 创建, false: 更新）
+ */
+export function addSystemFields(data: any, user: any, isCreate: boolean = true): any {
+  const userId = user?.id ? BigInt(user.id) : null
+  const now = new Date()
+  
+  if (isCreate) {
+    // 创建操作：设置 created_by 和 created_at
+    if (!data.created_by && userId) {
+      data.created_by = userId
+    }
+    if (!data.created_at) {
+      data.created_at = now
+    }
+    // 创建时也设置 updated_by 和 updated_at
+    if (!data.updated_by && userId) {
+      data.updated_by = userId
+    }
+    if (!data.updated_at) {
+      data.updated_at = now
+    }
+  } else {
+    // 更新操作：只更新 updated_by 和 updated_at
+    if (userId) {
+      data.updated_by = userId
+    }
+    data.updated_at = now
+    // 更新时不能修改 created_by 和 created_at
+    delete data.created_by
+    delete data.created_at
+  }
+  
+  return data
+}
+
+/**
  * 将 BigInt 和 Decimal 转换为字符串（用于 JSON 响应）
  */
 export function serializeBigInt(obj: any): any {

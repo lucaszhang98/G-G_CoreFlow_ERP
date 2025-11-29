@@ -14,6 +14,9 @@ import { vehicleCreateSchema, vehicleUpdateSchema } from '@/lib/validations/vehi
 import { trailerCreateSchema, trailerUpdateSchema } from '@/lib/validations/trailer'
 import { driverCreateSchema, driverUpdateSchema } from '@/lib/validations/driver'
 import { orderCreateSchema, orderUpdateSchema } from '@/lib/validations/order'
+import { inboundReceiptCreateSchema, inboundReceiptUpdateSchema } from '@/lib/validations/inbound-receipt'
+import { inventoryLotCreateSchema, inventoryLotUpdateSchema } from '@/lib/validations/inventory-lot'
+import { outboundShipmentCreateSchema, outboundShipmentUpdateSchema } from '@/lib/validations/outbound-shipment'
 
 type SchemaMap = {
   create: z.ZodSchema
@@ -60,6 +63,18 @@ const schemaMap: Record<string, SchemaMap> = {
   order: {
     create: orderCreateSchema,
     update: orderUpdateSchema,
+  },
+  inbound_receipt: {
+    create: inboundReceiptCreateSchema,
+    update: inboundReceiptUpdateSchema,
+  },
+  inventory_lot: {
+    create: inventoryLotCreateSchema,
+    update: inventoryLotUpdateSchema,
+  },
+  outbound_shipment: {
+    create: outboundShipmentCreateSchema,
+    update: outboundShipmentUpdateSchema,
   },
 }
 
