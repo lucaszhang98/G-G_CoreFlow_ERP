@@ -146,7 +146,8 @@ export function createTableColumns<TData>(
         // 如果没有自定义 cell，创建新的可点击 cell
         cell = ({ row }) => {
           // 尝试多种方式获取值
-          const value = row.getValue(columnId) ?? row.original[columnId] ?? null
+          const rowData = row.original as Record<string, any>
+          const value = row.getValue(columnId) ?? rowData[columnId] ?? null
           const isDisabled = clickableConfig.disabled
             ? clickableConfig.disabled(row.original)
             : false

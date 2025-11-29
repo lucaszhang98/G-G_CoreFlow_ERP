@@ -4,7 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { EntityTable } from '@/components/crud/entity-table';
 import { inventoryLotConfig } from '@/lib/crud/configs/inventory-lots';
-import type { ClickableColumnConfig } from '@/lib/table/types';
+import type { ClickableColumnConfig } from '@/lib/table/config';
 
 export function InventoryLotTable() {
   const router = useRouter();

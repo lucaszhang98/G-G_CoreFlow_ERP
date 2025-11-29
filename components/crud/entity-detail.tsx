@@ -294,7 +294,7 @@ export async function EntityDetail({ config, id, data: providedData, rightCard, 
                             {value || "-"}
                           </Badge>
                         </div>
-                      ) : field.type === 'notes' || fieldKey.includes('note') || fieldKey.includes('remark') ? (
+                      ) : fieldKey.includes('note') || fieldKey.includes('remark') ? (
                         <p className="text-base whitespace-pre-wrap mt-1">
                           {value || "暂无"}
                         </p>

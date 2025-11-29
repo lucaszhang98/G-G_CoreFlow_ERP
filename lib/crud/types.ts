@@ -18,6 +18,7 @@ export type FieldType =
   | 'badge'
   | 'relation'
   | 'datetime'
+  | 'checkbox'
 
 /**
  * 筛选字段配置（完全可序列化）

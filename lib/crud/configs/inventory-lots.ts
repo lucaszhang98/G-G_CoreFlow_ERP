@@ -91,9 +91,6 @@ export const inventoryLotConfig: EntityConfig = {
       key: 'delivery_progress',
       label: '送货进度',
       type: 'number',
-      min: 0,
-      max: 100,
-      step: 0.01,
       sortable: true,
       placeholder: '请输入送货进度（0-100）',
     },
@@ -206,7 +203,7 @@ export const inventoryLotConfig: EntityConfig = {
       {
         field: 'warehouse_id',
         label: '仓库',
-        type: 'relation',
+        type: 'select',
         relation: {
           model: 'warehouses',
           displayField: 'name',
