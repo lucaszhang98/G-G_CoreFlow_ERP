@@ -17,10 +17,12 @@ export const orderConfig: EntityConfig = {
   schemaName: 'order',
   
   fields: {
+    // order_id 是审计字段，由数据库自动生成，不在前端显示
     order_id: {
       key: 'order_id',
       label: '订单ID',
       type: 'text',
+      hidden: true, // 标记为隐藏，不在前端显示
     },
     order_number: {
       key: 'order_number',
@@ -41,10 +43,16 @@ export const orderConfig: EntityConfig = {
         valueField: 'id',
       },
     },
+    // user_id 改为显示负责人名称
     user_id: {
       key: 'user_id',
-      label: '用户ID',
-      type: 'number',
+      label: '负责人',
+      type: 'relation',
+      relation: {
+        model: 'users',
+        displayField: 'full_name',
+        valueField: 'id',
+      },
     },
     order_date: {
       key: 'order_date',
@@ -64,6 +72,8 @@ export const orderConfig: EntityConfig = {
         { label: '已交付', value: 'delivered' },
         { label: '已取消', value: 'cancelled' },
         { label: '完成留档', value: 'archived' }, // 软删除状态
+        { label: '直送', value: 'direct_delivery' },
+        { label: '拆柜', value: 'unload' },
       ],
     },
     total_amount: {
@@ -93,17 +103,20 @@ export const orderConfig: EntityConfig = {
       label: '备注',
       type: 'textarea',
     },
+    // created_at 和 updated_at 是审计字段，由系统自动维护，不在前端显示
     created_at: {
       key: 'created_at',
       label: '创建时间',
       type: 'date',
       sortable: true,
+      hidden: true,
     },
     updated_at: {
       key: 'updated_at',
       label: '更新时间',
       type: 'date',
       sortable: true,
+      hidden: true,
     },
     eta_date: {
       key: 'eta_date',
@@ -135,10 +148,12 @@ export const orderConfig: EntityConfig = {
       label: '货柜类型',
       type: 'text',
     },
-    weight: {
-      key: 'weight',
-      label: '重量',
+    container_volume: {
+      key: 'container_volume',
+      label: '整柜体积',
       type: 'number',
+      readonly: true, // 只读字段，由系统自动计算
+      computed: true, // 计算字段，从仓点明细的体积总和得出
     },
     mbl_number: {
       key: 'mbl_number',
@@ -148,46 +163,45 @@ export const orderConfig: EntityConfig = {
     do_issued: {
       key: 'do_issued',
       label: 'DO已签发',
-      type: 'badge',
-      options: [
-        { label: '是', value: 'true' },
-        { label: '否', value: 'false' },
-      ],
+      type: 'boolean',
     },
+    // 以下字段隐藏，不在前端显示
     warehouse_account: {
       key: 'warehouse_account',
       label: '仓库账户',
       type: 'text',
+      hidden: true,
     },
-    container_number: {
-      key: 'container_number',
-      label: '柜号',
-      type: 'text',
-    },
+    // container_number 已从数据库删除，不再定义
     appointment_time: {
       key: 'appointment_time',
       label: '预约时间',
       type: 'date',
+      hidden: true,
     },
     port_location: {
       key: 'port_location',
       label: '码头/查验站',
       type: 'text',
+      hidden: true,
     },
     operation_mode: {
       key: 'operation_mode',
       label: '操作方式',
       type: 'text',
+      hidden: true,
     },
     delivery_location: {
       key: 'delivery_location',
       label: '送货地',
       type: 'text',
+      hidden: true,
     },
     carrier_id: {
       key: 'carrier_id',
       label: '承运公司ID',
       type: 'number',
+      hidden: true,
     },
     carrier: {
       key: 'carrier',
@@ -199,22 +213,25 @@ export const orderConfig: EntityConfig = {
         valueField: 'carrier_id',
       },
     },
+    // created_by 和 updated_by 是审计字段，由系统自动维护，不在前端显示
     created_by: {
       key: 'created_by',
       label: '创建人ID',
       type: 'number',
+      hidden: true,
     },
     updated_by: {
       key: 'updated_by',
       label: '更新人ID',
       type: 'number',
+      hidden: true,
     },
   },
   
   list: {
     defaultSort: 'order_date',
     defaultOrder: 'desc',
-    columns: ['order_id', 'order_number', 'customer', 'user_id', 'order_date', 'status', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'weight', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'warehouse_account', 'container_number', 'appointment_time', 'port_location', 'operation_mode', 'delivery_location', 'carrier_id', 'created_by', 'updated_by', 'created_at', 'updated_at'],
+    columns: ['order_number', 'customer', 'user_id', 'order_date', 'status', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'container_volume', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'notes'],
     searchFields: ['order_number', 'mbl_number'],
     pageSize: 10,
     // 筛选配置（快速筛选）
@@ -252,11 +269,12 @@ export const orderConfig: EntityConfig = {
         label: 'MBL号码',
         type: 'text',
       },
-      {
-        field: 'container_number',
-        label: '柜号',
-        type: 'text',
-      },
+      // container_number 已隐藏，不在高级搜索中显示
+      // {
+      //   field: 'container_number',
+      //   label: '柜号',
+      //   type: 'text',
+      // },
       {
         field: 'total_amount',
         label: '订单金额',
@@ -269,13 +287,19 @@ export const orderConfig: EntityConfig = {
         type: 'numberRange',
         numberFields: ['final_amount'],
       },
-      {
-        field: 'created_at',
-        label: '创建日期',
-        type: 'dateRange',
-        dateFields: ['created_at'],
-      },
+      // created_at 是审计字段，不在高级搜索中显示
+      // {
+      //   field: 'created_at',
+      //   label: '创建日期',
+      //   type: 'dateRange',
+      //   dateFields: ['created_at'],
+      // },
     ],
+    // 行内编辑配置
+    inlineEdit: {
+      enabled: true,
+      fields: ['status', 'order_date', 'total_amount', 'notes'],
+    },
   },
   
   formFields: ['order_number', 'customer_id', 'order_date', 'status', 'total_amount', 'container_type', 'notes'],
@@ -303,6 +327,18 @@ export const orderConfig: EntityConfig = {
           carrier_id: true,
           name: true,
           carrier_code: true,
+        },
+      },
+      users_orders_user_idTousers: {
+        select: {
+          id: true,
+          full_name: true,
+        },
+      },
+      order_detail: {
+        select: {
+          id: true,
+          volume: true, // 只需要 volume 字段来计算整柜体积
         },
       },
     },

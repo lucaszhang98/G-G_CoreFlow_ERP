@@ -19,6 +19,8 @@ export type FieldType =
   | 'relation'
   | 'datetime'
   | 'checkbox'
+  | 'boolean' // boolean 类型（使用图标显示）
+  | 'location' // 位置选择（两级下拉框：类型 + 代码）
 
 /**
  * 筛选字段配置（完全可序列化）
@@ -78,6 +80,9 @@ export interface FieldConfig {
     displayField: string
     valueField?: string
   }
+  hidden?: boolean // 标记为隐藏字段（如审计字段），不在前端显示
+  readonly?: boolean // 标记为只读字段，用户不能编辑
+  computed?: boolean // 标记为计算字段，由系统自动计算
 }
 
 /**

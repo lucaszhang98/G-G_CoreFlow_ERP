@@ -180,10 +180,6 @@ export const inventoryLotConfig: EntityConfig = {
       'remaining_pallet_count',
       'unbooked_pallet_count',
       'delivery_progress',
-      'status',
-      'lot_number',
-      'received_date',
-      'warehouse_id',
     ],
     searchFields: ['customer_name', 'container_number', 'storage_location_code', 'lot_number'],
     pageSize: 20,
@@ -309,13 +305,8 @@ export const inventoryLotConfig: EntityConfig = {
           quantity: true,
           volume: true,
           estimated_pallets: true,
-          order_detail_item_order_detail_detail_idToorder_detail_item: {
-            select: {
-              detail_name: true,
-              sku: true,
-              description: true,
-            },
-          },
+          delivery_nature: true,
+          delivery_location: true,
         },
       },
       inbound_receipt: {

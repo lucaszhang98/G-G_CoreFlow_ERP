@@ -3,6 +3,120 @@ import { auth } from '@/auth'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
 
+// GET - 获取仓点明细列表（支持 orderId 查询参数）
+export async function GET(request: NextRequest) {
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: '未授权' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const orderId = searchParams.get('orderId')
+
+    if (!orderId) {
+      return NextResponse.json({ error: '缺少 orderId 参数' }, { status: 400 })
+    }
+
+    // 获取订单的所有明细
+    const orderDetails = await prisma.order_detail.findMany({
+      where: {
+        order_id: BigInt(orderId),
+      },
+      select: {
+        id: true,
+        order_id: true,
+        detail_id: true,
+        quantity: true,
+        volume: true,
+        estimated_pallets: true,
+        remaining_pallets: true, // 剩余板数
+        delivery_nature: true,
+        delivery_location: true,
+        unload_type: true,
+        volume_percentage: true,
+        notes: true,
+        po: true,
+        created_at: true,
+        updated_at: true,
+        created_by: true,
+        updated_by: true,
+        order_detail_item_order_detail_item_detail_idToorder_detail: {
+          select: {
+            id: true,
+            detail_name: true,
+            sku: true,
+            description: true,
+          },
+        },
+      },
+      orderBy: {
+        volume_percentage: 'desc', // 按分仓占总柜比降序排列
+      },
+    })
+
+    // 获取 locations 数据，用于将 delivery_location (location_id) 转换为 location_code
+    const locationIds = orderDetails
+      .map(detail => detail.delivery_location)
+      .filter((loc): loc is string => !!loc && !isNaN(Number(loc)))
+      .map(loc => BigInt(loc))
+
+    let locationsMap = new Map<string, string>()
+    if (locationIds.length > 0) {
+      try {
+        const locations = await prisma.locations.findMany({
+          where: {
+            location_id: {
+              in: locationIds,
+            },
+          },
+          select: {
+            location_id: true,
+            location_code: true,
+          },
+        })
+
+        locations.forEach(loc => {
+          locationsMap.set(loc.location_id.toString(), loc.location_code || '')
+        })
+      } catch (error) {
+        console.error('获取 locations 失败:', error)
+      }
+    }
+
+    // 序列化并格式化数据
+    const serializedDetails = orderDetails.map(detail => {
+      const serialized = serializeBigInt(detail)
+      const deliveryLocationId = serialized.delivery_location
+      const locationCode = deliveryLocationId && locationsMap.has(deliveryLocationId)
+        ? locationsMap.get(deliveryLocationId) || null
+        : null
+
+      return {
+        ...serialized,
+        // 如果存在 location_code，使用它作为 delivery_location（用于显示）
+        // 但保留原始的 delivery_location_id 用于编辑
+        delivery_location: locationCode || serialized.delivery_location,
+        delivery_location_code: locationCode, // 添加 location_code 字段（备用）
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      data: serializedDetails,
+    })
+  } catch (error: any) {
+    console.error('获取仓点明细失败:', error)
+    return NextResponse.json(
+      { 
+        success: false,
+        error: error.message || '获取仓点明细失败' 
+      },
+      { status: 500 }
+    )
+  }
+}
+
 // POST - 创建仓点明细
 export async function POST(request: NextRequest) {
   try {
@@ -12,15 +126,43 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { order_id, quantity, volume, container_volume, estimated_pallets } = body
+    const { order_id, quantity, volume, delivery_nature, delivery_location, unload_type, notes, po } = body
+
+    // 计算预计板数：体积除以2后四舍五入
+    const volumeNum = volume ? parseFloat(volume) : 0
+    const calculatedEstimatedPallets = volumeNum > 0 ? Math.round(volumeNum / 2) : null
+
+    // 计算分仓占总柜比：需要先获取订单的总体积
+    const order = await prisma.orders.findUnique({
+      where: { order_id: BigInt(order_id) },
+      include: {
+        order_detail: {
+          select: { volume: true },
+        },
+      },
+    })
+    
+    // 计算当前订单的总体积（包括即将添加的明细）
+    const existingTotalVolume = order?.order_detail?.reduce((sum: number, detail: any) => {
+      const vol = detail.volume ? Number(detail.volume) : 0
+      return sum + vol
+    }, 0) || 0
+    const newTotalVolume = existingTotalVolume + volumeNum
+    const calculatedVolumePercentage = newTotalVolume > 0 ? (volumeNum / newTotalVolume) * 100 : null
 
     const orderDetail = await prisma.order_detail.create({
       data: {
-        order_id: BigInt(order_id),
+        order_id: BigInt(order_id), // 直接使用 order_id 字段
         quantity: quantity || 0,
-        volume: volume ? parseFloat(volume) : null,
-        container_volume: container_volume ? parseFloat(container_volume) : null,
-        estimated_pallets: estimated_pallets || null,
+        volume: volumeNum || null,
+        estimated_pallets: calculatedEstimatedPallets, // 自动计算
+        remaining_pallets: calculatedEstimatedPallets, // 初始化剩余板数 = 总板数
+        delivery_nature: delivery_nature || null,
+        delivery_location: delivery_location ? String(delivery_location) : null,
+        unload_type: unload_type || null,
+        volume_percentage: calculatedVolumePercentage ? parseFloat(calculatedVolumePercentage.toFixed(2)) : null, // 自动计算，保留2位小数
+        notes: notes || null,
+        po: po || null,
         created_by: session.user.id ? BigInt(session.user.id) : null,
         updated_by: session.user.id ? BigInt(session.user.id) : null,
       },

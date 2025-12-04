@@ -54,6 +54,9 @@ export function isDateTimeField(fieldKey: string, value: any): boolean {
     /requested_end/i,
     /confirmed_start/i,
     /confirmed_end/i,
+    /scheduled_load_time/i,
+    /actual_load_time/i,
+    /load_time/i,
   ]
   
   const isDateTimeFieldName = dateTimeFieldPatterns.some(pattern => pattern.test(fieldKey))
@@ -112,17 +115,42 @@ export function formatDateDisplay(value: Date | string | null | undefined): stri
  * 格式化日期时间显示（不包含年份，节省空间）
  * @param value 日期时间值（Date对象、ISO字符串或datetime-local格式字符串）
  * @returns 格式化的日期时间字符串（MM-DD HH:mm）或 "-"
+ * 注意：使用 UTC 方法避免时区转换问题，直接显示数据库存储的时间
  */
 export function formatDateTimeDisplay(value: Date | string | null | undefined): string {
   if (!value) return "-"
   
+  // 如果是字符串，优先直接解析提取（避免时区转换）
+  if (typeof value === 'string') {
+    // ISO 格式：2024-11-05T14:30:00.000Z 或 2024-11-05T14:30:00+08:00
+    const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{3})?(Z|[+-]\d{2}:\d{2})?/)
+    if (isoMatch) {
+      const [, year, month, day, hours, minutes] = isoMatch
+      return `${month}-${day} ${hours}:${minutes}`
+    }
+    // datetime-local 格式：2024-11-05T14:30
+    const dateTimeMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+    if (dateTimeMatch) {
+      const [, year, month, day, hours, minutes] = dateTimeMatch
+      return `${month}-${day} ${hours}:${minutes}`
+    }
+    // 日期时间字符串格式：2024-11-05 14:30:00
+    const dateTimeStringMatch = value.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/)
+    if (dateTimeStringMatch) {
+      const [, year, month, day, hours, minutes] = dateTimeStringMatch
+      return `${month}-${day} ${hours}:${minutes}`
+    }
+  }
+  
+  // 如果是 Date 对象，使用 UTC 方法避免时区转换
   const date = value instanceof Date ? value : new Date(value)
   if (isNaN(date.getTime())) return "-"
   
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
+  // 使用 UTC 方法，直接显示数据库存储的时间，不进行时区转换
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
+  const hours = String(date.getUTCHours()).padStart(2, '0')
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0')
   return `${month}-${day} ${hours}:${minutes}`
 }
 

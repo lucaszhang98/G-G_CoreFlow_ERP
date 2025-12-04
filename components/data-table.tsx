@@ -13,7 +13,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { ChevronDown, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Columns3 } from "lucide-react"
+import { ChevronDown, ChevronRight, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Columns3 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 
 import {
@@ -66,8 +66,14 @@ interface DataTableProps<TData, TValue> {
   enableRowSelection?: boolean // 是否启用行选择
   onRowSelectionChange?: (selectedRows: TData[]) => void // 行选择变化回调
   getIdValue?: (row: TData) => string | number // 获取行的ID值（用于行选择）
+  selectedRows?: TData[] // 外部控制的行选择（受控模式）
   // 行内编辑相关
   isRowEditing?: (row: TData) => boolean // 检查行是否正在编辑
+  // 可展开行相关
+  expandableRows?: {
+    enabled: boolean
+    getExpandedContent?: (row: TData) => React.ReactNode | null // 获取展开内容
+  }
 }
 
 export function DataTable<TData, TValue>({
@@ -92,8 +98,18 @@ export function DataTable<TData, TValue>({
   enableRowSelection = false,
   onRowSelectionChange,
   getIdValue,
+  selectedRows: externalSelectedRows,
   isRowEditing,
+  expandableRows,
 }: DataTableProps<TData, TValue>) {
+  // 防止 hydration 错误：只在客户端渲染 DropdownMenu
+  const [mounted, setMounted] = React.useState(false)
+  // 展开行状态
+  const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set())
+  
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting)
 
   // 同步初始排序状态（只在真正改变时更新，避免无限循环）
@@ -121,6 +137,18 @@ export function DataTable<TData, TValue>({
   const [pageIndex, setPageIndex] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
   const [pageInputValue, setPageInputValue] = React.useState<string>("")
+
+  // 同步外部控制的行选择状态
+  React.useEffect(() => {
+    if (externalSelectedRows !== undefined && getIdValue) {
+      const newSelection: Record<string, boolean> = {}
+      externalSelectedRows.forEach(row => {
+        const id = String(getIdValue(row))
+        newSelection[id] = true
+      })
+      setRowSelection(newSelection)
+    }
+  }, [externalSelectedRows, getIdValue])
 
   // 使用外部分页状态或内部状态
   const currentPage = externalPage !== undefined ? externalPage - 1 : pageIndex
@@ -308,34 +336,40 @@ export function DataTable<TData, TValue>({
               {addButtonLabel}
             </Button>
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="ml-auto">
-                列 <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>切换列</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {table
-                .getAllColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => {
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      className="capitalize"
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) =>
-                        column.toggleVisibility(!!value)
-                      }
-                    >
-                      {column.id}
-                    </DropdownMenuCheckboxItem>
-                  )
-                })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {mounted ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="ml-auto">
+                  列 <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>切换列</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {table
+                  .getAllColumns()
+                  .filter((column) => column.getCanHide())
+                  .map((column) => {
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        className="capitalize"
+                        checked={column.getIsVisible()}
+                        onCheckedChange={(value) =>
+                          column.toggleVisibility(!!value)
+                        }
+                      >
+                        {column.id}
+                      </DropdownMenuCheckboxItem>
+                    )
+                  })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button variant="outline" className="ml-auto" disabled>
+              列 <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
       )}
@@ -347,6 +381,12 @@ export function DataTable<TData, TValue>({
             <TableHeader className="bg-gradient-to-r from-gray-50/80 to-gray-100/80 dark:from-gray-800/80 dark:to-gray-700/80">
             {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="hover:bg-transparent border-b-2 border-border/50 [&_th]:pb-3 [&_th]:pt-3 [&_th]:border-t-0 [&_th]:first:pl-4 [&_th]:last:pr-4">
+                  {/* 展开图标列占位（如果启用展开行功能） */}
+                  {expandableRows?.enabled && (
+                    <TableHead className="w-[40px] px-2 py-3 text-center">
+                      {/* 占位，保持对齐 */}
+                    </TableHead>
+                  )}
                   {headerGroup.headers.map((header, headerIndex) => {
                   const canSort = header.column.getCanSort()
                   const columnId = header.column.id
@@ -405,7 +445,7 @@ export function DataTable<TData, TValue>({
                     return (
                       <TableHead key={header.id} className="font-semibold text-sm text-foreground/90 px-2 py-3 whitespace-nowrap">
                         <div className="flex items-center justify-center gap-2">
-                          {showColumnToggle && (
+                          {showColumnToggle && mounted && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-accent">
@@ -440,6 +480,12 @@ export function DataTable<TData, TValue>({
                                 </div>
                               </DropdownMenuContent>
                             </DropdownMenu>
+                          )}
+                          {showColumnToggle && !mounted && (
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
+                              <Columns3 className="h-4 w-4" />
+                              <span className="sr-only">切换列</span>
+                            </Button>
                           )}
                           <span>操作</span>
                         </div>
@@ -505,36 +551,86 @@ export function DataTable<TData, TValue>({
                 // 只在客户端检查编辑状态，避免 hydration 错误
                 const isEditing = typeof window !== 'undefined' && (isRowEditing?.(row.original) || false)
                 const isSelected = row.getIsSelected()
+                const rowId = String(row.id)
+                const isExpanded = expandableRows?.enabled && expandedRows.has(rowId)
+                // 先检查是否有展开内容，避免不必要的渲染
+                const expandedContent = expandableRows?.enabled && expandableRows?.getExpandedContent 
+                  ? expandableRows.getExpandedContent(row.original)
+                  : null
+                const canExpand = expandableRows?.enabled && expandedContent !== null
+                
+                // 如果已展开，获取展开内容（用于渲染）
+                const currentExpandedContent = isExpanded && expandedContent ? expandedContent : null
                 
                 return (
-                  <TableRow
-                    key={row.id}
-                    data-state={(isSelected && "selected") || (isEditing && "editing")}
-                    suppressHydrationWarning={isEditing} // 编辑状态可能在服务器端和客户端不一致
-                    className={cn(
-                      "transition-all duration-200 border-b border-border/30 group",
-                      isEditing
-                        ? "bg-gradient-to-r from-amber-50 via-yellow-50/80 to-amber-50 dark:from-amber-950/40 dark:via-yellow-950/30 dark:to-amber-950/40 shadow-md shadow-amber-500/20 border-amber-300 dark:border-amber-700"
-                        : isSelected
-                        ? "bg-gradient-to-r from-blue-50 via-indigo-50/80 to-blue-50 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-blue-950/40 shadow-sm shadow-blue-500/10"
-                        : "hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-blue-950/20 dark:hover:to-indigo-950/20"
-                    )}
-                  >
-                  {row.getVisibleCells().map((cell) => {
-                    const isActionsCell = cell.column.id === 'actions'
-                    const widthClass = (cell.column.columnDef.meta as any)?.widthClass || ''
-                    return (
-                      <TableCell key={cell.id} className={`py-3 group-hover:text-foreground transition-colors ${isActionsCell ? 'px-2' : 'px-3'} ${widthClass}`}>
-                        <div className="flex justify-center truncate">
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
+                  <React.Fragment key={row.id}>
+                    <TableRow
+                      data-state={(isSelected && "selected") || (isEditing && "editing")}
+                      suppressHydrationWarning={isEditing} // 编辑状态可能在服务器端和客户端不一致
+                      className={cn(
+                        "transition-all duration-200 border-b border-border/30 group cursor-pointer",
+                        isEditing
+                          ? "bg-gradient-to-r from-amber-50 via-yellow-50/80 to-amber-50 dark:from-amber-950/40 dark:via-yellow-950/30 dark:to-amber-950/40 shadow-md shadow-amber-500/20 border-amber-300 dark:border-amber-700"
+                          : isSelected
+                          ? "bg-gradient-to-r from-blue-50 via-indigo-50/80 to-blue-50 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-blue-950/40 shadow-sm shadow-blue-500/10"
+                          : "hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-blue-950/20 dark:hover:to-indigo-950/20"
                       )}
-                        </div>
-                    </TableCell>
-                    )
-                  })}
-                  </TableRow>
+                      onClick={(e) => {
+                        // 如果点击的是操作按钮或其他交互元素，不触发展开
+                        const target = e.target as HTMLElement
+                        if (target.closest('button') || target.closest('a') || target.closest('[role="button"]')) {
+                          return
+                        }
+                        if (canExpand) {
+                          const newExpanded = new Set(expandedRows)
+                          if (newExpanded.has(rowId)) {
+                            newExpanded.delete(rowId)
+                          } else {
+                            newExpanded.add(rowId)
+                          }
+                          setExpandedRows(newExpanded)
+                        }
+                      }}
+                    >
+                      {/* 展开图标列（如果启用展开行功能，始终显示以保持对齐） */}
+                      {expandableRows?.enabled && (
+                        <TableCell className="py-3 px-2 w-[40px] text-center">
+                          {canExpand ? (
+                            <div className="flex items-center justify-center">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </div>
+                          ) : (
+                            <div className="w-4" /> // 占位，保持对齐
+                          )}
+                        </TableCell>
+                      )}
+                      {row.getVisibleCells().map((cell) => {
+                        const isActionsCell = cell.column.id === 'actions'
+                        const widthClass = (cell.column.columnDef.meta as any)?.widthClass || ''
+                        return (
+                          <TableCell key={cell.id} className={`py-3 group-hover:text-foreground transition-colors ${isActionsCell ? 'px-2' : 'px-3'} ${widthClass}`}>
+                            <div className="flex justify-center truncate">
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                            </div>
+                        </TableCell>
+                        )
+                      })}
+                    </TableRow>
+                    {isExpanded && currentExpandedContent && (
+                      <TableRow>
+                        <TableCell colSpan={row.getVisibleCells().length + (expandableRows?.enabled ? 1 : 0)} className="p-0 bg-muted/30">
+                          {currentExpandedContent}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
                 )
               })
             ) : (

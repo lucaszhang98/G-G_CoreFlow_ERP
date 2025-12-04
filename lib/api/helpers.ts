@@ -184,6 +184,12 @@ export function handleForeignKeyError(error: any, message: string) {
  */
 export function handleError(error: any, defaultMessage: string = '操作失败') {
   console.error('API Error:', error);
+  console.error('API Error Details:', {
+    message: error?.message,
+    code: error?.code,
+    meta: error?.meta,
+    name: error?.name,
+  });
 
   // 尝试处理已知错误
   const uniqueError = handleUniqueConstraintError(error, '资源');
@@ -192,13 +198,20 @@ export function handleError(error: any, defaultMessage: string = '操作失败')
   const fkError = handleForeignKeyError(error, '');
   if (fkError) return fkError;
 
-  // 返回通用错误
-  return NextResponse.json(
-    {
-      error: defaultMessage,
-    },
-    { status: 500 }
-  );
+  // 返回通用错误，包含更多错误信息（仅在开发环境）
+  const errorResponse: any = {
+    error: defaultMessage,
+  };
+  
+  if (process.env.NODE_ENV === 'development') {
+    errorResponse.details = {
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+    };
+  }
+
+  return NextResponse.json(errorResponse, { status: 500 });
 }
 
 /**

@@ -16,10 +16,12 @@ export const userConfig: EntityConfig = {
   schemaName: 'user',
   
   fields: {
+    // id 是审计字段，由数据库自动生成，不在前端显示
     id: {
       key: 'id',
       label: 'ID',
       type: 'text',
+      hidden: true,
     },
     username: {
       key: 'username',
@@ -91,18 +93,20 @@ export const userConfig: EntityConfig = {
       required: false, // 更新时可选
       placeholder: '请输入密码（留空则不修改）',
     },
+    // created_at 是审计字段，由系统自动维护，不在前端显示
     created_at: {
       key: 'created_at',
       label: '创建时间',
       type: 'date',
       sortable: true,
+      hidden: true,
     },
   },
   
   list: {
     defaultSort: 'username',
     defaultOrder: 'asc',
-    columns: ['username', 'email', 'full_name', 'role', 'status', 'department', 'created_at'],
+    columns: ['username', 'email', 'full_name', 'role', 'status', 'department'],
     searchFields: ['username', 'email', 'full_name'],
     pageSize: 10,
     // 筛选配置（快速筛选）
@@ -129,12 +133,13 @@ export const userConfig: EntityConfig = {
           { label: '停用', value: 'inactive' },
         ],
       },
-      {
-        field: 'created_at',
-        label: '创建日期',
-        type: 'dateRange',
-        dateFields: ['created_at'],
-      },
+      // created_at 是审计字段，不在筛选配置中显示
+      // {
+      //   field: 'created_at',
+      //   label: '创建日期',
+      //   type: 'dateRange',
+      //   dateFields: ['created_at'],
+      // },
     ],
     // 高级搜索配置（多条件组合）
     advancedSearchFields: [

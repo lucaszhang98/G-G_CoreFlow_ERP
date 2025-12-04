@@ -10,7 +10,7 @@ export const orderCreateSchema = z.object({
   customer_id: z.number().optional().nullable(),
   user_id: z.number().optional().nullable(),
   order_date: z.string().or(z.date()),
-  status: z.enum(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']).optional(),
+  status: z.enum(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'archived', 'direct_delivery', 'unload']).optional(),
   total_amount: z.number().min(0, '订单金额不能为负数'),
   discount_amount: z.number().min(0, '折扣金额不能为负数').optional().nullable(),
   tax_amount: z.number().min(0, '税费不能为负数').optional().nullable(),
@@ -22,7 +22,7 @@ export const orderCreateSchema = z.object({
   ready_date: z.string().or(z.date()).optional().nullable(),
   return_deadline: z.string().or(z.date()).optional().nullable(),
   container_type: z.string().max(50).optional().nullable(),
-  weight: z.number().min(0).optional().nullable(),
+  container_volume: z.number().min(0).optional().nullable(), // 计算字段，由系统自动计算，用户不能填写
   mbl_number: z.string().max(100).optional().nullable(),
   do_issued: z.boolean().optional().nullable(),
   warehouse_account: z.string().max(100).optional().nullable(),

@@ -1,4 +1,4 @@
-/**
+/**·
  * 通用实体列表组件
  */
 
@@ -7,7 +7,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { ColumnDef } from "@tanstack/react-table"
-import { Plus, Trash2, Edit } from "lucide-react"
+import { Plus, Trash2, Edit, CheckCircle, XCircle } from "lucide-react"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -25,9 +25,84 @@ import {
 import { EntityConfig, FieldConfig } from "@/lib/crud/types"
 import { toast } from "sonner"
 import { EntityForm } from "./entity-form"
+import { filterAuditFields, getIdField as getConfigIdField } from "@/lib/crud/constants"
 import { autoFormatDateField, formatDateDisplay, formatDateTimeDisplay } from "@/lib/utils/date-format"
 import { SearchModule } from "./search-module"
 import { InlineEditCell } from "./inline-edit-cell"
+import { LocationSelect } from "@/components/ui/location-select"
+
+// 关系字段批量编辑组件（用于处理异步选项加载）
+function RelationFieldBatchEdit({
+  fieldKey,
+  fieldConfig,
+  fieldValue,
+  onValueChange,
+  loadOptions,
+}: {
+  fieldKey: string
+  fieldConfig: FieldConfig
+  fieldValue: any
+  onValueChange: (fieldKey: string, value: any) => void
+  loadOptions?: () => Promise<Array<{ label: string; value: string }>>
+}) {
+  const [options, setOptions] = React.useState<Array<{ label: string; value: string }>>([])
+  const [loading, setLoading] = React.useState(false)
+
+  React.useEffect(() => {
+    if (loadOptions) {
+      setLoading(true)
+      loadOptions()
+        .then((loadedOptions) => {
+          setOptions(loadedOptions)
+        })
+        .catch((error) => {
+          console.error(`加载${fieldConfig.label}选项失败:`, error)
+        })
+        .finally(() => {
+          setLoading(false)
+        })
+    }
+  }, [loadOptions, fieldConfig.label])
+
+  if (loadOptions) {
+    return (
+      <div className="space-y-2">
+        <label className="text-sm font-medium">
+          {fieldConfig.label}
+        </label>
+        <select
+          value={fieldValue || ''}
+          onChange={(e) => onValueChange(fieldKey, e.target.value || null)}
+          disabled={loading}
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <option value="">（留空则不修改）</option>
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    )
+  }
+
+  // 如果没有 loadOptions，使用文本输入（回退方案）
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">
+        {fieldConfig.label}
+      </label>
+      <input
+        type="text"
+        value={fieldValue || ''}
+        onChange={(e) => onValueChange(fieldKey, e.target.value)}
+        placeholder={`输入新的${fieldConfig.label}（留空则不修改）`}
+        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+      />
+    </div>
+  )
+}
 
 interface EntityTableProps<T = any> {
   config: EntityConfig
@@ -36,12 +111,17 @@ interface EntityTableProps<T = any> {
   customActions?: {
     onView?: (item: T) => void
     onDelete?: (item: T) => void
+    onAdd?: () => void
   } // 自定义操作（如果提供，则使用自定义操作）
   customSortableColumns?: string[] // 自定义可排序列
   customColumnLabels?: Record<string, string> // 自定义列标签
   customClickableColumns?: ClickableColumnConfig<T>[] // 自定义可点击列配置
   fieldLoadOptions?: Record<string, () => Promise<Array<{ label: string; value: string }>>> // 字段选项加载函数（用于 select 类型字段）
   customSaveHandler?: (row: T, updates: Record<string, any>) => Promise<void> // 自定义保存处理函数（如果提供，则使用自定义保存逻辑）
+  expandableRows?: {
+    enabled: boolean
+    getExpandedContent?: (row: T) => React.ReactNode | null // 获取展开内容
+  } // 可展开行配置
 }
 
 export function EntityTable<T = any>({ 
@@ -54,6 +134,7 @@ export function EntityTable<T = any>({
   customClickableColumns,
   fieldLoadOptions,
   customSaveHandler,
+  expandableRows,
 }: EntityTableProps<T>) {
   const router = useRouter()
   const [data, setData] = React.useState<T[]>([])
@@ -92,6 +173,11 @@ export function EntityTable<T = any>({
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = React.useState(false)
   const [batchEditValues, setBatchEditValues] = React.useState<Record<string, any>>({})
   
+  // 批量编辑字段更新处理函数（使用函数式更新，避免闭包问题）
+  const handleBatchEditValueChange = React.useCallback((fieldKey: string, value: any) => {
+    setBatchEditValues(prev => ({ ...prev, [fieldKey]: value }))
+  }, [])
+  
   // 行内编辑状态（只在客户端初始化，避免 hydration 错误）
   const [editingRowId, setEditingRowId] = React.useState<string | number | null>(null)
   const [editingValues, setEditingValues] = React.useState<Record<string, any>>({})
@@ -101,6 +187,17 @@ export function EntityTable<T = any>({
   React.useEffect(() => {
     setIsMounted(true)
   }, [])
+  
+  // 获取可批量编辑的字段列表（使用 useMemo 避免每次渲染重新计算）
+  const batchEditableFields = React.useMemo(() => {
+    const idField = config.idField || 'id'
+    return config.list.batchOperations?.edit?.fields || 
+      Object.keys(config.fields).filter(key => {
+        const field = config.fields[key]
+        // 排除主键字段
+        return key !== idField && field.type !== 'relation'
+      })
+  }, [config.list.batchOperations?.edit?.fields, config.fields, config.idField])
 
   // 获取列表数据
   const fetchData = React.useCallback(async (
@@ -174,7 +271,8 @@ export function EntityTable<T = any>({
       }
       
       setData(result.data || [])
-      setTotal(result.pagination?.total || 0)
+      // 支持两种返回格式：pagination.total 或直接 total
+      setTotal(result.pagination?.total ?? result.total ?? 0)
     } catch (error: any) {
       console.error(`[EntityTable] 获取${config.displayName}列表失败:`, error)
       const errorMsg = error?.message || `获取${config.displayName}列表失败`
@@ -266,6 +364,9 @@ export function EntityTable<T = any>({
   }, [editingRowId, config.idField, isMounted])
   
   // 开始编辑行
+  // 更新编辑值（使用 ref 存储，避免触发重新渲染）
+  const editingValuesRef = React.useRef<Record<string, any>>({})
+  
   const handleStartEdit = React.useCallback((row: T) => {
     const idField = getIdField()
     const rowId = (row as any)[idField]
@@ -273,24 +374,44 @@ export function EntityTable<T = any>({
     // 初始化编辑值（只包含可编辑字段）
     const initialValues: Record<string, any> = {}
     editableFields.forEach(fieldKey => {
-      initialValues[fieldKey] = (row as any)[fieldKey]
+      const fieldConfig = config.fields[fieldKey]
+      // 对于 relation 字段，优先使用 _id 字段的值
+      if (fieldConfig?.type === 'relation') {
+        const idKey = `${fieldKey}_id`
+        const idValue = (row as any)[idKey]
+        if (idValue !== undefined && idValue !== null) {
+          initialValues[fieldKey] = String(idValue)
+        } else {
+          // 如果没有 _id 字段，使用原字段的值（可能是 ID 或显示值）
+          initialValues[fieldKey] = (row as any)[fieldKey]
+        }
+      } else {
+        initialValues[fieldKey] = (row as any)[fieldKey]
+      }
     })
     setEditingValues(initialValues)
-  }, [editingRowId, editableFields, config.idField])
+    // 同时初始化 ref
+    editingValuesRef.current = { ...initialValues }
+  }, [editingRowId, editableFields, config.idField, config.fields])
   
-  // 更新编辑值
   const handleEditValueChange = React.useCallback((fieldKey: string, value: any) => {
-    setEditingValues(prev => ({
-      ...prev,
-      [fieldKey]: value
-    }))
+    // 只更新 ref，不更新 state，避免触发重新渲染
+    editingValuesRef.current[fieldKey] = value
+    // 可选：如果需要实时显示，可以更新 state（但会导致重新渲染）
+    // setEditingValues(prev => ({ ...prev, [fieldKey]: value }))
   }, [])
   
-  // 保存编辑 - 使用 ref 存储最新的编辑值，确保获取到最新状态
-  const editingValuesRef = React.useRef<Record<string, any>>({})
-  React.useEffect(() => {
-    editingValuesRef.current = editingValues
-  }, [editingValues])
+  // 缓存字段 onChange 回调映射（使用稳定的函数引用）
+  const fieldOnChangeMap = React.useMemo(() => {
+    const map: Record<string, (value: any) => void> = {}
+    // 过滤掉审计字段
+    const displayColumns = filterAuditFields(config.list.columns, config.idField)
+    displayColumns.forEach(fieldKey => {
+      // 为每个字段创建一个稳定的闭包函数
+      map[fieldKey] = (value: any) => handleEditValueChange(fieldKey, value)
+    })
+    return map
+  }, [config.list.columns, handleEditValueChange])
   
   // 保存编辑
   const handleSaveEdit = React.useCallback(async (row: T) => {
@@ -300,29 +421,98 @@ export function EntityTable<T = any>({
       const idField = getIdField()
       const id = (row as any)[idField]
       
-      // 使用 ref 获取最新的 editingValues，确保获取到最新值
+      // 从 ref 获取最新的编辑值（编辑时只更新 ref，不更新 state）
       const currentEditingValues = editingValuesRef.current
       
-      // 过滤掉未改变的字段，并处理日期字段
+      // 在提交前，同步 ref 的值到 state，以便后续使用
+      setEditingValues(currentEditingValues)
+      
+      // 过滤掉未改变的字段，并处理日期字段和关系字段
       const updates: Record<string, any> = {}
       Object.entries(currentEditingValues).forEach(([key, value]) => {
-        const originalValue = (row as any)[key]
         const fieldConfig = config.fields[key]
         
-        // 处理日期字段：将 YYYY-MM-DD 字符串转换为 Date 对象
-        let processedValue = value
-        if (fieldConfig?.type === 'date' && value && typeof value === 'string') {
-          // 日期字符串格式：YYYY-MM-DD，转换为 Date 对象（UTC）
-          const [year, month, day] = value.split('-').map(Number)
-          if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-            processedValue = new Date(Date.UTC(year, month - 1, day))
+        // 处理 boolean 字段：false 和 true 都是有效值
+        if (fieldConfig?.type === 'boolean') {
+          // boolean 字段：确保值是布尔类型
+          // 注意：null/undefined 应该转换为 false，但需要明确处理
+          let processedValue: boolean
+          if (value === null || value === undefined) {
+            processedValue = false
+          } else if (typeof value === 'boolean') {
+            processedValue = value
+          } else if (typeof value === 'string') {
+            processedValue = value === 'true' || value === '1'
+          } else {
+            processedValue = Boolean(value)
           }
-        } else if (fieldConfig?.type === 'datetime' && value && typeof value === 'string') {
-          // 日期时间字符串，直接转换为 Date
-          processedValue = new Date(value)
+          
+          const originalValue = (row as any)[key]
+          const originalBool = originalValue !== undefined && originalValue !== null ? Boolean(originalValue) : false
+          
+          // 比较处理后的值是否改变
+          if (processedValue !== originalBool) {
+            updates[key] = processedValue
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`[EntityTable] Boolean字段 ${key} 更新:`, { original: originalBool, new: processedValue })
+            }
+          }
+          return // 跳过后续处理
+        }
+        
+        // 处理关系字段：关系字段在数据库中存储的是 ID，字段名就是数据库字段名
+        if (fieldConfig?.type === 'relation') {
+          // 对于关系字段，直接使用字段名（如 received_by），值应该是 ID
+          const idKey = key // 关系字段的字段名就是数据库字段名
+          const originalId = (row as any)[idKey] || (row as any)[`${key}_id`]
+          
+          // 处理空值：空字符串、null、undefined 都转换为 null
+          let processedValue: number | null
+          if (value === '' || value === null || value === undefined) {
+            processedValue = null
+          } else {
+            const numValue = Number(value)
+            // 如果转换后是 NaN，设置为 null；如果是 0，也设置为 null（0 通常不是有效的 ID）
+            processedValue = (isNaN(numValue) || numValue === 0) ? null : numValue
+          }
+          
+          // 比较处理后的值是否改变
+          const originalNum = originalId ? Number(originalId) : null
+          if (processedValue !== originalNum) {
+            updates[key] = processedValue
+          }
+          return // 跳过后续处理
+        }
+        
+        // 处理日期字段：保持为 YYYY-MM-DD 字符串格式（API 会处理转换）
+        let processedValue = value
+        if (fieldConfig?.type === 'date') {
+          // 日期字符串格式：YYYY-MM-DD，保持字符串格式发送给 API
+          // 空字符串转换为 null
+          if (!value || value === '') {
+            processedValue = null
+          } else if (typeof value === 'string') {
+            processedValue = value
+          }
+        } else if (fieldConfig?.type === 'datetime') {
+          // 日期时间字符串，保持字符串格式
+          // 空字符串转换为 null
+          if (!value || value === '') {
+            processedValue = null
+          } else if (typeof value === 'string') {
+            processedValue = value
+          }
+        }
+        
+        // 处理 textarea 类型字段：空字符串转换为 null
+        if (fieldConfig?.type === 'textarea') {
+          if (processedValue === '' || processedValue === null || processedValue === undefined) {
+            processedValue = null
+          }
         }
         
         // 比较值是否改变
+        const originalValue = (row as any)[key]
         const originalStr = originalValue === null || originalValue === undefined ? '' : String(originalValue)
         const newStr = processedValue === null || processedValue === undefined ? '' : String(processedValue)
         if (originalStr !== newStr) {
@@ -350,27 +540,86 @@ export function EntityTable<T = any>({
       }
       
       // 默认保存逻辑：调用 API 更新
-      const response = await fetch(`${config.apiPath}/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      })
+      // 添加调试日志
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[EntityTable] 更新 ${config.displayName} (${id}):`, updates)
+        console.log(`[EntityTable] 发送的 JSON:`, JSON.stringify(updates))
+      }
+      
+      let response: Response
+      let responseText: string = ''
+      
+      try {
+        response = await fetch(`${config.apiPath}/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updates),
+        })
+        
+        // 先读取响应文本（只能读取一次）
+        responseText = await response.text()
+      } catch (fetchError: any) {
+        console.error(`[EntityTable] 网络请求失败:`, fetchError)
+        throw new Error(`网络请求失败: ${fetchError.message || '未知错误'}`)
+      }
       
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `更新${config.displayName}失败`)
+        let errorData: any = {}
+        try {
+          errorData = responseText ? JSON.parse(responseText) : {}
+        } catch (e) {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}`, rawText: responseText }
+        }
+        
+        // 显示详细的验证错误信息
+        let errorMessage = errorData.error || `更新${config.displayName}失败`
+        if (errorData.details && Array.isArray(errorData.details) && errorData.details.length > 0) {
+          const detailMessages = errorData.details.map((d: any) => {
+            const fieldLabel = config.fields[d.field]?.label || d.field
+            return `${fieldLabel}: ${d.message}`
+          }).join('; ')
+          errorMessage = `${errorMessage}: ${detailMessages}`
+        }
+        console.error(`[EntityTable] 更新失败:`, {
+          error: errorData,
+          updates: updates,
+          responseStatus: response.status,
+          errorText: responseText
+        })
+        throw new Error(errorMessage)
+      }
+      
+      // 响应成功，尝试解析响应数据（可选，不影响成功状态）
+      if (responseText) {
+        try {
+          const responseData = JSON.parse(responseText)
+          console.log(`[EntityTable] 更新成功，响应数据:`, responseData)
+        } catch (e) {
+          // 如果响应体不是有效的 JSON，忽略错误（更新可能仍然成功）
+          console.warn(`[EntityTable] 响应解析警告（响应可能为空）:`, e, '响应文本:', responseText)
+        }
+      }
+      
+      // 清除编辑状态
+      setEditingRowId(null)
+      setEditingValues({})
+      editingValuesRef.current = {}
+      
+      // 刷新数据（使用 await 确保完成）
+      try {
+        await fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
+        console.log(`[EntityTable] 数据刷新完成`)
+      } catch (refreshError) {
+        console.error(`[EntityTable] 数据刷新失败:`, refreshError)
+        // 即使刷新失败，也显示成功（因为更新可能已经成功）
       }
       
       toast.success(`更新${config.displayName}成功`)
-      setEditingRowId(null)
-      setEditingValues({})
-      
-      // 刷新数据
-      fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
     } catch (error: any) {
-      console.error(`更新${config.displayName}失败:`, error)
+      console.error(`[EntityTable] 更新${config.displayName}失败:`, error)
+      console.error(`[EntityTable] 错误堆栈:`, error.stack)
       toast.error(error.message || `更新${config.displayName}失败`)
     }
   }, [editingRowId, editingValues, config.apiPath, config.displayName, config.fields, config.idField, customSaveHandler, fetchData, page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic])
@@ -535,10 +784,38 @@ export function EntityTable<T = any>({
         return
       }
       
-      // 过滤掉空值
-      const updates = Object.fromEntries(
-        Object.entries(batchEditValues).filter(([_, value]) => value !== null && value !== undefined && value !== '')
-      )
+      // 处理 relation 字段：确保发送的是数字类型（ID）
+      // 处理 boolean 字段：确保 false 值不被过滤掉
+      const processedUpdates: Record<string, any> = {}
+      Object.entries(batchEditValues).forEach(([key, value]) => {
+        const fieldConfig = config.fields[key]
+        
+        // 对于 boolean 字段，false 是有效值，不应该被过滤
+        if (fieldConfig?.type === 'boolean') {
+          // boolean 字段：false 和 true 都是有效值，只有 undefined 和 null 才过滤
+          if (value !== undefined && value !== null) {
+            processedUpdates[key] = Boolean(value)
+          }
+          return
+        }
+        
+        // 对于其他字段，过滤掉空值
+        if (value === null || value === undefined || value === '') {
+          return
+        }
+        
+        // 对于 relation 字段，确保值是数字类型
+        if (fieldConfig?.type === 'relation' && value) {
+          const numValue = Number(value)
+          if (!isNaN(numValue)) {
+            processedUpdates[key] = numValue
+          }
+        } else {
+          processedUpdates[key] = value
+        }
+      })
+      
+      const updates = processedUpdates
       
       if (Object.keys(updates).length === 0) {
         toast.error('请至少填写一个要修改的字段')
@@ -671,6 +948,7 @@ export function EntityTable<T = any>({
           
           // 如果正在编辑，使用 InlineEditCell
           if (rowIsEditing) {
+            // 直接使用 editingValues，但通过 key 确保组件正确更新
             const currentValue = editingValues[columnId] !== undefined 
               ? editingValues[columnId] 
               : row.getValue(columnId)
@@ -678,10 +956,11 @@ export function EntityTable<T = any>({
             const loadOptions = fieldLoadOptions?.[columnId]
             return (
               <InlineEditCell
+                key={`${row.original[getIdField()]}-${columnId}-${editingRowId}`}
                 fieldKey={columnId}
                 fieldConfig={fieldConfig}
                 value={currentValue}
-                onChange={(value) => handleEditValueChange(columnId, value)}
+                onChange={fieldOnChangeMap[columnId]}
                 loadOptions={loadOptions}
               />
             )
@@ -713,7 +992,10 @@ export function EntityTable<T = any>({
       })
     }
     
-    return config.list.columns.map((fieldKey) => {
+    // 过滤掉审计字段（ID、created_by、updated_by、created_at、updated_at）
+    const displayColumns = filterAuditFields(config.list.columns, config.idField)
+    
+    return displayColumns.map((fieldKey) => {
     const fieldConfig = config.fields[fieldKey]
     if (!fieldConfig) return null
 
@@ -740,17 +1022,40 @@ export function EntityTable<T = any>({
         
         // 如果正在编辑且字段可编辑，使用 InlineEditCell
         if (rowIsEditing) {
-          const currentValue = editingValues[fieldKey] !== undefined 
+          // 使用初始值或 ref 中的值（编辑时主要使用内部状态，这里只是初始值）
+          let initialValue = editingValues[fieldKey] !== undefined 
             ? editingValues[fieldKey] 
             : row.getValue(fieldKey)
+          
+          // 对于关系字段，如果存在 _id 字段，使用 ID 值
+          if (fieldConfig.type === 'relation') {
+            const idKey = `${fieldKey}_id`
+            const idValue = (row.original as any)[idKey]
+            // 优先使用 _id 字段的值（这是实际的 ID）
+            if (idValue !== undefined && idValue !== null) {
+              initialValue = String(idValue)
+            } else if (initialValue && typeof initialValue === 'string') {
+              // 如果 initialValue 是字符串（可能是显示值），尝试从关联数据中获取 ID
+              // 这种情况通常不会发生，因为 API 应该返回 _id 字段
+              initialValue = initialValue
+            }
+          }
+          
           // 获取字段的 loadOptions 函数（如果提供）
           const loadOptions = fieldLoadOptions?.[fieldKey]
+          
+          // 对于关系字段，如果没有 loadOptions，尝试使用 select 类型渲染
+          const effectiveType = fieldConfig.type === 'relation' && !loadOptions && fieldConfig.options
+            ? 'select'
+            : fieldConfig.type
+          
           return (
             <InlineEditCell
+              key={`${row.original[getIdField()]}-${fieldKey}-${editingRowId}`}
               fieldKey={fieldKey}
-              fieldConfig={fieldConfig}
-              value={currentValue}
-              onChange={(value) => handleEditValueChange(fieldKey, value)}
+              fieldConfig={{ ...fieldConfig, type: effectiveType as any }}
+              value={initialValue}
+              onChange={fieldOnChangeMap[fieldKey]}
               loadOptions={loadOptions}
             />
           )
@@ -764,6 +1069,11 @@ export function EntityTable<T = any>({
               {fieldConfig.options?.find(opt => opt.value === value)?.label || value}
             </Badge>
           )
+        }
+        if (fieldConfig.type === 'select') {
+          const value = row.getValue(fieldKey) as string
+          const option = fieldConfig.options?.find(opt => opt.value === value)
+          return <div>{option?.label || value || '-'}</div>
         }
         if (fieldConfig.type === 'currency') {
           const value = row.getValue(fieldKey)
@@ -779,15 +1089,51 @@ export function EntityTable<T = any>({
         
         if (fieldConfig.type === 'date') {
           const value = row.getValue(fieldKey)
-          return <div>{autoFormatDateField(fieldKey, value)}</div>
+          return <div>{formatDateDisplay(value)}</div>
+        }
+        
+        if (fieldConfig.type === 'datetime') {
+          const value = row.getValue(fieldKey)
+          return <div>{formatDateTimeDisplay(value)}</div>
         }
         
         if (fieldConfig.type === 'relation') {
           const value = row.getValue(fieldKey)
-          const displayValue = fieldConfig.relation?.displayField
-            ? (value as any)?.[fieldConfig.relation.displayField]
-            : value
-          return <div>{displayValue || '-'}</div>
+          // 如果 value 已经是字符串（API 已经转换了，如 full_name），直接显示
+          if (typeof value === 'string' && value) {
+            return <div>{value}</div>
+          }
+          // 如果 value 是对象，尝试获取 displayField
+          if (value && typeof value === 'object') {
+            const displayValue = fieldConfig.relation?.displayField
+              ? (value as any)?.[fieldConfig.relation.displayField]
+              : value
+            return <div>{displayValue || '-'}</div>
+          }
+          // 如果 value 是数字（ID）或 null/undefined，尝试从关联数据中获取显示值
+          // 检查是否有关联数据（如 users_inbound_receipt_received_byTousers）
+          const relationKey = `users_inbound_receipt_${fieldKey}Tousers`
+          const relationData = (row.original as any)[relationKey]
+          if (relationData && fieldConfig.relation?.displayField) {
+            const displayValue = relationData[fieldConfig.relation.displayField]
+            return <div>{displayValue || '-'}</div>
+          }
+          // 如果 value 是 null 或 undefined，显示 "-"
+          return <div>-</div>
+        }
+        
+        if (fieldConfig.type === 'boolean') {
+          const value = row.getValue(fieldKey)
+          const boolValue = value === true || value === 'true' || value === 1 || value === '1'
+          return (
+            <div className="flex items-center justify-center">
+              {boolValue ? (
+                <CheckCircle className="h-4 w-4 text-green-500" />
+              ) : (
+                <XCircle className="h-4 w-4 text-gray-400" />
+              )}
+            </div>
+          )
         }
         
         if (fieldConfig.type === 'number') {
@@ -816,37 +1162,47 @@ export function EntityTable<T = any>({
   }, [
     customColumns,
     config.list.columns,
+    config.idField,
     config.fields,
     inlineEditEnabled,
     editableFields,
     isMounted,
     isRowEditing,
     editingRowId,
-    editingValues,
+    // 注意：不包含 editingValues，因为编辑时使用内部状态，只在提交时更新
+    // 这样可以避免每次输入都重新创建列定义，导致输入框失去焦点
     handleEditValueChange,
     fieldLoadOptions,
+    fieldOnChangeMap,
+    getIdField,
   ])
 
   // 使用新框架创建表格配置
   const tableConfig = React.useMemo(() => {
     // 获取可排序列（如果提供了自定义，则使用自定义；否则根据字段配置）
-    const sortableColumns = customSortableColumns || config.list.columns.filter(fieldKey => {
+    // 先过滤掉审计字段，再筛选可排序列
+    const displayColumns = filterAuditFields(config.list.columns, config.idField)
+    const sortableColumns = customSortableColumns || displayColumns.filter(fieldKey => {
       const fieldConfig = config.fields[fieldKey]
       return fieldConfig?.sortable
     })
 
     // 创建列标签映射（如果提供了自定义，则使用自定义；否则根据配置生成）
+    // 使用上面已经过滤好的 displayColumns
     const columnLabels = customColumnLabels || Object.fromEntries(
-      config.list.columns.map(fieldKey => {
+      displayColumns.map(fieldKey => {
         const fieldConfig = config.fields[fieldKey]
         return [fieldKey, fieldConfig?.label || fieldKey]
       })
     )
 
+    // 检查是否有删除权限
+    const hasDeletePermission = config.permissions.delete && config.permissions.delete.length > 0
+    
     // 使用自定义操作或默认操作
     const actionsConfig = customActions ? {
       onView: customActions.onView,
-      onDelete: customActions.onDelete,
+      onDelete: customActions.onDelete && hasDeletePermission ? customActions.onDelete : undefined,
       // 如果自定义操作没有提供行内编辑，则使用默认的
       onEdit: inlineEditEnabled ? handleStartEdit : undefined,
       onSave: inlineEditEnabled ? handleSaveEdit : undefined,
@@ -854,7 +1210,7 @@ export function EntityTable<T = any>({
       isEditing: inlineEditEnabled ? isRowEditing : undefined,
     } : {
       onView: handleView,
-      onDelete: handleDelete,
+      onDelete: hasDeletePermission ? handleDelete : undefined,
       // 行内编辑功能
       onEdit: inlineEditEnabled ? handleStartEdit : undefined,
       onSave: inlineEditEnabled ? handleSaveEdit : undefined,
@@ -914,7 +1270,7 @@ export function EntityTable<T = any>({
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3 flex-1">
           <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
-            {config.pluralName}管理
+            {config.pluralName?.endsWith('管理') ? config.pluralName : `${config.pluralName}管理`}
           </h1>
           <p className="text-base text-muted-foreground leading-relaxed max-w-2xl">
             管理系统中所有{config.pluralName}信息，支持搜索、筛选和批量操作
@@ -1024,8 +1380,10 @@ export function EntityTable<T = any>({
         sortableColumns={sortableColumns}
         enableRowSelection={batchOpsEnabled}
         onRowSelectionChange={setSelectedRows}
+        selectedRows={selectedRows}
         getIdValue={getIdValue}
         isRowEditing={inlineEditEnabled ? isRowEditing : undefined}
+        expandableRows={expandableRows}
       />
         </CardContent>
       </Card>
@@ -1128,100 +1486,206 @@ export function EntityTable<T = any>({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {(() => {
-              // 获取可批量编辑的字段
-              const editableFields = config.list.batchOperations?.edit?.fields || 
-                Object.keys(config.fields).filter(key => {
-                  const field = config.fields[key]
-                  // 排除主键字段
-                  return key !== getIdField() && field.type !== 'relation'
-                })
+            {batchEditableFields.map((fieldKey) => {
+              // 处理字段名映射：origin_location_id -> origin_location, location_id -> destination_location
+              let actualFieldKey = fieldKey
+              let fieldConfig = config.fields[fieldKey]
               
-              return editableFields.map((fieldKey) => {
-                const fieldConfig = config.fields[fieldKey]
-                if (!fieldConfig) return null
-
-                const fieldValue = batchEditValues[fieldKey]
-
-                // 根据字段类型渲染不同的输入控件
-                switch (fieldConfig.type) {
-                  case 'text':
-                  case 'email':
-                  case 'phone':
-                    return (
-                      <div key={fieldKey} className="space-y-2">
-                        <label className="text-sm font-medium">
-                          {fieldConfig.label}
-                        </label>
-                        <input
-                          type={fieldConfig.type === 'email' ? 'email' : fieldConfig.type === 'phone' ? 'tel' : 'text'}
-                          value={fieldValue || ''}
-                          onChange={(e) => setBatchEditValues({ ...batchEditValues, [fieldKey]: e.target.value })}
-                          placeholder={`输入新的${fieldConfig.label}（留空则不修改）`}
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                      </div>
-                    )
-
-                  case 'number':
-                  case 'currency':
-                    return (
-                      <div key={fieldKey} className="space-y-2">
-                        <label className="text-sm font-medium">
-                          {fieldConfig.label}
-                        </label>
-                        <input
-                          type="number"
-                          step={fieldConfig.type === 'currency' ? '0.01' : '1'}
-                          value={fieldValue || ''}
-                          onChange={(e) => setBatchEditValues({ ...batchEditValues, [fieldKey]: e.target.value ? Number(e.target.value) : '' })}
-                          placeholder={`输入新的${fieldConfig.label}（留空则不修改）`}
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                      </div>
-                    )
-
-                  case 'date':
-                    return (
-                      <div key={fieldKey} className="space-y-2">
-                        <label className="text-sm font-medium">
-                          {fieldConfig.label}
-                        </label>
-                        <input
-                          type="date"
-                          value={fieldValue || ''}
-                          onChange={(e) => setBatchEditValues({ ...batchEditValues, [fieldKey]: e.target.value })}
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                      </div>
-                    )
-
-                  case 'select':
-                    return (
-                      <div key={fieldKey} className="space-y-2">
-                        <label className="text-sm font-medium">
-                          {fieldConfig.label}
-                        </label>
-                        <select
-                          value={fieldValue || ''}
-                          onChange={(e) => setBatchEditValues({ ...batchEditValues, [fieldKey]: e.target.value || '' })}
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <option value="">不修改</option>
-                          {fieldConfig.options?.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )
-
-                  default:
-                    return null
+              // 强制映射 location_id 字段（无论 fieldConfig 是否存在）
+              if (fieldKey === 'location_id') {
+                fieldConfig = config.fields['destination_location']
+                actualFieldKey = 'destination_location'
+              } else if (fieldKey === 'origin_location_id') {
+                fieldConfig = config.fields['origin_location']
+                actualFieldKey = 'origin_location'
+              } else if (!fieldConfig && fieldKey.endsWith('_location_id')) {
+                // 其他 location_id 字段的通用映射
+                const baseKey = fieldKey.replace('_location_id', '_location')
+                fieldConfig = config.fields[baseKey]
+                actualFieldKey = baseKey
+              }
+              
+              if (!fieldConfig) {
+                // 调试：如果找不到字段配置，打印警告
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn(`[EntityTable] 批量编辑：找不到字段配置 fieldKey=${fieldKey}, actualFieldKey=${actualFieldKey}, availableFields=${Object.keys(config.fields).join(', ')}`)
                 }
-              })
-            })()}
+                return null
+              }
+
+              // 使用映射后的字段名获取值（如果字段名被映射了）
+              // 注意：对于 location_id，我们需要从 batchEditValues['location_id'] 获取值
+              const fieldValue = batchEditValues[fieldKey]
+
+              // 根据字段类型渲染不同的输入控件
+              switch (fieldConfig.type) {
+                case 'text':
+                case 'email':
+                case 'phone':
+                  return (
+                    <div key={fieldKey} className="space-y-2">
+                      <label className="text-sm font-medium">
+                        {fieldConfig.label}
+                      </label>
+                      <input
+                        type={fieldConfig.type === 'email' ? 'email' : fieldConfig.type === 'phone' ? 'tel' : 'text'}
+                        value={fieldValue || ''}
+                        onChange={(e) => handleBatchEditValueChange(fieldKey, e.target.value)}
+                        placeholder={`输入新的${fieldConfig.label}（留空则不修改）`}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    </div>
+                  )
+
+                case 'number':
+                case 'currency':
+                  return (
+                    <div key={fieldKey} className="space-y-2">
+                      <label className="text-sm font-medium">
+                        {fieldConfig.label}
+                      </label>
+                      <input
+                        type="number"
+                        step={fieldConfig.type === 'currency' ? '0.01' : '1'}
+                        value={fieldValue || ''}
+                        onChange={(e) => handleBatchEditValueChange(fieldKey, e.target.value ? Number(e.target.value) : '')}
+                        placeholder={`输入新的${fieldConfig.label}（留空则不修改）`}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    </div>
+                  )
+
+                case 'date':
+                  return (
+                    <div key={fieldKey} className="space-y-2">
+                      <label className="text-sm font-medium">
+                        {fieldConfig.label}
+                      </label>
+                      <input
+                        type="date"
+                        value={fieldValue || ''}
+                        onChange={(e) => handleBatchEditValueChange(fieldKey, e.target.value)}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    </div>
+                  )
+
+                case 'relation':
+                  // 关系字段：使用 RelationFieldSelect 组件
+                  return (
+                    <RelationFieldSelect
+                      key={fieldKey}
+                      fieldKey={fieldKey}
+                      fieldConfig={fieldConfig}
+                      fieldValue={fieldValue}
+                      setBatchEditValues={setBatchEditValues}
+                      batchEditValues={batchEditValues}
+                      loadOptions={fieldLoadOptions?.[fieldKey]}
+                    />
+                  )
+
+                case 'select':
+                  return (
+                    <div key={fieldKey} className="space-y-2">
+                      <label className="text-sm font-medium">
+                        {fieldConfig.label}
+                      </label>
+                      <select
+                        value={fieldValue || ''}
+                        onChange={(e) => handleBatchEditValueChange(fieldKey, e.target.value || '')}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="">不修改</option>
+                        {fieldConfig.options?.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )
+
+                case 'textarea':
+                  return (
+                    <div key={fieldKey} className="space-y-2">
+                      <label className="text-sm font-medium">
+                        {fieldConfig.label}
+                      </label>
+                      <textarea
+                        value={fieldValue || ''}
+                        onChange={(e) => handleBatchEditValueChange(fieldKey, e.target.value)}
+                        placeholder={`输入新的${fieldConfig.label}（留空则不修改）`}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 min-h-[80px]"
+                        rows={3}
+                      />
+                    </div>
+                  )
+
+                case 'boolean':
+                  return (
+                    <div key={fieldKey} className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={fieldValue === true || fieldValue === 'true'}
+                          onChange={(e) => handleBatchEditValueChange(fieldKey, e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <label className="text-sm font-medium cursor-pointer">
+                          {fieldConfig.label}
+                        </label>
+                      </div>
+                    </div>
+                  )
+
+                case 'datetime':
+                  return (
+                    <div key={fieldKey} className="space-y-2">
+                      <label className="text-sm font-medium">
+                        {fieldConfig.label}
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={fieldValue || ''}
+                        onChange={(e) => handleBatchEditValueChange(fieldKey, e.target.value)}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    </div>
+                  )
+
+                case 'location':
+                  // 位置选择字段：使用 LocationSelect 组件
+                  return (
+                    <div key={fieldKey} className="space-y-2">
+                      <label className="text-sm font-medium">
+                        {fieldConfig.label}
+                      </label>
+                      <LocationSelect
+                        value={fieldValue || null}
+                        onChange={(val) => handleBatchEditValueChange(fieldKey, val)}
+                        placeholder={`选择新的${fieldConfig.label}（留空则不修改）`}
+                      />
+                    </div>
+                  )
+
+                case 'relation':
+                  // 关系字段：使用 RelationFieldSelect 组件
+                  return (
+                    <RelationFieldSelect
+                      key={fieldKey}
+                      fieldKey={fieldKey}
+                      fieldConfig={fieldConfig}
+                      fieldValue={fieldValue}
+                      setBatchEditValues={setBatchEditValues}
+                      batchEditValues={batchEditValues}
+                      loadOptions={fieldLoadOptions?.[fieldKey]}
+                    />
+                  )
+
+                default:
+                  return null
+              }
+            })}
           </div>
           <DialogFooter>
             <Button
@@ -1239,6 +1703,75 @@ export function EntityTable<T = any>({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// 关系字段选择组件（单独组件以正确使用 hooks）
+function RelationFieldSelect({
+  fieldKey,
+  fieldConfig,
+  fieldValue,
+  setBatchEditValues,
+  batchEditValues,
+  loadOptions,
+}: {
+  fieldKey: string
+  fieldConfig: FieldConfig
+  fieldValue: any
+  setBatchEditValues: (values: Record<string, any>) => void
+  batchEditValues: Record<string, any>
+  loadOptions?: () => Promise<Array<{ label: string; value: string }>>
+}) {
+  const [relationOptions, setRelationOptions] = React.useState<Array<{ label: string; value: string }>>([])
+  const [loadingRelationOptions, setLoadingRelationOptions] = React.useState(false)
+  
+  React.useEffect(() => {
+    if (loadOptions) {
+      setLoadingRelationOptions(true)
+      loadOptions()
+        .then((options) => {
+          setRelationOptions(options)
+        })
+        .catch((error) => {
+          console.error(`加载${fieldConfig.label}选项失败:`, error)
+        })
+        .finally(() => {
+          setLoadingRelationOptions(false)
+        })
+    }
+  }, [loadOptions, fieldConfig.label])
+  
+  // 使用函数式更新，避免闭包问题
+  const handleChange = React.useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value
+    // 空字符串转换为 null，这样在提交时会被过滤掉（表示不修改）
+    setBatchEditValues((prev: Record<string, any>) => ({ ...prev, [fieldKey]: value === '' ? null : value }))
+  }, [fieldKey, setBatchEditValues])
+  
+  if (!loadOptions) {
+    // 如果没有 loadOptions，返回 null
+    return null
+  }
+  
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">
+        {fieldConfig.label}
+      </label>
+      <select
+        value={fieldValue || ''}
+        onChange={handleChange}
+        disabled={loadingRelationOptions}
+        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <option value="">（留空则不修改）</option>
+        {relationOptions.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
     </div>
   )
 }

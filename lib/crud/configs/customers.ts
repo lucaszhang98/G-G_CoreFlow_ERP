@@ -16,10 +16,12 @@ export const customerConfig: EntityConfig = {
   schemaName: 'customer',
   
   fields: {
+    // id 是审计字段，由数据库自动生成，不在前端显示
     id: {
       key: 'id',
       label: 'ID',
       type: 'text',
+      hidden: true,
     },
     code: {
       key: 'code',
@@ -70,18 +72,20 @@ export const customerConfig: EntityConfig = {
         displayField: 'name',
       },
     },
+    // created_at 是审计字段，由系统自动维护，不在前端显示
     created_at: {
       key: 'created_at',
       label: '创建时间',
       type: 'date',
       sortable: true,
+      hidden: true,
     },
   },
   
   list: {
     defaultSort: 'code',
     defaultOrder: 'asc',
-    columns: ['code', 'name', 'company_name', 'status', 'credit_limit', 'contact', 'created_at'],
+    columns: ['code', 'name', 'company_name', 'status', 'credit_limit', 'contact'],
     searchFields: ['code', 'name', 'company_name'],
     pageSize: 10,
     // 筛选配置（快速筛选）
@@ -95,12 +99,13 @@ export const customerConfig: EntityConfig = {
           { label: '停用', value: 'inactive' },
         ],
       },
-      {
-        field: 'created_at',
-        label: '创建日期',
-        type: 'dateRange',
-        dateFields: ['created_at'],
-      },
+      // created_at 是审计字段，不在筛选配置中显示
+      // {
+      //   field: 'created_at',
+      //   label: '创建日期',
+      //   type: 'dateRange',
+      //   dateFields: ['created_at'],
+      // },
     ],
     // 高级搜索配置（多条件组合）
     advancedSearchFields: [

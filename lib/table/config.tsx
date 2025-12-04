@@ -6,7 +6,7 @@ import * as React from "react"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Eye, Trash2, Pencil, Save, X } from "lucide-react"
-import { autoFormatDateField, isDateField } from "@/lib/utils/date-format"
+import { autoFormatDateField, isDateField, isDateTimeField, formatDateTimeDisplay } from "@/lib/utils/date-format"
 import { ClickableCell } from "@/components/ui/clickable-cell"
 
 /**
@@ -187,9 +187,13 @@ export function createTableColumns<TData>(
       // 如果没有自定义 cell，且字段名看起来像日期字段，则自动应用格式化
       cell = ({ row }) => {
         const value = row.getValue(columnId)
+        // 自动检测并格式化日期时间字段
+        if (isDateTimeField(columnId, value)) {
+          return <div>{formatDateTimeDisplay(value as Date | string | null | undefined)}</div>
+        }
         // 自动检测并格式化日期字段
         if (isDateField(columnId, value)) {
-          return <div>{autoFormatDateField(columnId, value)}</div>
+          return <div>{autoFormatDateField(columnId, value as Date | string | null | undefined)}</div>
         }
         // 非日期字段，使用默认显示
         return <div>{value?.toString() || "-"}</div>

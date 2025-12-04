@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { formatDateDisplay, formatDateTimeDisplay } from "@/lib/utils/date-format"
 
 interface EditableCellProps {
   value: string | number | Date | null | undefined
@@ -285,40 +286,11 @@ export function EditableCell({
     }
     
     if (type === "datetime-local") {
-      // 如果是 datetime-local 类型，显示为 MM-DD HH:mm（不包含年份）
-      const date = value instanceof Date ? value : new Date(value as string | number)
-      if (isNaN(date.getTime())) return value.toString()
-      
-      const month = String(date.getMonth() + 1).padStart(2, "0")
-      const day = String(date.getDate()).padStart(2, "0")
-      const hours = String(date.getHours()).padStart(2, "0")
-      const minutes = String(date.getMinutes()).padStart(2, "0")
-      return `${month}-${day} ${hours}:${minutes}`
+      // 使用统一的格式化函数，显示为 MM-DD HH:mm（不包含年份和秒）
+      return formatDateTimeDisplay(value as Date | string | null | undefined)
     } else if (type === "date") {
-      // 如果是 date 类型，显示为 MM-DD（不包含年份）
-      // 使用 UTC 方法避免时区转换问题，直接显示数据库存储的日期
-      if (typeof value === 'string') {
-        // 如果是字符串，直接提取日期部分（YYYY-MM-DD）
-        const dateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
-        if (dateMatch) {
-          const [, year, month, day] = dateMatch
-          return `${month}-${day}`
-        }
-        // 如果是 ISO 格式（包含 T），提取日期部分
-        const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})T/)
-        if (isoMatch) {
-          const [, year, month, day] = isoMatch
-          return `${month}-${day}`
-        }
-      }
-      
-      const date = value instanceof Date ? value : new Date(value as string | number)
-      if (isNaN(date.getTime())) return value.toString()
-      
-      // 使用 UTC 方法，直接显示数据库存储的日期，不进行时区转换
-      const month = String(date.getUTCMonth() + 1).padStart(2, "0")
-      const day = String(date.getUTCDate()).padStart(2, "0")
-      return `${month}-${day}`
+      // 使用统一的格式化函数，显示为 MM-DD（不包含年份）
+      return formatDateDisplay(value as Date | string | null | undefined)
     }
     
     return value.toString()

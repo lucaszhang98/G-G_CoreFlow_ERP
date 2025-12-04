@@ -17,6 +17,7 @@ import { orderCreateSchema, orderUpdateSchema } from '@/lib/validations/order'
 import { inboundReceiptCreateSchema, inboundReceiptUpdateSchema } from '@/lib/validations/inbound-receipt'
 import { inventoryLotCreateSchema, inventoryLotUpdateSchema } from '@/lib/validations/inventory-lot'
 import { outboundShipmentCreateSchema, outboundShipmentUpdateSchema } from '@/lib/validations/outbound-shipment'
+import { deliveryAppointmentCreateSchema, deliveryAppointmentUpdateSchema } from '@/lib/validations/delivery-appointment'
 
 type SchemaMap = {
   create: z.ZodSchema
@@ -75,6 +76,10 @@ const schemaMap: Record<string, SchemaMap> = {
   outbound_shipment: {
     create: outboundShipmentCreateSchema,
     update: outboundShipmentUpdateSchema,
+  },
+  delivery_appointment: {
+    create: deliveryAppointmentCreateSchema,
+    update: deliveryAppointmentUpdateSchema,
   },
 }
 

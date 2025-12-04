@@ -26,7 +26,6 @@ export async function GET(
           select: {
             order_id: true,
             order_number: true,
-            container_number: true,
             order_date: true,
             eta_date: true,
             ready_date: true,
@@ -47,7 +46,7 @@ export async function GET(
                 container_volume: true,
                 estimated_pallets: true,
                 delivery_nature: true,
-              },
+              } as any,
             },
           },
         },
@@ -60,8 +59,6 @@ export async function GET(
             remaining_pallet_count: true,
             unbooked_pallet_count: true,
             delivery_progress: true,
-            unload_transfer_notes: true,
-            notes: true,
             order_detail: {
               select: {
                 id: true,
@@ -69,14 +66,14 @@ export async function GET(
                 container_volume: true,
                 volume: true,
                 estimated_pallets: true,
-              },
+              } as any,
             },
             orders: {
               select: {
                 delivery_location: true,
               },
             },
-          },
+          } as any,
         },
       },
     });
@@ -166,9 +163,10 @@ export async function PUT(
     if (data.notes !== undefined) updateData.notes = data.notes || null;
     if (data.unloaded_by !== undefined) updateData.unloaded_by = data.unloaded_by || null;
     if (data.received_by !== undefined) updateData.received_by = data.received_by ? BigInt(data.received_by) : null;
-    if (data.delivery_progress !== undefined) updateData.delivery_progress = data.delivery_progress !== null ? data.delivery_progress : null;
+    // delivery_progress 是自动生成的，不允许手动修改
     if (data.unload_method_code !== undefined) updateData.unload_method_code = data.unload_method_code || null;
     if (data.warehouse_id !== undefined) updateData.warehouse_id = BigInt(data.warehouse_id);
+    if (data.order_id !== undefined) updateData.order_id = BigInt(data.order_id);
 
     // 处理拆柜日期
     if (data.planned_unload_at !== undefined) {
@@ -184,6 +182,11 @@ export async function PUT(
     addSystemFields(updateData, currentUser, false);
 
     // 更新拆柜规划
+    // 添加调试日志
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[inbound-receipts PUT] 更新数据:', updateData)
+    }
+    
     const inboundReceipt = await prisma.inbound_receipt.update({
       where: { inbound_receipt_id: BigInt(resolvedParams.id) },
       data: updateData,
@@ -212,6 +215,14 @@ export async function PUT(
       message: '拆柜规划更新成功',
     });
   } catch (error: any) {
+    // 添加详细的错误日志
+    console.error('[inbound-receipts PUT] 更新失败:', {
+      error: error,
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+      stack: error?.stack,
+    })
     return handleError(error, '更新拆柜规划失败');
   }
 }

@@ -1,120 +1,124 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
-import { outboundShipmentUpdateSchema } from '@/lib/validations/outbound-shipment';
+import { checkAuth, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import prisma from '@/lib/prisma';
 
-// GET - 获取单个出库管理记录
+// GET - 获取单个出库管理记录（通过 appointment_id）
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
+    // 检查登录
+    const authResult = await checkAuth();
+    if (authResult.error) return authResult.error;
+    
     const resolvedParams = params instanceof Promise ? await params : params;
-    const id = resolvedParams.id;
+    const appointmentId = resolvedParams.id;
 
-    if (!id || isNaN(Number(id))) {
+    if (!appointmentId || isNaN(Number(appointmentId))) {
       return NextResponse.json(
-        { error: '无效的出库管理ID' },
+        { error: '无效的预约ID' },
         { status: 400 }
       );
     }
 
-    const includeConfig = {
-      locations: {
-        select: {
-          location_id: true,
-          name: true,
-          location_code: true,
+    // 查询 delivery_appointment
+    const appointment = await prisma.delivery_appointments.findUnique({
+      where: { appointment_id: BigInt(appointmentId) },
+      include: {
+        orders: {
+          select: {
+            order_id: true,
+            status: true,
+            order_detail: {
+              select: {
+                id: true,
+                estimated_pallets: true,
+              },
+            },
+          },
         },
-      },
-      locations_outbound_shipments_origin_location_idTolocations: {
-        select: {
-          location_id: true,
-          name: true,
-          location_code: true,
+        locations: {
+          select: {
+            location_id: true,
+            location_code: true,
+          },
         },
-      },
-      drivers: {
-        select: {
-          driver_id: true,
-          driver_code: true,
+        locations_delivery_appointments_origin_location_idTolocations: {
+          select: {
+            location_id: true,
+            location_code: true,
+          },
         },
-      },
-      trailers: {
-        select: {
-          trailer_id: true,
-          trailer_code: true,
-        },
-      },
-      users_outbound_shipments_loaded_byTousers: {
-        select: {
-          id: true,
-          full_name: true,
-          username: true,
-        },
-      },
-      outbound_shipment_lines: {
-        select: {
-          order_id: true,
-          orders: {
-            select: {
-              order_id: true,
-              delivery_appointments: {
-                select: {
-                  appointment_id: true,
-                  reference_number: true,
-                  appointment_type_code: true,
-                  appointment_types: {
-                    select: {
-                      appointment_type_code: true,
-                      description: true,
-                    },
-                  },
-                },
-                take: 1,
+        outbound_shipments: {
+          select: {
+            outbound_shipment_id: true,
+            trailer_id: true,
+            loaded_by: true,
+            notes: true,
+            trailers: {
+              select: {
+                trailer_id: true,
+                trailer_code: true,
+              },
+            },
+            users_outbound_shipments_loaded_byTousers: {
+              select: {
+                id: true,
+                full_name: true,
               },
             },
           },
         },
       },
-    };
-
-    const item = await prisma.outbound_shipments.findUnique({
-      where: { outbound_shipment_id: BigInt(id) },
-      include: includeConfig,
     });
 
-    if (!item) {
+    if (!appointment) {
       return NextResponse.json(
-        { error: '出库管理记录不存在' },
+        { error: '预约记录不存在' },
         { status: 404 }
       );
     }
 
-    const serialized = serializeBigInt(item);
+    // 检查订单状态（只显示非直送）
+    if (appointment.orders?.status === 'direct_delivery') {
+      return NextResponse.json(
+        { error: '直送订单不在出库管理范围内' },
+        { status: 400 }
+      );
+    }
+
+    const serialized = serializeBigInt(appointment);
+    const outboundShipment = serialized.outbound_shipments || null;
     
-    // 格式化数据
-    // 预约号码直接使用shipment_number
-    const shipmentNumber = serialized.shipment_number || null;
-    
-    // 从关联的delivery_appointments获取预约类型（如果需要）
-    const appointment = serialized.outbound_shipment_lines?.[0]?.orders?.delivery_appointments?.[0];
-    const appointmentType = appointment?.appointment_types?.description || null;
-    const loadedByName = serialized.users_outbound_shipments_loaded_byTousers?.full_name || null;
-    const originLocation = serialized.locations_outbound_shipments_origin_location_idTolocations?.name || null;
-    const driverName = serialized.drivers?.driver_code || null;
-    const trailerCode = serialized.trailers?.trailer_code || null;
-    const destinationLocation = serialized.locations?.name || null;
+    // 计算总板数
+    let totalPallets = 0;
+    if (serialized.orders?.order_detail && Array.isArray(serialized.orders.order_detail)) {
+      totalPallets = serialized.orders.order_detail.reduce((sum: number, detail: any) => {
+        return sum + (detail.estimated_pallets || 0);
+      }, 0);
+    }
 
     return NextResponse.json({
-      ...serialized,
-      shipment_number: shipmentNumber,
-      appointment_type: appointmentType,
-      loaded_by_name: loadedByName,
-      origin_location: originLocation,
-      driver_name: driverName,
-      trailer_code: trailerCode,
-      destination_location: destinationLocation,
+      // 从 delivery_appointments 获取的字段
+      appointment_id: serialized.appointment_id.toString(),
+      reference_number: serialized.reference_number || null,
+      delivery_method: serialized.delivery_method || null,
+      rejected: serialized.rejected || false,
+      appointment_account: serialized.appointment_account || null,
+      appointment_type: serialized.appointment_type || null,
+      origin_location: serialized.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
+      destination_location: serialized.locations?.location_code || null,
+      confirmed_start: serialized.confirmed_start || null,
+      total_pallets: totalPallets,
+      
+      // 从 outbound_shipments 获取的字段（如果存在）
+      outbound_shipment_id: outboundShipment ? outboundShipment.outbound_shipment_id.toString() : null,
+      trailer_id: outboundShipment?.trailer_id ? outboundShipment.trailer_id.toString() : null,
+      trailer_code: outboundShipment?.trailers?.trailer_code || null,
+      loaded_by: outboundShipment?.loaded_by ? outboundShipment.loaded_by.toString() : null,
+      loaded_by_name: outboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
+      notes: outboundShipment?.notes || null,
     });
   } catch (error: any) {
     console.error('获取出库管理记录失败:', error);
@@ -122,92 +126,105 @@ export async function GET(
   }
 }
 
-// PUT - 更新出库管理记录
+// PUT - 更新出库管理记录（只允许修改 trailer_id, loaded_by, notes）
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     const resolvedParams = params instanceof Promise ? await params : params;
-    const id = resolvedParams.id;
+    const appointmentId = resolvedParams.id;
 
-    if (!id || isNaN(Number(id))) {
+    if (!appointmentId || isNaN(Number(appointmentId))) {
       return NextResponse.json(
-        { error: '无效的出库管理ID' },
+        { error: '无效的预约ID' },
         { status: 400 }
       );
     }
 
     const body = await request.json();
     
-    // 验证输入
-    const validationResult = outboundShipmentUpdateSchema.safeParse(body);
-    if (!validationResult.success) {
-      return handleValidationError(validationResult.error);
-    }
-
-    const data = validationResult.data;
+    // 检查登录
+    const authResult = await checkAuth();
+    if (authResult.error) return authResult.error;
     
     // 获取当前用户
-    const currentUser = await checkPermission([]);
-    const user = currentUser.user || null;
+    const user = authResult.user || null;
 
-    // 构建更新数据
+    // 只允许修改 trailer_id, loaded_by, notes
     const updateData: any = {};
     
-    if (data.warehouse_id !== undefined) {
-      updateData.warehouse_id = typeof data.warehouse_id === 'bigint' ? data.warehouse_id : BigInt(data.warehouse_id);
+    if (body.trailer_id !== undefined) {
+      updateData.trailer_id = body.trailer_id ? (typeof body.trailer_id === 'bigint' ? body.trailer_id : BigInt(body.trailer_id)) : null;
     }
-    if (data.destination_location_id !== undefined) {
-      updateData.destination_location_id = typeof data.destination_location_id === 'bigint' 
-        ? data.destination_location_id 
-        : BigInt(data.destination_location_id);
+    if (body.loaded_by !== undefined) {
+      updateData.loaded_by = body.loaded_by ? (typeof body.loaded_by === 'bigint' ? body.loaded_by : BigInt(body.loaded_by)) : null;
     }
-    if (data.shipment_number !== undefined) updateData.shipment_number = data.shipment_number;
-    if (data.scheduled_load_time !== undefined) {
-      updateData.scheduled_load_time = data.scheduled_load_time ? new Date(data.scheduled_load_time) : null;
-    }
-    if (data.actual_load_time !== undefined) {
-      updateData.actual_load_time = data.actual_load_time ? new Date(data.actual_load_time) : null;
-    }
-    if (data.status !== undefined) updateData.status = data.status;
-    if (data.total_pallets !== undefined) updateData.total_pallets = data.total_pallets;
-    if (data.total_volume !== undefined) updateData.total_volume = data.total_volume;
-    if (data.total_weight !== undefined) updateData.total_weight = data.total_weight;
-    if (data.notes !== undefined) updateData.notes = data.notes;
-    if (data.trailer_id !== undefined) {
-      updateData.trailer_id = data.trailer_id ? (typeof data.trailer_id === 'bigint' ? data.trailer_id : BigInt(data.trailer_id)) : null;
-    }
-    if (data.loaded_by !== undefined) {
-      updateData.loaded_by = data.loaded_by ? (typeof data.loaded_by === 'bigint' ? data.loaded_by : BigInt(data.loaded_by)) : null;
-    }
-    if (data.bol_document_id !== undefined) {
-      updateData.bol_document_id = data.bol_document_id ? (typeof data.bol_document_id === 'bigint' ? data.bol_document_id : BigInt(data.bol_document_id)) : null;
-    }
-    if (data.load_sheet_document_id !== undefined) {
-      updateData.load_sheet_document_id = data.load_sheet_document_id ? (typeof data.load_sheet_document_id === 'bigint' ? data.load_sheet_document_id : BigInt(data.load_sheet_document_id)) : null;
-    }
-    // 新增字段
-    if (data.delivery_method !== undefined) updateData.delivery_method = data.delivery_method;
-    if (data.is_rejected !== undefined) updateData.is_rejected = data.is_rejected;
-    if (data.appointment_account !== undefined) updateData.appointment_account = data.appointment_account;
-    if (data.driver_id !== undefined) {
-      updateData.driver_id = data.driver_id ? (typeof data.driver_id === 'bigint' ? data.driver_id : BigInt(data.driver_id)) : null;
-    }
-    if (data.origin_location_id !== undefined) {
-      updateData.origin_location_id = data.origin_location_id ? (typeof data.origin_location_id === 'bigint' ? data.origin_location_id : BigInt(data.origin_location_id)) : null;
+    if (body.notes !== undefined) {
+      updateData.notes = body.notes || null;
     }
 
-    // 应用系统字段
-    const finalData = addSystemFields(updateData, user, false);
-
-    // 更新记录
-    const updatedItem = await prisma.outbound_shipments.update({
-      where: { outbound_shipment_id: BigInt(id) },
-      data: finalData,
+    // 检查 delivery_appointment 是否存在且非直送
+    const appointment = await prisma.delivery_appointments.findUnique({
+      where: { appointment_id: BigInt(appointmentId) },
+      include: {
+        orders: {
+          select: {
+            status: true,
+          },
+        },
+      },
     });
 
-    const serialized = serializeBigInt(updatedItem);
+    if (!appointment) {
+      return NextResponse.json(
+        { error: '预约记录不存在' },
+        { status: 404 }
+      );
+    }
+
+    if (appointment.orders?.status === 'direct_delivery') {
+      return NextResponse.json(
+        { error: '直送订单不在出库管理范围内' },
+        { status: 400 }
+      );
+    }
+
+    // 检查 outbound_shipment 是否存在，如果不存在则创建
+    let outboundShipment = await prisma.outbound_shipments.findUnique({
+      where: { appointment_id: BigInt(appointmentId) },
+    });
+
+    if (!outboundShipment) {
+      // 自动创建 outbound_shipment
+      // 需要 warehouse_id，这里使用默认值或从配置获取
+      // 暂时使用 1 作为默认值，实际应该从配置或上下文获取
+      const defaultWarehouseId = BigInt(1);
+      
+      const createData: any = {
+        appointment_id: BigInt(appointmentId),
+        warehouse_id: defaultWarehouseId,
+        trailer_id: updateData.trailer_id || null,
+        loaded_by: updateData.loaded_by || null,
+        notes: updateData.notes || null,
+      };
+      
+      const finalCreateData = addSystemFields(createData, user, true);
+      
+      outboundShipment = await prisma.outbound_shipments.create({
+        data: finalCreateData,
+      });
+    } else {
+      // 更新现有记录
+      const finalUpdateData = addSystemFields(updateData, user, false);
+      
+      outboundShipment = await prisma.outbound_shipments.update({
+        where: { appointment_id: BigInt(appointmentId) },
+        data: finalUpdateData,
+      });
+    }
+
+    const serialized = serializeBigInt(outboundShipment);
     return NextResponse.json(serialized);
   } catch (error: any) {
     console.error('更新出库管理记录失败:', error);
@@ -215,30 +232,13 @@ export async function PUT(
   }
 }
 
-// DELETE - 删除出库管理记录
+// DELETE - 不允许删除（出库管理记录应该与预约管理记录关联）
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  try {
-    const resolvedParams = params instanceof Promise ? await params : params;
-    const id = resolvedParams.id;
-
-    if (!id || isNaN(Number(id))) {
-      return NextResponse.json(
-        { error: '无效的出库管理ID' },
-        { status: 400 }
-      );
-    }
-
-    await prisma.outbound_shipments.delete({
-      where: { outbound_shipment_id: BigInt(id) },
-    });
-
-    return NextResponse.json({ message: '出库管理记录已删除' });
-  } catch (error: any) {
-    console.error('删除出库管理记录失败:', error);
-    return handleError(error);
-  }
+  return NextResponse.json(
+    { error: '出库管理记录不能删除，它们与预约管理记录关联' },
+    { status: 405 }
+  );
 }
-

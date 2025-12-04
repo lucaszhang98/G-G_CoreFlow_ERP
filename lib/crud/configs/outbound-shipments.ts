@@ -1,29 +1,34 @@
 /**
  * 出库管理实体配置（完全可序列化）
+ * 
+ * 注意：出库管理现在从 delivery_appointments 动态获取数据（非直送）
+ * 每个 delivery_appointment 可能有一个对应的 outbound_shipment 记录
+ * 只能修改 trailer_id, loaded_by, notes
  */
 
 import { EntityConfig } from '../types'
 
 export const outboundShipmentConfig: EntityConfig = {
   name: 'outbound_shipments',
-  displayName: '出库管理',
-  pluralName: '出库管理',
+  displayName: '出库',
+  pluralName: '出库',
   
   apiPath: '/api/wms/outbound-shipments',
   detailPath: '/dashboard/wms/outbound-shipments',
-  idField: 'outbound_shipment_id',
+  idField: 'appointment_id', // 使用 appointment_id 作为主键（因为列表显示的是 delivery_appointments）
   
   // Schema 名称，用于动态导入
   schemaName: 'outbound_shipment',
   
   fields: {
-    outbound_shipment_id: {
-      key: 'outbound_shipment_id',
-      label: 'ID',
+    appointment_id: {
+      key: 'appointment_id',
+      label: '预约ID',
       type: 'text',
+      hidden: true, // 隐藏，但作为主键使用
     },
-    shipment_number: {
-      key: 'shipment_number',
+    reference_number: {
+      key: 'reference_number',
       label: '预约号码',
       type: 'text',
       sortable: true,
@@ -36,10 +41,10 @@ export const outboundShipmentConfig: EntityConfig = {
       sortable: true,
       searchable: true,
     },
-    is_rejected: {
-      key: 'is_rejected',
+    rejected: {
+      key: 'rejected',
       label: '拒收',
-      type: 'checkbox',
+      type: 'boolean',
       sortable: true,
     },
     appointment_account: {
@@ -64,13 +69,7 @@ export const outboundShipmentConfig: EntityConfig = {
     origin_location: {
       key: 'origin_location',
       label: '起始地',
-      type: 'text',
-      sortable: true,
-    },
-    driver_name: {
-      key: 'driver_name',
-      label: '司机',
-      type: 'text',
+      type: 'location',
       sortable: true,
     },
     trailer_code: {
@@ -79,8 +78,8 @@ export const outboundShipmentConfig: EntityConfig = {
       type: 'text',
       sortable: true,
     },
-    scheduled_load_time: {
-      key: 'scheduled_load_time',
+    confirmed_start: {
+      key: 'confirmed_start',
       label: '送货时间',
       type: 'datetime',
       sortable: true,
@@ -88,7 +87,7 @@ export const outboundShipmentConfig: EntityConfig = {
     destination_location: {
       key: 'destination_location',
       label: '目的地',
-      type: 'text',
+      type: 'location',
       sortable: true,
     },
     total_pallets: {
@@ -102,112 +101,78 @@ export const outboundShipmentConfig: EntityConfig = {
       label: '备注',
       type: 'text',
     },
+    // 隐藏字段：outbound_shipment_id, trailer_id, loaded_by
+    outbound_shipment_id: {
+      key: 'outbound_shipment_id',
+      label: '出库ID',
+      type: 'text',
+      hidden: true,
+    },
+    trailer_id: {
+      key: 'trailer_id',
+      label: 'Trailer ID',
+      type: 'number',
+      hidden: true,
+    },
+    loaded_by: {
+      key: 'loaded_by',
+      label: '装车人ID',
+      type: 'number',
+      hidden: true,
+    },
   },
   
   list: {
     defaultSort: 'created_at',
     defaultOrder: 'desc',
     columns: [
-      'shipment_number',
+      'reference_number',
       'delivery_method',
-      'is_rejected',
+      'rejected',
       'appointment_account',
       'appointment_type',
       'loaded_by_name',
       'origin_location',
-      'driver_name',
       'trailer_code',
-      'scheduled_load_time',
+      'confirmed_start',
       'destination_location',
       'total_pallets',
       'notes',
     ],
+    // 批量操作配置：只允许批量修改 trailer_id, loaded_by, notes
+    batchOperations: {
+      enabled: true,
+      edit: {
+        enabled: true,
+        fields: ['trailer_id', 'loaded_by', 'notes'],
+      },
+      delete: {
+        enabled: false, // 不允许批量删除
+      },
+    },
+    // 行内编辑配置：只允许修改 trailer_id, loaded_by, notes
+    inlineEdit: {
+      enabled: true,
+      fields: ['trailer_id', 'loaded_by', 'notes'],
+    },
   },
   
   formFields: [
-    'shipment_number',
-    'delivery_method',
-    'is_rejected',
-    'appointment_account',
-    'appointment_type_code',
-    'loaded_by',
-    'origin_location_id',
-    'driver_id',
     'trailer_id',
-    'scheduled_load_time',
-    'destination_location_id',
-    'total_pallets',
+    'loaded_by',
     'notes',
   ],
   
   permissions: {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: ['admin', 'wms_manager'],
+    create: ['admin', 'wms_manager'], // 虽然不允许手动创建，但保留权限配置
     update: ['admin', 'wms_manager'],
-    delete: ['admin'],
+    delete: ['admin'], // 虽然不允许删除，但保留权限配置
   },
   
+  // 注意：由于数据来自 delivery_appointments，这里不需要 prisma.include
+  // API 会直接查询 delivery_appointments
   prisma: {
-    model: 'outbound_shipments',
-    include: {
-      locations: {
-        select: {
-          location_id: true,
-          name: true,
-          location_code: true,
-        },
-      },
-      locations_outbound_shipments_origin_location_idTolocations: {
-        select: {
-          location_id: true,
-          name: true,
-          location_code: true,
-        },
-      },
-      drivers: {
-        select: {
-          driver_id: true,
-          driver_code: true,
-        },
-      },
-      trailers: {
-        select: {
-          trailer_id: true,
-          trailer_code: true,
-        },
-      },
-      users_outbound_shipments_loaded_byTousers: {
-        select: {
-          id: true,
-          full_name: true,
-          username: true,
-        },
-      },
-      outbound_shipment_lines: {
-        select: {
-          order_id: true,
-          orders: {
-            select: {
-              order_id: true,
-              delivery_appointments: {
-                select: {
-                  appointment_id: true,
-                  reference_number: true,
-                  appointment_type_code: true,
-                  appointment_types: {
-                    select: {
-                      appointment_type_code: true,
-                      description: true,
-                    },
-                  },
-                },
-                take: 1, // 只取第一个预约
-              },
-            },
-          },
-        },
-      },
-    },
+    model: 'delivery_appointments', // 实际上查询的是 delivery_appointments
   },
 }
-

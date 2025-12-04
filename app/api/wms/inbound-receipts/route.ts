@@ -19,17 +19,32 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
 
     // 构建查询条件
-    const where: any = {};
+    const where: any = {
+      // 只显示状态为"拆柜"的订单
+      orders: {
+        status: 'unload',
+      },
+    };
 
     // 搜索条件
     if (search) {
       const searchConditions: any[] = [];
       
-      // 客户名称搜索
+      // 客户名称搜索（需要同时满足状态为拆柜）
       if (search.trim()) {
         searchConditions.push(
-          { orders: { customers: { name: { contains: search } } } },
-          { orders: { order_number: { contains: search } } }
+          { 
+            orders: { 
+              status: 'unload',
+              customers: { name: { contains: search } } 
+            } 
+          },
+          { 
+            orders: { 
+              status: 'unload',
+              order_number: { contains: search } 
+            } 
+          }
         );
       }
       
@@ -40,7 +55,16 @@ export async function GET(request: NextRequest) {
       
       if (searchConditions.length > 0) {
         where.OR = searchConditions;
+        // 移除单独的 orders 条件，因为搜索条件中已经包含状态筛选
+        delete where.orders;
       }
+    }
+    
+    // 如果没有搜索条件，确保只显示状态为拆柜的订单
+    if (!where.OR && !where.orders) {
+      where.orders = {
+        status: 'unload',
+      };
     }
 
     // 排序 - Prisma 不支持多级嵌套排序，所以先按主表字段排序
@@ -70,7 +94,6 @@ export async function GET(request: NextRequest) {
           select: {
             order_id: true,
             order_number: true,
-            container_number: true,
             order_date: true,
             eta_date: true,
             ready_date: true,
@@ -130,7 +153,7 @@ export async function GET(request: NextRequest) {
           orders: {
             select: {
               order_id: true,
-              container_number: true,
+              order_number: true,
               order_date: true,
               eta_date: true,
               ready_date: true,

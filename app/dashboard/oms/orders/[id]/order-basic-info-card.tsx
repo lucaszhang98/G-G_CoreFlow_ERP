@@ -105,8 +105,8 @@ export function OrderBasicInfoCard({
                 {order.container_type || "-"}
               </p>
               <p className="text-sm">
-                <span className="text-muted-foreground">重量:</span>{" "}
-                {formatNumber(order.weight)}
+                <span className="text-muted-foreground">整柜体积:</span>{" "}
+                {formatNumber(order.container_volume)} CBM
               </p>
               <p className="text-sm">
                 <span className="text-muted-foreground">MBL号码:</span>{" "}

@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { EntityConfig, FieldConfig } from "@/lib/crud/types"
 import { getSchema } from "@/lib/crud/schema-loader"
+import { filterAuditFields } from "@/lib/crud/constants"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,6 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
+import { LocationSelect } from "@/components/ui/location-select"
 
 interface EntityFormProps<T = any> {
   data?: T | null
@@ -39,18 +41,46 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
     return getSchema(config.schemaName, isEditing ? 'update' : 'create')
   }, [config.schemaName, isEditing])
 
+  // 处理表单默认值：确保location字段使用location_id，并转换为字符串
+  const processedDefaultValues = React.useMemo(() => {
+    if (!data) return {}
+    
+    const defaults: any = { ...data }
+    
+    // 处理location字段映射：如果有origin_location_id/destination_location_id，确保表单使用这些值
+    // 同时保留origin_location/destination_location用于显示
+    // validation schema期望字符串类型，所以需要将数字转换为字符串
+    if (defaults.origin_location_id !== undefined && defaults.origin_location_id !== null) {
+      defaults.origin_location_id = String(defaults.origin_location_id)
+    }
+    if (defaults.destination_location_id !== undefined && defaults.destination_location_id !== null) {
+      defaults.destination_location_id = String(defaults.destination_location_id)
+    }
+    if (defaults.location_id !== undefined && defaults.destination_location_id === undefined) {
+      // 对于delivery_appointments，location_id就是destination_location_id
+      defaults.destination_location_id = defaults.location_id !== null ? String(defaults.location_id) : null
+    }
+    
+    
+    return defaults
+  }, [data])
+
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
     watch,
+    getValues,
   } = useForm({
     resolver: zodResolver(schema as any) as any,
-    defaultValues: data ? (data as any) : {},
+    defaultValues: processedDefaultValues,
   })
 
-  const onSubmit = async (formData: any) => {
+  const onSubmit = async (formData: any, e?: React.BaseSyntheticEvent) => {
+    // 防止默认表单提交行为
+    e?.preventDefault()
+    
     try {
       setLoading(true)
 
@@ -60,10 +90,45 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
       const url = isEditing ? `${config.apiPath}/${id}` : config.apiPath
       const method = isEditing ? 'PUT' : 'POST'
 
+      // 使用getValues()获取所有表单值，包括通过setValue设置的值（如LocationSelect）
+      // 因为LocationSelect使用setValue而不是register，所以formData可能不包含这些值
+      const allFormValues = getValues()
+      
+      // 合并formData和allFormValues，优先使用allFormValues（包含通过setValue设置的值）
+      const submitData: any = { ...formData, ...allFormValues }
+      
+      // 处理location字段映射：确保使用正确的字段名，并将数字转换为字符串（validation schema期望字符串）
+      // formFields中定义的是origin_location_id和location_id，所以提交时应该使用这些字段名
+      // 如果submitData中有origin_location或destination_location（显示用的字段），需要删除它们
+      // 只保留origin_location_id和location_id
+      if (submitData.origin_location !== undefined) {
+        // 如果只有origin_location但没有origin_location_id，说明LocationSelect设置错了字段名
+        if (submitData.origin_location_id === undefined) {
+          submitData.origin_location_id = submitData.origin_location
+        }
+        delete submitData.origin_location // 删除显示用的字段
+      }
+      if (submitData.destination_location !== undefined) {
+        // 如果只有destination_location但没有location_id，说明LocationSelect设置错了字段名
+        if (submitData.location_id === undefined) {
+          submitData.location_id = submitData.destination_location
+        }
+        delete submitData.destination_location // 删除显示用的字段
+      }
+      
+      // 将location字段的值转换为字符串（validation schema期望字符串类型）
+      if (submitData.origin_location_id !== undefined && submitData.origin_location_id !== null) {
+        submitData.origin_location_id = String(submitData.origin_location_id)
+      }
+      if (submitData.location_id !== undefined && submitData.location_id !== null) {
+        submitData.location_id = String(submitData.location_id)
+      }
+
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(submitData),
       })
 
       if (!response.ok) {
@@ -81,12 +146,50 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
     }
   }
 
+  // 创建稳定的location onChange回调
+  const createLocationOnChange = React.useCallback((fieldKey: string, locationFieldKey: string) => {
+    return (val: string | number | null) => {
+      // fieldKey是formFields中的字段名（如origin_location_id或location_id），应该直接使用
+      // validation schema期望字符串类型，所以需要将数字转换为字符串
+      const stringValue = val !== null && val !== undefined ? String(val) : null
+      setValue(fieldKey, stringValue, { shouldValidate: true, shouldDirty: true, shouldTouch: true })
+    }
+  }, [setValue])
+
   // 渲染字段
   const renderField = (fieldKey: string) => {
-    const fieldConfig = config.fields[fieldKey]
+    // 处理 location_id 字段映射：origin_location_id -> origin_location, location_id -> destination_location
+    let actualFieldKey = fieldKey
+    let fieldConfig = config.fields[fieldKey]
+    
+    // 强制映射 location_id 字段（无论 fieldConfig 是否存在，与批量编辑逻辑一致）
+    if (fieldKey === 'location_id') {
+      fieldConfig = config.fields['destination_location']
+      actualFieldKey = 'destination_location'
+    } else if (fieldKey === 'origin_location_id') {
+      fieldConfig = config.fields['origin_location']
+      actualFieldKey = 'origin_location'
+    } else if (!fieldConfig && fieldKey.endsWith('_location_id')) {
+      // 其他 location_id 字段的通用映射
+      const baseKey = fieldKey.replace('_location_id', '_location')
+      fieldConfig = config.fields[baseKey]
+      if (fieldConfig) {
+        actualFieldKey = baseKey
+      }
+    }
+    
     if (!fieldConfig) return null
 
-    const fieldValue = watch(fieldKey)
+    // 对于location类型字段，优先读取原始字段名（location_id）的值
+    // 注意：fieldKey 是 formFields 中的字段名（如 location_id），actualFieldKey 是映射后的字段名（如 destination_location）
+    let fieldValue: any = null
+    if (fieldConfig.type === 'location') {
+      // 对于 location 类型字段，始终使用 fieldKey（formFields 中的字段名）来读取值
+      // 因为 LocationSelect 的 onChange 会设置 fieldKey 的值
+      fieldValue = watch(fieldKey)
+    } else {
+      fieldValue = watch(actualFieldKey)
+    }
 
     switch (fieldConfig.type) {
       case 'text':
@@ -117,6 +220,9 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
             <Label htmlFor={fieldKey}>
               {fieldConfig.label}
               {fieldConfig.required && <span className="text-red-500">*</span>}
+              {fieldConfig.readonly || fieldConfig.computed ? (
+                <span className="text-xs text-muted-foreground ml-2">(自动计算)</span>
+              ) : null}
             </Label>
             <Input
               id={fieldKey}
@@ -124,6 +230,8 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
               step={fieldConfig.type === 'currency' ? '0.01' : '1'}
               {...register(fieldKey, { valueAsNumber: true })}
               placeholder={fieldConfig.placeholder}
+              disabled={fieldConfig.readonly || fieldConfig.computed}
+              className={fieldConfig.readonly || fieldConfig.computed ? 'bg-muted cursor-not-allowed' : ''}
             />
             {errors[fieldKey] && (
               <p className="text-sm text-red-500">{(errors[fieldKey] as any)?.message}</p>
@@ -142,6 +250,37 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
               id={fieldKey}
               type="date"
               {...register(fieldKey)}
+            />
+            {errors[fieldKey] && (
+              <p className="text-sm text-red-500">{(errors[fieldKey] as any)?.message}</p>
+            )}
+          </div>
+        )
+
+      case 'datetime':
+        // 处理日期时间字段：使用 datetime-local 输入类型
+        // 格式：YYYY-MM-DDTHH:mm
+        const datetimeValue = fieldValue 
+          ? (fieldValue instanceof Date 
+            ? fieldValue.toISOString().slice(0, 16) 
+            : typeof fieldValue === 'string' 
+            ? fieldValue.slice(0, 16) 
+            : fieldValue)
+          : ''
+        return (
+          <div key={fieldKey} className="space-y-2">
+            <Label htmlFor={fieldKey}>
+              {fieldConfig.label}
+              {fieldConfig.required && <span className="text-red-500">*</span>}
+            </Label>
+            <Input
+              id={fieldKey}
+              type="datetime-local"
+              value={datetimeValue}
+              onChange={(e) => {
+                const value = e.target.value || null
+                setValue(fieldKey, value, { shouldValidate: true, shouldDirty: true, shouldTouch: true })
+              }}
             />
             {errors[fieldKey] && (
               <p className="text-sm text-red-500">{(errors[fieldKey] as any)?.message}</p>
@@ -290,22 +429,96 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
             </div>
           )
         }
+        // 处理 locations 关联字段（使用 LocationSelect 组件）
+        if (fieldConfig.relation?.model === 'locations') {
+          return (
+            <div key={fieldKey} className="space-y-2">
+              <Label htmlFor={fieldKey} className="text-sm font-medium text-foreground">
+                {fieldConfig.label}
+                {fieldConfig.required && <span className="text-red-500 ml-1">*</span>}
+              </Label>
+              <LocationSelect
+                value={fieldValue || null}
+                onChange={(val) => setValue(fieldKey, val)}
+                placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
+                // 不传递className，使用LocationSelect组件的默认统一样式
+              />
+              {errors[fieldKey] && (
+                <p className="text-sm text-red-500 mt-1">{(errors[fieldKey] as any)?.message}</p>
+              )}
+            </div>
+          )
+        }
         // 其他关联字段暂时跳过
         return null
+
+      case 'location':
+        // 位置选择字段（使用 LocationSelect 组件）
+        // 对于location类型字段，fieldKey可能是origin_location_id或location_id（来自formFields）
+        // 但fields定义的是origin_location或destination_location
+        // 所以需要确保使用正确的字段名：如果fieldKey是origin_location_id，就使用origin_location_id；如果是location_id，就使用location_id
+        // locationFieldKey应该就是fieldKey本身（因为formFields中已经是_id结尾的字段名）
+        const locationFieldKey = fieldKey // formFields中已经是_id结尾的字段名，直接使用
+        return (
+          <div key={fieldKey} className="space-y-2">
+            <Label htmlFor={fieldKey} className="text-sm font-medium text-foreground">
+              {fieldConfig.label}
+              {fieldConfig.required && <span className="text-red-500 ml-1">*</span>}
+            </Label>
+            <LocationSelect
+              value={fieldValue || null}
+              onChange={createLocationOnChange(fieldKey, locationFieldKey)}
+              placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
+              // 不传递className，使用LocationSelect组件的默认统一样式
+            />
+            {errors[locationFieldKey] && (
+              <p className="text-sm text-red-500 mt-1">{(errors[locationFieldKey] as any)?.message}</p>
+            )}
+            {locationFieldKey !== fieldKey && errors[fieldKey] && (
+              <p className="text-sm text-red-500 mt-1">{(errors[fieldKey] as any)?.message}</p>
+            )}
+          </div>
+        )
+
+      case 'boolean':
+        return (
+          <div key={fieldKey} className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <input
+                id={fieldKey}
+                type="checkbox"
+                checked={fieldValue === true || fieldValue === 'true'}
+                onChange={(e) => setValue(fieldKey, e.target.checked, { shouldValidate: true, shouldDirty: true, shouldTouch: true })}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <Label htmlFor={fieldKey} className="text-sm font-medium text-foreground cursor-pointer">
+                {fieldConfig.label}
+                {fieldConfig.required && <span className="text-red-500 ml-1">*</span>}
+              </Label>
+            </div>
+            {errors[fieldKey] && (
+              <p className="text-sm text-red-500 mt-1">{(errors[fieldKey] as any)?.message}</p>
+            )}
+          </div>
+        )
 
       default:
         return null
     }
   }
 
-  // 系统维护字段，用户不能手动更改
-  const systemFields = ['created_at', 'created_by', 'updated_at', 'updated_by']
-  
-  // 过滤掉系统维护字段
-  const userEditableFields = config.formFields.filter(fieldKey => !systemFields.includes(fieldKey))
+  // 过滤掉审计字段（ID、created_by、updated_by、created_at、updated_at）
+  // 这些字段由系统自动维护，用户不能手动更改
+  const userEditableFields = filterAuditFields(config.formFields, config.idField)
+
+  // 添加表单提交的错误处理
+  const onError = (errors: any) => {
+    console.error('[EntityForm] 表单验证失败:', errors)
+    toast.error('请检查表单输入是否正确')
+  }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-4">
       {userEditableFields.map((fieldKey) => {
         // 编辑模式下，某些字段可能不需要显示（如 password）
         if (isEditing && fieldKey === 'password') {

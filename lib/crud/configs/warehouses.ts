@@ -43,11 +43,7 @@ export const warehouseConfig: EntityConfig = {
     location: {
       key: 'location',
       label: '位置',
-      type: 'relation',
-      relation: {
-        model: 'locations',
-        displayField: 'name',
-      },
+      type: 'location',
     },
     capacity_cbm: {
       key: 'capacity_cbm',

@@ -69,12 +69,12 @@ export const inboundReceiptConfig: EntityConfig = {
     status: {
       key: 'status',
       label: '状态',
-      type: 'badge',
+      type: 'select',
       sortable: true,
       options: [
+        { label: '待处理', value: 'pending' },
         { label: '已到仓', value: 'arrived' },
         { label: '已入库', value: 'received' },
-        { label: '待处理', value: 'pending' },
       ],
     },
     planned_unload_at: {
@@ -179,10 +179,10 @@ export const inboundReceiptConfig: EntityConfig = {
         ],
       },
       {
-        field: 'created_at',
-        label: '创建日期',
+        field: 'planned_unload_at',
+        label: '拆柜日期',
         type: 'dateRange',
-        dateFields: ['created_at'],
+        dateFields: ['planned_unload_at'],
       },
     ],
     // 高级搜索配置（多条件组合）
@@ -213,16 +213,16 @@ export const inboundReceiptConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['status'],
+        fields: ['status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes'],
       },
       delete: {
-        enabled: true,
+        enabled: false,
       },
     },
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['status', 'planned_unload_at', 'unloaded_by', 'received_by', 'delivery_progress', 'notes', 'unload_method_code'],
+      fields: ['status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes'],
     },
   },
   
@@ -233,16 +233,14 @@ export const inboundReceiptConfig: EntityConfig = {
     'planned_unload_at',
     'unloaded_by',
     'received_by',
-    'delivery_progress',
     'notes',
-    'unload_method_code',
   ],
   
   permissions: {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: ['admin', 'wms_manager'],
+    create: [], // 禁用创建功能
     update: ['admin', 'wms_manager'],
-    delete: ['admin'],
+    delete: [], // 禁用删除功能
   },
   
   prisma: {
@@ -252,7 +250,6 @@ export const inboundReceiptConfig: EntityConfig = {
         select: {
           order_id: true,
           order_number: true,
-          container_number: true,
           order_date: true,
           eta_date: true,
           ready_date: true,

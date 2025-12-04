@@ -36,7 +36,7 @@ export function createListHandler(config: EntityConfig) {
       if (permissionResult.error) return permissionResult.error
 
       const searchParams = request.nextUrl.searchParams
-      const { page, limit, sort, order } = parsePaginationParams(
+      let { page, limit, sort, order } = parsePaginationParams(
         searchParams,
         config.list.defaultSort,
         config.list.defaultOrder
@@ -236,6 +236,17 @@ export function createListHandler(config: EntityConfig) {
       // 查询数据
       const prismaModel = getPrismaModel(config)
 
+      // 验证排序字段是否有效（检查字段是否存在且可排序）
+      const sortFieldConfig = config.fields[sort]
+      if (!sortFieldConfig || sortFieldConfig.hidden) {
+        // 如果排序字段无效或已隐藏，使用默认排序
+        console.warn(`[createListHandler] 无效的排序字段: ${sort}，使用默认排序: ${config.list.defaultSort}`)
+        const defaultSort = config.list.defaultSort || 'id'
+        const defaultOrder = config.list.defaultOrder || 'desc'
+        sort = defaultSort
+        order = defaultOrder
+      }
+
       const queryOptions: any = {
         where,
         skip: (page - 1) * limit,
@@ -250,137 +261,324 @@ export function createListHandler(config: EntityConfig) {
         queryOptions.select = config.prisma.select
       }
 
-      const [items, total] = await Promise.all([
-        prismaModel.findMany(queryOptions),
-        prismaModel.count({ where }),
-      ])
+      // 添加详细的查询日志（开发环境）
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[createListHandler] 查询配置:', {
+          model: config.prisma?.model || config.name,
+          where: Object.keys(where),
+          hasInclude: !!queryOptions.include,
+          hasSelect: !!queryOptions.select,
+          skip: queryOptions.skip,
+          take: queryOptions.take,
+          orderBy: queryOptions.orderBy,
+        })
+      }
+
+      let items: any[] = []
+      let total = 0
+      
+      try {
+        [items, total] = await Promise.all([
+          prismaModel.findMany(queryOptions),
+          prismaModel.count({ where }),
+        ])
+        
+        // 如果是 orders 模型，需要处理 location 字段（delivery_location 和 port_location）
+        // 如果这些字段存储的是 location_id（数字字符串），需要查询 locations 表获取 location_code
+        if (config.prisma?.model === 'orders' && items.length > 0) {
+          // 收集所有可能的 location_id（从 delivery_location 和 port_location）
+          const locationIds = new Set<bigint>()
+          items.forEach((item: any) => {
+            if (item.delivery_location) {
+              const deliveryLocationValue = String(item.delivery_location).trim()
+              if (/^\d+$/.test(deliveryLocationValue)) {
+                try {
+                  locationIds.add(BigInt(deliveryLocationValue))
+                } catch (e) {
+                  // 忽略无效的 BigInt
+                }
+              }
+            }
+            if (item.port_location) {
+              const portLocationValue = String(item.port_location).trim()
+              if (/^\d+$/.test(portLocationValue)) {
+                try {
+                  locationIds.add(BigInt(portLocationValue))
+                } catch (e) {
+                  // 忽略无效的 BigInt
+                }
+              }
+            }
+          })
+          
+          // 批量查询 locations 表获取 location_code
+          if (locationIds.size > 0) {
+            const locations = await prisma.locations.findMany({
+              where: {
+                location_id: { in: Array.from(locationIds) },
+              },
+              select: {
+                location_id: true,
+                location_code: true,
+              },
+            })
+            
+            // 创建 location_id -> location_code 的映射
+            const locationCodeMap = new Map<string, string>()
+            locations.forEach((loc: any) => {
+              locationCodeMap.set(String(loc.location_id), loc.location_code || '')
+            })
+            
+            // 更新 items 中的 delivery_location 和 port_location 为 location_code
+            items.forEach((item: any) => {
+              if (item.delivery_location) {
+                const deliveryLocationValue = String(item.delivery_location).trim()
+                if (/^\d+$/.test(deliveryLocationValue)) {
+                  const locationCode = locationCodeMap.get(deliveryLocationValue)
+                  if (locationCode) {
+                    item.delivery_location = locationCode
+                  }
+                }
+              }
+              if (item.port_location) {
+                const portLocationValue = String(item.port_location).trim()
+                if (/^\d+$/.test(portLocationValue)) {
+                  const locationCode = locationCodeMap.get(portLocationValue)
+                  if (locationCode) {
+                    item.port_location = locationCode
+                  }
+                }
+              }
+            })
+          }
+        }
+      } catch (queryError: any) {
+        console.error('[createListHandler] Prisma 查询错误:', queryError)
+        console.error('错误详情:', {
+          message: queryError?.message,
+          code: queryError?.code,
+          meta: queryError?.meta,
+          stack: queryError?.stack,
+        })
+        console.error('查询配置:', {
+          model: config.prisma?.model || config.name,
+          whereKeys: Object.keys(where),
+          hasInclude: !!queryOptions.include,
+          hasSelect: !!queryOptions.select,
+        })
+        // 如果是 Prisma 错误，返回更详细的错误信息
+        if (queryError?.code) {
+          return NextResponse.json(
+            {
+              error: `数据库查询失败: ${queryError.message || '未知错误'}`,
+              details: process.env.NODE_ENV === 'development' ? {
+                code: queryError.code,
+                meta: queryError.meta,
+              } : undefined,
+            },
+            { status: 500 }
+          )
+        }
+        throw queryError
+      }
 
       // 数据转换（根据配置的 prisma 模型处理）
       const transformedItems = items.map((item: any) => {
-        const serialized = serializeBigInt(item)
-        // 处理订单数据：确保 order_id 是字符串，处理 carriers 关联
-        if (config.prisma?.model === 'orders') {
-          if (serialized.order_id) {
-            serialized.order_id = String(serialized.order_id)
+        try {
+          const serialized = serializeBigInt(item)
+          
+          // 开发环境：记录第一条数据的结构
+          if (process.env.NODE_ENV === 'development' && items.indexOf(item) === 0) {
+            console.log('[createListHandler] 第一条数据（转换前）:', {
+              hasCustomers: !!serialized.customers,
+              hasUsersOrdersUserIdTousers: !!serialized.users_orders_user_idTousers,
+              hasCarriers: !!serialized.carriers,
+              keys: Object.keys(serialized),
+            })
           }
-          // 处理 carriers 关联：carriers -> carrier
-          if (serialized.carriers) {
-            serialized.carrier = serialized.carriers
-            delete serialized.carriers
-          }
-        }
-        // 处理用户数据：departments_users_department_idTodepartments -> department
-        if (config.prisma?.model === 'users') {
-          if (serialized.departments_users_department_idTodepartments) {
-            serialized.department = serialized.departments_users_department_idTodepartments
-            delete serialized.departments_users_department_idTodepartments
-          } else {
-            serialized.department = null
-          }
-        }
-        // 处理客户数据：contact_roles -> contact, credit_limit 转换
-        if (config.prisma?.model === 'customers') {
-          if (serialized.contact_roles) {
-            serialized.contact = {
-              name: serialized.contact_roles.name || '',
-              phone: serialized.contact_roles.phone || null,
-              email: serialized.contact_roles.email || null,
+          // 处理订单数据：确保 order_id 是字符串，处理关联数据
+          if (config.prisma?.model === 'orders') {
+            if (serialized.order_id) {
+              serialized.order_id = String(serialized.order_id)
             }
-            delete serialized.contact_roles
-          } else {
-            serialized.contact = null
-          }
-          if (serialized.credit_limit !== null && serialized.credit_limit !== undefined) {
-            if (typeof serialized.credit_limit === 'object' && 'toString' in serialized.credit_limit) {
-              serialized.credit_limit = serialized.credit_limit.toString()
+            // 处理 customers 关联：customers -> customer
+            if (serialized.customers) {
+              serialized.customer = serialized.customers
+              delete serialized.customers
             } else {
-              serialized.credit_limit = String(serialized.credit_limit)
+              serialized.customer = null
             }
-            if (serialized.credit_limit === 'null' || serialized.credit_limit === 'undefined' || serialized.credit_limit === '') {
+            // 处理 users_orders_user_idTousers 关联：users_orders_user_idTousers -> user_id (relation 字段)
+            // 注意：保留原始的 user_id 值（BigInt），同时添加关联对象
+            if (serialized.users_orders_user_idTousers) {
+              serialized.user_id = serialized.users_orders_user_idTousers
+              delete serialized.users_orders_user_idTousers
+            } else {
+              // 如果关联不存在，设置为 null（前端会显示 '-'）
+              serialized.user_id = null
+            }
+            // 处理 carriers 关联：carriers -> carrier
+            if (serialized.carriers) {
+              serialized.carrier = serialized.carriers
+              delete serialized.carriers
+            }
+            // 计算整柜体积：从 order_detail 的 volume 总和得出（覆盖数据库中的旧值）
+            if (serialized.order_detail && Array.isArray(serialized.order_detail)) {
+              const totalVolume = serialized.order_detail.reduce((sum: number, detail: any) => {
+                // 确保 volume 是数字类型，处理 Decimal 类型和字符串
+                let volume = 0
+                if (detail.volume !== null && detail.volume !== undefined) {
+                  if (typeof detail.volume === 'object' && 'toString' in detail.volume) {
+                    // Decimal 类型
+                    volume = parseFloat(detail.volume.toString()) || 0
+                  } else if (typeof detail.volume === 'string') {
+                    volume = parseFloat(detail.volume) || 0
+                  } else {
+                    volume = Number(detail.volume) || 0
+                  }
+                }
+                return sum + volume
+              }, 0)
+              // 强制覆盖数据库中的 container_volume 值（使用计算出的值）
+              // 注意：数据库中的 container_volume 可能是旧值，这里用计算值覆盖
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`[createListHandler] 订单 ${serialized.order_id} 整柜体积计算:`, {
+                  detailCount: serialized.order_detail.length,
+                  volumes: serialized.order_detail.map((d: any) => d.volume),
+                  calculatedTotal: totalVolume,
+                  dbValue: serialized.container_volume,
+                })
+              }
+              serialized.container_volume = totalVolume
+            } else {
+              // 如果没有明细，整柜体积为 0
+              serialized.container_volume = 0
+            }
+          }
+          // 处理用户数据：departments_users_department_idTodepartments -> department
+          if (config.prisma?.model === 'users') {
+            if (serialized.departments_users_department_idTodepartments) {
+              serialized.department = serialized.departments_users_department_idTodepartments
+              delete serialized.departments_users_department_idTodepartments
+            } else {
+              serialized.department = null
+            }
+          }
+          // 处理客户数据：contact_roles -> contact, credit_limit 转换
+          if (config.prisma?.model === 'customers') {
+            if (serialized.contact_roles) {
+              serialized.contact = {
+                name: serialized.contact_roles.name || '',
+                phone: serialized.contact_roles.phone || null,
+                email: serialized.contact_roles.email || null,
+              }
+              delete serialized.contact_roles
+            } else {
+              serialized.contact = null
+            }
+            if (serialized.credit_limit !== null && serialized.credit_limit !== undefined) {
+              if (typeof serialized.credit_limit === 'object' && 'toString' in serialized.credit_limit) {
+                serialized.credit_limit = serialized.credit_limit.toString()
+              } else {
+                serialized.credit_limit = String(serialized.credit_limit)
+              }
+              if (serialized.credit_limit === 'null' || serialized.credit_limit === 'undefined' || serialized.credit_limit === '') {
+                serialized.credit_limit = null
+              }
+            } else {
               serialized.credit_limit = null
             }
-          } else {
-            serialized.credit_limit = null
           }
-        }
-        // 处理仓库数据：locations -> location, users_warehouses_contact_user_idTousers -> contact_user
-        if (config.prisma?.model === 'warehouses') {
-          if (serialized.locations) {
-            serialized.location = serialized.locations
-            delete serialized.locations
-          } else {
-            serialized.location = null
-          }
-          if (serialized.users_warehouses_contact_user_idTousers) {
-            serialized.contact_user = serialized.users_warehouses_contact_user_idTousers
-            delete serialized.users_warehouses_contact_user_idTousers
-          } else {
-            serialized.contact_user = null
-          }
-        }
-        // 处理部门数据：departments -> parent
-        // 注意：manager_id 字段存在，但在 schema 中没有定义关系，保留 manager_id 供前端使用
-        if (config.prisma?.model === 'departments') {
-          if (serialized.departments) {
-            serialized.parent = serialized.departments
-            delete serialized.departments
-          } else {
-            serialized.parent = null
-          }
-          // manager_id 保留在数据中，前端可以通过 manager_id 单独查询
-          serialized.manager = serialized.manager_id ? { id: serialized.manager_id } : null
-        }
-        // 处理承运商数据：contact_roles -> contact
-        if (config.prisma?.model === 'carriers') {
-          if (serialized.contact_roles) {
-            serialized.contact = {
-              name: serialized.contact_roles.name || '',
-              phone: serialized.contact_roles.phone || null,
-              email: serialized.contact_roles.email || null,
+          // 处理仓库数据：locations -> location, users_warehouses_contact_user_idTousers -> contact_user
+          if (config.prisma?.model === 'warehouses') {
+            if (serialized.locations) {
+              serialized.location = serialized.locations
+              delete serialized.locations
+            } else {
+              serialized.location = null
             }
-            delete serialized.contact_roles
-          } else {
-            serialized.contact = null
-          }
-        }
-        // 处理车辆数据：carriers -> carrier
-        if (config.prisma?.model === 'vehicles') {
-          if (serialized.carriers) {
-            serialized.carrier = serialized.carriers
-            delete serialized.carriers
-          }
-        }
-        // 处理货柜数据：departments -> department
-        if (config.prisma?.model === 'trailers') {
-          if (serialized.departments) {
-            serialized.department = serialized.departments
-            delete serialized.departments
-          }
-        }
-        // 处理司机数据：carriers -> carrier, contact_roles -> contact
-        if (config.prisma?.model === 'drivers') {
-          if (serialized.carriers) {
-            serialized.carrier = serialized.carriers
-            delete serialized.carriers
-          }
-          if (serialized.contact_roles) {
-            serialized.contact = {
-              name: serialized.contact_roles.name || '',
-              phone: serialized.contact_roles.phone || null,
-              email: serialized.contact_roles.email || null,
+            if (serialized.users_warehouses_contact_user_idTousers) {
+              serialized.contact_user = serialized.users_warehouses_contact_user_idTousers
+              delete serialized.users_warehouses_contact_user_idTousers
+            } else {
+              serialized.contact_user = null
             }
-            delete serialized.contact_roles
-          } else {
-            serialized.contact = null
           }
+          // 处理部门数据：departments -> parent
+          // 注意：manager_id 字段存在，但在 schema 中没有定义关系，保留 manager_id 供前端使用
+          if (config.prisma?.model === 'departments') {
+            if (serialized.departments) {
+              serialized.parent = serialized.departments
+              delete serialized.departments
+            } else {
+              serialized.parent = null
+            }
+            // manager_id 保留在数据中，前端可以通过 manager_id 单独查询
+            serialized.manager = serialized.manager_id ? { id: serialized.manager_id } : null
+          }
+          // 处理承运商数据：contact_roles -> contact
+          if (config.prisma?.model === 'carriers') {
+            if (serialized.contact_roles) {
+              serialized.contact = {
+                name: serialized.contact_roles.name || '',
+                phone: serialized.contact_roles.phone || null,
+                email: serialized.contact_roles.email || null,
+              }
+              delete serialized.contact_roles
+            } else {
+              serialized.contact = null
+            }
+          }
+          // 处理车辆数据：carriers -> carrier
+          if (config.prisma?.model === 'vehicles') {
+            if (serialized.carriers) {
+              serialized.carrier = serialized.carriers
+              delete serialized.carriers
+            }
+          }
+          // 处理货柜数据：departments -> department
+          if (config.prisma?.model === 'trailers') {
+            if (serialized.departments) {
+              serialized.department = serialized.departments
+              delete serialized.departments
+            }
+          }
+          // 处理司机数据：carriers -> carrier, contact_roles -> contact
+          if (config.prisma?.model === 'drivers') {
+            if (serialized.carriers) {
+              serialized.carrier = serialized.carriers
+              delete serialized.carriers
+            }
+            if (serialized.contact_roles) {
+              serialized.contact = {
+                name: serialized.contact_roles.name || '',
+                phone: serialized.contact_roles.phone || null,
+                email: serialized.contact_roles.email || null,
+              }
+              delete serialized.contact_roles
+            } else {
+              serialized.contact = null
+            }
+          }
+          return serialized
+        } catch (error: any) {
+          console.error('数据转换错误:', error, 'item:', item)
+          // 如果转换失败，返回序列化后的原始数据
+          return serializeBigInt(item)
         }
-        return serialized
       })
 
       return NextResponse.json(
         buildPaginationResponse(transformedItems, total, page, limit)
       )
-    } catch (error) {
+    } catch (error: any) {
+      console.error(`[createListHandler] 获取${config.displayName}列表失败:`, error)
+      console.error('错误详情:', {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name,
+        code: error?.code,
+      })
       return handleError(error, `获取${config.displayName}列表失败`)
     }
   }
@@ -460,6 +658,55 @@ export function createDetailHandler(config: EntityConfig) {
           delete transformed.contact_roles
         } else {
           transformed.contact = null
+        }
+      }
+      
+      // 处理订单数据：计算整柜体积
+      if (config.prisma?.model === 'orders') {
+        if (transformed.order_id) {
+          transformed.order_id = String(transformed.order_id)
+        }
+        // 处理 customers 关联：customers -> customer
+        if (transformed.customers) {
+          transformed.customer = transformed.customers
+          delete transformed.customers
+        } else {
+          transformed.customer = null
+        }
+        // 处理 users_orders_user_idTousers 关联：users_orders_user_idTousers -> user_id
+        if (transformed.users_orders_user_idTousers) {
+          transformed.user_id = transformed.users_orders_user_idTousers
+          delete transformed.users_orders_user_idTousers
+        } else {
+          transformed.user_id = null
+        }
+        // 处理 carriers 关联：carriers -> carrier
+        if (transformed.carriers) {
+          transformed.carrier = transformed.carriers
+          delete transformed.carriers
+        }
+        // 计算整柜体积：从 order_detail 的 volume 总和得出（覆盖数据库中的旧值）
+        if (transformed.order_detail && Array.isArray(transformed.order_detail)) {
+          const totalVolume = transformed.order_detail.reduce((sum: number, detail: any) => {
+            // 确保 volume 是数字类型，处理 Decimal 类型和字符串
+            let volume = 0
+            if (detail.volume !== null && detail.volume !== undefined) {
+              if (typeof detail.volume === 'object' && 'toString' in detail.volume) {
+                // Decimal 类型
+                volume = parseFloat(detail.volume.toString()) || 0
+              } else if (typeof detail.volume === 'string') {
+                volume = parseFloat(detail.volume) || 0
+              } else {
+                volume = Number(detail.volume) || 0
+              }
+            }
+            return sum + volume
+          }, 0)
+          // 强制覆盖数据库中的 container_volume 值（使用计算出的值）
+          transformed.container_volume = totalVolume
+        } else {
+          // 如果没有明细，整柜体积为 0
+          transformed.container_volume = 0
         }
       }
       
@@ -558,6 +805,10 @@ export function createCreateHandler(config: EntityConfig) {
       const processedData: any = {}
       for (const [key, value] of Object.entries(submitData as Record<string, any>)) {
         const fieldConfig = config.fields[key]
+        // 跳过只读/计算字段（如 container_volume）
+        if (fieldConfig?.readonly || fieldConfig?.computed) {
+          continue
+        }
         if (fieldConfig?.relation && fieldConfig.relation.valueField) {
           // 关系字段需要转换为 BigInt
           if (value) {
@@ -567,6 +818,13 @@ export function createCreateHandler(config: EntityConfig) {
           processedData[key] = BigInt(value)
         } else {
           processedData[key] = value
+        }
+      }
+
+      // 对于订单表，确保 container_volume 默认为 0（新建订单时没有明细，体积为 0）
+      if (config.prisma?.model === 'orders') {
+        if (processedData.container_volume === undefined || processedData.container_volume === null) {
+          processedData.container_volume = 0
         }
       }
 
@@ -623,10 +881,19 @@ export function createUpdateHandler(config: EntityConfig) {
       // 获取主键字段名（默认为 'id'）
       const idField = config.idField || 'id'
 
-      // 处理 BigInt 字段
+      // 处理 BigInt 字段和 boolean 字段
       const processedData: any = {}
       for (const [key, value] of Object.entries(submitData as Record<string, any>)) {
         const fieldConfig = config.fields[key]
+        
+        // 处理 boolean 字段：确保转换为布尔类型
+        if (fieldConfig?.type === 'boolean') {
+          if (value !== undefined && value !== null) {
+            processedData[key] = Boolean(value)
+          }
+          continue // 跳过后续处理
+        }
+        
         if (fieldConfig?.relation && fieldConfig.relation.valueField) {
           if (value) {
             processedData[fieldConfig.relation.valueField] = BigInt(value as number)
@@ -816,24 +1083,82 @@ export function createBatchUpdateHandler(config: EntityConfig) {
         }
       })
 
-      // 处理日期字段
+      // 处理字段映射和类型转换
       const processedUpdates: any = {}
       Object.entries(updates).forEach(([key, value]) => {
-        const fieldConfig = config.fields[key]
-        if (fieldConfig && value !== null && value !== undefined && value !== '') {
+        // 字段名映射：origin_location -> origin_location_id, destination_location -> location_id
+        let actualKey = key
+        if (key === 'origin_location') {
+          actualKey = 'origin_location_id'
+        } else if (key === 'destination_location') {
+          actualKey = 'location_id'
+        }
+        
+        // 尝试查找字段配置（先尝试映射后的字段名，再尝试原始字段名）
+        let fieldConfig = config.fields[actualKey]
+        if (!fieldConfig && key.endsWith('_location_id')) {
+          const baseKey = key.replace('_location_id', '_location')
+          fieldConfig = config.fields[baseKey]
+        }
+        
+        // 处理 boolean 字段：确保 false 值不被过滤，并转换为布尔类型
+        if (fieldConfig?.type === 'boolean') {
+          // boolean 字段：false 和 true 都是有效值
+          if (value !== undefined && value !== null) {
+            processedUpdates[actualKey] = Boolean(value)
+          }
+          return // 跳过后续处理
+        }
+        
+        if (value !== null && value !== undefined && value !== '') {
           // 处理日期字段
-          if (fieldConfig.type === 'date' && typeof value === 'string') {
+          if (fieldConfig?.type === 'date' && typeof value === 'string') {
             // 日期字符串格式：YYYY-MM-DD，转换为 Date 对象（UTC）
             const [year, month, day] = value.split('-').map(Number)
-            processedUpdates[key] = new Date(Date.UTC(year, month - 1, day))
-          } else if (fieldConfig.type === 'datetime' && typeof value === 'string') {
-            // 日期时间字符串，直接转换为 Date
-            processedUpdates[key] = new Date(value)
-          } else if (fieldConfig.type === 'number' || fieldConfig.type === 'currency') {
+            processedUpdates[actualKey] = new Date(Date.UTC(year, month - 1, day))
+          } else if (fieldConfig?.type === 'datetime' && typeof value === 'string') {
+            // 日期时间字符串，手动解析为 Date（不进行时区转换）
+            // 格式：YYYY-MM-DDTHH:mm 或 YYYY-MM-DDTHH:mm:ss
+            const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{3}))?/)
+            if (match) {
+              const [, year, month, day, hours, minutes, seconds = '0', milliseconds = '0'] = match
+              // 使用 UTC 方法创建 Date 对象，这样就不会进行时区转换
+              processedUpdates[actualKey] = new Date(Date.UTC(
+                parseInt(year, 10),
+                parseInt(month, 10) - 1,
+                parseInt(day, 10),
+                parseInt(hours, 10),
+                parseInt(minutes, 10),
+                parseInt(seconds, 10),
+                parseInt(milliseconds, 10)
+              ))
+            } else {
+              // 如果不是预期格式，尝试直接解析（可能会进行时区转换，但这是后备方案）
+              processedUpdates[actualKey] = new Date(value)
+            }
+          } else if (actualKey === 'total_pallets') {
+            // total_pallets 是计算字段，不能直接更新
+            // 如果需要修改，需要更新 order_detail 中的 estimated_pallets
+            // 这里我们暂时忽略，不添加到 processedUpdates 中
+            // 跳过这个字段
+          } else if (actualKey === 'container_volume') {
+            // container_volume 是计算字段，不能直接更新
+            // 由系统根据 order_detail 的 volume 总和自动计算
+            // 跳过这个字段
+          } else if (fieldConfig?.type === 'number' || fieldConfig?.type === 'currency') {
             // 数值字段，确保是数字类型
-            processedUpdates[key] = typeof value === 'string' ? parseFloat(value) : value
+            processedUpdates[actualKey] = typeof value === 'string' ? parseFloat(value) : value
+          } else if (fieldConfig?.type === 'location' || actualKey.endsWith('_location_id')) {
+            // location 字段：转换为 BigInt（如果是数字或字符串数字）
+            if (typeof value === 'number') {
+              processedUpdates[actualKey] = BigInt(value)
+            } else if (typeof value === 'string' && !isNaN(Number(value))) {
+              processedUpdates[actualKey] = BigInt(value)
+            } else {
+              processedUpdates[actualKey] = value
+            }
           } else {
-            processedUpdates[key] = value
+            processedUpdates[actualKey] = value
           }
         }
       })

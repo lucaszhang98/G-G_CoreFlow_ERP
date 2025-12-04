@@ -65,6 +65,7 @@ export function InboundReceiptDetailPageClient({
             orderDetails={orderDetails}
             inventoryLots={inventoryLots}
             deliveryAppointments={deliveryAppointments}
+            warehouseId={inboundReceipt?.warehouse_id?.toString() || inboundReceipt?.warehouses?.warehouse_id?.toString() || ''}
             onRefresh={handleRefresh}
           />
         </CardContent>

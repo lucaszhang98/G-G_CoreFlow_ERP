@@ -77,6 +77,13 @@ export function SearchModule({
   onAdvancedSearch,
   onResetAdvancedSearch,
 }: SearchModuleProps) {
+  // 只在客户端挂载后渲染 Radix UI 组件，避免 hydration 错误
+  const [mounted, setMounted] = React.useState(false)
+  
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+  
   // 维护筛选选项映射（用于显示标签）
   const [filterOptionsMap, setFilterOptionsMap] = React.useState<Record<string, Record<string, string>>>({})
 
@@ -274,6 +281,27 @@ export function SearchModule({
                       return option?.label || filterOptionsMap[filter.field]?.[currentValue] || currentValue
                     }, [currentValue, filter.options, filter.field, filterOptionsMap])
                     
+                    // 只在客户端挂载后渲染 DropdownMenu，避免 hydration 错误
+                    if (!mounted) {
+                      return (
+                        <Button
+                          key={filter.field}
+                          variant={isActive ? "default" : "outline"}
+                          className={`
+                            h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+                            ${isActive
+                              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
+                              : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
+                            }
+                          `}
+                          disabled
+                        >
+                          <span className="truncate">{filter.label}</span>
+                          <ChevronDown className="ml-2 h-3 w-3 opacity-70 shrink-0" />
+                        </Button>
+                      )
+                    }
+                    
                     return (
                       <DropdownMenu key={filter.field}>
                         <DropdownMenuTrigger asChild>
@@ -327,6 +355,27 @@ export function SearchModule({
                     const fromValue = filterValues[`${filter.field}_from`]
                     const toValue = filterValues[`${filter.field}_to`]
                     const isActive = fromValue || toValue
+
+                    // 只在客户端挂载后渲染 Popover，避免 hydration 错误
+                    if (!mounted) {
+                      return (
+                        <Button
+                          key={filter.field}
+                          variant={isActive ? "default" : "outline"}
+                          className={`
+                            h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+                            ${isActive
+                              ? "bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white shadow-md shadow-cyan-500/20"
+                              : "border-gray-200 dark:border-gray-800 hover:border-cyan-400 dark:hover:border-cyan-600 hover:bg-cyan-50/50 dark:hover:bg-cyan-950/20"
+                            }
+                          `}
+                          disabled
+                        >
+                          {filter.label}
+                          <ChevronDown className="ml-2 h-3 w-3 opacity-70" />
+                        </Button>
+                      )
+                    }
 
                     return (
                       <Popover key={filter.field}>
@@ -400,6 +449,27 @@ export function SearchModule({
                     const minValue = filterValues[`${filter.field}_min`]
                     const maxValue = filterValues[`${filter.field}_max`]
                     const isActive = minValue || maxValue
+
+                    // 只在客户端挂载后渲染 Popover，避免 hydration 错误
+                    if (!mounted) {
+                      return (
+                        <Button
+                          key={filter.field}
+                          variant={isActive ? "default" : "outline"}
+                          className={`
+                            h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+                            ${isActive
+                              ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md shadow-emerald-500/20"
+                              : "border-gray-200 dark:border-gray-800 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20"
+                            }
+                          `}
+                          disabled
+                        >
+                          {filter.label}
+                          <ChevronDown className="ml-2 h-3 w-3 opacity-70" />
+                        </Button>
+                      )
+                    }
 
                     return (
                       <Popover key={filter.field}>

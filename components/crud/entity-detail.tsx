@@ -12,7 +12,7 @@ import Link from "next/link"
 import prisma from "@/lib/prisma"
 import { EntityConfig } from "@/lib/crud/types"
 import { Decimal } from "@prisma/client/runtime/library"
-import { autoFormatDateField } from "@/lib/utils/date-format"
+import { autoFormatDateField, formatDateTimeDisplay } from "@/lib/utils/date-format"
 import { EntityDetailClient } from "./entity-detail-client"
 import { serializeBigInt } from "@/lib/api/helpers"
 
@@ -110,6 +110,9 @@ export async function EntityDetail({ config, id, data: providedData, rightCard, 
       case 'date':
         // 使用统一的日期格式化框架
         return autoFormatDateField(fieldKey, value)
+      case 'datetime':
+        // 使用统一的时间戳格式化框架，显示为 MM-DD HH:mm（不包含年份和秒）
+        return formatDateTimeDisplay(value)
       case 'number':
         return formatNumber(value)
       case 'currency':

@@ -35,7 +35,6 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
           select: {
             order_id: true,
             order_number: true,
-            container_number: true,
             order_date: true,
             eta_date: true,
             ready_date: true,
@@ -54,10 +53,16 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 id: true,
                 quantity: true,
                 volume: true,
-                container_volume: true,
                 estimated_pallets: true,
                 delivery_nature: true,
+                delivery_location: true,
+                unload_type: true,
+                volume_percentage: true,
+                notes: true,
                 order_id: true,
+              },
+              orderBy: {
+                volume_percentage: 'desc',
               },
             },
             delivery_appointments: {
@@ -100,15 +105,16 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
             remaining_pallet_count: true,
             unbooked_pallet_count: true,
             delivery_progress: true,
-            unload_transfer_notes: true,
-            notes: true,
             order_detail: {
               select: {
                 id: true,
                 delivery_nature: true,
-                container_volume: true,
+                delivery_location: true,
+                unload_type: true,
                 volume: true,
                 estimated_pallets: true,
+                volume_percentage: true,
+                notes: true,
               },
             },
             orders: {
@@ -131,9 +137,35 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
     notFound()
   }
 
-  // 计算整柜体积
+  // 获取所有唯一的 delivery_location（location_id）用于查询 location_code
+  const locationIds = inboundReceipt.orders?.order_detail
+    ?.map((detail: any) => detail.delivery_location)
+    .filter((id: any) => id !== null && id !== undefined)
+    .map((id: any) => BigInt(id)) || []
+  
+  // 批量查询 locations 获取 location_code
+  const locationsMap = new Map<string, string>()
+  if (locationIds.length > 0) {
+    const locations = await prisma.locations.findMany({
+      where: {
+        location_id: {
+          in: locationIds,
+        },
+      },
+      select: {
+        location_id: true,
+        location_code: true,
+      },
+    })
+    
+    locations.forEach((loc: any) => {
+      locationsMap.set(loc.location_id.toString(), loc.location_code || '')
+    })
+  }
+
+  // 计算整柜体积（使用 volume 字段）
   const totalContainerVolume = inboundReceipt.orders?.order_detail?.reduce((sum: number, detail: any) => {
-    const volume = detail.container_volume ? Number(detail.container_volume) : 0;
+    const volume = detail.volume ? Number(detail.volume) : 0;
     return sum + volume;
   }, 0) || 0;
 
@@ -183,13 +215,23 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 planned_unload_at: serialized.planned_unload_at || null,
                 total_container_volume: totalContainerVolume,
               }}
-              orderDetails={serialized.orders?.order_detail?.map((detail: any) => ({
-                ...detail,
-                id: detail.id.toString(),
-                order_id: detail.order_id?.toString() || null,
-                volume: detail.volume ? Number(detail.volume) : null,
-                container_volume: detail.container_volume ? Number(detail.container_volume) : null,
-              })) || []}
+              orderDetails={serialized.orders?.order_detail?.map((detail: any) => {
+                // 获取 location_code
+                const deliveryLocationCode = detail.delivery_location 
+                  ? locationsMap.get(detail.delivery_location.toString()) || detail.delivery_location
+                  : null
+
+                return {
+                  ...detail,
+                  id: detail.id.toString(),
+                  order_id: detail.order_id?.toString() || null,
+                  volume: detail.volume ? Number(detail.volume) : null,
+                  volume_percentage: detail.volume_percentage ? Number(detail.volume_percentage) : null,
+                  delivery_location: deliveryLocationCode, // 显示 location_code
+                  unload_type: detail.unload_type || null,
+                  notes: detail.notes || null,
+                }
+              }) || []}
               inventoryLots={serialized.inventory_lots?.map((lot: any) => ({
                 ...lot,
                 inventory_lot_id: lot.inventory_lot_id.toString(),
@@ -201,8 +243,11 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 order_detail: lot.order_detail ? {
                   ...lot.order_detail,
                   id: lot.order_detail.id.toString(),
-                  container_volume: lot.order_detail.container_volume ? Number(lot.order_detail.container_volume) : null,
                   volume: lot.order_detail.volume ? Number(lot.order_detail.volume) : null,
+                  delivery_location: lot.order_detail.delivery_location || null,
+                  unload_type: lot.order_detail.unload_type || null,
+                  volume_percentage: lot.order_detail.volume_percentage ? Number(lot.order_detail.volume_percentage) : null,
+                  notes: lot.order_detail.notes || null,
                 } : null,
                 delivery_location: lot.orders?.delivery_location || null,
               })) || []}
