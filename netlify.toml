@@ -26,7 +26,7 @@
 # Netlify Next.js 插件会自动处理必要的文件打包
 # 注意：不要使用 included_files = ["**"]，这会让函数包变得非常大
 [functions]
-  # 函数超时时间（秒）- Netlify 免费版最大 10 秒，Pro 版最大 26 秒
-  timeout = 10
   # 使用 esbuild 进行打包（默认值，明确指定以确保一致性）
   node_bundler = "esbuild"
+  # 函数超时时间在 Netlify 控制台的函数设置中配置
+  # 或者在每个函数的配置文件中单独设置
