@@ -5,7 +5,7 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { ColumnDef } from "@tanstack/react-table"
 import { Plus, Trash2, Edit, CheckCircle, XCircle } from "lucide-react"
 import { DataTable } from "@/components/data-table"
@@ -109,7 +109,7 @@ interface EntityTableProps<T = any> {
   FormComponent?: React.ComponentType<any>
   customColumns?: ColumnDef<T>[] // 自定义列定义（如果提供，则使用自定义列而不是自动生成）
   customActions?: {
-    onView?: (item: T) => void
+    onView?: ((item: T) => void) | null // null 表示隐藏查看详情按钮
     onDelete?: (item: T) => void
     onAdd?: () => void
   } // 自定义操作（如果提供，则使用自定义操作）
@@ -137,6 +137,7 @@ export function EntityTable<T = any>({
   expandableRows,
 }: EntityTableProps<T>) {
   const router = useRouter()
+  const pathname = usePathname()
   const [data, setData] = React.useState<T[]>([])
   const [loading, setLoading] = React.useState(true)
   const [openDialog, setOpenDialog] = React.useState(false)
@@ -155,9 +156,60 @@ export function EntityTable<T = any>({
     desc: config.list.defaultOrder === 'desc' 
   }])
   
-  // 搜索状态
-  const [search, setSearch] = React.useState('')
-  const [searchInput, setSearchInput] = React.useState('')
+  // 搜索状态 - 从 URL 参数读取初始搜索值
+  const [search, setSearch] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      return params.get('search') || ''
+    }
+    return ''
+  })
+  const [searchInput, setSearchInput] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      return params.get('search') || ''
+    }
+    return ''
+  })
+  
+  // 当路径变化时，重置搜索状态（清除之前的搜索值）
+  // 使用 ref 来跟踪上一个路径，避免重复触发
+  const prevPathnameRef = React.useRef<string | null>(null)
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const urlSearch = params.get('search') || ''
+      
+      // 如果路径真的变化了（不是初始化）
+      if (prevPathnameRef.current !== null && prevPathnameRef.current !== pathname) {
+        // 路径变化时，强制清除所有搜索状态
+        // 设置标志，让防抖逻辑立即执行（不等待300ms）
+        isPathChangingRef.current = true
+        // 先清除 searchInput（这会触发防抖的 useEffect，但由于 isPathChangingRef，会立即更新 search）
+        setSearchInput('')
+        // 同时直接清除 search（确保立即生效）
+        setSearch('')
+        setPage(1)
+        // search 状态变化会触发 fetchData 的 useEffect，使用空字符串
+      } else if (prevPathnameRef.current === null) {
+        // 首次加载，从 URL 读取搜索值
+        if (urlSearch) {
+          setSearchInput(urlSearch)
+          setSearch(urlSearch)
+        }
+      } else {
+        // 路径没变，但 URL 参数可能变了
+        if (urlSearch !== searchInput) {
+          setSearchInput(urlSearch)
+          setSearch(urlSearch)
+          setPage(1)
+        }
+      }
+      
+      prevPathnameRef.current = pathname
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]) // 只在路径变化时触发
   
   // 筛选状态
   const [filterValues, setFilterValues] = React.useState<Record<string, any>>({})
@@ -290,13 +342,24 @@ export function EntityTable<T = any>({
   }, [fetchData, page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic])
   
   // 处理搜索（防抖）
+  // 使用 ref 来跟踪是否正在处理路径变化
+  const isPathChangingRef = React.useRef(false)
+  
   React.useEffect(() => {
-    const timer = setTimeout(() => {
+    // 如果正在处理路径变化，立即更新 search（不防抖），避免延迟导致的问题
+    if (isPathChangingRef.current) {
       setSearch(searchInput)
-      setPage(1) // 搜索时重置到第一页
-    }, 300) // 300ms 防抖
-    
-    return () => clearTimeout(timer)
+      setPage(1)
+      isPathChangingRef.current = false
+    } else {
+      // 正常情况使用防抖
+      const timer = setTimeout(() => {
+        setSearch(searchInput)
+        setPage(1) // 搜索时重置到第一页
+      }, 300) // 300ms 防抖
+      
+      return () => clearTimeout(timer)
+    }
   }, [searchInput])
 
   // 处理排序
@@ -317,6 +380,12 @@ export function EntityTable<T = any>({
 
   // 处理创建
   const handleCreate = () => {
+    // 如果提供了自定义 onAdd，使用自定义处理
+    if (customActions?.onAdd) {
+      customActions.onAdd()
+      return
+    }
+    // 否则使用默认的表单对话框
     setEditingItem(null)
     setOpenDialog(true)
   }
@@ -1136,13 +1205,72 @@ export function EntityTable<T = any>({
           )
         }
         
+        // 特殊处理：未约板数 < 0 时红色显示
+        if (fieldKey === 'unbooked_pallet_count') {
+          const value = row.getValue(fieldKey)
+          const numValue = typeof value === 'number' ? value : (value ? parseFloat(String(value)) : 0)
+          const isNegative = !isNaN(numValue) && numValue < 0
+          return (
+            <div className={isNegative ? 'text-red-600 font-semibold' : ''}>
+              {value || value === 0 ? numValue.toLocaleString() : '-'}
+            </div>
+          )
+        }
+        
+        // 特殊处理：送货进度（实时计算：(实际板数 - 剩余板数) / 实际板数 * 100%）
+        // 即：已送板数 / 实际板数 * 100%
+        if (fieldKey === 'delivery_progress') {
+          const rowData = row.original as any
+          const palletCount = rowData.pallet_count ?? 0
+          const remainingCount = rowData.remaining_pallet_count ?? 0
+          
+          // 如果实际板数为0，返回100%（没有库存，视为已送完）
+          let progress = 100
+          if (palletCount > 0) {
+            // 已送板数 = 实际板数 - 剩余板数
+            const deliveredCount = palletCount - remainingCount
+            progress = (deliveredCount / palletCount) * 100
+            progress = Math.round(progress * 100) / 100 // 保留两位小数
+            // 确保进度在 0-100 之间
+            progress = Math.max(0, Math.min(100, progress))
+          }
+          
+          const isComplete = progress >= 100
+          
+          return (
+            <div className="flex items-center gap-3 min-w-[140px]">
+              {/* 进度条 */}
+              <div className="flex-1 relative h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 rounded-full ${
+                    isComplete
+                      ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+                      : 'bg-gradient-to-r from-blue-500 to-indigo-500'
+                  }`}
+                  style={{ width: `${Math.min(progress, 100)}%` }}
+                />
+              </div>
+              {/* 百分比文字 */}
+              <span 
+                className={`text-sm font-semibold min-w-[50px] text-right ${
+                  isComplete 
+                    ? 'text-green-600 dark:text-green-400' 
+                    : 'text-foreground'
+                }`}
+              >
+                {progress.toFixed(0)}%
+              </span>
+            </div>
+          )
+        }
+        
         if (fieldConfig.type === 'number') {
           const value = row.getValue(fieldKey)
           if (value === null || value === undefined) return <div className="text-muted-foreground">-</div>
           const numValue = typeof value === 'number' ? value : parseFloat(String(value))
           if (isNaN(numValue)) return <div className="text-muted-foreground">-</div>
-          // 特殊处理：如果是 capacity_cbm，显示 CBM 单位
-          if (fieldKey === 'capacity_cbm') {
+          // 特殊处理：如果是 capacity_cbm 或 container_volume，显示 CBM 单位
+          if (fieldKey === 'capacity_cbm' || fieldKey === 'container_volume') {
             return <div>{numValue.toLocaleString()} CBM</div>
           }
           return <div>{numValue.toLocaleString()}</div>
@@ -1200,8 +1328,9 @@ export function EntityTable<T = any>({
     const hasDeletePermission = config.permissions.delete && config.permissions.delete.length > 0
     
     // 使用自定义操作或默认操作
+    // 如果 customActions.onView 是 undefined，则使用默认的 handleView；如果是 null，则隐藏查看详情按钮
     const actionsConfig = customActions ? {
-      onView: customActions.onView,
+      onView: customActions.onView === null ? undefined : (customActions.onView !== undefined ? customActions.onView : handleView),
       onDelete: customActions.onDelete && hasDeletePermission ? customActions.onDelete : undefined,
       // 如果自定义操作没有提供行内编辑，则使用默认的
       onEdit: inlineEditEnabled ? handleStartEdit : undefined,
@@ -1384,6 +1513,9 @@ export function EntityTable<T = any>({
         getIdValue={getIdValue}
         isRowEditing={inlineEditEnabled ? isRowEditing : undefined}
         expandableRows={expandableRows}
+        enableViewManager={true}
+        viewManagerTableName={config.name}
+        viewManagerUserId={undefined}
       />
         </CardContent>
       </Card>

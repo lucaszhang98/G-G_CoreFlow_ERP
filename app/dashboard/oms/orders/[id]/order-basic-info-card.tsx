@@ -106,7 +106,9 @@ export function OrderBasicInfoCard({
               </p>
               <p className="text-sm">
                 <span className="text-muted-foreground">整柜体积:</span>{" "}
-                {formatNumber(order.container_volume)} CBM
+                {order.container_volume !== null && order.container_volume !== undefined 
+                  ? Number(order.container_volume).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  : "-"}
               </p>
               <p className="text-sm">
                 <span className="text-muted-foreground">MBL号码:</span>{" "}

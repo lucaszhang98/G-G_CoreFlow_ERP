@@ -18,15 +18,16 @@ export function OrderDetailsTable({
     title: '仓点明细',
     showExpandable: true,
     showColumns: {
-      // 按照要求的顺序：送仓地点-性质-数量-体积-预计板数-分仓占总柜比-拆柜/转仓-备注
+      // 按照要求的顺序：送仓地点-性质-数量-体积-预计板数-分仓占比-拆柜/转仓-备注-PO
       deliveryLocation: true, // 送仓地点
       locationType: true, // 性质（delivery_nature）
       quantity: true, // 数量
       volume: true, // 体积
       estimatedPallets: true, // 预计板数
-      volumePercentage: true, // 分仓占总柜比
+      volumePercentage: true, // 分仓占比
       unloadType: true, // 拆柜/转仓
       notes: true, // 备注
+      po: true, // PO字段
       // 隐藏字段
       detailId: false, // 仓点ID隐藏
       createdAt: false, // 创建时间隐藏

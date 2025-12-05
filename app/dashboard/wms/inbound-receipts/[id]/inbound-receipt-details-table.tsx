@@ -25,7 +25,7 @@ interface OrderDetail {
   container_volume: number | null
   estimated_pallets: number | null
   delivery_nature: string | null
-  volume_percentage: number | null // 分仓占总柜比（从数据库自动生成）
+  volume_percentage: number | null // 分仓占比（从数据库自动生成）
   delivery_location?: string | null // 添加送仓地点
 }
 
@@ -96,7 +96,7 @@ export function InboundReceiptDetailsTable({
       return next
     })
   }
-  // 总柜体积计算（用于显示，但分仓占总柜比现在从数据库读取）
+  // 总柜体积计算（用于显示，但分仓占比现在从数据库读取）
   // 注意：volume_percentage 现在由数据库触发器自动计算
 
   // 将inventory_lots按order_detail_id分组（需要在其他函数之前定义）
@@ -236,8 +236,25 @@ export function InboundReceiptDetailsTable({
     }
   }
 
+  // 格式化数字（千分位）
   const formatNumber = (value: number | null | string) => {
     if (!value && value !== 0) return "-"
+    const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
+    if (isNaN(numValue)) return "-"
+    return numValue.toLocaleString()
+  }
+
+  // 格式化整数（用于板数相关字段）
+  const formatInteger = (value: number | null | string) => {
+    if (!value && value !== 0) return "-"
+    const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
+    if (isNaN(numValue)) return "-"
+    return Math.round(numValue).toLocaleString()
+  }
+
+  // 格式化体积（不加单位，直接显示数字）
+  const formatVolume = (value: number | null | string) => {
+    if (value === null || value === undefined || value === '') return "-"
     const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
     if (isNaN(numValue)) return "-"
     return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -248,8 +265,7 @@ export function InboundReceiptDetailsTable({
     return `${Number(value).toFixed(2)}%`
   }
 
-  // 分仓占总柜比现在从数据库自动生成，不再需要计算
-
+  // 分仓占比现在从数据库自动生成，不再需要计算
 
   // 获取送仓地点（直接从 order_detail 获取）
   const getDeliveryLocation = (detail: OrderDetail) => {
@@ -285,7 +301,7 @@ export function InboundReceiptDetailsTable({
     )
   }
 
-  // 按分仓占总柜比倒序排列（使用数据库字段）
+  // 按分仓占比倒序排列（使用数据库字段）
   const sortedOrderDetails = React.useMemo(() => {
     return [...orderDetails].sort((a, b) => {
       const percentageA = a.volume_percentage || 0
@@ -304,7 +320,7 @@ export function InboundReceiptDetailsTable({
             <TableHead>送仓地点</TableHead>
             <TableHead>体积</TableHead>
             <TableHead>预估板数</TableHead>
-            <TableHead>分仓占总柜比</TableHead>
+            <TableHead>分仓占比</TableHead>
             <TableHead>仓库位置</TableHead>
             <TableHead>实际板数</TableHead>
             <TableHead>剩余板数</TableHead>
@@ -341,16 +357,16 @@ export function InboundReceiptDetailsTable({
                     </Button>
                   </TableCell>
                   <TableCell>
-                    {detail.delivery_nature || "-"}
+                    {detail.delivery_nature === '亚马逊' ? 'AMZ' : (detail.delivery_nature || "-")}
                   </TableCell>
                   <TableCell>
                     {deliveryLocation || "-"}
                   </TableCell>
                   <TableCell>
-                    {formatNumber(detail.container_volume)} CBM
+                    {formatVolume(detail.container_volume)}
                   </TableCell>
                   <TableCell>
-                    {detail.estimated_pallets ? formatNumber(detail.estimated_pallets) : "-"}
+                    {formatInteger(detail.estimated_pallets)}
                   </TableCell>
                   <TableCell>
                     {percentage !== null ? formatPercentage(percentage) : "-"}
@@ -384,11 +400,11 @@ export function InboundReceiptDetailsTable({
                         className="w-full"
                       />
                     ) : (
-                      inventoryInfo.total_pallet_count > 0 ? formatNumber(inventoryInfo.total_pallet_count) : "-"
+                      formatInteger(inventoryInfo.total_pallet_count)
                     )}
                   </TableCell>
                   <TableCell>
-                    {inventoryInfo.total_remaining_pallet_count > 0 ? formatNumber(inventoryInfo.total_remaining_pallet_count) : "-"}
+                    {formatInteger(inventoryInfo.total_remaining_pallet_count)}
                   </TableCell>
                   <TableCell>
                     {inventoryInfo.delivery_progress !== null ? formatPercentage(inventoryInfo.delivery_progress) : "-"}
@@ -475,7 +491,7 @@ export function InboundReceiptDetailsTable({
                                   <TableCell>{formatDate(appt.confirmed_start)}</TableCell>
                                   <TableCell>
                                     {/* 板数需要从inventory_lots获取，这里暂时显示"-"，后续可以根据业务逻辑填充 */}
-                                    {inventoryInfo.total_pallet_count > 0 ? formatNumber(inventoryInfo.total_pallet_count) : "-"}
+                                    {formatInteger(inventoryInfo.total_pallet_count)}
                                   </TableCell>
                                 </TableRow>
                               ))}

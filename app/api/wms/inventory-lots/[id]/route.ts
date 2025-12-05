@@ -19,7 +19,6 @@ export async function GET(
           select: {
             order_id: true,
             order_number: true,
-            container_number: true,
             order_date: true,
             delivery_location: true,
             customers: {
@@ -111,6 +110,12 @@ export async function PUT(
       return NextResponse.json({ error: '库存管理记录不存在' }, { status: 404 });
     }
 
+    const orderDetailId = existing.order_detail_id;
+    const newPalletCount = data.pallet_count !== undefined ? data.pallet_count : existing.pallet_count;
+
+    // 如果实际板数变化了，需要重新计算未约板数和剩余板数
+    let shouldRecalculate = data.pallet_count !== undefined && data.pallet_count !== existing.pallet_count;
+
     // 构建更新数据
     const updateData: any = {};
 
@@ -120,17 +125,49 @@ export async function PUT(
     if (data.pallet_count !== undefined) {
       updateData.pallet_count = data.pallet_count;
     }
-    if (data.remaining_pallet_count !== undefined) {
-      updateData.remaining_pallet_count = data.remaining_pallet_count ?? 0;
-    }
-    if (data.unbooked_pallet_count !== undefined) {
-      updateData.unbooked_pallet_count = data.unbooked_pallet_count ?? 0;
+    // 如果实际板数变化了，自动重新计算；否则允许手动设置
+    if (shouldRecalculate) {
+      // 获取所有预约的预计板数之和（用于计算未约板数）
+      const appointmentLines = await prisma.appointment_detail_lines.findMany({
+        where: { order_detail_id: orderDetailId },
+        select: { estimated_pallets: true },
+      });
+      const totalAppointmentPallets = appointmentLines.reduce((sum, line) => {
+        return sum + (line.estimated_pallets || 0);
+      }, 0);
+
+      // 获取所有未过期预约的预计板数之和（用于计算剩余板数）
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expiredAppointmentLines = await prisma.appointment_detail_lines.findMany({
+        where: {
+          order_detail_id: orderDetailId,
+          delivery_appointments: {
+            confirmed_start: {
+              lt: today,
+            },
+          },
+        },
+        select: { estimated_pallets: true },
+      });
+      const totalExpiredAppointmentPallets = expiredAppointmentLines.reduce((sum, line) => {
+        return sum + (line.estimated_pallets || 0);
+      }, 0);
+
+      // 自动计算
+      updateData.unbooked_pallet_count = newPalletCount - totalAppointmentPallets;
+      updateData.remaining_pallet_count = newPalletCount - totalExpiredAppointmentPallets;
+    } else {
+      // 允许手动设置（但通常不建议）
+      if (data.remaining_pallet_count !== undefined) {
+        updateData.remaining_pallet_count = data.remaining_pallet_count ?? 0;
+      }
+      if (data.unbooked_pallet_count !== undefined) {
+        updateData.unbooked_pallet_count = data.unbooked_pallet_count ?? 0;
+      }
     }
     if (data.delivery_progress !== undefined) {
       updateData.delivery_progress = data.delivery_progress ? Number(data.delivery_progress) : null;
-    }
-    if (data.unload_transfer_notes !== undefined) {
-      updateData.unload_transfer_notes = data.unload_transfer_notes || null;
     }
     if (data.notes !== undefined) {
       updateData.notes = data.notes || null;
@@ -173,7 +210,6 @@ export async function PUT(
           select: {
             order_id: true,
             order_number: true,
-            container_number: true,
             order_date: true,
             delivery_location: true,
             customers: {

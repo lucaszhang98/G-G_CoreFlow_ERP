@@ -73,7 +73,9 @@ export function InboundReceiptBasicInfoCard({
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-muted-foreground">整柜体积</h4>
             <p className="text-sm font-semibold">
-              {formatNumber(inboundReceipt.total_container_volume)} CBM
+              {inboundReceipt.total_container_volume !== null && inboundReceipt.total_container_volume !== undefined 
+                ? Number(inboundReceipt.total_container_volume).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : "-"}
             </p>
           </div>
         </div>

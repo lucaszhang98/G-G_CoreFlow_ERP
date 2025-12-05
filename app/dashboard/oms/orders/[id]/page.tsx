@@ -37,21 +37,52 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
         order_id: true,
         order_number: true,
         customer_id: true,
-        status: true,
-        do_issued: true,
-        notes: true,
         user_id: true,
+        order_date: true,
+        status: true,
+        total_amount: true,
+        discount_amount: true,
+        tax_amount: true,
+        final_amount: true,
+        notes: true,
+        eta_date: true,
+        lfd_date: true,
+        pickup_date: true,
+        ready_date: true,
+        return_deadline: true,
+        container_type: true,
+        container_volume: true, // 从数据库读取，但也会根据 order_detail 计算以确保一致性
+        mbl_number: true,
+        do_issued: true,
+        warehouse_account: true,
+        port_location: true,
+        operation_mode: true,
+        delivery_location: true,
+        carrier_id: true,
+        appointment_time: true,
         created_at: true,
         updated_at: true,
         created_by: true,
         updated_by: true,
-        weight: true, // 使用 weight 字段（在 schema 中，container_volume 可能不存在）
         customers: {
           select: {
             id: true,
             code: true,
             name: true,
             company_name: true,
+          },
+        },
+        carriers: {
+          select: {
+            carrier_id: true,
+            name: true,
+            carrier_code: true,
+          },
+        },
+        users_orders_user_idTousers: {
+          select: {
+            id: true,
+            full_name: true,
           },
         },
         order_detail: {
@@ -67,11 +98,11 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             unload_type: true,
             volume_percentage: true,
             notes: true,
+            po: true, // PO字段
             created_at: true,
             updated_at: true,
             created_by: true,
             updated_by: true,
-            po: true,
             remaining_pallets: true,
             // 一个仓点可以有多个SKU（通过 order_detail_item.detail_id 指向 order_detail.id）
             order_detail_item_order_detail_item_detail_idToorder_detail: {
@@ -93,7 +124,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             },
           },
           orderBy: {
-            volume_percentage: 'desc', // 默认按分仓占总柜比降序排列
+            volume_percentage: 'desc', // 默认按分仓占比降序排列
           },
         },
       },
@@ -135,37 +166,79 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
         detailCount: order.order_detail.length,
         volumes,
         calculatedTotal: containerVolume,
-        dbValue: order.weight,
       })
     }
 
-    // 获取所有唯一的 delivery_location（location_id）
-    const locationIds = order.order_detail
+    // 获取所有唯一的 delivery_location（可能是 location_id 或 location_code）
+    const deliveryLocations = order.order_detail
       .map((detail: any) => detail.delivery_location)
-      .filter((id: any) => id !== null && id !== undefined)
-      .map((id: any) => BigInt(id))
+      .filter((loc: any) => loc !== null && loc !== undefined)
     
     // 批量查询 locations 获取 location_code
     const locationsMap = new Map<string, string>()
-    if (locationIds.length > 0) {
-      const locations = await prisma.locations.findMany({
-        where: {
-          location_id: {
-            in: locationIds,
-          },
-        },
-        select: {
-          location_id: true,
-          location_code: true,
-        },
+    if (deliveryLocations.length > 0) {
+      // 分离数字类型的 location_id 和字符串类型的 location_code
+      const numericIds: bigint[] = []
+      const stringCodes: string[] = []
+      
+      deliveryLocations.forEach((loc: any) => {
+        // 检查是否为数字（location_id）
+        if (typeof loc === 'number' || (typeof loc === 'string' && !isNaN(Number(loc)) && loc.trim() !== '')) {
+          try {
+            numericIds.push(BigInt(loc))
+          } catch (e) {
+            // 如果转换失败，可能是 location_code
+            stringCodes.push(String(loc))
+          }
+        } else {
+          // 字符串类型，可能是 location_code
+          stringCodes.push(String(loc))
+        }
       })
       
-      locations.forEach((loc: any) => {
-        locationsMap.set(loc.location_id.toString(), loc.location_code || '')
-      })
+      // 查询数字类型的 location_id
+      if (numericIds.length > 0) {
+        const locationsById = await prisma.locations.findMany({
+          where: {
+            location_id: {
+              in: numericIds,
+            },
+          },
+          select: {
+            location_id: true,
+            location_code: true,
+          },
+        })
+        
+        locationsById.forEach((loc: any) => {
+          locationsMap.set(loc.location_id.toString(), loc.location_code || '')
+        })
+      }
+      
+      // 查询字符串类型的 location_code
+      if (stringCodes.length > 0) {
+        const locationsByCode = await prisma.locations.findMany({
+          where: {
+            location_code: {
+              in: stringCodes,
+            },
+          },
+          select: {
+            location_id: true,
+            location_code: true,
+          },
+        })
+        
+        locationsByCode.forEach((loc: any) => {
+          // 使用 location_code 作为 key（因为 delivery_location 存储的是 code）
+          locationsMap.set(loc.location_code || '', loc.location_code || '')
+          // 同时也用 location_id 作为 key（以防万一）
+          locationsMap.set(loc.location_id.toString(), loc.location_code || '')
+        })
+      }
     }
 
-    // 为每个明细计算预计板数和分仓占总柜比（覆盖数据库中的值）
+    // 为每个明细计算预计板数和分仓占比（覆盖数据库中的值）
     order.order_detail = order.order_detail.map((detail: any) => {
       let volumeNum = 0
       if (detail.volume !== null && detail.volume !== undefined) {
@@ -181,15 +254,26 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
       // 计算预计板数：体积除以2后四舍五入
       const calculatedEstimatedPallets = volumeNum > 0 ? Math.round(volumeNum / 2) : null
       
-      // 计算分仓占总柜比：当前体积除以总体积的百分比
+      // 计算分仓占比：当前体积除以总体积的百分比
       const calculatedVolumePercentage = containerVolume > 0 && volumeNum > 0 
         ? parseFloat(((volumeNum / containerVolume) * 100).toFixed(2)) 
         : null
 
       // 获取 location_code
-      const deliveryLocationCode = detail.delivery_location 
-        ? locationsMap.get(detail.delivery_location.toString()) || detail.delivery_location
-        : null
+      // delivery_location 可能是 location_id（数字）或 location_code（字符串）
+      let deliveryLocationCode: string | null = null
+      if (detail.delivery_location) {
+        const locKey = detail.delivery_location.toString()
+        // 先尝试用原值作为 key 查找
+        deliveryLocationCode = locationsMap.get(locKey) || null
+        // 如果找不到，且原值是字符串，可能原值就是 location_code
+        if (!deliveryLocationCode && typeof detail.delivery_location === 'string') {
+          // 检查是否已经是 location_code（在 locationsMap 中作为 key 存在）
+          if (locationsMap.has(detail.delivery_location)) {
+            deliveryLocationCode = detail.delivery_location
+          }
+        }
+      }
 
       return {
         ...detail,
@@ -199,9 +283,15 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
       }
     })
   }
-  // 覆盖数据库中的 weight 值（使用计算出的 container_volume 值）
-  // 注意：schema 中使用 weight 字段存储整柜体积
-  order.weight = containerVolume as any
+  // container_volume 从数据库读取，但如果计算值与数据库值不一致，使用计算值（确保数据一致性）
+  const dbContainerVolume = order.container_volume ? Number(order.container_volume) : 0
+  if (Math.abs(dbContainerVolume - containerVolume) > 0.01) {
+    // 如果差异较大，使用计算值（但不在详情页更新数据库，由 API 处理）
+    ;(order as any).container_volume = containerVolume
+  } else {
+    // 如果差异很小，使用数据库值
+    ;(order as any).container_volume = dbContainerVolume
+  }
 
   // 格式化日期（不包含年份，节省空间）
   const formatDate = (date: Date | null) => {
@@ -291,6 +381,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                 unload_type: detail.unload_type || null,
                 volume_percentage: detail.volume_percentage ? Number(detail.volume_percentage) : null,
                 notes: detail.notes || null,
+                po: detail.po || null, // PO字段
                 order_detail_item_order_detail_item_detail_idToorder_detail: (detail.order_detail_item_order_detail_item_detail_idToorder_detail || []).map((item: any) => ({
                   ...item,
                   id: item.id.toString(),

@@ -39,6 +39,7 @@ interface OrderDetail {
   volume: number | string | null
   container_volume: number | string | null
   estimated_pallets: number | null
+  po: string | null // PO字段
   created_at: string | Date | null
   updated_at: string | Date | null
   created_by: bigint | string | number | null
@@ -63,6 +64,7 @@ export function OrderDetailTable({ orderDetails }: OrderDetailTableProps) {
     setExpandedRows(newExpanded)
   }
 
+  // 格式化数字（千分位）
   const formatNumber = (value: number | null | string) => {
     if (!value && value !== 0) return "-"
     const numValue = typeof value === 'string' 
@@ -70,6 +72,22 @@ export function OrderDetailTable({ orderDetails }: OrderDetailTableProps) {
       : Number(value)
     if (isNaN(numValue)) return "-"
     return numValue.toLocaleString()
+  }
+
+  // 格式化整数（用于板数相关字段）
+  const formatInteger = (value: number | null | string) => {
+    if (!value && value !== 0) return "-"
+    const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
+    if (isNaN(numValue)) return "-"
+    return Math.round(numValue).toLocaleString()
+  }
+
+  // 格式化体积（不加单位，直接显示数字）
+  const formatVolume = (value: number | null | string) => {
+    if (value === null || value === undefined || value === '') return "-"
+    const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
+    if (isNaN(numValue)) return "-"
+    return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   if (!orderDetails || orderDetails.length === 0) {
@@ -89,6 +107,7 @@ export function OrderDetailTable({ orderDetails }: OrderDetailTableProps) {
             <TableHead>体积</TableHead>
             <TableHead>货柜体积</TableHead>
             <TableHead>预估托盘数</TableHead>
+            <TableHead>PO</TableHead>
             <TableHead>创建时间</TableHead>
             <TableHead>更新时间</TableHead>
             <TableHead>创建人ID</TableHead>
@@ -132,9 +151,10 @@ export function OrderDetailTable({ orderDetails }: OrderDetailTableProps) {
                   <TableCell>{detail.order_id ? detail.order_id.toString() : "-"}</TableCell>
                   <TableCell>{detail.detail_id ? detail.detail_id.toString() : "-"}</TableCell>
                   <TableCell>{detail.quantity}</TableCell>
-                  <TableCell>{formatNumber(detail.volume)}</TableCell>
-                  <TableCell>{formatNumber(detail.container_volume)}</TableCell>
-                  <TableCell>{detail.estimated_pallets || "-"}</TableCell>
+                  <TableCell>{formatVolume(detail.volume)}</TableCell>
+                  <TableCell>{formatVolume(detail.container_volume)}</TableCell>
+                  <TableCell>{formatInteger(detail.estimated_pallets)}</TableCell>
+                  <TableCell>{detail.po || "-"}</TableCell>
                   <TableCell>{detail.created_at ? new Date(detail.created_at).toLocaleDateString('zh-CN') : "-"}</TableCell>
                   <TableCell>{detail.updated_at ? new Date(detail.updated_at).toLocaleDateString('zh-CN') : "-"}</TableCell>
                   <TableCell>{detail.created_by ? detail.created_by.toString() : "-"}</TableCell>
@@ -182,7 +202,7 @@ export function OrderDetailTable({ orderDetails }: OrderDetailTableProps) {
                                 <TableCell>{item.sku}</TableCell>
                                 <TableCell>{item.description || "-"}</TableCell>
                                 <TableCell>{formatNumber(item.stock_quantity)}</TableCell>
-                                <TableCell>{formatNumber(item.volume)}</TableCell>
+                                <TableCell>{formatVolume(item.volume)}</TableCell>
                                 <TableCell>
                                   <Badge variant={item.status === 'active' ? 'default' : 'secondary'}>
                                     {item.status || "-"}

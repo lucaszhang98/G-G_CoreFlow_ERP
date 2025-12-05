@@ -9,30 +9,31 @@ datasource db {
 }
 
 model delivery_appointments {
-  appointment_id                                BigInt             @id @default(autoincrement())
-  order_id                                      BigInt?
-  location_id                                   BigInt?
-  origin_location_id                            BigInt?
-  appointment_type                              String?            @db.VarChar(50)
-  requested_start                               DateTime?          @db.Timestamptz(6)
-  requested_end                                 DateTime?          @db.Timestamptz(6)
-  confirmed_start                               DateTime?          @db.Timestamptz(6)
-  confirmed_end                                 DateTime?          @db.Timestamptz(6)
-  status                                        String?            @default("requested") @db.VarChar(50)
-  reference_number                              String?            @db.VarChar(100)
-  delivery_method                               String?            @db.VarChar(50)
-  appointment_account                           String?            @db.VarChar(100)
-  rejected                                      Boolean?           @default(false)
-  notes                                         String?
-  created_at                                    DateTime?          @default(now()) @db.Timestamptz(6)
-  updated_at                                    DateTime?          @default(now()) @db.Timestamptz(6)
-  created_by                                    BigInt?
-  updated_by                                    BigInt?
-  users_delivery_appointments_created_byTousers users?             @relation("delivery_appointments_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  locations                                     locations?         @relation("delivery_appointments_location_idTolocations", fields: [location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
-  locations_delivery_appointments_origin_location_idTolocations locations? @relation("delivery_appointments_origin_location_idTolocations", fields: [origin_location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
-  orders                                        orders?            @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)
-  users_delivery_appointments_updated_byTousers users?             @relation("delivery_appointments_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  appointment_id                                                BigInt                     @id @default(autoincrement())
+  order_id                                                      BigInt?
+  location_id                                                   BigInt?
+  origin_location_id                                            BigInt?
+  appointment_type                                              String?                    @db.VarChar(50)
+  requested_start                                               DateTime?                  @db.Timestamptz(6)
+  requested_end                                                 DateTime?                  @db.Timestamptz(6)
+  confirmed_start                                               DateTime?                  @db.Timestamptz(6)
+  confirmed_end                                                 DateTime?                  @db.Timestamptz(6)
+  status                                                        String?                    @default("requested") @db.VarChar(50)
+  reference_number                                              String?                    @db.VarChar(100)
+  delivery_method                                               String?                    @db.VarChar(50)
+  appointment_account                                           String?                    @db.VarChar(100)
+  rejected                                                      Boolean?                   @default(false)
+  total_pallets                                                 Int                        @default(0) // 预约总板数（累加所有预约明细的estimated_pallets）
+  notes                                                         String?
+  created_at                                                    DateTime?                  @default(now()) @db.Timestamptz(6)
+  updated_at                                                    DateTime?                  @default(now()) @db.Timestamptz(6)
+  created_by                                                    BigInt?
+  updated_by                                                    BigInt?
+  users_delivery_appointments_created_byTousers                 users?                     @relation("delivery_appointments_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  locations                                                     locations?                 @relation("delivery_appointments_location_idTolocations", fields: [location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
+  locations_delivery_appointments_origin_location_idTolocations locations?                 @relation("delivery_appointments_origin_location_idTolocations", fields: [origin_location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
+  orders                                                        orders?                    @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)
+  users_delivery_appointments_updated_byTousers                 users?                     @relation("delivery_appointments_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   appointment_detail_lines                                      appointment_detail_lines[]
   outbound_shipments                                            outbound_shipments?
 
@@ -40,19 +41,20 @@ model delivery_appointments {
 }
 
 model appointment_detail_lines {
-  id                                                          BigInt                    @id @default(autoincrement())
-  appointment_id                                              BigInt                    // 关联到 delivery_appointments.appointment_id
-  order_detail_id                                             BigInt                    // 关联到 order_detail.id
-  estimated_pallets                                            Int                       // 这个预约送了多少板
-  po                                                          String?                   @db.VarChar(200)
-  created_at                                                  DateTime?                 @default(now()) @db.Timestamptz(6)
-  updated_at                                                  DateTime?                 @default(now()) @db.Timestamptz(6)
-  created_by                                                  BigInt?
-  updated_by                                                  BigInt?
-  delivery_appointments                                       delivery_appointments     @relation(fields: [appointment_id], references: [appointment_id], onDelete: Cascade, onUpdate: NoAction)
-  order_detail                                                order_detail              @relation(fields: [order_detail_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  users_appointment_detail_lines_created_byTousers           users?                    @relation("appointment_detail_lines_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_appointment_detail_lines_updated_byTousers           users?                    @relation("appointment_detail_lines_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                                               BigInt                @id @default(autoincrement())
+  appointment_id                                   BigInt // 关联到 delivery_appointments.appointment_id
+  order_detail_id                                  BigInt // 关联到 order_detail.id
+  estimated_pallets                                Int // 这个预约送了多少板
+  total_pallets_at_time                            Int? // 总板数快照（创建/更新时的总板数，用于审计和历史追溯）
+  // po 字段已移除，PO 应该从 order_detail.po 读取
+  created_at                                       DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at                                       DateTime?             @default(now()) @db.Timestamptz(6)
+  created_by                                       BigInt?
+  updated_by                                       BigInt?
+  delivery_appointments                            delivery_appointments @relation(fields: [appointment_id], references: [appointment_id], onDelete: Cascade, onUpdate: NoAction)
+  order_detail                                     order_detail          @relation(fields: [order_detail_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_appointment_detail_lines_created_byTousers users?                @relation("appointment_detail_lines_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_appointment_detail_lines_updated_byTousers users?                @relation("appointment_detail_lines_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([appointment_id, order_detail_id], map: "appointment_detail_lines_unique")
   @@index([appointment_id], map: "idx_appointment_detail_lines_appointment_id")
@@ -261,22 +263,22 @@ model document_links {
 }
 
 model drivers {
-  driver_id                       BigInt               @id @default(autoincrement())
+  driver_id                       BigInt         @id @default(autoincrement())
   carrier_id                      BigInt?
-  driver_code                     String?              @unique @db.VarChar(50)
-  license_number                  String?              @db.VarChar(100)
-  license_expiration              DateTime?            @db.Date
+  driver_code                     String?        @unique @db.VarChar(50)
+  license_number                  String?        @db.VarChar(100)
+  license_expiration              DateTime?      @db.Date
   notes                           String?
-  status                          String?              @default("active") @db.VarChar(50)
-  created_at                      DateTime?            @default(now()) @db.Timestamptz(6)
-  updated_at                      DateTime?            @default(now()) @db.Timestamptz(6)
+  status                          String?        @default("active") @db.VarChar(50)
+  created_at                      DateTime?      @default(now()) @db.Timestamptz(6)
+  updated_at                      DateTime?      @default(now()) @db.Timestamptz(6)
   contact_id                      BigInt?
   created_by                      BigInt?
   updated_by                      BigInt?
-  carriers                        carriers?            @relation(fields: [carrier_id], references: [carrier_id], onDelete: NoAction, onUpdate: NoAction)
-  contact_roles                   contact_roles?       @relation(fields: [contact_id], references: [contact_id], onDelete: NoAction, onUpdate: NoAction)
-  users_drivers_created_byTousers users?               @relation("drivers_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_drivers_updated_byTousers users?               @relation("drivers_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  carriers                        carriers?      @relation(fields: [carrier_id], references: [carrier_id], onDelete: NoAction, onUpdate: NoAction)
+  contact_roles                   contact_roles? @relation(fields: [contact_id], references: [contact_id], onDelete: NoAction, onUpdate: NoAction)
+  users_drivers_created_byTousers users?         @relation("drivers_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_drivers_updated_byTousers users?         @relation("drivers_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@schema("public")
 }
@@ -306,59 +308,59 @@ model events_log {
 }
 
 model locations {
-  location_id                                                              BigInt                  @id @default(autoincrement())
-  location_code                                                            String?                 @unique @db.VarChar(50)
-  name                                                                     String                  @db.VarChar(200)
-  location_type                                                            String                  @db.VarChar(50)
-  address_line1                                                            String?                 @db.VarChar(200)
-  address_line2                                                            String?                 @db.VarChar(200)
-  city                                                                     String?                 @db.VarChar(100)
-  state                                                                    String?                 @db.VarChar(100)
-  postal_code                                                              String?                 @db.VarChar(20)
-  country                                                                  String?                 @db.VarChar(100)
-  timezone                                                                 String?                 @db.VarChar(100)
-  latitude                                                                 Decimal?                @db.Decimal(10, 6)
-  longitude                                                                Decimal?                @db.Decimal(10, 6)
-  notes                                                                    String?
-  created_at                                                               DateTime?               @default(now()) @db.Timestamptz(6)
-  updated_at                                                               DateTime?               @default(now()) @db.Timestamptz(6)
-  created_by                                                               BigInt?
-  updated_by                                                               BigInt?
-  delivery_appointments                                                    delivery_appointments[] @relation("delivery_appointments_location_idTolocations")
+  location_id                                                               BigInt                  @id @default(autoincrement())
+  location_code                                                             String?                 @unique @db.VarChar(50)
+  name                                                                      String                  @db.VarChar(200)
+  location_type                                                             String                  @db.VarChar(50)
+  address_line1                                                             String?                 @db.VarChar(200)
+  address_line2                                                             String?                 @db.VarChar(200)
+  city                                                                      String?                 @db.VarChar(100)
+  state                                                                     String?                 @db.VarChar(100)
+  postal_code                                                               String?                 @db.VarChar(20)
+  country                                                                   String?                 @db.VarChar(100)
+  timezone                                                                  String?                 @db.VarChar(100)
+  latitude                                                                  Decimal?                @db.Decimal(10, 6)
+  longitude                                                                 Decimal?                @db.Decimal(10, 6)
+  notes                                                                     String?
+  created_at                                                                DateTime?               @default(now()) @db.Timestamptz(6)
+  updated_at                                                                DateTime?               @default(now()) @db.Timestamptz(6)
+  created_by                                                                BigInt?
+  updated_by                                                                BigInt?
+  delivery_appointments                                                     delivery_appointments[] @relation("delivery_appointments_location_idTolocations")
   delivery_appointments_delivery_appointments_origin_location_idTolocations delivery_appointments[] @relation("delivery_appointments_origin_location_idTolocations")
-  events_log                                                               events_log[]
-  users_locations_created_byTousers                                        users?                  @relation("locations_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_locations_updated_byTousers                                        users?                  @relation("locations_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  warehouses                                                               warehouses[]
-  container_legs_container_legs_destination_location_idTolocations         container_legs[]        @relation("container_legs_destination_location_idTolocations")
-  container_legs_container_legs_origin_location_idTolocations              container_legs[]        @relation("container_legs_origin_location_idTolocations")
+  events_log                                                                events_log[]
+  users_locations_created_byTousers                                         users?                  @relation("locations_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_locations_updated_byTousers                                         users?                  @relation("locations_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses                                                                warehouses[]
+  container_legs_container_legs_destination_location_idTolocations          container_legs[]        @relation("container_legs_destination_location_idTolocations")
+  container_legs_container_legs_origin_location_idTolocations               container_legs[]        @relation("container_legs_origin_location_idTolocations")
 
   @@schema("public")
 }
 
 model order_detail {
-  id                                                          BigInt                    @id @default(autoincrement())
+  id                                                          BigInt                     @id @default(autoincrement())
   order_id                                                    BigInt?
   detail_id                                                   BigInt?
   quantity                                                    Int
-  created_at                                                  DateTime?                 @default(now()) @db.Timestamptz(6)
-  volume                                                      Decimal?                  @db.Decimal
+  created_at                                                  DateTime?                  @default(now()) @db.Timestamptz(6)
+  volume                                                      Decimal?                   @db.Decimal
   estimated_pallets                                           Int?
-  remaining_pallets                                           Int?                      // 剩余板数（总板数 - 所有预约的预计板数之和）
+  remaining_pallets                                           Int? // 剩余板数（总板数 - 所有预约的预计板数之和）
   created_by                                                  BigInt?
-  updated_at                                                  DateTime?                 @default(now()) @db.Timestamptz(6)
+  updated_at                                                  DateTime?                  @default(now()) @db.Timestamptz(6)
   updated_by                                                  BigInt?
-  delivery_nature                                             String?                   @db.VarChar(50)
-  volume_percentage                                           Decimal?                  @db.Decimal(5, 2)
-  delivery_location                                           String?                   @db.VarChar(200)
-  unload_type                                                 String?                   @db.VarChar(50)
+  delivery_nature                                             String?                    @db.VarChar(50)
+  volume_percentage                                           Decimal?                   @db.Decimal(5, 2)
+  delivery_location                                           String?                    @db.VarChar(200)
+  unload_type                                                 String?                    @db.VarChar(50)
   notes                                                       String?
-  po                                                          String?                   @db.VarChar(200)
-  users_order_detail_created_byTousers                        users?                    @relation("order_detail_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  order_detail_item_order_detail_detail_idToorder_detail_item order_detail_item?        @relation("order_detail_detail_idToorder_detail_item", fields: [detail_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  orders                                                      orders?                   @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)
-  users_order_detail_updated_byTousers                        users?                    @relation("order_detail_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  order_detail_item_order_detail_item_detail_idToorder_detail order_detail_item[]       @relation("order_detail_item_detail_idToorder_detail")
+  po                                                          String?                    @db.VarChar(200)
+  users_order_detail_created_byTousers                        users?                     @relation("order_detail_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_detail_item_order_detail_detail_idToorder_detail_item order_detail_item?         @relation("order_detail_detail_idToorder_detail_item", fields: [detail_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders                                                      orders?                    @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)
+  users_order_detail_updated_byTousers                        users?                     @relation("order_detail_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_detail_item_order_detail_item_detail_idToorder_detail order_detail_item[]        @relation("order_detail_item_detail_idToorder_detail")
   inventory_lots                                              inventory_lots[]
   outbound_shipment_lines                                     outbound_shipment_lines[]
   appointment_detail_lines                                    appointment_detail_lines[]
@@ -413,7 +415,7 @@ model orders {
   ready_date                     DateTime?                 @db.Date
   return_deadline                DateTime?                 @db.Date
   container_type                 String?                   @db.VarChar(50)
-  weight                         Decimal?                  @db.Decimal(10, 2)
+  container_volume               Decimal?                  @default(0) @db.Decimal(12, 2)
   mbl_number                     String?                   @db.VarChar(100)
   do_issued                      Boolean?                  @default(false)
   warehouse_account              String?                   @db.VarChar(100)
@@ -421,7 +423,6 @@ model orders {
   operation_mode                 String?                   @db.VarChar(50)
   delivery_location              String?                   @db.VarChar(200)
   carrier_id                     BigInt?
-  container_number               String?                   @db.VarChar(100)
   appointment_time               DateTime?                 @db.Timestamptz(6)
   delivery_appointments          delivery_appointments[]
   order_allocations              order_allocations[]
@@ -498,89 +499,89 @@ model unload_methods {
 }
 
 model users {
-  id                                                                BigInt                    @id @default(autoincrement())
-  username                                                          String                    @unique @db.VarChar(50)
-  email                                                             String                    @unique @db.VarChar(100)
-  password_hash                                                     String                    @db.VarChar(255)
-  full_name                                                         String?                   @db.VarChar(100)
-  department_id                                                     BigInt?
-  role                                                              String?                   @default("employee") @db.VarChar(50)
-  status                                                            String?                   @default("active") @db.VarChar(20)
-  phone                                                             String?                   @db.VarChar(20)
-  avatar_url                                                        String?
-  created_at                                                        DateTime?                 @default(now()) @db.Timestamptz(6)
-  updated_at                                                        DateTime?                 @default(now()) @db.Timestamptz(6)
-  created_by                                                        BigInt?
-  updated_by                                                        BigInt?
-  delivery_appointments_delivery_appointments_created_byTousers     delivery_appointments[]   @relation("delivery_appointments_created_byTousers")
-  delivery_appointments_delivery_appointments_updated_byTousers     delivery_appointments[]   @relation("delivery_appointments_updated_byTousers")
-  order_allocations_order_allocations_created_byTousers             order_allocations[]       @relation("order_allocations_created_byTousers")
-  order_allocations_order_allocations_updated_byTousers             order_allocations[]       @relation("order_allocations_updated_byTousers")
-  order_requirements_order_requirements_created_byTousers           order_requirements[]      @relation("order_requirements_created_byTousers")
-  order_requirements_order_requirements_updated_byTousers           order_requirements[]      @relation("order_requirements_updated_byTousers")
-  carrier_service_levels_carrier_service_levels_created_byTousers   carrier_service_levels[]  @relation("carrier_service_levels_created_byTousers")
-  carrier_service_levels_carrier_service_levels_updated_byTousers   carrier_service_levels[]  @relation("carrier_service_levels_updated_byTousers")
-  carriers_carriers_created_byTousers                               carriers[]                @relation("carriers_created_byTousers")
-  carriers_carriers_updated_byTousers                               carriers[]                @relation("carriers_updated_byTousers")
-  contact_roles_contact_roles_created_byTousers                     contact_roles[]           @relation("contact_roles_created_byTousers")
-  contact_roles_contact_roles_updated_byTousers                     contact_roles[]           @relation("contact_roles_updated_byTousers")
-  customers_customers_created_byTousers                             customers[]               @relation("customers_created_byTousers")
-  customers_customers_updated_byTousers                             customers[]               @relation("customers_updated_byTousers")
-  delivery_status_codes_delivery_status_codes_created_byTousers     delivery_status_codes[]   @relation("delivery_status_codes_created_byTousers")
-  delivery_status_codes_delivery_status_codes_updated_byTousers     delivery_status_codes[]   @relation("delivery_status_codes_updated_byTousers")
-  departments_departments_created_byTousers                         departments[]             @relation("departments_created_byTousers")
-  departments_departments_updated_byTousers                         departments[]             @relation("departments_updated_byTousers")
-  document_links_document_links_created_byTousers                   document_links[]          @relation("document_links_created_byTousers")
-  document_links_document_links_updated_byTousers                   document_links[]          @relation("document_links_updated_byTousers")
-  document_links_document_links_uploaded_byTousers                  document_links[]          @relation("document_links_uploaded_byTousers")
-  drivers_drivers_created_byTousers                                 drivers[]                 @relation("drivers_created_byTousers")
-  drivers_drivers_updated_byTousers                                 drivers[]                 @relation("drivers_updated_byTousers")
-  events_log_events_log_created_byTousers                           events_log[]              @relation("events_log_created_byTousers")
-  events_log_events_log_updated_byTousers                           events_log[]              @relation("events_log_updated_byTousers")
-  locations_locations_created_byTousers                             locations[]               @relation("locations_created_byTousers")
-  locations_locations_updated_byTousers                             locations[]               @relation("locations_updated_byTousers")
-  order_detail_order_detail_created_byTousers                       order_detail[]            @relation("order_detail_created_byTousers")
-  order_detail_order_detail_updated_byTousers                       order_detail[]            @relation("order_detail_updated_byTousers")
-  order_detail_item_order_detail_item_created_byTousers             order_detail_item[]       @relation("order_detail_item_created_byTousers")
-  order_detail_item_order_detail_item_updated_byTousers             order_detail_item[]       @relation("order_detail_item_updated_byTousers")
-  orders_orders_created_byTousers                                   orders[]                  @relation("orders_created_byTousers")
-  orders_orders_updated_byTousers                                   orders[]                  @relation("orders_updated_byTousers")
-  orders_orders_user_idTousers                                      orders[]                  @relation("orders_user_idTousers")
-  trailers_trailers_created_byTousers                               trailers[]                @relation("trailers_created_byTousers")
-  trailers_trailers_updated_byTousers                               trailers[]                @relation("trailers_updated_byTousers")
-  unload_methods_unload_methods_created_byTousers                   unload_methods[]          @relation("unload_methods_created_byTousers")
-  unload_methods_unload_methods_updated_byTousers                   unload_methods[]          @relation("unload_methods_updated_byTousers")
-  users_users_created_byTousers                                     users?                    @relation("users_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  other_users_users_created_byTousers                               users[]                   @relation("users_created_byTousers")
-  departments_users_department_idTodepartments                      departments?              @relation("users_department_idTodepartments", fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_users_updated_byTousers                                     users?                    @relation("users_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  other_users_users_updated_byTousers                               users[]                   @relation("users_updated_byTousers")
-  vehicles_vehicles_created_byTousers                               vehicles[]                @relation("vehicles_created_byTousers")
-  vehicles_vehicles_updated_byTousers                               vehicles[]                @relation("vehicles_updated_byTousers")
-  warehouses_warehouses_contact_user_idTousers                      warehouses[]              @relation("warehouses_contact_user_idTousers")
-  warehouses_warehouses_created_byTousers                           warehouses[]              @relation("warehouses_created_byTousers")
-  warehouses_warehouses_updated_byTousers                           warehouses[]              @relation("warehouses_updated_byTousers")
-  container_legs_container_legs_created_byTousers                   container_legs[]          @relation("container_legs_created_byTousers")
-  container_legs_container_legs_updated_byTousers                   container_legs[]          @relation("container_legs_updated_byTousers")
-  containers_containers_created_byTousers                           containers[]              @relation("containers_created_byTousers")
-  containers_containers_updated_byTousers                           containers[]              @relation("containers_updated_byTousers")
-  freight_bills_freight_bills_created_byTousers                     freight_bills[]           @relation("freight_bills_created_byTousers")
-  freight_bills_freight_bills_updated_byTousers                     freight_bills[]           @relation("freight_bills_updated_byTousers")
-  inbound_receipt_inbound_receipt_created_byTousers                 inbound_receipt[]         @relation("inbound_receipt_created_byTousers")
-  inbound_receipt_inbound_receipt_received_byTousers                inbound_receipt[]         @relation("inbound_receipt_received_byTousers")
-  inbound_receipt_inbound_receipt_updated_byTousers                 inbound_receipt[]         @relation("inbound_receipt_updated_byTousers")
-  inventory_lots_inventory_lots_created_byTousers                   inventory_lots[]          @relation("inventory_lots_created_byTousers")
-  inventory_lots_inventory_lots_updated_byTousers                   inventory_lots[]          @relation("inventory_lots_updated_byTousers")
-  outbound_shipment_lines_outbound_shipment_lines_created_byTousers outbound_shipment_lines[] @relation("outbound_shipment_lines_created_byTousers")
-  outbound_shipment_lines_outbound_shipment_lines_updated_byTousers outbound_shipment_lines[] @relation("outbound_shipment_lines_updated_byTousers")
+  id                                                                  BigInt                     @id @default(autoincrement())
+  username                                                            String                     @unique @db.VarChar(50)
+  email                                                               String                     @unique @db.VarChar(100)
+  password_hash                                                       String                     @db.VarChar(255)
+  full_name                                                           String?                    @db.VarChar(100)
+  department_id                                                       BigInt?
+  role                                                                String?                    @default("employee") @db.VarChar(50)
+  status                                                              String?                    @default("active") @db.VarChar(20)
+  phone                                                               String?                    @db.VarChar(20)
+  avatar_url                                                          String?
+  created_at                                                          DateTime?                  @default(now()) @db.Timestamptz(6)
+  updated_at                                                          DateTime?                  @default(now()) @db.Timestamptz(6)
+  created_by                                                          BigInt?
+  updated_by                                                          BigInt?
+  delivery_appointments_delivery_appointments_created_byTousers       delivery_appointments[]    @relation("delivery_appointments_created_byTousers")
+  delivery_appointments_delivery_appointments_updated_byTousers       delivery_appointments[]    @relation("delivery_appointments_updated_byTousers")
+  order_allocations_order_allocations_created_byTousers               order_allocations[]        @relation("order_allocations_created_byTousers")
+  order_allocations_order_allocations_updated_byTousers               order_allocations[]        @relation("order_allocations_updated_byTousers")
+  order_requirements_order_requirements_created_byTousers             order_requirements[]       @relation("order_requirements_created_byTousers")
+  order_requirements_order_requirements_updated_byTousers             order_requirements[]       @relation("order_requirements_updated_byTousers")
+  carrier_service_levels_carrier_service_levels_created_byTousers     carrier_service_levels[]   @relation("carrier_service_levels_created_byTousers")
+  carrier_service_levels_carrier_service_levels_updated_byTousers     carrier_service_levels[]   @relation("carrier_service_levels_updated_byTousers")
+  carriers_carriers_created_byTousers                                 carriers[]                 @relation("carriers_created_byTousers")
+  carriers_carriers_updated_byTousers                                 carriers[]                 @relation("carriers_updated_byTousers")
+  contact_roles_contact_roles_created_byTousers                       contact_roles[]            @relation("contact_roles_created_byTousers")
+  contact_roles_contact_roles_updated_byTousers                       contact_roles[]            @relation("contact_roles_updated_byTousers")
+  customers_customers_created_byTousers                               customers[]                @relation("customers_created_byTousers")
+  customers_customers_updated_byTousers                               customers[]                @relation("customers_updated_byTousers")
+  delivery_status_codes_delivery_status_codes_created_byTousers       delivery_status_codes[]    @relation("delivery_status_codes_created_byTousers")
+  delivery_status_codes_delivery_status_codes_updated_byTousers       delivery_status_codes[]    @relation("delivery_status_codes_updated_byTousers")
+  departments_departments_created_byTousers                           departments[]              @relation("departments_created_byTousers")
+  departments_departments_updated_byTousers                           departments[]              @relation("departments_updated_byTousers")
+  document_links_document_links_created_byTousers                     document_links[]           @relation("document_links_created_byTousers")
+  document_links_document_links_updated_byTousers                     document_links[]           @relation("document_links_updated_byTousers")
+  document_links_document_links_uploaded_byTousers                    document_links[]           @relation("document_links_uploaded_byTousers")
+  drivers_drivers_created_byTousers                                   drivers[]                  @relation("drivers_created_byTousers")
+  drivers_drivers_updated_byTousers                                   drivers[]                  @relation("drivers_updated_byTousers")
+  events_log_events_log_created_byTousers                             events_log[]               @relation("events_log_created_byTousers")
+  events_log_events_log_updated_byTousers                             events_log[]               @relation("events_log_updated_byTousers")
+  locations_locations_created_byTousers                               locations[]                @relation("locations_created_byTousers")
+  locations_locations_updated_byTousers                               locations[]                @relation("locations_updated_byTousers")
+  order_detail_order_detail_created_byTousers                         order_detail[]             @relation("order_detail_created_byTousers")
+  order_detail_order_detail_updated_byTousers                         order_detail[]             @relation("order_detail_updated_byTousers")
+  order_detail_item_order_detail_item_created_byTousers               order_detail_item[]        @relation("order_detail_item_created_byTousers")
+  order_detail_item_order_detail_item_updated_byTousers               order_detail_item[]        @relation("order_detail_item_updated_byTousers")
+  orders_orders_created_byTousers                                     orders[]                   @relation("orders_created_byTousers")
+  orders_orders_updated_byTousers                                     orders[]                   @relation("orders_updated_byTousers")
+  orders_orders_user_idTousers                                        orders[]                   @relation("orders_user_idTousers")
+  trailers_trailers_created_byTousers                                 trailers[]                 @relation("trailers_created_byTousers")
+  trailers_trailers_updated_byTousers                                 trailers[]                 @relation("trailers_updated_byTousers")
+  unload_methods_unload_methods_created_byTousers                     unload_methods[]           @relation("unload_methods_created_byTousers")
+  unload_methods_unload_methods_updated_byTousers                     unload_methods[]           @relation("unload_methods_updated_byTousers")
+  users_users_created_byTousers                                       users?                     @relation("users_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_users_users_created_byTousers                                 users[]                    @relation("users_created_byTousers")
+  departments_users_department_idTodepartments                        departments?               @relation("users_department_idTodepartments", fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_users_updated_byTousers                                       users?                     @relation("users_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_users_users_updated_byTousers                                 users[]                    @relation("users_updated_byTousers")
+  vehicles_vehicles_created_byTousers                                 vehicles[]                 @relation("vehicles_created_byTousers")
+  vehicles_vehicles_updated_byTousers                                 vehicles[]                 @relation("vehicles_updated_byTousers")
+  warehouses_warehouses_contact_user_idTousers                        warehouses[]               @relation("warehouses_contact_user_idTousers")
+  warehouses_warehouses_created_byTousers                             warehouses[]               @relation("warehouses_created_byTousers")
+  warehouses_warehouses_updated_byTousers                             warehouses[]               @relation("warehouses_updated_byTousers")
+  container_legs_container_legs_created_byTousers                     container_legs[]           @relation("container_legs_created_byTousers")
+  container_legs_container_legs_updated_byTousers                     container_legs[]           @relation("container_legs_updated_byTousers")
+  containers_containers_created_byTousers                             containers[]               @relation("containers_created_byTousers")
+  containers_containers_updated_byTousers                             containers[]               @relation("containers_updated_byTousers")
+  freight_bills_freight_bills_created_byTousers                       freight_bills[]            @relation("freight_bills_created_byTousers")
+  freight_bills_freight_bills_updated_byTousers                       freight_bills[]            @relation("freight_bills_updated_byTousers")
+  inbound_receipt_inbound_receipt_created_byTousers                   inbound_receipt[]          @relation("inbound_receipt_created_byTousers")
+  inbound_receipt_inbound_receipt_received_byTousers                  inbound_receipt[]          @relation("inbound_receipt_received_byTousers")
+  inbound_receipt_inbound_receipt_updated_byTousers                   inbound_receipt[]          @relation("inbound_receipt_updated_byTousers")
+  inventory_lots_inventory_lots_created_byTousers                     inventory_lots[]           @relation("inventory_lots_created_byTousers")
+  inventory_lots_inventory_lots_updated_byTousers                     inventory_lots[]           @relation("inventory_lots_updated_byTousers")
+  outbound_shipment_lines_outbound_shipment_lines_created_byTousers   outbound_shipment_lines[]  @relation("outbound_shipment_lines_created_byTousers")
+  outbound_shipment_lines_outbound_shipment_lines_updated_byTousers   outbound_shipment_lines[]  @relation("outbound_shipment_lines_updated_byTousers")
   appointment_detail_lines_appointment_detail_lines_created_byTousers appointment_detail_lines[] @relation("appointment_detail_lines_created_byTousers")
   appointment_detail_lines_appointment_detail_lines_updated_byTousers appointment_detail_lines[] @relation("appointment_detail_lines_updated_byTousers")
-  outbound_shipments_outbound_shipments_created_byTousers           outbound_shipments[]      @relation("outbound_shipments_created_byTousers")
-  outbound_shipments_outbound_shipments_loaded_byTousers            outbound_shipments[]      @relation("outbound_shipments_loaded_byTousers")
-  outbound_shipments_outbound_shipments_updated_byTousers           outbound_shipments[]      @relation("outbound_shipments_updated_byTousers")
-  wms_labor_logs_wms_labor_logs_created_byTousers                   wms_labor_logs[]          @relation("wms_labor_logs_created_byTousers")
-  wms_labor_logs_wms_labor_logs_updated_byTousers                   wms_labor_logs[]          @relation("wms_labor_logs_updated_byTousers")
-  wms_labor_logs_wms_labor_logs_user_idTousers                      wms_labor_logs[]          @relation("wms_labor_logs_user_idTousers")
+  outbound_shipments_outbound_shipments_created_byTousers             outbound_shipments[]       @relation("outbound_shipments_created_byTousers")
+  outbound_shipments_outbound_shipments_loaded_byTousers              outbound_shipments[]       @relation("outbound_shipments_loaded_byTousers")
+  outbound_shipments_outbound_shipments_updated_byTousers             outbound_shipments[]       @relation("outbound_shipments_updated_byTousers")
+  wms_labor_logs_wms_labor_logs_created_byTousers                     wms_labor_logs[]           @relation("wms_labor_logs_created_byTousers")
+  wms_labor_logs_wms_labor_logs_updated_byTousers                     wms_labor_logs[]           @relation("wms_labor_logs_updated_byTousers")
+  wms_labor_logs_wms_labor_logs_user_idTousers                        wms_labor_logs[]           @relation("wms_labor_logs_user_idTousers")
 
   @@index([department_id], map: "idx_users_department")
   @@index([email], map: "idx_users_email")
@@ -759,7 +760,6 @@ model inventory_lots {
   pallet_count                           Int              @default(1)
   remaining_pallet_count                 Int?             @default(0)
   unbooked_pallet_count                  Int?             @default(0)
-  unload_transfer_notes                  String?
   delivery_progress                      Decimal?         @db.Decimal(5, 2)
   users_inventory_lots_created_byTousers users?           @relation("inventory_lots_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   inbound_receipt                        inbound_receipt? @relation(fields: [inbound_receipt_id], references: [inbound_receipt_id], onDelete: NoAction, onUpdate: NoAction)
@@ -820,7 +820,7 @@ model outbound_shipments {
   trailers                                                                 trailers?                 @relation(fields: [trailer_id], references: [trailer_id], onDelete: NoAction, onUpdate: NoAction)
   users_outbound_shipments_updated_byTousers                               users?                    @relation("outbound_shipments_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   warehouses                                                               warehouses                @relation(fields: [warehouse_id], references: [warehouse_id], onDelete: NoAction, onUpdate: NoAction)
-  delivery_appointments                                                     delivery_appointments?    @relation(fields: [appointment_id], references: [appointment_id], onDelete: Cascade, onUpdate: NoAction)
+  delivery_appointments                                                    delivery_appointments?    @relation(fields: [appointment_id], references: [appointment_id], onDelete: Cascade, onUpdate: NoAction)
 
   @@schema("wms")
 }

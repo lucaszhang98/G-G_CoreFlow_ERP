@@ -11,9 +11,10 @@ export function DeliveryAppointmentTable() {
   const router = useRouter()
   const [refreshKey, setRefreshKey] = React.useState(0)
 
-  // 隐藏查看详情按钮
+  // 隐藏查看详情按钮，但保留删除功能
   const customActions = React.useMemo(() => ({
-    onView: undefined, // 隐藏查看详情按钮
+    onView: null as any, // 设置为 null 以隐藏查看详情按钮（undefined 会使用默认的 handleView）
+    // onDelete 不设置，使用配置中的默认删除功能（单个删除）
   }), [])
 
   const handleRefresh = React.useCallback(() => {
@@ -28,8 +29,8 @@ export function DeliveryAppointmentTable() {
       orderNumber: true,
       location: true,
       locationType: true,
-      totalVolume: true,
-      totalPallets: true,
+      // totalVolume: false, // 总方数不需要显示
+      // totalPallets: false, // 总板数不需要显示
       estimatedPallets: true,
       po: true,
     },

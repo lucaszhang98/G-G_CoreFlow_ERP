@@ -94,28 +94,32 @@ export function InlineEditCell({
     case 'email':
     case 'phone':
       return (
-        <Input
-          type={fieldConfig.type === 'email' ? 'email' : fieldConfig.type === 'phone' ? 'tel' : 'text'}
-          value={internalValue || ''}
-          onChange={(e) => handleInternalChange(e.target.value)}
-          onBlur={handleBlur}
-          placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-          className={cn("h-8 text-sm", className)}
-        />
+        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <Input
+            type={fieldConfig.type === 'email' ? 'email' : fieldConfig.type === 'phone' ? 'tel' : 'text'}
+            value={internalValue || ''}
+            onChange={(e) => handleInternalChange(e.target.value)}
+            onBlur={handleBlur}
+            placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
+            className={cn("h-8 text-sm", className)}
+          />
+        </div>
       )
 
     case 'number':
     case 'currency':
       return (
-        <Input
-          type="number"
-          step={fieldConfig.type === 'currency' ? '0.01' : '1'}
-          value={internalValue || ''}
-          onChange={(e) => handleInternalChange(e.target.value ? Number(e.target.value) : '')}
-          onBlur={handleBlur}
-          placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-          className={cn("h-8 text-sm", className)}
-        />
+        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <Input
+            type="number"
+            step={fieldConfig.type === 'currency' ? '0.01' : '1'}
+            value={internalValue || ''}
+            onChange={(e) => handleInternalChange(e.target.value ? Number(e.target.value) : '')}
+            onBlur={handleBlur}
+            placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
+            className={cn("h-8 text-sm", className)}
+          />
+        </div>
       )
 
     case 'date':
@@ -128,13 +132,15 @@ export function InlineEditCell({
           : internalValue)
         : ''
       return (
-        <Input
-          type="date"
-          value={dateValue}
-          onChange={(e) => handleInternalChange(e.target.value || null)}
-          onBlur={handleBlur}
-          className={cn("h-8 text-sm", className)}
-        />
+        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <Input
+            type="date"
+            value={dateValue}
+            onChange={(e) => handleInternalChange(e.target.value || null)}
+            onBlur={handleBlur}
+            className={cn("h-8 text-sm", className)}
+          />
+        </div>
       )
 
     case 'datetime': {
@@ -157,13 +163,15 @@ export function InlineEditCell({
         }
       }
       return (
-        <Input
-          type="datetime-local"
-          value={datetimeValue}
-          onChange={(e) => handleInternalChange(e.target.value || null)}
-          onBlur={handleBlur}
-          className={cn("h-8 text-sm", className)}
-        />
+        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <Input
+            type="datetime-local"
+            value={datetimeValue}
+            onChange={(e) => handleInternalChange(e.target.value || null)}
+            onBlur={handleBlur}
+            className={cn("h-8 text-sm", className)}
+          />
+        </div>
       )
     }
 
@@ -175,41 +183,45 @@ export function InlineEditCell({
         break
       }
       return (
-        <Select
-          value={internalValue || ''}
-          onValueChange={(val) => {
-            handleInternalChange(val || null)
-            // Select 组件在值改变时立即同步到外部
-            onChange(val || null)
-          }}
-          disabled={loadingOptions}
-        >
-          <SelectTrigger className={cn("h-8 text-sm", className)}>
-            <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
-          </SelectTrigger>
-          <SelectContent>
-            {selectOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <Select
+            value={internalValue || ''}
+            onValueChange={(val) => {
+              handleInternalChange(val || null)
+              // Select 组件在值改变时立即同步到外部
+              onChange(val || null)
+            }}
+            disabled={loadingOptions}
+          >
+            <SelectTrigger className={cn("h-8 text-sm", className)}>
+              <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
+            </SelectTrigger>
+            <SelectContent>
+              {selectOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       )
 
     case 'textarea':
       return (
-        <textarea
-          value={internalValue || ''}
-          onChange={(e) => handleInternalChange(e.target.value)}
-          onBlur={handleBlur}
-          placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-          className={cn(
-            "flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-            className
-          )}
-          rows={2}
-        />
+        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <textarea
+            value={internalValue || ''}
+            onChange={(e) => handleInternalChange(e.target.value)}
+            onBlur={handleBlur}
+            placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
+            className={cn(
+              "flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+              className
+            )}
+            rows={2}
+          />
+        </div>
       )
 
     case 'boolean':
@@ -218,40 +230,26 @@ export function InlineEditCell({
         ? internalValue 
         : (internalValue === true || internalValue === 'true' || internalValue === 1 || internalValue === '1')
       return (
-        <input
-          type="checkbox"
-          checked={boolValue}
-          onChange={(e) => {
-            const newValue = e.target.checked
-            handleInternalChange(newValue)
-            // Checkbox 立即同步到外部
-            onChange(newValue)
-          }}
-          className={cn("h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary", className)}
-        />
+        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <input
+            type="checkbox"
+            checked={boolValue}
+            onChange={(e) => {
+              const newValue = e.target.checked
+              handleInternalChange(newValue)
+              // Checkbox 立即同步到外部
+              onChange(newValue)
+            }}
+            className={cn("h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary", className)}
+          />
+        </div>
       )
 
     case 'location':
       // 位置选择字段（使用 LocationSelect 组件 - 框架级复用组件）
       // 注意：不传递className来改变核心样式，保持统一的白色样式
       return (
-        <LocationSelect
-          value={internalValue || null}
-          onChange={(val) => {
-            handleInternalChange(val)
-            onChange(val) // 立即同步到外部
-          }}
-          onBlur={handleBlur}
-          placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
-          className={className} // 只传递外部className，不覆盖核心样式
-        />
-      )
-
-    case 'relation':
-      // 处理 locations 关联字段（使用 LocationSelect 组件 - 框架级复用组件）
-      // 注意：不传递className来改变核心样式，保持统一的白色样式
-      if (fieldConfig.relation?.model === 'locations') {
-        return (
+        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
           <LocationSelect
             value={internalValue || null}
             onChange={(val) => {
@@ -262,6 +260,26 @@ export function InlineEditCell({
             placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
             className={className} // 只传递外部className，不覆盖核心样式
           />
+        </div>
+      )
+
+    case 'relation':
+      // 处理 locations 关联字段（使用 LocationSelect 组件 - 框架级复用组件）
+      // 注意：不传递className来改变核心样式，保持统一的白色样式
+      if (fieldConfig.relation?.model === 'locations') {
+        return (
+          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+            <LocationSelect
+              value={internalValue || null}
+              onChange={(val) => {
+                handleInternalChange(val)
+                onChange(val) // 立即同步到外部
+              }}
+              onBlur={handleBlur}
+              placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
+              className={className} // 只传递外部className，不覆盖核心样式
+            />
+          </div>
         )
       }
       // 其他关联字段：如果有 loadOptions，使用下拉框
@@ -284,29 +302,31 @@ export function InlineEditCell({
         }, [loadOptions, fieldKey, selectOptions.length, loadingOptions])
         
         return (
-          <Select
-            value={internalValue || ''}
-            onValueChange={(val) => {
-              handleInternalChange(val || null)
-              onChange(val || null) // 立即同步到外部
-            }}
-            disabled={loadingOptions}
-          >
-            <SelectTrigger className={cn("h-8 text-sm", className)}>
-              <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
-            </SelectTrigger>
-            <SelectContent>
-              {selectOptions.length === 0 && !loadingOptions ? (
-                <SelectItem value="" disabled>暂无选项</SelectItem>
-              ) : (
-                selectOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+            <Select
+              value={internalValue || ''}
+              onValueChange={(val) => {
+                handleInternalChange(val || null)
+                onChange(val || null) // 立即同步到外部
+              }}
+              disabled={loadingOptions}
+            >
+              <SelectTrigger className={cn("h-8 text-sm", className)}>
+                <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
+              </SelectTrigger>
+              <SelectContent>
+                {selectOptions.length === 0 && !loadingOptions ? (
+                  <SelectItem value="" disabled>暂无选项</SelectItem>
+                ) : (
+                  selectOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
         )
       }
       // 如果没有 loadOptions，使用默认处理
@@ -315,14 +335,16 @@ export function InlineEditCell({
     default:
       // 默认显示为文本输入
       return (
-        <Input
-          type="text"
-          value={internalValue?.toString() || ''}
-          onChange={(e) => handleInternalChange(e.target.value)}
-          onBlur={handleBlur}
-          placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-          className={cn("h-8 text-sm", className)}
-        />
+        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <Input
+            type="text"
+            value={internalValue?.toString() || ''}
+            onChange={(e) => handleInternalChange(e.target.value)}
+            onBlur={handleBlur}
+            placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
+            className={cn("h-8 text-sm", className)}
+          />
+        </div>
       )
   }
 }

@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: {
-        volume_percentage: 'desc', // 按分仓占总柜比降序排列
+        volume_percentage: 'desc', // 按分仓占比降序排列
       },
     })
 
@@ -126,13 +126,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { order_id, quantity, volume, delivery_nature, delivery_location, unload_type, notes, po } = body
+    const { order_id, quantity, volume, delivery_nature, delivery_location, unload_type, notes, po, estimated_pallets } = body
 
-    // 计算预计板数：体积除以2后四舍五入
+    // 计算预计板数：如果用户没有输入，则根据体积除以2后四舍五入
     const volumeNum = volume ? parseFloat(volume) : 0
-    const calculatedEstimatedPallets = volumeNum > 0 ? Math.round(volumeNum / 2) : null
+    const calculatedEstimatedPallets = estimated_pallets !== undefined && estimated_pallets !== null 
+      ? parseInt(estimated_pallets) 
+      : (volumeNum > 0 ? Math.round(volumeNum / 2) : null)
 
-    // 计算分仓占总柜比：需要先获取订单的总体积
+    // 计算分仓占比：需要先获取订单的总体积
     const order = await prisma.orders.findUnique({
       where: { order_id: BigInt(order_id) },
       include: {
@@ -167,6 +169,45 @@ export async function POST(request: NextRequest) {
         updated_by: session.user.id ? BigInt(session.user.id) : null,
       },
     })
+
+    // 创建明细后，重新计算该订单所有明细的分仓占比，并更新订单的 container_volume
+    const updatedOrder = await prisma.orders.findUnique({
+      where: { order_id: BigInt(order_id) },
+      select: {
+        order_id: true,
+        order_detail: {
+          select: { id: true, volume: true },
+        },
+      },
+    })
+
+    if (updatedOrder?.order_detail) {
+      // 计算总体积
+      const totalVolume = updatedOrder.order_detail.reduce((sum: number, detail: any) => {
+        const vol = detail.volume ? Number(detail.volume) : 0
+        return sum + vol
+      }, 0)
+
+      // 更新所有明细的 volume_percentage
+      if (totalVolume > 0) {
+        await Promise.all(
+          updatedOrder.order_detail.map((detail: any) => {
+            const vol = detail.volume ? Number(detail.volume) : 0
+            const percentage = vol > 0 ? parseFloat(((vol / totalVolume) * 100).toFixed(2)) : null
+            return prisma.order_detail.update({
+              where: { id: detail.id },
+              data: { volume_percentage: percentage },
+            })
+          })
+        )
+      }
+      
+      // 更新订单的 container_volume
+      await prisma.orders.update({
+        where: { order_id: BigInt(order_id) },
+        data: { container_volume: totalVolume },
+      })
+    }
 
     return NextResponse.json(
       { data: serializeBigInt(orderDetail) },

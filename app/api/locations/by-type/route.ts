@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type');
+    const search = searchParams.get('search') || '';
 
     if (!type) {
       return NextResponse.json(
@@ -28,14 +29,24 @@ export async function GET(request: NextRequest) {
       location_type: type,
     };
 
+    // 如果有搜索条件，进行模糊搜索
+    if (search && search.trim()) {
+      where.OR = [
+        { location_code: { contains: search.trim(), mode: 'insensitive' as const } },
+        { name: { contains: search.trim(), mode: 'insensitive' as const } },
+      ];
+    }
+
     // 查询数据
+    // 如果有搜索条件，返回所有匹配结果；否则限制返回前5000条
+    const takeLimit = search && search.trim() ? 50000 : 5000;
     const items = await prisma.locations.findMany({
       where,
       orderBy: [
         { location_code: 'asc' },
         { name: 'asc' },
       ],
-      take: 1000, // 限制最大数量
+      take: takeLimit,
     });
 
     // 序列化

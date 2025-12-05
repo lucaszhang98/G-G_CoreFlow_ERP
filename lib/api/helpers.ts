@@ -107,9 +107,17 @@ export async function checkPermission(allowedRoles: string[]) {
 /**
  * 解析分页参数
  */
-export function parsePaginationParams(searchParams: URLSearchParams, defaultSort: string = 'code', defaultOrder: 'asc' | 'desc' = 'asc') {
+export function parsePaginationParams(searchParams: URLSearchParams, defaultSort: string = 'code', defaultOrder: 'asc' | 'desc' = 'asc', maxLimit: number = 100) {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '10', 10)));
+  // 支持 unlimited=true 或 limit=0 表示无限制（用于主数据搜索）
+  const unlimited = searchParams.get('unlimited') === 'true' || searchParams.get('limit') === '0';
+  let limit: number;
+  if (unlimited) {
+    // 无限制时使用一个非常大的数字（但不超过数据库限制）
+    limit = 50000;
+  } else {
+    limit = Math.min(maxLimit, Math.max(1, parseInt(searchParams.get('limit') || '10', 10)));
+  }
   const sort = searchParams.get('sort') || defaultSort;
   const order = searchParams.get('order') === 'asc' ? 'asc' : (searchParams.get('order') === 'desc' ? 'desc' : defaultOrder);
 

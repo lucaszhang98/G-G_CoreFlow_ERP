@@ -16,8 +16,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
 
     // 构建查询条件：只显示非直送的预约
-    // 从 outbound_shipments 查询，关联 delivery_appointments
-    // 由于只有非直送的预约才会在 outbound_shipments 表中创建记录，所以直接查询即可
+    // 直接从 delivery_appointments 查询非直送的预约，然后关联 outbound_shipments
+    // 这样即使 outbound_shipments 记录不存在，也能显示所有非直送预约
     const where: any = {
       delivery_appointments: {
         delivery_method: {
@@ -60,61 +60,80 @@ export async function GET(request: NextRequest) {
       orderBy[sort] = order;
     }
 
-    // 查询 outbound_shipments（只显示非直送的预约）
-    let shipments: any[] = [];
+    // 查询所有非直送的预约，然后关联 outbound_shipments
+    // 这样即使 outbound_shipments 记录不存在，也能显示所有非直送预约
+    let appointments: any[] = [];
     let total = 0;
     
+    // 先查询所有非直送的预约
+    const appointmentWhere: any = {
+      delivery_method: {
+        not: '直送',
+      },
+    };
+    
+    // 搜索条件
+    if (search) {
+      const searchConditions: any[] = [
+        { reference_number: { contains: search } },
+        { appointment_account: { contains: search, mode: 'insensitive' } },
+        { notes: { contains: search, mode: 'insensitive' } },
+      ];
+      appointmentWhere.OR = searchConditions;
+    }
+    
     try {
-      [shipments, total] = await Promise.all([
-        prisma.outbound_shipments.findMany({
-          where,
-          orderBy,
+      [appointments, total] = await Promise.all([
+        prisma.delivery_appointments.findMany({
+          where: appointmentWhere,
+          orderBy: {
+            created_at: order === 'asc' ? 'asc' : 'desc',
+          },
           skip: (page - 1) * limit,
           take: limit,
           include: {
-            delivery_appointments: {
+            orders: {
+              select: {
+                order_id: true,
+                status: true,
+              },
+            },
+            locations: {
+              select: {
+                location_id: true,
+                location_code: true,
+              },
+            },
+            locations_delivery_appointments_origin_location_idTolocations: {
+              select: {
+                location_id: true,
+                location_code: true,
+              },
+            },
+            outbound_shipments: {
               include: {
-                orders: {
+                trailers: {
                   select: {
-                    order_id: true,
-                    status: true,
-                    order_detail: {
-                      select: {
-                        id: true,
-                        estimated_pallets: true,
-                      },
-                    },
+                    trailer_id: true,
+                    trailer_code: true,
                   },
                 },
-                locations: {
+                users_outbound_shipments_loaded_byTousers: {
                   select: {
-                    location_id: true,
-                    location_code: true,
-                  },
-                },
-                locations_delivery_appointments_origin_location_idTolocations: {
-                  select: {
-                    location_id: true,
-                    location_code: true,
+                    id: true,
+                    full_name: true,
                   },
                 },
               },
             },
-            trailers: {
+            appointment_detail_lines: {
               select: {
-                trailer_id: true,
-                trailer_code: true,
-              },
-            },
-            users_outbound_shipments_loaded_byTousers: {
-              select: {
-                id: true,
-                full_name: true,
+                estimated_pallets: true,
               },
             },
           },
         }),
-        prisma.outbound_shipments.count({ where }),
+        prisma.delivery_appointments.count({ where: appointmentWhere }),
       ]);
     } catch (queryError: any) {
       console.error('Prisma 查询错误:', queryError);
@@ -128,22 +147,15 @@ export async function GET(request: NextRequest) {
     }
 
     // 序列化并格式化数据
-    const serializedItems = shipments.map((shipment: any) => {
-      const serialized = serializeBigInt(shipment);
-      const appointment = serialized.delivery_appointments;
-      
-      if (!appointment) {
-        // 如果没有关联的预约，跳过这条记录
-        return null;
-      }
-
+    const serializedItems = appointments.map((appointment: any) => {
       const serializedAppointment = serializeBigInt(appointment);
+      const shipment = serializedAppointment.outbound_shipments;
       
-      // 计算总板数：从 order_detail.estimated_pallets 求和
+      // 计算总板数：从 appointment_detail_lines.estimated_pallets 累加
       let totalPallets = 0;
-      if (serializedAppointment.orders?.order_detail && Array.isArray(serializedAppointment.orders.order_detail)) {
-        totalPallets = serializedAppointment.orders.order_detail.reduce((sum: number, detail: any) => {
-          return sum + (detail.estimated_pallets || 0);
+      if (serializedAppointment.appointment_detail_lines && Array.isArray(serializedAppointment.appointment_detail_lines)) {
+        totalPallets = serializedAppointment.appointment_detail_lines.reduce((sum: number, line: any) => {
+          return sum + (line.estimated_pallets || 0);
         }, 0);
       }
 
@@ -158,21 +170,21 @@ export async function GET(request: NextRequest) {
         origin_location: serializedAppointment.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
         destination_location: serializedAppointment.locations?.location_code || null,
         confirmed_start: serializedAppointment.confirmed_start || null,
-        total_pallets: totalPallets,
+        total_pallets: totalPallets, // 从 appointment_detail_lines.estimated_pallets 累加
         
-        // 从 outbound_shipments 获取的字段（自有字段）
-        outbound_shipment_id: serialized.outbound_shipment_id.toString(),
-        trailer_id: serialized.trailer_id ? serialized.trailer_id.toString() : null,
-        trailer_code: serialized.trailers?.trailer_code || null,
-        loaded_by: serialized.loaded_by ? serialized.loaded_by.toString() : null,
-        loaded_by_name: serialized.users_outbound_shipments_loaded_byTousers?.full_name || null,
-        notes: serialized.notes || null,
+        // 从 outbound_shipments 获取的字段（如果存在）
+        outbound_shipment_id: shipment ? serializeBigInt(shipment).outbound_shipment_id?.toString() : null,
+        trailer_id: shipment?.trailer_id ? shipment.trailer_id.toString() : null,
+        trailer_code: shipment?.trailers?.trailer_code || null,
+        loaded_by: shipment?.loaded_by ? shipment.loaded_by.toString() : null,
+        loaded_by_name: shipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
+        notes: shipment?.notes || null,
         
         // 审计字段
-        created_at: serialized.created_at,
-        updated_at: serialized.updated_at,
+        created_at: serializedAppointment.created_at,
+        updated_at: serializedAppointment.updated_at,
       };
-    }).filter((item: any) => item !== null); // 过滤掉 null 值
+    });
 
     return NextResponse.json({
       data: serializedItems,

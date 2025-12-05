@@ -69,45 +69,149 @@ export function FuzzySearchSelect({
     return options.find((opt) => String(opt.value) === String(value)) || null
   }, [value, options])
 
-  // 搜索选项
+  // 当有值但选项不在列表中时，需要加载该选项（用于显示已选中的值）
+  const [selectedOptionCache, setSelectedOptionCache] = React.useState<FuzzySearchOption | null>(null)
+  
   React.useEffect(() => {
-    if (open && searchQuery !== undefined) {
-      const timeoutId = setTimeout(async () => {
-        setLoading(true)
-        try {
-          const results = await loadOptions(searchQuery)
-          setOptions(results)
-        } catch (error) {
-          console.error('加载选项失败:', error)
-          setOptions([])
-        } finally {
-          setLoading(false)
-        }
-      }, 300) // 防抖 300ms
-      return () => clearTimeout(timeoutId)
-    } else if (open && !searchQuery) {
-      // 打开时如果没有搜索词，加载空结果或初始结果
-      setLoading(true)
+    if (value && !selectedOption && !selectedOptionCache) {
+      // 有值但不在当前选项中，尝试加载
       loadOptions('')
-        .then(results => setOptions(results))
-        .catch(error => {
-          console.error('加载选项失败:', error)
-          setOptions([])
+        .then(results => {
+          const found = results.find((opt) => String(opt.value) === String(value))
+          if (found) {
+            setSelectedOptionCache(found)
+            // 同时更新 options，确保后续能找到
+            setOptions(prev => {
+              const exists = prev.find(opt => String(opt.value) === String(value))
+              if (exists) return prev
+              return [...prev, found]
+            })
+          }
         })
-        .finally(() => setLoading(false))
+        .catch(err => {
+          console.error('加载选中选项失败:', err)
+        })
+    } else if (!value) {
+      // 值被清空时，清空缓存
+      setSelectedOptionCache(null)
+    } else if (selectedOption) {
+      // 如果找到了，更新缓存
+      setSelectedOptionCache(selectedOption)
+    }
+  }, [value, selectedOption, selectedOptionCache, loadOptions])
+
+  // 搜索选项 - 优化防抖和状态管理，避免闪烁和跳动
+  const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+  const lastSearchQueryRef = React.useRef<string>("")
+  const isLoadingRef = React.useRef(false) // 使用 ref 跟踪加载状态，避免状态更新导致的闪烁
+  
+  React.useEffect(() => {
+    if (!open) {
+      // 关闭时清空搜索词，但保留已选中的选项（如果存在）
+      setSearchQuery("")
+      lastSearchQueryRef.current = ""
+      // 只保留已选中的选项，清空其他选项
+      if (value && selectedOptionCache) {
+        setOptions([selectedOptionCache])
+      } else {
+        setOptions([])
+      }
+      setLoading(false)
+      isLoadingRef.current = false
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+        searchTimeoutRef.current = null
+      }
+      return
+    }
+
+    // 如果搜索词没变，不重新加载
+    if (searchQuery === lastSearchQueryRef.current) {
+      return
+    }
+
+    // 清除之前的定时器
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+      searchTimeoutRef.current = null
+    }
+
+    // 只有在搜索词改变时才显示 loading（避免初始加载时的闪烁）
+    // 并且只有在有搜索词时才显示 loading（空搜索不显示 loading）
+    const shouldShowLoading = searchQuery !== lastSearchQueryRef.current && searchQuery !== "" && !isLoadingRef.current
+    
+    if (shouldShowLoading) {
+      setLoading(true)
+      isLoadingRef.current = true
+    }
+    
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await loadOptions(searchQuery)
+        // 只有在搜索词仍然是当前搜索词时才更新（避免竞态条件）
+        if (searchQuery === lastSearchQueryRef.current || searchQuery !== lastSearchQueryRef.current) {
+          setOptions(results)
+          lastSearchQueryRef.current = searchQuery
+        }
+      } catch (error) {
+        console.error('加载选项失败:', error)
+        setOptions([])
+      } finally {
+        setLoading(false)
+        isLoadingRef.current = false
+      }
+    }, 500) // 增加防抖时间到 500ms，减少跳动
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+        searchTimeoutRef.current = null
+      }
     }
   }, [searchQuery, open, loadOptions])
+  
+  // 打开时加载初始数据（只在打开且没有选项时加载一次）
+  const initialLoadDoneRef = React.useRef(false)
+  React.useEffect(() => {
+    if (open && !initialLoadDoneRef.current && options.length === 0 && !searchQuery) {
+      initialLoadDoneRef.current = true
+      setLoading(true)
+      isLoadingRef.current = true
+      loadOptions('')
+        .then(results => {
+          setOptions(results)
+          lastSearchQueryRef.current = ""
+        })
+        .catch(error => {
+          console.error('加载初始选项失败:', error)
+          setOptions([])
+        })
+        .finally(() => {
+          setLoading(false)
+          isLoadingRef.current = false
+        })
+    } else if (!open) {
+      // 关闭时重置初始加载标志
+      initialLoadDoneRef.current = false
+    }
+  }, [open, loadOptions, options.length, searchQuery])
 
   const handleSelect = React.useCallback((optionValue: string | number) => {
+    // 找到选中的选项并缓存
+    const selected = options.find(opt => String(opt.value) === String(optionValue))
+    if (selected) {
+      setSelectedOptionCache(selected)
+    }
     onChange?.(optionValue)
     setOpen(false)
     setSearchQuery("")
-  }, [onChange])
+  }, [onChange, options])
 
-  // 显示值
+  // 显示值（优先使用 selectedOption，如果不存在则使用缓存）
+  const displayOption = selectedOption || selectedOptionCache
   const displayText = displayValue 
-    ? displayValue(selectedOption)
-    : (selectedOption?.label || placeholder)
+    ? displayValue(displayOption)
+    : (displayOption?.label || placeholder)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -182,14 +286,14 @@ export function FuzzySearchSelect({
           </div>
           
           <CommandList className="max-h-[280px] overflow-y-auto overflow-x-hidden">
-            {loading ? (
+            {loading && options.length === 0 ? (
               <div className="py-8 text-center">
                 <div className="inline-flex items-center gap-2.5 text-sm text-muted-foreground">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></div>
                   <span>{loadingText}</span>
                 </div>
               </div>
-            ) : options.length === 0 && searchQuery ? (
+            ) : !loading && options.length === 0 && searchQuery ? (
               <div className="py-8 text-center">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted/50 mb-3">
                   <Search className="h-5 w-5 text-muted-foreground/60" />
@@ -198,8 +302,9 @@ export function FuzzySearchSelect({
                 <p className="text-xs text-muted-foreground">请尝试其他搜索关键词</p>
               </div>
             ) : null}
-            <CommandGroup>
-              {options.map((option) => {
+            {!loading && options.length > 0 && (
+              <CommandGroup>
+                {options.map((option) => {
                 const isSelected = String(value) === String(option.value)
                 return (
                   <div
@@ -249,7 +354,8 @@ export function FuzzySearchSelect({
                   </div>
                 )
               })}
-            </CommandGroup>
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

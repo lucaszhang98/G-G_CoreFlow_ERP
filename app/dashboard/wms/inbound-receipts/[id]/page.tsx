@@ -62,7 +62,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 order_id: true,
               },
               orderBy: {
-                volume_percentage: 'desc',
+                volume_percentage: 'desc', // 按分仓占比降序排列
               },
             },
             delivery_appointments: {
@@ -221,11 +221,15 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                   ? locationsMap.get(detail.delivery_location.toString()) || detail.delivery_location
                   : null
 
+                // 计算该明细的体积（从 order_detail.volume 获取）
+                const detailVolume = detail.volume ? Number(detail.volume) : null
+                
                 return {
                   ...detail,
                   id: detail.id.toString(),
                   order_id: detail.order_id?.toString() || null,
-                  volume: detail.volume ? Number(detail.volume) : null,
+                  volume: detailVolume,
+                  container_volume: detailVolume, // 明细的体积就是 container_volume（用于显示）
                   volume_percentage: detail.volume_percentage ? Number(detail.volume_percentage) : null,
                   delivery_location: deliveryLocationCode, // 显示 location_code
                   unload_type: detail.unload_type || null,

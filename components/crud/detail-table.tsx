@@ -55,6 +55,7 @@ export interface DetailData {
   notes?: string | null
   po?: string | null // PO字段
   total_pallets?: number | null // 总板数（用于验证，已废弃，使用 remaining_pallets）
+  total_pallets_at_time?: number | null // 总板数快照（预约明细创建/更新时的总板数）
   has_inventory?: boolean // 是否有库存
   inventory_pallets?: number | null // 库存板数
   created_at?: string | Date | null
@@ -88,7 +89,7 @@ export interface DetailTableConfig {
     totalVolume?: boolean // 总方数
     totalPallets?: boolean // 总板数
     estimatedPallets?: boolean // 预计板数
-    volumePercentage?: boolean // 分仓占总柜比
+    volumePercentage?: boolean // 分仓占比
     unloadType?: boolean // 拆柜/转仓
     notes?: boolean // 备注
     po?: boolean // PO
@@ -138,6 +139,10 @@ export function DetailTable({
         .then(data => {
           console.log('[DetailTable] 获取预约明细响应:', data)
           if (data.success && data.data) {
+            // 调试日志：检查返回的数据
+            data.data.forEach((detail: any) => {
+              console.log(`[DetailTable] 初始加载明细 ${detail.id}: remaining_pallets=${detail.remaining_pallets}, has_inventory=${detail.has_inventory}, inventory_pallets=${detail.inventory_pallets}, order_detail_id=${detail.order_detail_id}`)
+            })
             console.log('[DetailTable] 预约明细数据:', data.data)
             setOrderDetails(data.data)
           } else {
@@ -198,6 +203,22 @@ export function DetailTable({
     return numValue.toLocaleString()
   }
 
+  // 格式化整数（用于板数相关字段）
+  const formatInteger = (value: number | null | string) => {
+    if (!value && value !== 0) return "-"
+    const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
+    if (isNaN(numValue)) return "-"
+    return Math.round(numValue).toLocaleString()
+  }
+
+  // 格式化体积（不加单位，直接显示数字）
+  const formatVolume = (value: number | null | string) => {
+    if (value === null || value === undefined || value === '') return "-"
+    const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
+    if (isNaN(numValue)) return "-"
+    return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+
   const formatDate = (date: string | Date | null) => {
     if (!date) return "-"
     const d = date instanceof Date ? date : new Date(date)
@@ -222,12 +243,12 @@ export function DetailTable({
 
   const handleEditDetail = (detail: DetailData) => {
     setEditingRowId(detail.id)
-    // 预约明细：只允许编辑预计板数（estimated_pallets）和PO
+    // 预约明细：只允许编辑预计板数（estimated_pallets），PO 从 order_detail.po 读取，不可编辑
     // 订单明细：允许编辑其他字段
     if (appointmentId) {
       setEditingData({
         estimated_pallets: detail.estimated_pallets,
-        po: detail.po || null,
+        // po 不再编辑，从 order_detail.po 读取
       })
     } else {
       setEditingData({
@@ -262,7 +283,7 @@ export function DetailTable({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               estimated_pallets: editingData.estimated_pallets,
-              po: editingData.po,
+              // po 不再发送，从 order_detail.po 读取
             }),
           })
 
@@ -479,7 +500,7 @@ export function DetailTable({
               appointment_id: appointmentId,
               order_detail_id: data.order_detail_id,
               estimated_pallets: data.estimated_pallets,
-              po: data.po || null,
+              // po 不再发送，从 order_detail.po 读取
             }),
           })
 
@@ -560,6 +581,7 @@ export function DetailTable({
           delivery_location: data.delivery_location,
           unload_type: data.unload_type,
           notes: data.notes,
+          po: data.po,
         }),
       })
 
@@ -578,7 +600,7 @@ export function DetailTable({
     }
   }
 
-  // 获取显示的列（按照指定顺序：送仓地点-性质-数量-体积-预计板数-分仓占总柜比-拆柜/转仓-备注）
+  // 获取显示的列（按照指定顺序：送仓地点-性质-数量-体积-预计板数-分仓占比-拆柜/转仓-备注）
   const getVisibleColumns = () => {
     const cols: string[] = []
     if (config.showExpandable) cols.push('expand')
@@ -590,7 +612,7 @@ export function DetailTable({
     if (config.showColumns?.quantity) cols.push('quantity') // 数量
     if (config.showColumns?.volume) cols.push('volume') // 体积
     if (config.showColumns?.estimatedPallets) cols.push('estimatedPallets') // 预计板数
-    if (config.showColumns?.volumePercentage) cols.push('volumePercentage') // 分仓占总柜比
+    if (config.showColumns?.volumePercentage) cols.push('volumePercentage') // 分仓占比
     if (config.showColumns?.unloadType) cols.push('unloadType') // 拆柜/转仓
     if (config.showColumns?.notes) cols.push('notes') // 备注
     // 其他可选字段
@@ -661,7 +683,7 @@ export function DetailTable({
                   case 'estimatedPallets':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">预计板数</th>
                   case 'volumePercentage':
-                    return <th key={col} className="text-left p-2 font-semibold text-sm">分仓占总柜比</th>
+                    return <th key={col} className="text-left p-2 font-semibold text-sm">分仓占比</th>
                   case 'unloadType':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">拆柜/转仓</th>
                   case 'notes':
@@ -731,16 +753,61 @@ export function DetailTable({
                           // 仓点：显示 location_code（从 delivery_location 转换而来）
                           return <td key={col} className="p-2 text-sm">{locationCode}</td>
                         case 'deliveryLocation':
-                          // 预约明细不允许编辑送仓地点，直接显示 location_code（API 已转换）
+                          // 订单明细可以编辑送仓地点，预约明细不允许编辑，直接显示 location_code（API 已转换）
+                          if (editingRowId === detailId && editingData && !appointmentId) {
+                            return (
+                              <td key={col} className="p-2 text-sm">
+                                <LocationSelect
+                                  value={editingData.delivery_location || null}
+                                  onChange={(value: string | number | null) => setEditingData({ ...editingData, delivery_location: value ? String(value) : null })}
+                                  placeholder="选择送仓地点"
+                                />
+                              </td>
+                            )
+                          }
                           return <td key={col} className="p-2 text-sm">{(detail as any).delivery_location_code || detail.delivery_location || '-'}</td>
                         case 'locationType':
-                          // 预约明细不允许编辑仓点类型
-                          return <td key={col} className="p-2 text-sm">{detail.delivery_nature || '-'}</td>
+                          // 订单明细可以编辑仓点类型，预约明细不允许编辑，显示时如果是"亚马逊"改为"AMZ"
+                          if (editingRowId === detailId && editingData && !appointmentId) {
+                            return (
+                              <td key={col} className="p-2 text-sm">
+                                <select
+                                  value={editingData.delivery_nature || ''}
+                                  onChange={(e) => setEditingData({ ...editingData, delivery_nature: e.target.value || null })}
+                                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                >
+                                  <option value="">请选择</option>
+                                  <option value="AMZ">AMZ</option>
+                                  <option value="扣货">扣货</option>
+                                  <option value="已放行">已放行</option>
+                                  <option value="私仓">私仓</option>
+                                </select>
+                              </td>
+                            )
+                          }
+                          return <td key={col} className="p-2 text-sm">{detail.delivery_nature === '亚马逊' ? 'AMZ' : (detail.delivery_nature || '-')}</td>
                         case 'quantity':
                           return <td key={col} className="p-2 text-sm">{formatNumber(detail.quantity)}</td>
                         case 'volume':
-                          // 预约明细不允许编辑体积
-                          return <td key={col} className="p-2 text-sm">{formatNumber(detail.volume)}</td>
+                          // 订单明细可以编辑体积，预约明细不允许编辑
+                          if (editingRowId === detailId && editingData && !appointmentId) {
+                            return (
+                              <td key={col} className="p-2 text-sm">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={editingData.volume !== null && editingData.volume !== undefined ? editingData.volume : ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value === '' ? null : parseFloat(e.target.value)
+                                    setEditingData({ ...editingData, volume: value })
+                                  }}
+                                  className="w-full"
+                                  placeholder="体积"
+                                />
+                              </td>
+                            )
+                          }
+                          return <td key={col} className="p-2 text-sm">{formatVolume(detail.volume)}</td>
                         case 'estimatedPallets':
                           // 预计板数：显示这个预约送了多少板（可编辑）
                           if (editingRowId === detailId && editingData && appointmentId) {
@@ -763,22 +830,55 @@ export function DetailTable({
                               </td>
                             )
                           }
-                          return <td key={col} className="p-2 text-sm">{formatNumber(detail.estimated_pallets)}</td>
+                          return <td key={col} className="p-2 text-sm">{formatInteger(detail.estimated_pallets)}</td>
                         case 'volumePercentage':
                           return <td key={col} className="p-2 text-sm">{detail.volume_percentage ? `${formatNumber(detail.volume_percentage)}%` : '-'}</td>
                         case 'unloadType':
-                          // 预约明细不允许编辑拆柜/转仓
+                          // 订单明细可以编辑拆柜/转仓，预约明细不允许编辑
+                          if (editingRowId === detailId && editingData && !appointmentId) {
+                            return (
+                              <td key={col} className="p-2 text-sm">
+                                <Input
+                                  type="text"
+                                  value={editingData.unload_type || ''}
+                                  onChange={(e) => setEditingData({ ...editingData, unload_type: e.target.value || null })}
+                                  className="w-full"
+                                  placeholder="拆柜/转仓"
+                                />
+                              </td>
+                            )
+                          }
                           return <td key={col} className="p-2 text-sm">{detail.unload_type || '-'}</td>
                         case 'notes':
-                          // 预约明细不允许编辑备注
+                          // 订单明细可以编辑备注，预约明细不允许编辑
+                          if (editingRowId === detailId && editingData && !appointmentId) {
+                            return (
+                              <td key={col} className="p-2 text-sm">
+                                <Input
+                                  type="text"
+                                  value={editingData.notes || ''}
+                                  onChange={(e) => setEditingData({ ...editingData, notes: e.target.value || null })}
+                                  className="w-full"
+                                  placeholder="备注"
+                                />
+                              </td>
+                            )
+                          }
                           return <td key={col} className="p-2 text-sm">{detail.notes || '-'}</td>
                         case 'totalVolume':
-                          return <td key={col} className="p-2 text-sm">{formatNumber(detail.volume)}</td>
+                          return <td key={col} className="p-2 text-sm">{formatVolume(detail.volume)}</td>
                         case 'totalPallets':
-                          // 总板数：显示剩余板数（remaining_pallets）
-                          return <td key={col} className="p-2 text-sm">{formatNumber(detail.remaining_pallets ?? detail.estimated_pallets)}</td>
+                          // 总板数：优先使用实时的 remaining_pallets（已入库用 unbooked_pallet_count，未入库用 remaining_pallets），否则使用快照或预计板数，显示整数
+                          // 注意：detail.remaining_pallets 已经是 API 返回的实时值（已入库时是 unbooked_pallet_count，未入库时是 order_detail.remaining_pallets）
+                          const totalPallets = detail.remaining_pallets ?? (detail as any).total_pallets_at_time ?? detail.estimated_pallets
+                          // 调试日志（仅在开发环境）
+                          if (process.env.NODE_ENV === 'development' && detail.has_inventory) {
+                            console.log(`[DetailTable] 显示总板数 detail.id=${detail.id}, order_detail_id=${detail.order_detail_id}: remaining_pallets=${detail.remaining_pallets}, has_inventory=${detail.has_inventory}, inventory_pallets=${detail.inventory_pallets}, totalPallets=${totalPallets}`)
+                          }
+                          return <td key={col} className="p-2 text-sm">{formatInteger(totalPallets)}</td>
                         case 'po':
-                          if (editingRowId === detailId && editingData) {
+                          // 订单明细可以编辑PO，预约明细中PO从order_detail.po读取，不可编辑
+                          if (editingRowId === detailId && editingData && !appointmentId) {
                             return (
                               <td key={col} className="p-2 text-sm">
                                 <Input
@@ -786,7 +886,7 @@ export function DetailTable({
                                   value={editingData.po || ''}
                                   onChange={(e) => setEditingData({ ...editingData, po: e.target.value || null })}
                                   className="w-full"
-                                  placeholder="请输入PO"
+                                  placeholder="PO"
                                 />
                               </td>
                             )
@@ -894,7 +994,7 @@ export function DetailTable({
                                       <td className="p-2 text-sm">{item.detail_name}</td>
                                       <td className="p-2 text-sm">{item.description || "-"}</td>
                                       <td className="p-2 text-sm">{formatNumber(item.stock_quantity)}</td>
-                                      <td className="p-2 text-sm">{formatNumber(item.volume)}</td>
+                                      <td className="p-2 text-sm">{formatVolume(item.volume)}</td>
                                       <td className="p-2 text-sm">
                                         <Badge variant={item.status === 'active' ? 'default' : 'secondary'}>
                                           {item.status || '-'}
@@ -1076,35 +1176,17 @@ function EditDetailDialog({
   const [totalPallets, setTotalPallets] = React.useState<number>(0)
   const [isLoadingTotalPallets, setIsLoadingTotalPallets] = React.useState(false)
 
-  // 获取总板数
+  // 获取总板数：直接使用 detail.remaining_pallets（API 返回的实时值）
   React.useEffect(() => {
-    if (detail && detail.order_id) {
-      setIsLoadingTotalPallets(true)
-      // 通过订单ID和明细ID获取总板数
-      fetch(`/api/oms/appointments/order-details/${detail.order_id}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.success && data.data.details) {
-            const detailInfo = data.data.details.find((d: any) => d.id === detail.id?.toString())
-            if (detailInfo) {
-              const total = detailInfo.has_inventory 
-                ? (detailInfo.inventory_pallets || 0)
-                : (detailInfo.estimated_pallets || 0)
-              setTotalPallets(total)
-            }
-          }
-        })
-        .catch(error => {
-          console.error('获取总板数失败:', error)
-          // 如果获取失败，使用 estimated_pallets 作为默认值
-          setTotalPallets(Number(detail.estimated_pallets) || 0)
-        })
-        .finally(() => {
-          setIsLoadingTotalPallets(false)
-        })
-    } else if (detail) {
-      // 如果没有 order_id，使用 estimated_pallets 作为默认值
-      setTotalPallets(Number(detail.estimated_pallets) || 0)
+    if (detail) {
+      // 优先使用实时的 remaining_pallets（已入库用 unbooked_pallet_count，未入库用 remaining_pallets），否则使用快照或预计板数
+      const total = detail.remaining_pallets ?? (detail as any).total_pallets_at_time ?? (detail.has_inventory 
+        ? (detail.inventory_pallets || 0)
+        : (detail.estimated_pallets || 0))
+      setTotalPallets(total)
+      console.log(`[AddDetailDialog] 设置总板数: detail.id=${detail.id}, remaining_pallets=${detail.remaining_pallets}, has_inventory=${detail.has_inventory}, total=${total}`)
+    } else {
+      setTotalPallets(0)
     }
   }, [detail])
 
@@ -1254,6 +1336,8 @@ function AddDetailDialog({
     location_code: string | null // 仓点编码（从 delivery_location 获取）
     has_inventory: boolean
     inventory_pallets: number | null
+    remaining_pallets?: number | null // 总板数（已入库用 unbooked_pallet_count，未入库用 remaining_pallets）
+    total_pallets_at_time?: number | null // 总板数快照
   }>>([])
   const [selectedDetailId, setSelectedDetailId] = React.useState<string | null>(null)
   const [selectedDetail, setSelectedDetail] = React.useState<any>(null)
@@ -1272,6 +1356,22 @@ function AddDetailDialog({
     const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
     if (isNaN(numValue)) return "-"
     return numValue.toLocaleString()
+  }
+
+  // 格式化整数（用于板数相关字段）
+  const formatInteger = (value: number | null | string) => {
+    if (!value && value !== 0) return "-"
+    const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
+    if (isNaN(numValue)) return "-"
+    return Math.round(numValue).toLocaleString()
+  }
+
+  // 格式化体积（不加单位，直接显示数字）
+  const formatVolume = (value: number | null | string) => {
+    if (value === null || value === undefined || value === '') return "-"
+    const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
+    if (isNaN(numValue)) return "-"
+    return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   // 搜索订单的逻辑已移到 FuzzySearchSelect 的 loadOptions 中
@@ -1326,8 +1426,8 @@ function AddDetailDialog({
   const handleSelectDetail = (detail: any) => {
     setSelectedDetailId(detail.id)
     setSelectedDetail(detail)
-    // 自动填充预计板数，默认值为剩余板数（remaining_pallets）或总板数
-    const totalPallets = detail.remaining_pallets ?? (detail.has_inventory 
+    // 自动填充预计板数，默认值为实时的 remaining_pallets（已入库用 unbooked_pallet_count，未入库用 remaining_pallets），否则使用快照或总板数
+    const totalPallets = detail.remaining_pallets ?? (detail as any).total_pallets_at_time ?? (detail.has_inventory 
       ? (detail.inventory_pallets || 0)
       : (detail.estimated_pallets || 0))
     setEstimatedPallets(totalPallets.toString())
@@ -1345,8 +1445,8 @@ function AddDetailDialog({
       return
     }
 
-    // 计算总板数（剩余板数或总板数）
-    const totalPallets = selectedDetail.remaining_pallets ?? (selectedDetail.has_inventory 
+    // 计算总板数（优先使用实时的 remaining_pallets，否则使用快照或总板数）
+    const totalPallets = selectedDetail.remaining_pallets ?? (selectedDetail as any).total_pallets_at_time ?? (selectedDetail.has_inventory 
       ? (selectedDetail.inventory_pallets || 0)
       : (selectedDetail.estimated_pallets || 0))
 
@@ -1417,6 +1517,7 @@ function AddDetailDialog({
       delivery_nature: '',
       unload_type: '',
       notes: '',
+      po: '',
     })
 
     React.useEffect(() => {
@@ -1428,6 +1529,7 @@ function AddDetailDialog({
           delivery_nature: '',
           unload_type: '',
           notes: '',
+          po: '',
         })
       }
     }, [open])
@@ -1447,6 +1549,7 @@ function AddDetailDialog({
           delivery_nature: formData.delivery_nature || null,
           unload_type: formData.unload_type || null,
           notes: formData.notes || null,
+          po: formData.po || null,
           order_id: orderId,
         })
       } catch (error) {
@@ -1462,7 +1565,7 @@ function AddDetailDialog({
           <DialogHeader>
             <DialogTitle>添加仓点明细</DialogTitle>
             <DialogDescription>
-              填写仓点明细信息，预计板数和分仓占总柜比将自动计算
+              填写仓点明细信息，预计板数和分仓占比将自动计算
             </DialogDescription>
           </DialogHeader>
           
@@ -1511,7 +1614,7 @@ function AddDetailDialog({
                   <SelectValue placeholder="选择性质" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="亚马逊">亚马逊</SelectItem>
+                  <SelectItem value="AMZ">AMZ</SelectItem>
                   <SelectItem value="扣货">扣货</SelectItem>
                   <SelectItem value="已放行">已放行</SelectItem>
                   <SelectItem value="私仓">私仓</SelectItem>
@@ -1538,6 +1641,17 @@ function AddDetailDialog({
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 placeholder="请输入备注"
                 rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="po">PO</Label>
+              <Input
+                id="po"
+                type="text"
+                value={formData.po}
+                onChange={(e) => setFormData({ ...formData, po: e.target.value })}
+                placeholder="请输入PO（可选）"
               />
             </div>
           </div>
@@ -1674,9 +1788,10 @@ function AddDetailDialog({
                       </thead>
                       <tbody>
                         {orderDetails.map((detail) => {
-                          const totalPallets = detail.has_inventory 
+                          // 总板数：优先使用实时的 remaining_pallets（API 返回的实时值），否则使用快照或预计板数
+                          const totalPallets = detail.remaining_pallets ?? (detail as any).total_pallets_at_time ?? (detail.has_inventory 
                             ? (detail.inventory_pallets || 0)
-                            : (detail.estimated_pallets || 0)
+                            : (detail.estimated_pallets || 0))
                           const isSelected = selectedDetailId === detail.id
                           
                           return (
@@ -1689,8 +1804,8 @@ function AddDetailDialog({
                               )}
                             >
                               <td className="p-3 text-sm font-medium">{detail.location_code || '-'}</td>
-                              <td className="p-3 text-sm">{detail.delivery_nature || '-'}</td>
-                              <td className="p-3 text-sm">{detail.volume ? formatNumber(detail.volume) : '-'}</td>
+                              <td className="p-3 text-sm">{detail.delivery_nature === '亚马逊' ? 'AMZ' : (detail.delivery_nature || '-')}</td>
+                              <td className="p-3 text-sm">{formatVolume(detail.volume)}</td>
                               <td className="p-3 text-sm">
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium">{totalPallets}</span>
@@ -1739,17 +1854,14 @@ function AddDetailDialog({
                   </div>
                   <div>
                     <span className="text-muted-foreground">仓点类型：</span>
-                    <span className="font-medium text-foreground ml-2">{selectedDetail.delivery_nature || '-'}</span>
+                    <span className="font-medium text-foreground ml-2">{selectedDetail.delivery_nature === '亚马逊' ? 'AMZ' : (selectedDetail.delivery_nature || '-')}</span>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">总方数：</span>
-                    <span className="font-medium text-foreground ml-2">{selectedDetail.volume ? formatNumber(selectedDetail.volume) : '-'}</span>
-                  </div>
+                  {/* 总方数不需要显示 */}
                   <div>
                     <span className="text-muted-foreground">剩余板数：</span>
                     <div className="inline-flex items-center gap-2 ml-2">
                       <span className="font-medium text-foreground">
-                        {selectedDetail.remaining_pallets ?? (selectedDetail.has_inventory 
+                        {selectedDetail.remaining_pallets ?? (selectedDetail as any).total_pallets_at_time ?? (selectedDetail.has_inventory 
                           ? (selectedDetail.inventory_pallets || 0)
                           : (selectedDetail.estimated_pallets || 0))}
                       </span>
@@ -1771,7 +1883,7 @@ function AddDetailDialog({
                     预计板数 *
                     {selectedDetail && (
                       <span className="text-muted-foreground text-xs ml-2 font-normal">
-                        (范围: 1 - {selectedDetail.remaining_pallets ?? (selectedDetail.has_inventory 
+                        (范围: 1 - {selectedDetail.remaining_pallets ?? (selectedDetail as any).total_pallets_at_time ?? (selectedDetail.has_inventory 
                           ? (selectedDetail.inventory_pallets || 0)
                           : (selectedDetail.estimated_pallets || 0))})
                       </span>
@@ -1784,27 +1896,14 @@ function AddDetailDialog({
                     onChange={(e) => setEstimatedPallets(e.target.value)}
                     placeholder="请输入预计板数"
                     min="1"
-                    max={selectedDetail ? (selectedDetail.remaining_pallets ?? (selectedDetail.has_inventory 
+                    max={selectedDetail ? (selectedDetail.remaining_pallets ?? (selectedDetail as any).total_pallets_at_time ?? (selectedDetail.has_inventory 
                       ? (selectedDetail.inventory_pallets || 0)
                       : (selectedDetail.estimated_pallets || 0))) : undefined}
                     className="h-10"
                   />
                 </div>
 
-                {/* 对于预约明细，PO可以编辑 */}
-                {appointmentId && (
-                  <div className="space-y-2">
-                    <Label htmlFor="add-po" className="text-sm font-semibold">PO</Label>
-                    <Input
-                      id="add-po"
-                      type="text"
-                      value={po}
-                      onChange={(e) => setPo(e.target.value)}
-                      placeholder="请输入PO（可选）"
-                      className="h-10"
-                    />
-                  </div>
-                )}
+                {/* PO 从 order_detail.po 读取，不需要输入（预约明细中） */}
               </div>
             </div>
           )}

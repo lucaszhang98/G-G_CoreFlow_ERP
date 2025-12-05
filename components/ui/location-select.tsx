@@ -72,8 +72,8 @@ export function LocationSelect({
     return found
   }, [value, locations])
 
-  // 根据类型加载位置列表
-  const loadLocations = React.useCallback(async (type: string): Promise<Location[]> => {
+  // 根据类型加载位置列表（支持搜索）
+  const loadLocations = React.useCallback(async (type: string, search?: string): Promise<Location[]> => {
     if (!type) {
       setLocations([])
       return []
@@ -81,7 +81,13 @@ export function LocationSelect({
 
     setLoading(true)
     try {
-      const response = await fetch(`/api/locations/by-type?type=${encodeURIComponent(type)}`)
+      const params = new URLSearchParams()
+      params.set('type', type)
+      if (search && search.trim()) {
+        params.set('search', search.trim())
+      }
+      
+      const response = await fetch(`/api/locations/by-type?${params.toString()}`)
       if (!response.ok) {
         throw new Error('获取位置列表失败')
       }
@@ -98,14 +104,14 @@ export function LocationSelect({
     }
   }, [])
 
-  // 当选择类型改变时，加载对应的位置列表
+  // 当选择类型改变或搜索词改变时，加载对应的位置列表
   React.useEffect(() => {
     if (selectedType) {
-      loadLocations(selectedType)
+      loadLocations(selectedType, searchQuery)
     } else {
       setLocations([])
     }
-  }, [selectedType, loadLocations])
+  }, [selectedType, searchQuery, loadLocations])
 
   // 初始化：如果有值，先加载对应的位置信息来确定类型
   React.useEffect(() => {
@@ -160,19 +166,10 @@ export function LocationSelect({
     }
   }, [value, locations, selectedLocation])
 
-  // 过滤位置列表（根据搜索查询 - 只搜索位置代码）
+  // 位置列表已经在后端根据搜索词过滤了，这里直接使用
   const filteredLocations = React.useMemo(() => {
-    if (!searchQuery) return locations
-    
-    const query = searchQuery.toLowerCase().trim()
-    if (!query) return locations
-    
-    return locations.filter((loc) => {
-      const code = (loc.location_code || '').toLowerCase()
-      // 只搜索位置代码，不搜索名称
-      return code.includes(query)
-    })
-  }, [locations, searchQuery])
+    return locations
+  }, [locations])
 
   const handleSelect = React.useCallback((locationId: string | number) => {
     // 确保传递的是location_id（数字），而不是location_code（字符串）

@@ -40,7 +40,6 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
           status: true,
           total_amount: true,
           container_type: true,
-          weight: true,
           mbl_number: true,
           do_issued: true,
           eta_date: true,

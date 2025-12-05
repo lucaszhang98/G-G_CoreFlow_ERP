@@ -92,17 +92,24 @@ export async function GET(
           },
           select: {
             pallet_count: true,
+            unbooked_pallet_count: true, // 未约板数
             remaining_pallet_count: true,
           },
         })
 
         // 计算总库存板数
         const totalInventoryPallets = inventoryLots.reduce(
-          (sum, lot) => sum + (Number(lot.remaining_pallet_count || lot.pallet_count) || 0),
+          (sum, lot) => sum + (Number(lot.pallet_count) || 0),
           0
         )
 
-        const hasInventory = inventoryLots.length > 0
+        const hasInventory = inventoryLots.length > 0 && totalInventoryPallets > 0
+
+        // 确定总板数：已入库使用 unbooked_pallet_count，未入库使用 remaining_pallets
+        // 如果有多个库存记录，使用第一个的 unbooked_pallet_count（通常一个明细只有一个库存记录）
+        const totalPallets = hasInventory && inventoryLots.length > 0
+          ? (inventoryLots[0].unbooked_pallet_count ?? inventoryLots[0].pallet_count ?? 0)
+          : (detail.remaining_pallets ?? detail.estimated_pallets ?? 0)
 
         // 获取 location_code：如果 delivery_location 是 location_id，从 locationsMap 获取；否则直接使用 delivery_location（可能是 location_code）
         let locationCode = null
@@ -120,7 +127,7 @@ export async function GET(
           quantity: detail.quantity,
           volume: detail.volume ? Number(detail.volume) : null,
           estimated_pallets: detail.estimated_pallets,
-          remaining_pallets: detail.remaining_pallets, // 剩余板数
+          remaining_pallets: totalPallets, // 总板数（已入库用 unbooked_pallet_count，未入库用 remaining_pallets）
           delivery_nature: detail.delivery_nature,
           delivery_location: detail.delivery_location || null,
           location_code: locationCode, // 新增：location_code

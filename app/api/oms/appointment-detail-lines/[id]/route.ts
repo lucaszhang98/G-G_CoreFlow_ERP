@@ -18,12 +18,17 @@ export async function PUT(
     }
 
     body = await request.json()
-    const { estimated_pallets, po } = body
+    const { estimated_pallets } = body
+    // PO 不再从请求中获取，应该从 order_detail.po 读取
 
-    // 获取当前预约明细，用于获取 order_detail_id
+    // 获取当前预约明细
     const currentLine = await prisma.appointment_detail_lines.findUnique({
       where: { id: BigInt(resolvedParams.id) },
-      select: { order_detail_id: true },
+      select: { 
+        appointment_id: true,
+        order_detail_id: true,
+        estimated_pallets: true, // 旧值
+      },
     })
 
     if (!currentLine) {
@@ -33,31 +38,119 @@ export async function PUT(
       }, { status: 404 })
     }
 
-    const updateData: any = {
-      updated_by: session.user.id ? BigInt(session.user.id) : null,
-      updated_at: new Date(),
-    }
+    const orderDetailId = currentLine.order_detail_id
+    const appointmentId = currentLine.appointment_id
+    const oldEstimatedPallets = currentLine.estimated_pallets
 
+    // 如果修改了 estimated_pallets，需要计算差值
+    let estimatedPalletsValue: number | undefined
+    let palletsDiff = 0
     if (estimated_pallets !== undefined) {
-      updateData.estimated_pallets = parseInt(estimated_pallets) || 0
+      estimatedPalletsValue = parseInt(estimated_pallets) || 0
+      palletsDiff = estimatedPalletsValue - oldEstimatedPallets
     }
 
-    if (po !== undefined) {
-      updateData.po = po || null
-    }
-
-    // 更新预约明细
-    const appointmentDetailLine = await prisma.appointment_detail_lines.update({
-      where: { id: BigInt(resolvedParams.id) },
-      data: updateData,
+    // 检查是否已入库（查询 inventory_lots）
+    const inventoryLot = await prisma.inventory_lots.findFirst({
+      where: {
+        order_detail_id: orderDetailId,
+      },
+      select: {
+        inventory_lot_id: true,
+        unbooked_pallet_count: true,
+        pallet_count: true,
+      },
     })
 
-    // 重新计算并更新 order_detail.remaining_pallets
-    await updateRemainingPallets(currentLine.order_detail_id)
+    // 如果修改了预计板数，需要验证和计算总板数快照
+    let totalPalletsAtTime: number | undefined
+    if (estimated_pallets !== undefined) {
+      if (inventoryLot && inventoryLot.pallet_count > 0) {
+        // 已入库：使用未约板数
+        totalPalletsAtTime = inventoryLot.unbooked_pallet_count ?? inventoryLot.pallet_count ?? 0
+      } else {
+        // 未入库：使用 order_detail 的剩余板数
+        const orderDetail = await prisma.order_detail.findUnique({
+          where: { id: orderDetailId },
+          select: { remaining_pallets: true, estimated_pallets: true },
+        })
+        totalPalletsAtTime = orderDetail?.remaining_pallets ?? orderDetail?.estimated_pallets ?? 0
+      }
+
+      // 验证新值不能超过总板数（需要考虑差值）
+      const maxAllowed = totalPalletsAtTime + oldEstimatedPallets // 当前剩余 + 旧值
+      if (estimatedPalletsValue !== undefined && estimatedPalletsValue > maxAllowed) {
+        return NextResponse.json({ 
+          error: `预计板数（${estimatedPalletsValue}）不能超过总板数（${maxAllowed}）` 
+        }, { status: 400 })
+      }
+    }
+
+    // 使用事务确保数据一致性
+    const result = await prisma.$transaction(async (tx) => {
+      const updateData: any = {
+        updated_by: session.user.id ? BigInt(session.user.id) : null,
+        updated_at: new Date(),
+      }
+
+      if (estimated_pallets !== undefined) {
+        updateData.estimated_pallets = estimatedPalletsValue
+        updateData.total_pallets_at_time = totalPalletsAtTime // 更新总板数快照
+      }
+
+      // PO 不再更新，应该从 order_detail.po 读取
+
+      // 更新预约明细
+      const appointmentDetailLine = await tx.appointment_detail_lines.update({
+        where: { id: BigInt(resolvedParams.id) },
+        data: updateData,
+      })
+
+      // 如果修改了预计板数，更新相关板数字段
+      if (palletsDiff !== 0) {
+        if (inventoryLot && inventoryLot.pallet_count > 0) {
+          // 已入库：更新 inventory_lots.unbooked_pallet_count（减去差值）
+          const currentUnbooked = inventoryLot.unbooked_pallet_count ?? inventoryLot.pallet_count
+          const newUnbookedCount = currentUnbooked - palletsDiff
+          await tx.inventory_lots.update({
+            where: { inventory_lot_id: inventoryLot.inventory_lot_id },
+            data: { unbooked_pallet_count: newUnbookedCount },
+          })
+        } else {
+          // 未入库：更新 order_detail.remaining_pallets（减去差值）
+          const orderDetail = await tx.order_detail.findUnique({
+            where: { id: orderDetailId },
+            select: { remaining_pallets: true, estimated_pallets: true },
+          })
+          if (orderDetail) {
+            const currentRemaining = orderDetail.remaining_pallets ?? orderDetail.estimated_pallets ?? 0
+            const newRemaining = Math.max(0, currentRemaining - palletsDiff)
+            await tx.order_detail.update({
+              where: { id: orderDetailId },
+              data: { remaining_pallets: newRemaining },
+            })
+          }
+        }
+
+        // 更新 delivery_appointments.total_pallets（加上差值）
+        const appointment = await tx.delivery_appointments.findUnique({
+          where: { appointment_id: appointmentId },
+          select: { total_pallets: true },
+        })
+        if (appointment) {
+          await tx.delivery_appointments.update({
+            where: { appointment_id: appointmentId },
+            data: { total_pallets: (appointment.total_pallets || 0) + palletsDiff },
+          })
+        }
+      }
+
+      return appointmentDetailLine
+    })
 
     return NextResponse.json({
       success: true,
-      data: serializeBigInt(appointmentDetailLine)
+      data: serializeBigInt(result)
     })
   } catch (error: any) {
     if (error.code === 'P2025') {
@@ -98,10 +191,14 @@ export async function DELETE(
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    // 获取当前预约明细，用于获取 order_detail_id
+    // 获取当前预约明细
     const currentLine = await prisma.appointment_detail_lines.findUnique({
       where: { id: BigInt(resolvedParams.id) },
-      select: { order_detail_id: true },
+      select: { 
+        appointment_id: true,
+        order_detail_id: true,
+        estimated_pallets: true, // 需要回退的值
+      },
     })
 
     if (!currentLine) {
@@ -111,13 +208,69 @@ export async function DELETE(
       }, { status: 404 })
     }
 
-    // 删除预约明细
-    await prisma.appointment_detail_lines.delete({
-      where: { id: BigInt(resolvedParams.id) },
+    const orderDetailId = currentLine.order_detail_id
+    const appointmentId = currentLine.appointment_id
+    const estimatedPalletsToRevert = currentLine.estimated_pallets
+
+    // 检查是否已入库（查询 inventory_lots）
+    const inventoryLot = await prisma.inventory_lots.findFirst({
+      where: {
+        order_detail_id: orderDetailId,
+      },
+      select: {
+        inventory_lot_id: true,
+        unbooked_pallet_count: true,
+        pallet_count: true,
+      },
     })
 
-    // 重新计算并更新 order_detail.remaining_pallets
-    await updateRemainingPallets(currentLine.order_detail_id)
+    // 使用事务确保数据一致性
+    await prisma.$transaction(async (tx) => {
+      // 删除预约明细
+      await tx.appointment_detail_lines.delete({
+        where: { id: BigInt(resolvedParams.id) },
+      })
+
+      // 回退相关板数字段
+      if (inventoryLot && inventoryLot.pallet_count > 0) {
+        // 已入库：回退 inventory_lots.unbooked_pallet_count（加上旧值）
+        const currentUnbooked = inventoryLot.unbooked_pallet_count ?? inventoryLot.pallet_count
+        const newUnbookedCount = currentUnbooked + estimatedPalletsToRevert
+        await tx.inventory_lots.update({
+          where: { inventory_lot_id: inventoryLot.inventory_lot_id },
+          data: { unbooked_pallet_count: newUnbookedCount },
+        })
+      } else {
+        // 未入库：回退 order_detail.remaining_pallets（加上旧值）
+        const orderDetail = await tx.order_detail.findUnique({
+          where: { id: orderDetailId },
+          select: { remaining_pallets: true, estimated_pallets: true },
+        })
+        if (orderDetail) {
+          const currentRemaining = orderDetail.remaining_pallets ?? orderDetail.estimated_pallets ?? 0
+          const newRemaining = currentRemaining + estimatedPalletsToRevert
+          // 不能超过 estimated_pallets
+          const maxRemaining = orderDetail.estimated_pallets ?? 0
+          await tx.order_detail.update({
+            where: { id: orderDetailId },
+            data: { remaining_pallets: Math.min(newRemaining, maxRemaining) },
+          })
+        }
+      }
+
+      // 回退 delivery_appointments.total_pallets（减去旧值）
+      const appointment = await tx.delivery_appointments.findUnique({
+        where: { appointment_id: appointmentId },
+        select: { total_pallets: true },
+      })
+      if (appointment) {
+        const newTotal = Math.max(0, (appointment.total_pallets || 0) - estimatedPalletsToRevert)
+        await tx.delivery_appointments.update({
+          where: { appointment_id: appointmentId },
+          data: { total_pallets: newTotal },
+        })
+      }
+    })
 
     return NextResponse.json({ 
       success: true,
@@ -147,43 +300,3 @@ export async function DELETE(
     )
   }
 }
-
-// 辅助函数：更新 order_detail 的剩余板数
-async function updateRemainingPallets(orderDetailId: bigint) {
-  try {
-    // 获取 order_detail 的总板数
-    const orderDetail = await prisma.order_detail.findUnique({
-      where: { id: orderDetailId },
-      select: { estimated_pallets: true },
-    })
-
-    if (!orderDetail || !orderDetail.estimated_pallets) {
-      return
-    }
-
-    const totalPallets = orderDetail.estimated_pallets
-
-    // 计算所有预约的预计板数之和
-    const appointmentLines = await prisma.appointment_detail_lines.findMany({
-      where: { order_detail_id: orderDetailId },
-      select: { estimated_pallets: true },
-    })
-
-    const totalAppointmentPallets = appointmentLines.reduce((sum, line) => {
-      return sum + (line.estimated_pallets || 0)
-    }, 0)
-
-    // 计算剩余板数
-    const remainingPallets = Math.max(0, totalPallets - totalAppointmentPallets)
-
-    // 更新 order_detail.remaining_pallets
-    await prisma.order_detail.update({
-      where: { id: orderDetailId },
-      data: { remaining_pallets: remainingPallets },
-    })
-  } catch (error) {
-    console.error('更新剩余板数失败:', error)
-    throw error
-  }
-}
-

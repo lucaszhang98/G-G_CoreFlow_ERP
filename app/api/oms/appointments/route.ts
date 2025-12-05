@@ -39,19 +39,13 @@ export async function GET(request: NextRequest) {
     }
 
     // 构建 include 对象
-    // 注意：预约明细现在从 outbound_shipment_lines 读取，而不是直接从 orders.order_detail
+    // 注意：预约明细现在从 appointment_detail_lines 读取
     const includeConfig: any = {
       orders: {
         select: {
           order_id: true,
           order_number: true,
           delivery_location: true,
-          order_detail: {
-            select: {
-              id: true,
-              estimated_pallets: true,
-            },
-          },
         },
       },
       locations: {
@@ -66,6 +60,11 @@ export async function GET(request: NextRequest) {
           location_id: true,
           name: true,
           location_code: true,
+        },
+      },
+      appointment_detail_lines: {
+        select: {
+          estimated_pallets: true,
         },
       },
     };
@@ -96,26 +95,13 @@ export async function GET(request: NextRequest) {
       // 如果是因为关联不存在，尝试简化查询
       if (queryError.message?.includes('Unknown field') || queryError.message?.includes('Available options')) {
         console.log('尝试简化查询（移除可能不存在的关联）');
-        // 移除可能有问题的关联
+        // 移除可能有问题的关联，但保留 appointment_detail_lines
         const simplifiedInclude: any = {
           orders: {
             select: {
               order_id: true,
               order_number: true,
-          order_detail: {
-            select: {
-              id: true,
-              quantity: true,
-              estimated_pallets: true,
-              delivery_nature: true,
-              order_detail_item_order_detail_item_detail_idToorder_detail: {
-                select: {
-                  detail_name: true,
-                },
-              },
-            },
-          },
-          delivery_location: true,
+              delivery_location: true,
             },
           },
           locations: {
@@ -123,6 +109,11 @@ export async function GET(request: NextRequest) {
               location_id: true,
               name: true,
               location_code: true,
+            },
+          },
+          appointment_detail_lines: {
+            select: {
+              estimated_pallets: true,
             },
           },
         };
@@ -171,12 +162,23 @@ export async function GET(request: NextRequest) {
       // 送货时间
       const confirmedStart = serialized.confirmed_start || null;
       
-      // 计算板数：从 order_detail.estimated_pallets 总和（outbound_shipment_lines 已被删除）
+      // 计算板数：从 appointment_detail_lines.estimated_pallets 累加
       let totalPallets = 0
-      if (serialized.orders?.order_detail && Array.isArray(serialized.orders.order_detail)) {
-        totalPallets = serialized.orders.order_detail.reduce((sum: number, detail: any) => {
-          return sum + (detail.estimated_pallets || 0)
+      if (serialized.appointment_detail_lines && Array.isArray(serialized.appointment_detail_lines)) {
+        totalPallets = serialized.appointment_detail_lines.reduce((sum: number, line: any) => {
+          const pallets = line.estimated_pallets
+          const numPallets = typeof pallets === 'number' ? pallets : (pallets ? Number(pallets) : 0)
+          return sum + (isNaN(numPallets) ? 0 : numPallets)
         }, 0)
+      }
+      
+      // 调试日志
+      console.log(`[appointments/route] 预约 ${serialized.appointment_id || serialized.reference_number}: appointment_detail_lines数量=${serialized.appointment_detail_lines?.length || 0}, totalPallets=${totalPallets}`)
+      if (serialized.appointment_detail_lines && serialized.appointment_detail_lines.length > 0) {
+        console.log(`[appointments/route] 明细行数据:`, serialized.appointment_detail_lines.map((line: any) => ({
+          estimated_pallets: line.estimated_pallets,
+          type: typeof line.estimated_pallets
+        })))
       }
       
       // 备注
@@ -293,9 +295,11 @@ export async function POST(request: NextRequest) {
         const appointmentId = serialized.appointment_id;
         
         // 使用原始 SQL 插入，避免 Prisma 类型问题
+        // 确保 appointmentId 是 BigInt 类型
+        const appointmentIdBigInt = BigInt(appointmentId);
         await prisma.$executeRaw`
           INSERT INTO wms.outbound_shipments (warehouse_id, appointment_id, status, created_at, updated_at, created_by, updated_by)
-          VALUES (${defaultWarehouseId}, ${appointmentId}, 'planned', NOW(), NOW(), ${user?.id ? BigInt(user.id) : null}, ${user?.id ? BigInt(user.id) : null})
+          VALUES (${defaultWarehouseId}, ${appointmentIdBigInt}, 'planned', NOW(), NOW(), ${user?.id ? BigInt(user.id) : null}, ${user?.id ? BigInt(user.id) : null})
           ON CONFLICT (appointment_id) DO NOTHING
         `;
       } catch (outboundError: any) {

@@ -1,9 +1,14 @@
 /**
  * 通用 CRUD API 处理函数
+ * 
+ * 使用统一的框架处理所有 CRUD 操作，减少代码重复
+ * 支持数据转换、查询构建、错误处理等通用功能
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { checkPermission, parsePaginationParams, buildPaginationResponse, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers'
+import { applyTransform, applyTransformList } from '@/lib/api/transformers'
+import { resolveParams, withApiHandler } from '@/lib/api/middleware'
 import { EntityConfig } from './types'
 import { getSchema } from './schema-loader'
 import prisma from '@/lib/prisma'
@@ -36,10 +41,13 @@ export function createListHandler(config: EntityConfig) {
       if (permissionResult.error) return permissionResult.error
 
       const searchParams = request.nextUrl.searchParams
+      // 对于主数据搜索，如果有搜索条件，允许更大的limit（通过unlimited参数）
+      // 默认maxLimit为100，但可以通过unlimited=true来支持更大的limit
       let { page, limit, sort, order } = parsePaginationParams(
         searchParams,
         config.list.defaultSort,
-        config.list.defaultOrder
+        config.list.defaultOrder,
+        100 // 默认最大limit为100
       )
       const search = searchParams.get('search') || ''
 
@@ -422,7 +430,8 @@ export function createListHandler(config: EntityConfig) {
               serialized.carrier = serialized.carriers
               delete serialized.carriers
             }
-            // 计算整柜体积：从 order_detail 的 volume 总和得出（覆盖数据库中的旧值）
+            // 计算整柜体积：从 order_detail 的 volume 总和得出
+            // container_volume 已经在上面批量更新了，这里只需要设置显示值
             if (serialized.order_detail && Array.isArray(serialized.order_detail)) {
               const totalVolume = serialized.order_detail.reduce((sum: number, detail: any) => {
                 // 确保 volume 是数字类型，处理 Decimal 类型和字符串
@@ -439,16 +448,8 @@ export function createListHandler(config: EntityConfig) {
                 }
                 return sum + volume
               }, 0)
-              // 强制覆盖数据库中的 container_volume 值（使用计算出的值）
-              // 注意：数据库中的 container_volume 可能是旧值，这里用计算值覆盖
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`[createListHandler] 订单 ${serialized.order_id} 整柜体积计算:`, {
-                  detailCount: serialized.order_detail.length,
-                  volumes: serialized.order_detail.map((d: any) => d.volume),
-                  calculatedTotal: totalVolume,
-                  dbValue: serialized.container_volume,
-                })
-              }
+              
+              // 使用计算出的值（确保数据一致性）
               serialized.container_volume = totalVolume
             } else {
               // 如果没有明细，整柜体积为 0
@@ -685,7 +686,8 @@ export function createDetailHandler(config: EntityConfig) {
           transformed.carrier = transformed.carriers
           delete transformed.carriers
         }
-        // 计算整柜体积：从 order_detail 的 volume 总和得出（覆盖数据库中的旧值）
+        // 计算整柜体积：从 order_detail 的 volume 总和得出，并更新数据库
+        // 如果数据库中的 container_volume 与计算值不一致，则更新数据库
         if (transformed.order_detail && Array.isArray(transformed.order_detail)) {
           const totalVolume = transformed.order_detail.reduce((sum: number, detail: any) => {
             // 确保 volume 是数字类型，处理 Decimal 类型和字符串
@@ -702,11 +704,33 @@ export function createDetailHandler(config: EntityConfig) {
             }
             return sum + volume
           }, 0)
-          // 强制覆盖数据库中的 container_volume 值（使用计算出的值）
+          
+          // 使用计算出的值（确保数据一致性）
           transformed.container_volume = totalVolume
+          
+          // 如果数据库中的值与计算值不一致，异步更新数据库（不阻塞响应）
+          const dbContainerVolume = transformed.container_volume ? Number(transformed.container_volume) : 0
+          if (Math.abs(dbContainerVolume - totalVolume) > 0.01) {
+            prisma.orders.update({
+              where: { order_id: BigInt(transformed.order_id) },
+              data: { container_volume: totalVolume },
+            }).catch((updateError: any) => {
+              console.error(`[createDetailHandler] 更新订单 ${transformed.order_id} container_volume 失败:`, updateError)
+            })
+          }
         } else {
           // 如果没有明细，整柜体积为 0
           transformed.container_volume = 0
+          // 如果数据库中的值不是 0，异步更新数据库（不阻塞响应）
+          const dbContainerVolume = transformed.container_volume ? Number(transformed.container_volume) : 0
+          if (dbContainerVolume !== 0) {
+            prisma.orders.update({
+              where: { order_id: BigInt(transformed.order_id) },
+              data: { container_volume: 0 },
+            }).catch((updateError: any) => {
+              console.error(`[createDetailHandler] 更新订单 ${transformed.order_id} container_volume 失败:`, updateError)
+            })
+          }
         }
       }
       
@@ -801,7 +825,7 @@ export function createCreateHandler(config: EntityConfig) {
       const data = validationResult.data
       const submitData = data // 提交数据转换在需要时处理
 
-      // 处理 BigInt 字段
+      // 处理 BigInt 字段和日期字段
       const processedData: any = {}
       for (const [key, value] of Object.entries(submitData as Record<string, any>)) {
         const fieldConfig = config.fields[key]
@@ -816,16 +840,27 @@ export function createCreateHandler(config: EntityConfig) {
           }
         } else if (typeof value === 'number' && key.endsWith('_id')) {
           processedData[key] = BigInt(value)
+        } else if (value && typeof value === 'string' && (fieldConfig?.type === 'date' || fieldConfig?.type === 'datetime' || key.includes('_date') || key.includes('_at'))) {
+          // 处理日期字段：如果是 YYYY-MM-DD 格式，转换为完整的 DateTime
+          // Prisma 需要完整的 ISO-8601 DateTime 格式（包含时间部分）
+          if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            // YYYY-MM-DD 格式，添加时间部分（00:00:00.000Z）
+            processedData[key] = new Date(value + 'T00:00:00.000Z')
+          } else if (/^\d{4}-\d{2}-\d{2}T/.test(value)) {
+            // 已经是完整的 DateTime 格式（包含 T），直接转换
+            processedData[key] = new Date(value)
+          } else {
+            // 其他格式，尝试转换
+            processedData[key] = new Date(value)
+          }
         } else {
           processedData[key] = value
         }
       }
 
-      // 对于订单表，确保 container_volume 默认为 0（新建订单时没有明细，体积为 0）
+      // 对于订单表，创建时设置 container_volume = 0（新建订单时没有明细，体积为 0）
       if (config.prisma?.model === 'orders') {
-        if (processedData.container_volume === undefined || processedData.container_volume === null) {
-          processedData.container_volume = 0
-        }
+        processedData.container_volume = 0
       }
 
       // 自动添加系统维护字段（创建人/时间、修改人/时间）
@@ -836,6 +871,41 @@ export function createCreateHandler(config: EntityConfig) {
       const item = await prismaModel.create({
         data: processedData,
       })
+
+      // 对于订单表，如果创建时状态就是"拆柜"（unload），自动创建入库记录
+      if (config.prisma?.model === 'orders' && processedData.status === 'unload') {
+        try {
+          // 获取第一个可用的 warehouse_id，如果没有则使用 1000 作为默认值
+          const firstWarehouse = await prisma.warehouses.findFirst({
+            select: { warehouse_id: true },
+            orderBy: { warehouse_id: 'asc' },
+          })
+          
+          const warehouseId = firstWarehouse?.warehouse_id || BigInt(1000)
+          
+          // 检查是否已存在入库记录（理论上不应该存在，因为刚创建）
+          const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
+            where: { order_id: item.order_id },
+            select: { inbound_receipt_id: true },
+          })
+          
+          // 如果不存在，则创建入库记录
+          if (!existingInboundReceipt) {
+            await prisma.inbound_receipt.create({
+              data: {
+                order_id: item.order_id,
+                warehouse_id: warehouseId,
+                status: 'pending',
+                created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+                updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+              },
+            })
+          }
+        } catch (inboundError: any) {
+          // 如果创建失败（例如已存在），记录错误但不影响订单创建
+          console.warn('自动创建入库记录失败:', inboundError)
+        }
+      }
 
       return NextResponse.json(
         { data: serializeBigInt(item) },
@@ -910,6 +980,51 @@ export function createUpdateHandler(config: EntityConfig) {
       addSystemFields(processedData, permissionResult.user, false)
 
       const prismaModel = getPrismaModel(config)
+      
+      // 对于订单表，检查 status 是否变为"拆柜"（unload），如果是则自动创建入库记录
+      if (config.prisma?.model === 'orders' && processedData.status === 'unload') {
+        // 先获取当前订单，检查旧状态和是否已经有入库记录
+        const currentOrder = await prismaModel.findUnique({
+          where: { [idField]: BigInt(resolvedParams.id) },
+          select: { order_id: true, status: true },
+        })
+        
+        if (currentOrder && currentOrder.status !== 'unload') {
+          // 只有当状态从非"拆柜"变为"拆柜"时才创建入库记录
+          // 检查是否已存在入库记录
+          const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
+            where: { order_id: currentOrder.order_id },
+            select: { inbound_receipt_id: true },
+          })
+          
+          // 如果不存在，则创建入库记录
+          if (!existingInboundReceipt) {
+            try {
+              // 获取第一个可用的 warehouse_id，如果没有则使用 1000 作为默认值
+              const firstWarehouse = await prisma.warehouses.findFirst({
+                select: { warehouse_id: true },
+                orderBy: { warehouse_id: 'asc' },
+              })
+              
+              const warehouseId = firstWarehouse?.warehouse_id || BigInt(1000)
+              
+              await prisma.inbound_receipt.create({
+                data: {
+                  order_id: currentOrder.order_id,
+                  warehouse_id: warehouseId,
+                  status: 'pending',
+                  created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+                  updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+                },
+              })
+            } catch (inboundError: any) {
+              // 如果创建失败（例如已存在），记录错误但不影响订单更新
+              console.warn('自动创建入库记录失败:', inboundError)
+            }
+          }
+        }
+      }
+      
       const item = await prismaModel.update({
         where: { [idField]: BigInt(resolvedParams.id) },
         data: processedData,

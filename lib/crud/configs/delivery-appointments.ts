@@ -113,6 +113,64 @@ export const deliveryAppointmentConfig: EntityConfig = {
       'rejected',
       'notes',
     ],
+    searchFields: ['reference_number', 'appointment_account'],
+    // 筛选配置（快速筛选）
+    filterFields: [
+      {
+        field: 'delivery_method',
+        label: '派送方式',
+        type: 'select',
+        options: [
+          { label: '私仓', value: '私仓' },
+          { label: '自提', value: '自提' },
+          { label: '直送', value: '直送' },
+          { label: '卡派', value: '卡派' },
+        ],
+      },
+      {
+        field: 'appointment_type',
+        label: '预约类型',
+        type: 'select',
+        options: [
+          { label: '地板', value: '地板' },
+          { label: '卡板', value: '卡板' },
+        ],
+      },
+      {
+        field: 'rejected',
+        label: '拒收',
+        type: 'select',
+        options: [
+          { label: '是', value: 'true' },
+          { label: '否', value: 'false' },
+        ],
+      },
+      {
+        field: 'confirmed_start',
+        label: '送货时间',
+        type: 'dateRange',
+        dateFields: ['confirmed_start'],
+      },
+    ],
+    // 高级搜索配置（多条件组合）
+    advancedSearchFields: [
+      {
+        field: 'reference_number',
+        label: '预约号码',
+        type: 'text',
+      },
+      {
+        field: 'appointment_account',
+        label: '预约账号',
+        type: 'text',
+      },
+      {
+        field: 'total_pallets',
+        label: '板数',
+        type: 'numberRange',
+        numberFields: ['total_pallets'],
+      },
+    ],
     // 批量操作配置
     batchOperations: {
       enabled: true,

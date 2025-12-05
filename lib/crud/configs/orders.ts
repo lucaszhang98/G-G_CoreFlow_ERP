@@ -300,6 +300,17 @@ export const orderConfig: EntityConfig = {
       enabled: true,
       fields: ['status', 'order_date', 'total_amount', 'notes'],
     },
+    // 批量操作配置：禁用删除功能
+    batchOperations: {
+      enabled: true,
+      edit: {
+        enabled: true,
+        fields: ['status', 'order_date', 'total_amount', 'notes'],
+      },
+      delete: {
+        enabled: false, // 订单管理不允许删除
+      },
+    },
   },
   
   formFields: ['order_number', 'customer_id', 'order_date', 'status', 'total_amount', 'container_type', 'notes'],
@@ -341,6 +352,7 @@ export const orderConfig: EntityConfig = {
           volume: true, // 只需要 volume 字段来计算整柜体积
         },
       },
+      // container_volume 字段会从数据库读取，但也会根据 order_detail 计算以确保一致性
     },
   },
 }

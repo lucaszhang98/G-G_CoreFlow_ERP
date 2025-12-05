@@ -32,7 +32,7 @@ export async function PUT(
     const volumeNum = volume !== undefined ? (volume ? parseFloat(volume) : null) : currentDetail.volume ? Number(currentDetail.volume) : null
     const calculatedEstimatedPallets = volumeNum && volumeNum > 0 ? Math.round(volumeNum / 2) : null
 
-    // 计算分仓占总柜比：需要获取订单的总体积
+    // 计算分仓占比：需要获取订单的总体积
     const order = await prisma.orders.findUnique({
       where: { order_id: currentDetail.order_id },
       select: {
@@ -86,7 +86,7 @@ export async function PUT(
       data: updateData,
     })
 
-    // 更新后，重新计算该订单所有明细的分仓占总柜比
+    // 更新后，重新计算该订单所有明细的分仓占比
     const updatedOrder = await prisma.orders.findUnique({
       where: { order_id: currentDetail.order_id },
       select: {
@@ -117,6 +117,12 @@ export async function PUT(
           })
         )
       }
+      
+      // 更新订单的 container_volume
+      await prisma.orders.update({
+        where: { order_id: updatedOrder.order_id },
+        data: { container_volume: totalVolume },
+      })
     }
 
     // 重新获取更新后的明细（包含重新计算的 volume_percentage）
@@ -157,10 +163,75 @@ export async function DELETE(
       where: { detail_id: BigInt(resolvedParams.id) },
     })
 
+    // 获取要删除的明细的订单ID
+    const detailToDelete = await prisma.order_detail.findUnique({
+      where: { id: BigInt(resolvedParams.id) },
+      select: { order_id: true },
+    })
+
+    if (!detailToDelete?.order_id) {
+      return NextResponse.json({ error: '仓点明细不存在或缺少订单ID' }, { status: 404 })
+    }
+
     // 然后删除仓点明细
     await prisma.order_detail.delete({
       where: { id: BigInt(resolvedParams.id) },
     })
+
+    // 删除明细后，重新计算该订单所有明细的分仓占比，并更新订单的 container_volume
+    const updatedOrder = await prisma.orders.findUnique({
+      where: { order_id: detailToDelete.order_id },
+      select: {
+        order_id: true,
+        order_detail: {
+          select: { id: true, volume: true },
+        },
+      },
+    })
+
+    if (updatedOrder?.order_detail) {
+      // 计算总体积
+      const totalVolume = updatedOrder.order_detail.reduce((sum: number, detail: any) => {
+        const vol = detail.volume ? Number(detail.volume) : 0
+        return sum + vol
+      }, 0)
+
+      // 更新所有明细的 volume_percentage
+      if (totalVolume > 0) {
+        await Promise.all(
+          updatedOrder.order_detail.map((detail: any) => {
+            const vol = detail.volume ? Number(detail.volume) : 0
+            const percentage = vol > 0 ? parseFloat(((vol / totalVolume) * 100).toFixed(2)) : null
+            return prisma.order_detail.update({
+              where: { id: detail.id },
+              data: { volume_percentage: percentage },
+            })
+          })
+        )
+      } else {
+        // 如果没有明细了，将所有明细的 volume_percentage 设为 null
+        await Promise.all(
+          updatedOrder.order_detail.map((detail: any) => {
+            return prisma.order_detail.update({
+              where: { id: detail.id },
+              data: { volume_percentage: null },
+            })
+          })
+        )
+      }
+      
+      // 更新订单的 container_volume
+      await prisma.orders.update({
+        where: { order_id: detailToDelete.order_id },
+        data: { container_volume: totalVolume },
+      })
+    } else {
+      // 如果没有明细了，将订单的 container_volume 设为 0
+      await prisma.orders.update({
+        where: { order_id: detailToDelete.order_id },
+        data: { container_volume: 0 },
+      })
+    }
 
     return NextResponse.json({ message: '仓点明细删除成功' })
   } catch (error: any) {

@@ -124,7 +124,8 @@ export function SearchModule({
 
   const hasActiveFilters = activeFilterCount > 0
   const hasActiveAdvancedSearch = activeAdvancedSearchCount > 0
-  const hasAnyFilters = hasActiveFilters || hasActiveAdvancedSearch || searchValue
+  // 只在客户端挂载后计算 hasAnyFilters，避免 hydration 错误
+  const hasAnyFilters = mounted && (hasActiveFilters || hasActiveAdvancedSearch || searchValue)
 
   return (
     <div className="space-y-4">
@@ -147,7 +148,7 @@ export function SearchModule({
                   onChange={(e) => onSearchChange(e.target.value)}
                   className="pl-12 pr-4 h-14 text-base border-2 border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 rounded-xl focus:border-blue-500 focus:bg-white dark:focus:bg-gray-900/50 focus:ring-4 focus:ring-blue-500/10 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-300 dark:hover:border-gray-700"
                 />
-                {searchValue && (
+                {mounted && searchValue && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
                     <Button
                       variant="ghost"
@@ -161,7 +162,7 @@ export function SearchModule({
                 )}
               </div>
               {/* 搜索结果提示 */}
-              {searchValue && (
+              {mounted && searchValue && (
                 <div className="absolute left-4 top-full mt-2 text-xs text-gray-500 dark:text-gray-400 animate-in fade-in slide-in-from-top-1">
                   找到 <span className="font-semibold text-blue-600 dark:text-blue-400">{total}</span> 条结果
                 </div>
@@ -550,7 +551,7 @@ export function SearchModule({
       </div>
 
       {/* 活跃筛选标签显示区域 */}
-      {hasAnyFilters && (
+      {mounted && hasAnyFilters && (
         <div className="flex flex-wrap items-center gap-2 px-1">
           {searchValue && (
             <Badge 

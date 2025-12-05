@@ -91,14 +91,8 @@ export const inventoryLotConfig: EntityConfig = {
       key: 'delivery_progress',
       label: '送货进度',
       type: 'number',
-      sortable: true,
-      placeholder: '请输入送货进度（0-100）',
-    },
-    unload_transfer_notes: {
-      key: 'unload_transfer_notes',
-      label: '拆柜/转仓',
-      type: 'textarea',
-      placeholder: '请输入拆柜/转仓备注',
+      sortable: false, // 计算字段，不支持排序
+      placeholder: '送货进度（自动计算）',
     },
     notes: {
       key: 'notes',
@@ -250,8 +244,7 @@ export const inventoryLotConfig: EntityConfig = {
         'pallet_count',
         'remaining_pallet_count',
         'unbooked_pallet_count',
-        'delivery_progress',
-        'unload_transfer_notes',
+        // 'delivery_progress', // 送货进度是计算字段，不可编辑
         'notes',
       ],
     },
@@ -266,8 +259,7 @@ export const inventoryLotConfig: EntityConfig = {
     'pallet_count',
     'remaining_pallet_count',
     'unbooked_pallet_count',
-    'delivery_progress',
-    'unload_transfer_notes',
+    // 'delivery_progress', // 送货进度是计算字段，不在表单中显示
     'notes',
     'status',
     'lot_number',

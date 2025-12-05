@@ -13,6 +13,16 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { LocationSelect } from "@/components/ui/location-select"
+import { Textarea } from "@/components/ui/textarea"
 import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Save, X } from "lucide-react"
 import {
   Dialog,
@@ -49,6 +59,7 @@ interface OrderDetail {
   volume: number | string | null
   container_volume: number | string | null
   estimated_pallets: number | null
+  po: string | null // PO字段
   created_at: string | Date | null
   updated_at: string | Date | null
   created_by: bigint | string | number | null
@@ -92,6 +103,7 @@ export function OrderDetailTableEditable({ orderId, orderDetails: initialOrderDe
     setExpandedRows(newExpanded)
   }
 
+  // 格式化数字（千分位）
   const formatNumber = (value: number | null | string) => {
     if (!value && value !== 0) return "-"
     const numValue = typeof value === 'string' 
@@ -99,6 +111,22 @@ export function OrderDetailTableEditable({ orderId, orderDetails: initialOrderDe
       : Number(value)
     if (isNaN(numValue)) return "-"
     return numValue.toLocaleString()
+  }
+
+  // 格式化整数（用于板数相关字段）
+  const formatInteger = (value: number | null | string) => {
+    if (!value && value !== 0) return "-"
+    const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
+    if (isNaN(numValue)) return "-"
+    return Math.round(numValue).toLocaleString()
+  }
+
+  // 格式化体积（不加单位，直接显示数字）
+  const formatVolume = (value: number | null | string) => {
+    if (value === null || value === undefined || value === '') return "-"
+    const numValue = typeof value === 'string' ? parseFloat(value) : Number(value)
+    if (isNaN(numValue)) return "-"
+    return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   // 编辑仓点明细
@@ -117,6 +145,7 @@ export function OrderDetailTableEditable({ orderId, orderDetails: initialOrderDe
           volume: detail.volume,
           container_volume: detail.container_volume,
           estimated_pallets: detail.estimated_pallets,
+          po: detail.po || null,
         }),
       })
 
@@ -290,6 +319,7 @@ export function OrderDetailTableEditable({ orderId, orderDetails: initialOrderDe
             <TableHead>体积</TableHead>
             <TableHead>货柜体积</TableHead>
             <TableHead>预估托盘数</TableHead>
+            <TableHead>PO</TableHead>
             <TableHead>创建时间</TableHead>
             <TableHead>更新时间</TableHead>
             <TableHead>创建人ID</TableHead>
@@ -394,6 +424,22 @@ export function OrderDetailTableEditable({ orderId, orderDetails: initialOrderDe
                           className="w-20"
                         />
                       </TableCell>
+                      <TableCell>
+                        <Input
+                          type="text"
+                          value={detail.po || ''}
+                          onChange={(e) => {
+                            const updated = orderDetails.map(d => 
+                              d.id.toString() === rowId 
+                                ? { ...d, po: e.target.value || null }
+                                : d
+                            )
+                            setOrderDetails(updated)
+                          }}
+                          className="w-32"
+                          placeholder="PO"
+                        />
+                      </TableCell>
                       <TableCell colSpan={4}>
                         <div className="flex gap-2">
                           <Button
@@ -423,9 +469,10 @@ export function OrderDetailTableEditable({ orderId, orderDetails: initialOrderDe
                   ) : (
                     <>
                       <TableCell>{detail.quantity}</TableCell>
-                      <TableCell>{formatNumber(detail.volume)}</TableCell>
-                      <TableCell>{formatNumber(detail.container_volume)}</TableCell>
-                      <TableCell>{detail.estimated_pallets || "-"}</TableCell>
+                      <TableCell>{formatVolume(detail.volume)}</TableCell>
+                      <TableCell>{formatVolume(detail.container_volume)}</TableCell>
+                      <TableCell>{formatInteger(detail.estimated_pallets)}</TableCell>
+                      <TableCell>{detail.po || "-"}</TableCell>
                       <TableCell>{detail.created_at ? formatDateDisplay(detail.created_at) : "-"}</TableCell>
                       <TableCell>{detail.updated_at ? formatDateDisplay(detail.updated_at) : "-"}</TableCell>
                       <TableCell>{detail.created_by ? detail.created_by.toString() : "-"}</TableCell>
@@ -657,7 +704,7 @@ export function OrderDetailTableEditable({ orderId, orderDetails: initialOrderDe
                                       <TableCell>{item.sku}</TableCell>
                                       <TableCell>{item.description || "-"}</TableCell>
                                       <TableCell>{formatNumber(item.stock_quantity)}</TableCell>
-                                      <TableCell>{formatNumber(item.volume)}</TableCell>
+                                      <TableCell>{formatVolume(item.volume)}</TableCell>
                                       <TableCell>
                                         <Badge variant={item.status === 'active' ? 'default' : 'secondary'}>
                                           {item.status || "-"}
@@ -762,53 +809,143 @@ function AddDetailDialog({ open, onOpenChange, onSave }: { open: boolean; onOpen
   const [formData, setFormData] = React.useState({
     quantity: 0,
     volume: '',
-    container_volume: '',
+    delivery_location: null as string | null,
+    delivery_nature: null as string | null,
+    unload_type: null as string | null,
+    notes: null as string | null,
     estimated_pallets: null as number | null,
+    po: null as string | null,
   })
 
+  React.useEffect(() => {
+    if (!open) {
+      setFormData({
+        quantity: 0,
+        volume: '',
+        delivery_location: null,
+        delivery_nature: null,
+        unload_type: null,
+        notes: null,
+        estimated_pallets: null,
+        po: null,
+      })
+    }
+  }, [open])
+
   const handleSubmit = () => {
+    // 验证必填字段
+    if (!formData.volume) {
+      toast.error('请填写体积')
+      return
+    }
+    if (!formData.delivery_location) {
+      toast.error('请选择送仓地点')
+      return
+    }
+    if (!formData.delivery_nature) {
+      toast.error('请选择性质')
+      return
+    }
+    
     onSave(formData)
-    setFormData({ quantity: 0, volume: '', container_volume: '', estimated_pallets: null })
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>添加仓点明细</DialogTitle>
           <DialogDescription>填写仓点明细信息</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">数量</label>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="volume">体积 *</Label>
             <Input
+              id="volume"
+              type="number"
+              step="0.01"
+              value={formData.volume}
+              onChange={(e) => setFormData({ ...formData, volume: e.target.value })}
+              placeholder="请输入体积 (支持小数点)"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="delivery_location">送仓地点 *</Label>
+            <LocationSelect
+              value={formData.delivery_location}
+              onChange={(value: string | number | null) => {
+                setFormData({ ...formData, delivery_location: value ? String(value) : null })
+              }}
+              placeholder="选择位置..."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="delivery_nature">性质 *</Label>
+            <Select
+              value={formData.delivery_nature || ''}
+              onValueChange={(value) => setFormData({ ...formData, delivery_nature: value || null })}
+            >
+              <SelectTrigger className="min-w-[120px]">
+                <SelectValue placeholder="选择性质" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="AMZ">AMZ</SelectItem>
+                <SelectItem value="扣货">扣货</SelectItem>
+                <SelectItem value="已放行">已放行</SelectItem>
+                <SelectItem value="私仓">私仓</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="quantity">数量</Label>
+            <Input
+              id="quantity"
               type="number"
               value={formData.quantity}
               onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })}
+              placeholder="请输入数量"
+              min="0"
             />
           </div>
-          <div>
-            <label className="text-sm font-medium">体积</label>
+          <div className="space-y-2">
+            <Label htmlFor="estimated_pallets">预估托盘数</Label>
             <Input
-              type="number"
-              value={formData.volume}
-              onChange={(e) => setFormData({ ...formData, volume: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">货柜体积</label>
-            <Input
-              type="number"
-              value={formData.container_volume}
-              onChange={(e) => setFormData({ ...formData, container_volume: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">预估托盘数</label>
-            <Input
+              id="estimated_pallets"
               type="number"
               value={formData.estimated_pallets || ''}
               onChange={(e) => setFormData({ ...formData, estimated_pallets: parseInt(e.target.value) || null })}
+              placeholder="请输入预估托盘数"
+              min="0"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="unload_type">拆柜/转仓</Label>
+            <Input
+              id="unload_type"
+              type="text"
+              value={formData.unload_type || ''}
+              onChange={(e) => setFormData({ ...formData, unload_type: e.target.value || null })}
+              placeholder="请输入拆柜/转仓"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="notes">备注</Label>
+            <Textarea
+              id="notes"
+              value={formData.notes || ''}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value || null })}
+              placeholder="请输入备注"
+              rows={3}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="po">PO</Label>
+            <Input
+              id="po"
+              type="text"
+              value={formData.po || ''}
+              onChange={(e) => setFormData({ ...formData, po: e.target.value || null })}
+              placeholder="请输入PO（可选）"
             />
           </div>
         </div>

@@ -395,15 +395,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '仓库不存在' }, { status: 404 });
     }
 
+    const orderDetailId = BigInt(data.order_detail_id);
+    const palletCount = data.pallet_count || 1;
+
+    // 获取所有预约的预计板数之和（用于计算未约板数）
+    const appointmentLines = await prisma.appointment_detail_lines.findMany({
+      where: { order_detail_id: orderDetailId },
+      select: { estimated_pallets: true },
+    });
+    const totalAppointmentPallets = appointmentLines.reduce((sum, line) => {
+      return sum + (line.estimated_pallets || 0);
+    }, 0);
+
+    // 获取所有未过期预约的预计板数之和（用于计算剩余板数）
+    // 判断过期：confirmed_start < 当前日期
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiredAppointmentLines = await prisma.appointment_detail_lines.findMany({
+      where: {
+        order_detail_id: orderDetailId,
+        delivery_appointments: {
+          confirmed_start: {
+            lt: today,
+          },
+        },
+      },
+      select: { estimated_pallets: true },
+    });
+    const totalExpiredAppointmentPallets = expiredAppointmentLines.reduce((sum, line) => {
+      return sum + (line.estimated_pallets || 0);
+    }, 0);
+
+    // 计算未约板数和剩余板数
+    const unbookedPalletCount = palletCount - totalAppointmentPallets; // 实际板数 - 所有预约的板数
+    const remainingPalletCount = palletCount - totalExpiredAppointmentPallets; // 实际板数 - 已过期预约的板数
+
     // 构建创建数据
     const createData: any = {
       order_id: BigInt(data.order_id),
-      order_detail_id: BigInt(data.order_detail_id),
+      order_detail_id: orderDetailId,
       warehouse_id: BigInt(data.warehouse_id),
       storage_location_code: data.storage_location_code || null,
-      pallet_count: data.pallet_count || 1,
-      remaining_pallet_count: data.remaining_pallet_count ?? 0,
-      unbooked_pallet_count: data.unbooked_pallet_count ?? 0,
+      pallet_count: palletCount,
+      remaining_pallet_count: remainingPalletCount, // 自动计算
+      unbooked_pallet_count: unbookedPalletCount, // 自动计算
       delivery_progress: data.delivery_progress ? Number(data.delivery_progress) : null,
       status: data.status || 'available',
       lot_number: data.lot_number || null,

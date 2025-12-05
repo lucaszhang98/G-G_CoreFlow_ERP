@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '2mb',
     },
   },
+  // Netlify 部署配置
+  // 不需要设置 output，Netlify Next.js 插件会自动处理
+  // 不需要设置 outputFileTracingIncludes，插件会自动优化
 };
 
 export default nextConfig;

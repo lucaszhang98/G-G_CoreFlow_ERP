@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { EntityTable } from '@/components/crud/entity-table';
 import { inventoryLotConfig } from '@/lib/crud/configs/inventory-lots';
 import type { ClickableColumnConfig } from '@/lib/table/config';
+import { ColumnDef } from '@tanstack/react-table';
 import {
   Table,
   TableBody,
@@ -60,6 +61,12 @@ export function InventoryLotTable() {
   const formatNumber = (num: number | null | undefined) => {
     if (num === null || num === undefined) return "-"
     return num.toLocaleString()
+  }
+
+  // 格式化整数（用于板数相关字段）
+  const formatInteger = (num: number | null | undefined) => {
+    if (num === null || num === undefined) return "-"
+    return Math.round(num).toLocaleString()
   }
 
   // 隐藏查看详情、删除和新建按钮（库存都是自动来的）
@@ -127,7 +134,7 @@ export function InventoryLotTable() {
                       </TableCell>
                       <TableCell>{formatDate(appt.confirmed_start)}</TableCell>
                       <TableCell>
-                        {row.pallet_count > 0 ? formatNumber(row.pallet_count) : "-"}
+                        {formatInteger(row.pallet_count)}
                       </TableCell>
                     </TableRow>
                   ))}

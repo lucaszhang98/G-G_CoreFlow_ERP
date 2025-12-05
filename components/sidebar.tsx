@@ -130,16 +130,6 @@ const menuItems: MenuItem[] = [
         icon: Calendar,
         href: "/dashboard/oms/appointments",
       },
-      {
-        title: "订单分配",
-        icon: ListChecks,
-        href: "/dashboard/oms/allocations",
-      },
-      {
-        title: "订单需求",
-        icon: ClipboardList,
-        href: "/dashboard/oms/requirements",
-      },
     ],
   },
   {
@@ -151,16 +141,6 @@ const menuItems: MenuItem[] = [
         title: "海柜管理",
         icon: Container,
         href: "/dashboard/tms/sea-containers",
-      },
-      {
-        title: "运输段管理",
-        icon: Route,
-        href: "/dashboard/tms/legs",
-      },
-      {
-        title: "运费单管理",
-        icon: Receipt,
-        href: "/dashboard/tms/freight-bills",
       },
     ],
   },
@@ -183,11 +163,6 @@ const menuItems: MenuItem[] = [
         title: "出库管理",
         icon: PackageCheck,
         href: "/dashboard/wms/outbound-shipments",
-      },
-      {
-        title: "劳动力管理",
-        icon: Users2,
-        href: "/dashboard/wms/labor",
       },
     ],
   },
@@ -338,6 +313,7 @@ function findActiveMenuItems(items: MenuItem[], pathname: string): string[] {
 
 export function Sidebar({ userRole = "user" }: SidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
   
   // 初始状态：只使用自动展开的菜单（确保服务器端和客户端一致）
   // 使用函数式初始化，基于当前 pathname 计算
@@ -428,6 +404,7 @@ export function Sidebar({ userRole = "user" }: SidebarProps) {
   }
 
   const renderMenuItem = (item: MenuItem, level: number = 0) => {
+    // 在函数内部处理点击事件，使用闭包访问 router
     if (!hasPermission(item.roles)) return null
 
     const isActive = item.href && pathname === item.href
@@ -481,6 +458,19 @@ export function Sidebar({ userRole = "user" }: SidebarProps) {
       <Link
         key={item.title}
         href={item.href || "#"}
+        onClick={(e) => {
+          // 如果当前 URL 有查询参数，清除它们（只保留路径）
+          if (item.href && typeof window !== 'undefined') {
+            const currentUrl = new URL(window.location.href)
+            const targetPath = item.href
+            // 如果目标路径与当前路径不同，或者当前 URL 有查询参数，清除查询参数
+            if (currentUrl.pathname !== targetPath || currentUrl.search) {
+              // 使用 router.push 清除查询参数
+              e.preventDefault()
+              router.push(targetPath)
+            }
+          }
+        }}
         className={cn(
           "flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors",
           level > 0 && "ml-4",

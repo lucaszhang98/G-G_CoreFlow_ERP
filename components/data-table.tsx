@@ -25,6 +25,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { TableViewManager } from "@/components/table/table-view-manager"
+import { getDefaultView, applyViewToVisibility } from "@/lib/table/view-manager"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -60,6 +62,10 @@ interface DataTableProps<TData, TValue> {
   // 列显示控制
   showColumnToggle?: boolean
   columnLabels?: Record<string, string> // 列ID到显示标签的映射
+  // 视图管理
+  enableViewManager?: boolean // 是否启用视图管理
+  viewManagerTableName?: string // 视图管理的表名（用于区分不同表格）
+  viewManagerUserId?: string | number // 用户ID（用于区分不同用户的视图）
   // 可排序列配置（如果未指定，则所有列都可排序）
   sortableColumns?: string[]
   // 行选择相关
@@ -94,6 +100,9 @@ export function DataTable<TData, TValue>({
   loading = false,
   showColumnToggle = false,
   columnLabels = {},
+  enableViewManager = false,
+  viewManagerTableName,
+  viewManagerUserId,
   sortableColumns = [],
   enableRowSelection = false,
   onRowSelectionChange,
@@ -132,7 +141,11 @@ export function DataTable<TData, TValue>({
     }
   }
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
+  
+  // 视图管理：初始化列可见性（根据保存的视图）
+  // 初始状态为空对象，等待 table 初始化后再应用默认视图
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+  
   const [rowSelection, setRowSelection] = React.useState({})
   const [pageIndex, setPageIndex] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
@@ -255,6 +268,26 @@ export function DataTable<TData, TValue>({
     },
   })
 
+  // 当 table 初始化后，应用默认视图（确保列ID都正确）
+  // 这个 useEffect 必须在 table 创建之后
+  React.useEffect(() => {
+    if (enableViewManager && viewManagerTableName && table) {
+      // 使用 table.getAllColumns() 获取所有列（包括隐藏的列）
+      const allColumns = table.getAllColumns()
+      const allColumnIds = allColumns
+        .map(col => col.id)
+        .filter((id): id is string => !!id && id !== 'select') // 排除 select 列
+      
+      if (allColumnIds.length > 0) {
+        const defaultView = getDefaultView(viewManagerTableName, viewManagerUserId)
+        if (defaultView) {
+          const initialVisibility = applyViewToVisibility(defaultView, allColumnIds)
+          setColumnVisibility(initialVisibility)
+        }
+      }
+    }
+  }, [enableViewManager, viewManagerTableName, viewManagerUserId, table])
+
   // 处理分页变化
   // 计算实际的总页数
   const pageCount = serverSidePagination && calculatedPageCount !== undefined
@@ -265,6 +298,41 @@ export function DataTable<TData, TValue>({
   React.useEffect(() => {
     setPageInputValue(String(currentPage + 1))
   }, [currentPage])
+
+  // 计算当前列可见性状态（用于保存视图）
+  const currentColumnVisibility = React.useMemo(() => {
+    if (!enableViewManager || !viewManagerTableName) {
+      return {}
+    }
+    
+    // 从表格中获取当前实际的列可见性状态（用于保存视图）
+    // 使用 table.getAllColumns() 获取所有列（包括隐藏的列），而不是 finalColumns
+    const actualVisibility: Record<string, boolean> = {}
+    
+    // 获取所有列（包括隐藏的列）
+    const allColumns = table.getAllColumns()
+    const allColumnIds = allColumns
+      .map(col => col.id)
+      .filter((id): id is string => !!id && id !== 'select') // 排除 select 列，因为它不应该被保存到视图中
+    
+    allColumnIds.forEach(colId => {
+      try {
+        const column = table.getColumn(colId)
+        if (column) {
+          actualVisibility[colId] = column.getIsVisible()
+        } else {
+          // 如果列还不存在，使用 columnVisibility 状态
+          // react-table: false 表示隐藏，true 或不设置表示显示
+          actualVisibility[colId] = columnVisibility[colId] !== false
+        }
+      } catch (error) {
+        // 如果获取列失败，使用 columnVisibility 状态
+        actualVisibility[colId] = columnVisibility[colId] !== false
+      }
+    })
+    
+    return actualVisibility
+  }, [enableViewManager, viewManagerTableName, table, columnVisibility])
 
   const handlePageChange = (newPage: number) => {
     if (serverSidePagination && onPageChange) {
@@ -443,7 +511,7 @@ export function DataTable<TData, TValue>({
                   // 如果是操作列，在表头显示列切换按钮和"操作"标题
                   if (isActionsColumn) {
                     return (
-                      <TableHead key={header.id} className="font-semibold text-sm text-foreground/90 px-2 py-3 whitespace-nowrap">
+                      <TableHead key={header.id} className="font-semibold text-sm text-foreground/90 px-2 py-3 whitespace-nowrap relative">
                         <div className="flex items-center justify-center gap-2">
                           {showColumnToggle && mounted && (
                             <DropdownMenu>
@@ -459,6 +527,30 @@ export function DataTable<TData, TValue>({
                               >
                                 <DropdownMenuLabel className="sticky top-0 bg-popover z-10 py-2 border-b">切换列显示</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
+                                {enableViewManager && viewManagerTableName && (
+                                  <>
+                                    <div className="px-2 py-1.5 border-b">
+                                      <TableViewManager
+                                        tableName={viewManagerTableName}
+                                        userId={viewManagerUserId}
+                                        currentVisibility={currentColumnVisibility}
+                                        allColumns={(() => {
+                                          // 获取所有列ID（排除 select 列）
+                                          const allColumns = table.getAllColumns()
+                                          return allColumns
+                                            .map(col => col.id)
+                                            .filter((id): id is string => !!id && id !== 'select')
+                                        })()}
+                                        columnLabels={columnLabels}
+                                        onViewChange={(visibility) => {
+                                          // 直接更新列可见性状态，react-table 会自动应用
+                                          setColumnVisibility(visibility)
+                                        }}
+                                      />
+                                    </div>
+                                    <DropdownMenuSeparator />
+                                  </>
+                                )}
                                 <div className="max-h-[320px] overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-border/80">
                                   {table
                                     .getAllColumns()
@@ -470,7 +562,23 @@ export function DataTable<TData, TValue>({
                                         <DropdownMenuCheckboxItem
                                           key={colId}
                                           checked={column.getIsVisible()}
-                                          onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                                          onCheckedChange={(value) => {
+                                            // 阻止事件冒泡，防止页面刷新
+                                            const newValue = !!value
+                                            // 直接更新列可见性（不触发页面刷新）
+                                            column.toggleVisibility(newValue)
+                                            // 同步到视图管理器状态（但不保存，只有点击保存视图时才保存）
+                                            if (enableViewManager) {
+                                              setColumnVisibility(prev => ({
+                                                ...prev,
+                                                [colId]: newValue
+                                              }))
+                                            }
+                                          }}
+                                          onSelect={(e) => {
+                                            // 阻止默认选择行为，防止下拉菜单关闭
+                                            e.preventDefault()
+                                          }}
                                           className="capitalize"
                                         >
                                           {colLabel}
@@ -576,27 +684,29 @@ export function DataTable<TData, TValue>({
                           : "hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-blue-950/20 dark:hover:to-indigo-950/20"
                       )}
                       onClick={(e) => {
-                        // 如果点击的是操作按钮或其他交互元素，不触发展开
-                        const target = e.target as HTMLElement
-                        if (target.closest('button') || target.closest('a') || target.closest('[role="button"]')) {
-                          return
-                        }
-                        if (canExpand) {
-                          const newExpanded = new Set(expandedRows)
-                          if (newExpanded.has(rowId)) {
-                            newExpanded.delete(rowId)
-                          } else {
-                            newExpanded.add(rowId)
-                          }
-                          setExpandedRows(newExpanded)
-                        }
+                        // 完全禁用行点击展开，只允许通过展开图标展开
+                        // 这样可以避免在编辑单元格时误触发展开
+                        e.stopPropagation()
                       }}
                     >
                       {/* 展开图标列（如果启用展开行功能，始终显示以保持对齐） */}
                       {expandableRows?.enabled && (
                         <TableCell className="py-3 px-2 w-[40px] text-center">
                           {canExpand ? (
-                            <div className="flex items-center justify-center">
+                            <div 
+                              data-expand-trigger
+                              className="flex items-center justify-center cursor-pointer hover:bg-muted/50 rounded p-1 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                const newExpanded = new Set(expandedRows)
+                                if (newExpanded.has(rowId)) {
+                                  newExpanded.delete(rowId)
+                                } else {
+                                  newExpanded.add(rowId)
+                                }
+                                setExpandedRows(newExpanded)
+                              }}
+                            >
                               {isExpanded ? (
                                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
                               ) : (
@@ -612,7 +722,23 @@ export function DataTable<TData, TValue>({
                         const isActionsCell = cell.column.id === 'actions'
                         const widthClass = (cell.column.columnDef.meta as any)?.widthClass || ''
                         return (
-                          <TableCell key={cell.id} className={`py-3 group-hover:text-foreground transition-colors ${isActionsCell ? 'px-2' : 'px-3'} ${widthClass}`}>
+                          <TableCell 
+                            key={cell.id} 
+                            className={`py-3 group-hover:text-foreground transition-colors ${isActionsCell ? 'px-2' : 'px-3'} ${widthClass}`}
+                            onClick={(e) => {
+                              // 如果点击的是可编辑单元格，阻止事件冒泡到行
+                              if (e.target instanceof HTMLElement) {
+                                const target = e.target as HTMLElement
+                                if (target.closest('.inline-edit-cell') || 
+                                    target.closest('input') || 
+                                    target.closest('textarea') || 
+                                    target.closest('select') ||
+                                    target.closest('[contenteditable="true"]')) {
+                                  e.stopPropagation()
+                                }
+                              }
+                            }}
+                          >
                             <div className="flex justify-center truncate">
                           {flexRender(
                             cell.column.columnDef.cell,

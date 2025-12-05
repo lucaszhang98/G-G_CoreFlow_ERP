@@ -344,7 +344,7 @@ export function SeaContainerTableWrapper() {
       config={enhancedConfig}
       customColumns={customColumns}
       customActions={{
-        onView: handleView,
+        onView: undefined, // 隐藏查看详情按钮（已有超链接）
         // 不提供 onDelete，海柜管理不允许删除（数据来自订单管理）
         // onDelete: handleDelete,
       }}
