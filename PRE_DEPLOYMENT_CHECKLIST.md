@@ -1,132 +1,104 @@
-# 发布前检查清单
+# 部署前最终检查清单
 
-## ✅ 已完成的优化
+## ✅ 代码质量检查
 
-### 1. 代码清理
-- ✅ 清理了调试用的 `console.log` 和 `console.warn`
-- ✅ 保留了必要的错误日志（`console.error`）
-- ✅ 生产环境错误日志已优化，减少敏感信息输出
-- ✅ 类型检查通过（`npm run type-check`）
-- ✅ 构建测试通过（`npm run build`）
+- [x] TypeScript 类型检查通过 (`npm run type-check`)
+- [x] 构建成功 (`npm run build`)
+- [x] 无严重安全漏洞 (`npm audit`)
+- [x] 无 Linter 错误
 
-### 2. 配置检查
-- ✅ Next.js 配置正确（`next.config.ts`）
-- ✅ Netlify 配置正确（`netlify.toml`）
-- ✅ Node.js 版本：20
-- ✅ Prisma 二进制目标：`rhel-openssl-3.0.x`
+## ✅ 功能验证
 
-### 3. 文档准备
-- ✅ 创建了部署指南（`DEPLOYMENT.md`）
-- ✅ 创建了生产环境准备脚本（`scripts/prepare-production.ts`）
+- [x] 订单状态字段重构完成（status 和 operation_mode 分离）
+- [x] 筛选功能支持多重筛选（AND 逻辑）
+- [x] 预约明细送仓地点一致性验证
+- [x] 预计板数最小值为 1 的限制
 
-## 📋 部署前必做事项
+## ✅ 数据库状态
 
-### 环境变量配置（Netlify 控制台）
+- [x] 预计板数为 0 的记录已修复（9 条记录已更新为 1）
+- [x] 订单状态迁移完成（status 和 operation_mode 分离）
+- [x] 入库单自动创建逻辑正常
 
-1. **DATABASE_URL**
-   - 格式：`postgresql://user:password@host:port/database?sslmode=require`
-   - 确保指向生产数据库
+## ✅ 配置文件
 
-2. **AUTH_SECRET**
-   - 至少 32 字符的随机字符串
-   - 用于会话加密，必须保密
+- [x] `netlify.toml` 配置正确
+- [x] `next.config.ts` 配置正确
+- [x] `package.json` 依赖版本正确
 
-3. **AUTH_URL**
-   - 生产环境 URL（例如：`https://your-domain.netlify.app`）
-   - 必须与 Netlify 分配的域名匹配
+## ⚠️ 部署前必做事项
 
-4. **NODE_ENV**（可选）
-   - 设置为 `production`
+### 1. 环境变量检查（在 Netlify 控制台）
 
-### 数据库准备
+确保以下环境变量已配置：
+- `DATABASE_URL` - 生产数据库连接字符串
+- `AUTH_SECRET` - 至少 32 字符的密钥
+- `AUTH_URL` - 生产环境 URL（例如：`https://your-domain.netlify.app`）
+- `NODE_VERSION` - 设置为 `20`（已在 netlify.toml 中配置）
 
-1. **运行 Prisma 迁移**
-   ```bash
-   npx prisma migrate deploy
-   ```
+### 2. 数据库迁移
 
-2. **创建用户账号**
-   ```bash
-   npx tsx scripts/restore-users.ts
-   ```
-   
-   默认账号：
-   - 管理员：`admin` / `admin123`
-   - OMS测试：`omstest` / `omstest123`
+如果数据库结构有变化，需要在生产环境运行：
+```bash
+npx prisma migrate deploy
+```
 
-3. **验证数据库连接**
-   - 测试连接是否正常
-   - 检查表结构是否正确
+### 3. 用户账号
 
-### Netlify 配置
+确保生产环境有必要的用户账号：
+- 管理员账号（admin）
+- 测试账号（如果需要）
 
-1. **构建设置**
-   - 构建命令：`npm run build`
-   - 发布目录：`.next`（自动处理）
+### 4. 监控和日志
 
-2. **函数设置**
-   - 超时时间：建议 10-30 秒
-   - Node.js 版本：20
+- 检查 Netlify 函数日志设置
+- 确保错误监控已配置（如果有）
 
-3. **环境变量**
-   - 在 Netlify 控制台配置所有必需变量
-   - 确保变量值正确
+## 📝 部署后验证
 
-## 🚀 部署步骤
+部署完成后，请验证以下功能：
 
-1. **推送代码到主分支**
-   ```bash
-   git add .
-   git commit -m "准备生产环境发布"
-   git push origin main
-   ```
+1. **登录功能**
+   - [ ] 管理员账号可以正常登录
+   - [ ] 权限控制正常
 
-2. **Netlify 自动构建**
-   - Netlify 会自动检测推送并开始构建
-   - 监控构建日志，确保成功
+2. **订单管理**
+   - [ ] 订单列表正常显示
+   - [ ] 状态和操作方式筛选正常
+   - [ ] 多重筛选功能正常
+   - [ ] 订单创建和编辑正常
 
-3. **验证部署**
-   - 访问生产 URL
-   - 测试登录功能
-   - 测试主要业务流程
+3. **预约管理**
+   - [ ] 预约列表正常显示
+   - [ ] 创建预约明细时，地点一致性验证正常
+   - [ ] 地点一致的明细优先显示
+
+4. **WMS 功能**
+   - [ ] 入库管理正常显示（operation_mode = 'unload' 的订单）
+   - [ ] 库存管理正常
+
+5. **数据完整性**
+   - [ ] 预计板数最小值为 1
+   - [ ] 订单状态和操作方式显示正确
+
+## 🚀 部署命令
+
+在 Netlify 上部署时，系统会自动：
+1. 运行 `npm install`
+2. 运行 `npm run build`（包含 `prebuild` 中的 `tsc --noEmit`）
+3. 使用 `@netlify/plugin-nextjs` 插件处理 Next.js 应用
 
 ## ⚠️ 注意事项
 
-1. **不要在生产环境使用测试数据**
-   - 确保数据库已清空测试数据
-   - 使用 `scripts/clear-all-data.ts` 清理（如需要）
+1. **构建时间**：首次部署可能需要较长时间（5-10 分钟）
+2. **函数超时**：确保 Netlify 函数超时时间足够（建议至少 10 秒）
+3. **数据库连接**：确保生产数据库允许 Netlify 服务器的 IP 访问
+4. **Prisma 客户端**：`postinstall` 脚本会自动生成 Prisma 客户端
 
-2. **安全建议**
-   - 定期轮换 `AUTH_SECRET`
-   - 使用强数据库密码
-   - 限制数据库访问 IP
+## 📞 问题排查
 
-3. **性能监控**
-   - 监控 API 响应时间
-   - 检查数据库查询性能
-   - 优化慢查询
-
-## 📞 故障排查
-
-如果遇到问题，请查看：
-- `DEPLOYMENT.md` - 详细部署指南
-- Netlify 构建日志
-- 浏览器控制台错误
-- 网络请求失败信息
-
-## ✅ 最终检查
-
-在部署前，请确认：
-
-- [ ] 所有环境变量已配置
-- [ ] 数据库已准备就绪
-- [ ] 用户账号已创建
-- [ ] 代码已推送到主分支
-- [ ] 构建测试通过
-- [ ] 类型检查通过
-- [ ] 已阅读 `DEPLOYMENT.md`
-
----
-
-**准备就绪！可以开始部署了！** 🎉
-
+如果部署失败，检查：
+1. Netlify 构建日志
+2. 环境变量是否正确配置
+3. 数据库连接是否正常
+4. Prisma 迁移是否完成

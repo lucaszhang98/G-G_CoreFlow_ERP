@@ -72,8 +72,6 @@ export const orderConfig: EntityConfig = {
         { label: '已交付', value: 'delivered' },
         { label: '已取消', value: 'cancelled' },
         { label: '完成留档', value: 'archived' }, // 软删除状态
-        { label: '直送', value: 'direct_delivery' },
-        { label: '拆柜', value: 'unload' },
       ],
     },
     total_amount: {
@@ -196,8 +194,12 @@ export const orderConfig: EntityConfig = {
     operation_mode: {
       key: 'operation_mode',
       label: '操作方式',
-      type: 'text',
-      hidden: true,
+      type: 'select',
+      sortable: true,
+      options: [
+        { label: '拆柜', value: 'unload' },
+        { label: '直送', value: 'direct_delivery' },
+      ],
     },
     delivery_location: {
       key: 'delivery_location',
@@ -239,7 +241,7 @@ export const orderConfig: EntityConfig = {
   list: {
     defaultSort: 'order_date',
     defaultOrder: 'desc',
-    columns: ['order_number', 'customer', 'user_id', 'order_date', 'status', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'container_volume', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'notes'],
+    columns: ['order_number', 'customer', 'user_id', 'order_date', 'status', 'operation_mode', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'container_volume', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'notes'],
     searchFields: ['order_number', 'mbl_number'],
     pageSize: 10,
     // 筛选配置（快速筛选）
@@ -255,6 +257,15 @@ export const orderConfig: EntityConfig = {
           { label: '已交付', value: 'delivered' },
           { label: '已取消', value: 'cancelled' },
           { label: '完成留档', value: 'archived' },
+        ],
+      },
+      {
+        field: 'operation_mode',
+        label: '操作方式',
+        type: 'select',
+        options: [
+          { label: '拆柜', value: 'unload' },
+          { label: '直送', value: 'direct_delivery' },
         ],
       },
       {
@@ -314,6 +325,7 @@ export const orderConfig: EntityConfig = {
         'user_id',
         'order_date',
         'status',
+        'operation_mode',
         'container_type',
         'eta_date',
         'lfd_date',
@@ -336,6 +348,7 @@ export const orderConfig: EntityConfig = {
           'user_id',
           'order_date',
           'status',
+          'operation_mode',
           'container_type',
           'eta_date',
           'lfd_date',
@@ -353,7 +366,7 @@ export const orderConfig: EntityConfig = {
     },
   },
   
-  formFields: ['order_number', 'customer_id', 'order_date', 'status', 'total_amount', 'container_type', 'notes'],
+  formFields: ['order_number', 'customer_id', 'order_date', 'status', 'operation_mode', 'total_amount', 'container_type', 'notes'],
   
   permissions: {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],

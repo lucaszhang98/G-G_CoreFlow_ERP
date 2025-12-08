@@ -128,11 +128,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { order_id, quantity, volume, delivery_nature, delivery_location, unload_type, notes, po, estimated_pallets } = body
 
-    // 计算预计板数：如果用户没有输入，则根据体积除以2后四舍五入
+    // 计算预计板数：如果用户没有输入，则根据体积除以2后四舍五入，最小值为1
     const volumeNum = volume ? parseFloat(volume) : 0
     const calculatedEstimatedPallets = estimated_pallets !== undefined && estimated_pallets !== null 
       ? parseInt(estimated_pallets) 
-      : (volumeNum > 0 ? Math.round(volumeNum / 2) : null)
+      : (volumeNum > 0 ? Math.max(1, Math.round(volumeNum / 2)) : null)
 
     // 计算分仓占比：需要先获取订单的总体积
     const order = await prisma.orders.findUnique({

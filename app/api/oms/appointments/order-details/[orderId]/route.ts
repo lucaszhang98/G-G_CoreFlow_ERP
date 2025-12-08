@@ -13,6 +13,37 @@ export async function GET(
 
     const resolvedParams = await Promise.resolve(params)
     const orderId = BigInt(resolvedParams.orderId)
+    
+    // 获取预约ID（如果提供了）
+    const { searchParams } = new URL(request.url)
+    const appointmentId = searchParams.get('appointmentId')
+    
+    // 如果提供了 appointmentId，获取预约的目的地信息
+    let appointmentDestinationLocationId: string | null = null
+    let appointmentDestinationLocationCode: string | null = null
+    if (appointmentId) {
+      try {
+        const appointment = await prisma.delivery_appointments.findUnique({
+          where: { appointment_id: BigInt(appointmentId) },
+          select: {
+            location_id: true,
+            locations: {
+              select: {
+                location_id: true,
+                location_code: true,
+              },
+            },
+          },
+        })
+        if (appointment?.location_id) {
+          appointmentDestinationLocationId = appointment.location_id.toString()
+          appointmentDestinationLocationCode = appointment.locations?.location_code || null
+        }
+      } catch (error) {
+        console.warn('获取预约目的地信息失败:', error)
+        // 不阻止继续执行，只是没有目的地验证
+      }
+    }
 
     // 获取订单信息
     const order = await prisma.orders.findUnique({
@@ -121,6 +152,18 @@ export async function GET(
             locationCode = detail.delivery_location
           }
         }
+        
+        // 检查送仓地点是否与预约目的地一致
+        let matchesAppointmentDestination = false
+        if (appointmentDestinationLocationId && detail.delivery_location) {
+          // 如果 delivery_location 是 location_id，直接比较
+          if (detail.delivery_location === appointmentDestinationLocationId) {
+            matchesAppointmentDestination = true
+          } else if (locationCode && appointmentDestinationLocationCode) {
+            // 如果 delivery_location 是 location_code，比较 location_code
+            matchesAppointmentDestination = locationCode === appointmentDestinationLocationCode
+          }
+        }
 
         return {
           id: detail.id.toString(),
@@ -137,6 +180,9 @@ export async function GET(
           po: detail.po || null, // PO字段
           has_inventory: hasInventory,
           inventory_pallets: hasInventory ? totalInventoryPallets : null,
+          // 新增：送仓地点与预约目的地一致性标记
+          matches_appointment_destination: matchesAppointmentDestination,
+          appointment_destination_location_code: appointmentDestinationLocationCode,
         }
       })
     )
@@ -150,6 +196,11 @@ export async function GET(
           delivery_location: order.delivery_location,
         },
         details: detailsWithInventory,
+        // 新增：预约目的地信息（如果提供了 appointmentId）
+        appointment_destination: appointmentDestinationLocationId ? {
+          location_id: appointmentDestinationLocationId,
+          location_code: appointmentDestinationLocationCode,
+        } : null,
       },
     })
   } catch (error: any) {

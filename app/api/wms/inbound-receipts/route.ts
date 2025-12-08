@@ -18,11 +18,12 @@ export async function GET(request: NextRequest) {
     const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc';
     const search = searchParams.get('search') || '';
 
-    // 构建查询条件
+    // 构建查询条件（只查询入库单表，不查询订单表）
+    // 入库单应该只关联操作方式为"拆柜"的订单，这个关联关系在入库单创建时已经保证
     const where: any = {
-      // 只显示状态为"拆柜"的订单
+      // 只显示关联订单操作方式为"拆柜"的入库单
       orders: {
-        status: 'unload',
+        operation_mode: 'unload',
       },
     };
 
@@ -30,18 +31,18 @@ export async function GET(request: NextRequest) {
     if (search) {
       const searchConditions: any[] = [];
       
-      // 客户名称搜索（需要同时满足状态为拆柜）
+      // 客户名称搜索（需要同时满足操作方式为拆柜）
       if (search.trim()) {
         searchConditions.push(
           { 
             orders: { 
-              status: 'unload',
+              operation_mode: 'unload',
               customers: { name: { contains: search } } 
             } 
           },
           { 
             orders: { 
-              status: 'unload',
+              operation_mode: 'unload',
               order_number: { contains: search } 
             } 
           }
@@ -60,10 +61,10 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // 如果没有搜索条件，确保只显示状态为拆柜的订单
+    // 如果没有搜索条件，确保只显示操作方式为拆柜的订单
     if (!where.OR && !where.orders) {
       where.orders = {
-        status: 'unload',
+        operation_mode: 'unload',
       };
     }
 

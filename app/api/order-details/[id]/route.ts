@@ -28,9 +28,9 @@ export async function PUT(
       return NextResponse.json({ error: '仓点明细不存在或缺少订单ID' }, { status: 404 })
     }
 
-    // 计算预计板数：体积除以2后四舍五入
+    // 计算预计板数：体积除以2后四舍五入，最小值为1
     const volumeNum = volume !== undefined ? (volume ? parseFloat(volume) : null) : currentDetail.volume ? Number(currentDetail.volume) : null
-    const calculatedEstimatedPallets = volumeNum && volumeNum > 0 ? Math.round(volumeNum / 2) : null
+    const calculatedEstimatedPallets = volumeNum && volumeNum > 0 ? Math.max(1, Math.round(volumeNum / 2)) : null
 
     // 计算分仓占比：需要获取订单的总体积
     const order = await prisma.orders.findUnique({

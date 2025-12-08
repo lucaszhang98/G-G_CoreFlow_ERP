@@ -142,3 +142,4 @@ export function getAdvancedSearchFields(config: EntityConfig): AdvancedSearchFie
   return generateAdvancedSearchFields(config)
 }
 
+

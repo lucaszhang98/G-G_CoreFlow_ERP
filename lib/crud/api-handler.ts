@@ -69,14 +69,15 @@ export function createListHandler(config: EntityConfig) {
         }).filter(Boolean)
       }
 
-      // 筛选条件（快速筛选）
+      // 筛选条件（快速筛选）- 所有筛选字段使用 AND 逻辑组合
+      const filterConditions: any[] = []
       if (config.list.filterFields) {
         config.list.filterFields.forEach((filterField) => {
           if (filterField.type === 'select') {
             const filterValue = searchParams.get(`filter_${filterField.field}`)
             // 忽略 "__all__" 值（表示清除筛选）
             if (filterValue && filterValue !== '__all__') {
-              where[filterField.field] = filterValue
+              filterConditions.push({ [filterField.field]: filterValue })
             }
           } else if (filterField.type === 'dateRange') {
             const dateFrom = searchParams.get(`filter_${filterField.field}_from`)
@@ -92,15 +93,21 @@ export function createListHandler(config: EntityConfig) {
                 endDate.setHours(23, 59, 59, 999)
                 dateCondition.lte = endDate
               }
-              // 如果指定了多个日期字段，使用 OR 逻辑
+              // 如果指定了多个日期字段，使用 OR 逻辑（同一筛选条件的多个字段）
               if (filterField.dateFields && filterField.dateFields.length > 0) {
-                if (!where.OR) where.OR = []
+                const dateFieldConditions: any[] = []
                 filterField.dateFields.forEach((dateField) => {
-                  where.OR!.push({ [dateField]: dateCondition })
+                  dateFieldConditions.push({ [dateField]: dateCondition })
                 })
+                // 同一筛选条件的多个字段使用 OR，但整个筛选条件与其他筛选条件使用 AND
+                if (dateFieldConditions.length === 1) {
+                  filterConditions.push(dateFieldConditions[0])
+                } else {
+                  filterConditions.push({ OR: dateFieldConditions })
+                }
               } else {
                 // 默认使用 filterField.field
-                where[filterField.field] = dateCondition
+                filterConditions.push({ [filterField.field]: dateCondition })
               }
             }
           } else if (filterField.type === 'numberRange') {
@@ -114,19 +121,39 @@ export function createListHandler(config: EntityConfig) {
               if (numMax) {
                 numCondition.lte = Number(numMax)
               }
-              // 如果指定了多个数值字段，使用 OR 逻辑
+              // 如果指定了多个数值字段，使用 OR 逻辑（同一筛选条件的多个字段）
               if (filterField.numberFields && filterField.numberFields.length > 0) {
-                if (!where.OR) where.OR = []
+                const numFieldConditions: any[] = []
                 filterField.numberFields.forEach((numField) => {
-                  where.OR!.push({ [numField]: numCondition })
+                  numFieldConditions.push({ [numField]: numCondition })
                 })
+                // 同一筛选条件的多个字段使用 OR，但整个筛选条件与其他筛选条件使用 AND
+                if (numFieldConditions.length === 1) {
+                  filterConditions.push(numFieldConditions[0])
+                } else {
+                  filterConditions.push({ OR: numFieldConditions })
+                }
               } else {
                 // 默认使用 filterField.field
-                where[filterField.field] = numCondition
+                filterConditions.push({ [filterField.field]: numCondition })
               }
             }
           }
         })
+        
+        // 将所有筛选条件使用 AND 逻辑组合
+        if (filterConditions.length > 0) {
+          if (filterConditions.length === 1) {
+            Object.assign(where, filterConditions[0])
+          } else {
+            // 如果已有 where.AND，合并到其中；否则创建新的 AND 数组
+            if (where.AND) {
+              where.AND = [...where.AND, ...filterConditions]
+            } else {
+              where.AND = filterConditions
+            }
+          }
+        }
       }
 
       // 高级搜索条件（多条件组合）
@@ -220,9 +247,19 @@ export function createListHandler(config: EntityConfig) {
           } else {
             // AND 逻辑：所有条件都必须满足
             if (advancedConditions.length === 1) {
-              Object.assign(where, advancedConditions[0])
+              // 如果已有 where.AND，合并到其中；否则直接设置
+              if (where.AND) {
+                where.AND.push(advancedConditions[0])
+              } else {
+                Object.assign(where, advancedConditions[0])
+              }
             } else {
-              where.AND = advancedConditions
+              // 如果已有 where.AND，合并到其中；否则创建新的 AND 数组
+              if (where.AND) {
+                where.AND = [...where.AND, ...advancedConditions]
+              } else {
+                where.AND = advancedConditions
+              }
             }
           }
         }
@@ -875,8 +912,8 @@ export function createCreateHandler(config: EntityConfig) {
         data: processedData,
       })
 
-      // 对于订单表，如果创建时状态就是"拆柜"（unload），自动创建入库记录
-      if (config.prisma?.model === 'orders' && processedData.status === 'unload') {
+      // 对于订单表，如果操作方式是"拆柜"（unload），自动创建入库记录
+      if (config.prisma?.model === 'orders' && processedData.operation_mode === 'unload') {
         try {
           // 获取第一个可用的 warehouse_id，如果没有则使用 1000 作为默认值
           const firstWarehouse = await prisma.warehouses.findFirst({
@@ -1016,25 +1053,35 @@ export function createUpdateHandler(config: EntityConfig) {
 
       const prismaModel = getPrismaModel(config)
       
-      // 对于订单表，检查 status 是否变为"拆柜"（unload），如果是则自动创建入库记录
-      if (config.prisma?.model === 'orders' && processedData.status === 'unload') {
-        // 先获取当前订单，检查旧状态和是否已经有入库记录
+      // 对于订单表，处理操作方式变化对入库单的影响
+      if (config.prisma?.model === 'orders' && processedData.operation_mode !== undefined) {
+        // 先获取当前订单，检查旧操作方式
         const currentOrder = await prismaModel.findUnique({
           where: { [idField]: BigInt(resolvedParams.id) },
-          select: { order_id: true, status: true },
+          select: { order_id: true, operation_mode: true },
         })
         
-        if (currentOrder && currentOrder.status !== 'unload') {
-          // 只有当状态从非"拆柜"变为"拆柜"时才创建入库记录
-          // 检查是否已存在入库记录
-          const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
-            where: { order_id: currentOrder.order_id },
-            select: { inbound_receipt_id: true },
-          })
-          
-          // 如果不存在，则创建入库记录
-          if (!existingInboundReceipt) {
-            try {
+        if (!currentOrder) {
+          return NextResponse.json(
+            { error: `${config.displayName}不存在` },
+            { status: 404 }
+          )
+        }
+        
+        const oldOperationMode = currentOrder.operation_mode
+        const newOperationMode = processedData.operation_mode
+        
+        // 情况1：操作方式从非"拆柜"变为"拆柜"，自动创建入库单
+        if (oldOperationMode !== 'unload' && newOperationMode === 'unload') {
+          try {
+            // 检查是否已存在入库记录
+            const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
+              where: { order_id: currentOrder.order_id },
+              select: { inbound_receipt_id: true },
+            })
+            
+            // 如果不存在，则创建入库记录
+            if (!existingInboundReceipt) {
               // 获取第一个可用的 warehouse_id，如果没有则使用 1000 作为默认值
               const firstWarehouse = await prisma.warehouses.findFirst({
                 select: { warehouse_id: true },
@@ -1052,10 +1099,43 @@ export function createUpdateHandler(config: EntityConfig) {
                   updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                 },
               })
-            } catch (inboundError: any) {
-              // 如果创建失败（例如已存在），记录错误但不影响订单更新
-              console.warn('自动创建入库记录失败:', inboundError)
             }
+          } catch (inboundError: any) {
+            // 如果创建失败（例如已存在），记录错误但不影响订单更新
+            console.warn('自动创建入库记录失败:', inboundError)
+          }
+        }
+        
+        // 情况2：操作方式从"拆柜"变为非"拆柜"（如"直送"），删除入库单（如果入库单状态还是pending且没有库存批次）
+        if (oldOperationMode === 'unload' && newOperationMode !== 'unload') {
+          try {
+            const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
+              where: { order_id: currentOrder.order_id },
+              include: {
+                inventory_lots: {
+                  take: 1, // 只检查是否有库存批次
+                  select: { inventory_lot_id: true },
+                },
+              },
+            })
+            
+            if (existingInboundReceipt) {
+              // 如果入库单状态是pending且没有库存批次，可以安全删除
+              if (existingInboundReceipt.status === 'pending' && existingInboundReceipt.inventory_lots.length === 0) {
+                await prisma.inbound_receipt.delete({
+                  where: { inbound_receipt_id: existingInboundReceipt.inbound_receipt_id },
+                })
+              } else {
+                // 如果入库单已经有库存批次或状态不是pending，记录警告但不删除
+                // 这种情况可能是业务逻辑问题，需要人工处理
+                console.warn(
+                  `订单 ${currentOrder.order_id} 操作方式从"拆柜"变为"${newOperationMode}"，但入库单已有库存批次或状态不是pending，无法自动删除`
+                )
+              }
+            }
+          } catch (inboundError: any) {
+            // 如果删除失败，记录错误但不影响订单更新
+            console.warn('自动删除入库记录失败:', inboundError)
           }
         }
       }

@@ -66,7 +66,8 @@ export function CreateOrderDialog({
     eta_date: null as string | null,
     container_type: '40HQ',
     mbl_number: '',
-    status: 'pending' as 'direct_delivery' | 'unload' | 'pending',
+    status: 'pending' as 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'archived',
+    operation_mode: null as 'unload' | 'direct_delivery' | null,
   })
   
   // 第二步：仓点明细
@@ -87,6 +88,7 @@ export function CreateOrderDialog({
       container_type: '40HQ',
       mbl_number: '',
       status: 'pending',
+      operation_mode: null,
     })
     setOrderDetails([])
     setEditingRowId(null)
@@ -222,6 +224,7 @@ export function CreateOrderDialog({
           container_type: orderData.container_type || null,
           mbl_number: orderData.mbl_number || null,
           status: orderData.status || 'pending',
+          operation_mode: orderData.operation_mode || null,
           total_amount: 0, // 默认值
           discount_amount: 0,
           tax_amount: 0,
@@ -434,7 +437,7 @@ export function CreateOrderDialog({
                 <Label htmlFor="status">状态</Label>
                 <Select
                   value={orderData.status}
-                  onValueChange={(value: 'direct_delivery' | 'unload' | 'pending') => 
+                  onValueChange={(value: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'archived') => 
                     setOrderData({ ...orderData, status: value })
                   }
                 >
@@ -442,9 +445,31 @@ export function CreateOrderDialog({
                     <SelectValue placeholder="选择状态" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="direct_delivery">直送</SelectItem>
-                    <SelectItem value="unload">拆柜</SelectItem>
                     <SelectItem value="pending">待处理</SelectItem>
+                    <SelectItem value="confirmed">已确认</SelectItem>
+                    <SelectItem value="shipped">已发货</SelectItem>
+                    <SelectItem value="delivered">已交付</SelectItem>
+                    <SelectItem value="cancelled">已取消</SelectItem>
+                    <SelectItem value="archived">完成留档</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="operation_mode">操作方式</Label>
+                <Select
+                  value={orderData.operation_mode || ''}
+                  onValueChange={(value: 'unload' | 'direct_delivery' | '') => 
+                    setOrderData({ ...orderData, operation_mode: value || null })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择操作方式" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">未选择</SelectItem>
+                    <SelectItem value="unload">拆柜</SelectItem>
+                    <SelectItem value="direct_delivery">直送</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

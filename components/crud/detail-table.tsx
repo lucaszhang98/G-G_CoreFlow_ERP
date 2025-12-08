@@ -1338,9 +1338,17 @@ function AddDetailDialog({
     inventory_pallets: number | null
     remaining_pallets?: number | null // 总板数（已入库用 unbooked_pallet_count，未入库用 remaining_pallets）
     total_pallets_at_time?: number | null // 总板数快照
+    matches_appointment_destination?: boolean // 送仓地点是否与预约目的地一致
+    appointment_destination_location_code?: string | null // 预约目的地编码
   }>>([])
   const [selectedDetailId, setSelectedDetailId] = React.useState<string | null>(null)
   const [selectedDetail, setSelectedDetail] = React.useState<any>(null)
+  const [appointmentDestination, setAppointmentDestination] = React.useState<{
+    location_id: string
+    location_code: string | null
+  } | null>(null)
+  const [showDestinationMismatchDialog, setShowDestinationMismatchDialog] = React.useState(false)
+  const [pendingDetailSelection, setPendingDetailSelection] = React.useState<any>(null)
   
   // 第三步：填写预计板数和PO
   const [estimatedPallets, setEstimatedPallets] = React.useState<string>('')
@@ -1382,11 +1390,19 @@ function AddDetailDialog({
   React.useEffect(() => {
     if (selectedOrderId) {
       setIsLoadingDetails(true)
-      fetch(`/api/oms/appointments/order-details/${selectedOrderId}`)
+      // 如果提供了 appointmentId，在请求中传递
+      const url = appointmentId 
+        ? `/api/oms/appointments/order-details/${selectedOrderId}?appointmentId=${encodeURIComponent(appointmentId)}`
+        : `/api/oms/appointments/order-details/${selectedOrderId}`
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           if (data.success && data.data.details) {
             setOrderDetails(data.data.details)
+            // 保存预约目的地信息（如果提供了）
+            if (data.data.appointment_destination) {
+              setAppointmentDestination(data.data.appointment_destination)
+            }
           }
         })
         .catch(error => {
@@ -1397,7 +1413,7 @@ function AddDetailDialog({
           setIsLoadingDetails(false)
         })
     }
-  }, [selectedOrderId])
+  }, [selectedOrderId, appointmentId])
 
   // 重置状态
   React.useEffect(() => {
@@ -1412,6 +1428,9 @@ function AddDetailDialog({
       setEstimatedPallets('')
       setPo('')
       setIsSaving(false)
+      setAppointmentDestination(null)
+      setShowDestinationMismatchDialog(false)
+      setPendingDetailSelection(null)
     }
   }, [open])
 
@@ -1424,6 +1443,23 @@ function AddDetailDialog({
 
   // 选择明细行
   const handleSelectDetail = (detail: any) => {
+    // 如果是预约明细，检查送仓地点是否与预约目的地一致
+    if (appointmentId && appointmentDestination) {
+      const matchesDestination = detail.matches_appointment_destination === true
+      if (!matchesDestination) {
+        // 送仓地点与预约目的地不一致，显示警告对话框
+        setPendingDetailSelection(detail)
+        setShowDestinationMismatchDialog(true)
+        return
+      }
+    }
+    
+    // 送仓地点一致或不是预约明细，直接选择
+    confirmDetailSelection(detail)
+  }
+  
+  // 确认选择明细行
+  const confirmDetailSelection = (detail: any) => {
     setSelectedDetailId(detail.id)
     setSelectedDetail(detail)
     // 自动填充预计板数，默认值为实时的 remaining_pallets（已入库用 unbooked_pallet_count，未入库用 remaining_pallets），否则使用快照或总板数
@@ -1787,7 +1823,17 @@ function AddDetailDialog({
                         </tr>
                       </thead>
                       <tbody>
-                        {orderDetails.map((detail) => {
+                        {[...orderDetails].sort((a, b) => {
+                          // 如果提供了 appointmentId，地点一致的优先显示
+                          if (appointmentId) {
+                            const aMatches = a.matches_appointment_destination === true
+                            const bMatches = b.matches_appointment_destination === true
+                            if (aMatches && !bMatches) return -1 // a 地点一致，b 不一致，a 排在前面
+                            if (!aMatches && bMatches) return 1  // a 地点不一致，b 一致，b 排在前面
+                          }
+                          // 其他情况保持原顺序
+                          return 0
+                        }).map((detail) => {
                           // 总板数：优先使用实时的 remaining_pallets（API 返回的实时值），否则使用快照或预计板数
                           const totalPallets = detail.remaining_pallets ?? (detail as any).total_pallets_at_time ?? (detail.has_inventory 
                             ? (detail.inventory_pallets || 0)
@@ -1803,7 +1849,21 @@ function AddDetailDialog({
                                 isSelected && "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/30 border-l-4 border-l-blue-500"
                               )}
                             >
-                              <td className="p-3 text-sm font-medium">{detail.location_code || '-'}</td>
+                              <td className="p-3 text-sm font-medium">
+                                <div className="flex items-center gap-2">
+                                  <span>{detail.location_code || '-'}</span>
+                                  {appointmentId && detail.matches_appointment_destination === false && (
+                                    <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700">
+                                      地点不一致
+                                    </Badge>
+                                  )}
+                                  {appointmentId && detail.matches_appointment_destination === true && (
+                                    <Badge variant="outline" className="text-xs text-green-600 dark:text-green-400 border-green-300 dark:border-green-700">
+                                      地点一致
+                                    </Badge>
+                                  )}
+                                </div>
+                              </td>
                               <td className="p-3 text-sm">{detail.delivery_nature === '亚马逊' ? 'AMZ' : (detail.delivery_nature || '-')}</td>
                               <td className="p-3 text-sm">{formatVolume(detail.volume)}</td>
                               <td className="p-3 text-sm">
@@ -1943,6 +2003,63 @@ function AddDetailDialog({
           )}
         </DialogFooter>
       </DialogContent>
+      
+      {/* 送仓地点不一致警告对话框 */}
+      <Dialog open={showDestinationMismatchDialog} onOpenChange={setShowDestinationMismatchDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-amber-600 dark:text-amber-400">送仓地点不一致</DialogTitle>
+            <DialogDescription>
+              您选择的明细行的送仓地点与预约目的地不一致，是否继续？
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">预约目的地：</span>
+                  <span className="font-medium text-foreground">
+                    {appointmentDestination?.location_code || '未知'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">明细送仓地点：</span>
+                  <span className="font-medium text-foreground">
+                    {pendingDetailSelection?.location_code || '未知'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              通常情况下，明细行的送仓地点应该与预约目的地一致。如果确实需要选择不一致的明细，请确认后继续。
+            </p>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowDestinationMismatchDialog(false)
+                setPendingDetailSelection(null)
+              }}
+            >
+              取消
+            </Button>
+            <Button 
+              variant="default"
+              onClick={() => {
+                if (pendingDetailSelection) {
+                  confirmDetailSelection(pendingDetailSelection)
+                  setShowDestinationMismatchDialog(false)
+                  setPendingDetailSelection(null)
+                }
+              }}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              确认继续
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }
