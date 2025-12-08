@@ -126,7 +126,7 @@ export const customerConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['status', 'credit_limit'], // 可批量编辑的字段
+        fields: ['code', 'name', 'company_name', 'status', 'credit_limit'], // 可批量编辑的字段
       },
       delete: {
         enabled: true,
@@ -135,7 +135,7 @@ export const customerConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['status', 'credit_limit', 'company_name'], // 可编辑的字段
+      fields: ['code', 'name', 'company_name', 'status', 'credit_limit'], // 可编辑的字段
     },
   },
   

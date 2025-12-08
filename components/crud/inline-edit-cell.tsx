@@ -18,6 +18,7 @@ import { FieldConfig } from "@/lib/crud/types"
 import { formatDateDisplay, formatDateTimeDisplay } from "@/lib/utils/date-format"
 import { cn } from "@/lib/utils"
 import { LocationSelect } from "@/components/ui/location-select"
+import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
 
 interface InlineEditCellProps {
   fieldKey: string
@@ -35,6 +36,7 @@ export function InlineEditCell({
   onChange,
   className,
   loadOptions,
+  loadFuzzyOptions,
 }: InlineEditCellProps) {
   // 使用内部状态管理输入值，避免每次输入都触发外部状态更新
   // 对于 boolean 字段，需要特殊处理：false 是有效值，不应该被转换为 ''
@@ -282,7 +284,26 @@ export function InlineEditCell({
           </div>
         )
       }
-      // 其他关联字段：如果有 loadOptions，使用下拉框
+      // 其他关联字段：优先使用模糊搜索下拉框（如果有 loadFuzzyOptions）
+      if (loadFuzzyOptions) {
+        return (
+          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+            <FuzzySearchSelect
+              value={internalValue || null}
+              onChange={(val) => {
+                handleInternalChange(val)
+                onChange(val) // 立即同步到外部
+              }}
+              onBlur={handleBlur}
+              placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
+              className={className}
+              loadOptions={loadFuzzyOptions}
+            />
+          </div>
+        )
+      }
+      
+      // 如果没有 loadFuzzyOptions，但有 loadOptions，使用普通下拉框
       if (loadOptions) {
         // 确保选项已加载
         React.useEffect(() => {
@@ -329,7 +350,7 @@ export function InlineEditCell({
           </div>
         )
       }
-      // 如果没有 loadOptions，使用默认处理
+      // 如果没有 loadOptions 和 loadFuzzyOptions，使用默认处理
       break
 
     default:

@@ -118,7 +118,10 @@ export async function PUT(
     if (data.code) updateData.code = data.code;
     if (data.name) updateData.name = data.name;
     if (data.company_name !== undefined) updateData.company_name = data.company_name;
-    if (data.credit_limit !== undefined) updateData.credit_limit = data.credit_limit;
+    // 信用额度：如果未填写或为null，自动设置为0
+    if (data.credit_limit !== undefined) {
+      updateData.credit_limit = data.credit_limit !== null ? data.credit_limit : 0;
+    }
     if (data.status) updateData.status = data.status;
 
     // 处理联系人更新

@@ -53,6 +53,7 @@ export const locationConfig: EntityConfig = {
         { label: '码头', value: 'port' },
         { label: '查验站', value: 'inspection' },
         { label: '仓库', value: 'warehouse' },
+        { label: '亚马逊', value: 'amazon' },
       ],
     },
     city: {

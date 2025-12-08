@@ -967,12 +967,44 @@ export function createUpdateHandler(config: EntityConfig) {
           continue // 跳过后续处理
         }
         
-        if (fieldConfig?.relation && fieldConfig.relation.valueField) {
-          if (value) {
-            processedData[fieldConfig.relation.valueField] = BigInt(value as number)
+        // 对于客户表的信用额度字段，如果未填写或为null，自动设置为0
+        if (config.prisma?.model === 'customers' && key === 'credit_limit') {
+          processedData[key] = value !== undefined && value !== null ? value : 0
+          continue
+        }
+        
+        // 处理日期字段：将 YYYY-MM-DD 格式转换为完整的 ISO-8601 DateTime
+        if (fieldConfig?.type === 'date' && typeof value === 'string' && value) {
+          // 日期字符串格式：YYYY-MM-DD，转换为完整的 ISO-8601 DateTime（YYYY-MM-DDTHH:mm:ss.000Z）
+          const dateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+          if (dateMatch) {
+            const [, year, month, day] = dateMatch
+            // 使用 UTC 时间，设置为 00:00:00.000Z
+            processedData[key] = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), 0, 0, 0, 0))
+          } else {
+            // 如果不是 YYYY-MM-DD 格式，尝试直接解析
+            processedData[key] = new Date(value)
           }
-        } else if (typeof value === 'number' && key.endsWith('_id')) {
+          continue
+        }
+        
+        // 处理日期时间字段：确保是 Date 对象
+        if (fieldConfig?.type === 'datetime' && typeof value === 'string' && value) {
+          processedData[key] = new Date(value)
+          continue
+        }
+        
+        // 处理关系字段：如果字段名以 _id 结尾，直接使用；否则需要查找对应的关系字段配置
+        if (key.endsWith('_id') && typeof value === 'number') {
+          // 字段名已经是 _id 结尾（如 customer_id, user_id），直接转换为 BigInt
           processedData[key] = BigInt(value)
+        } else if (fieldConfig?.relation && fieldConfig.relation.valueField) {
+          // 关系字段配置存在，但 valueField 是关联表的字段名（如 'id'），不是当前表的外键字段名
+          // 对于这种情况，如果字段名不是以 _id 结尾，使用 {fieldKey}_id 作为数据库字段名
+          const dbFieldName = key.endsWith('_id') ? key : `${key}_id`
+          if (value) {
+            processedData[dbFieldName] = BigInt(value as number)
+          }
         } else {
           processedData[key] = value
         }
@@ -1218,6 +1250,35 @@ export function createBatchUpdateHandler(config: EntityConfig) {
           const baseKey = key.replace('_location_id', '_location')
           fieldConfig = config.fields[baseKey]
         }
+        // 如果还是找不到，尝试原始字段名（用于关系字段，如 customer -> customer_id）
+        if (!fieldConfig) {
+          fieldConfig = config.fields[key]
+        }
+        
+        // 处理关系字段：需要映射到数据库字段名（如 customer -> customer_id）
+        if (fieldConfig?.type === 'relation') {
+          // 对于关系字段，数据库字段名通常是 {fieldKey}_id
+          // 但如果字段名已经以 _id 结尾（如 user_id），直接使用
+          const dbFieldName = key.endsWith('_id') ? key : `${key}_id`
+          
+          // 处理空值：空字符串、null、undefined 都转换为 null
+          let processedValue: bigint | null
+          if (value === '' || value === null || value === undefined) {
+            processedValue = null
+          } else {
+            const numValue = Number(value)
+            // 如果转换后是 NaN，设置为 null；如果是 0，也设置为 null（0 通常不是有效的 ID）
+            if (isNaN(numValue) || numValue === 0) {
+              processedValue = null
+            } else {
+              processedValue = BigInt(numValue)
+            }
+          }
+          
+          // 即使值为 null，也要设置（允许清空关系字段）
+          processedUpdates[dbFieldName] = processedValue
+          return // 跳过后续处理
+        }
         
         // 处理 boolean 字段：确保 false 值不被过滤，并转换为布尔类型
         if (fieldConfig?.type === 'boolean') {
@@ -1228,33 +1289,50 @@ export function createBatchUpdateHandler(config: EntityConfig) {
           return // 跳过后续处理
         }
         
-        if (value !== null && value !== undefined && value !== '') {
-          // 处理日期字段
-          if (fieldConfig?.type === 'date' && typeof value === 'string') {
-            // 日期字符串格式：YYYY-MM-DD，转换为 Date 对象（UTC）
-            const [year, month, day] = value.split('-').map(Number)
-            processedUpdates[actualKey] = new Date(Date.UTC(year, month - 1, day))
-          } else if (fieldConfig?.type === 'datetime' && typeof value === 'string') {
-            // 日期时间字符串，手动解析为 Date（不进行时区转换）
-            // 格式：YYYY-MM-DDTHH:mm 或 YYYY-MM-DDTHH:mm:ss
-            const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{3}))?/)
-            if (match) {
-              const [, year, month, day, hours, minutes, seconds = '0', milliseconds = '0'] = match
-              // 使用 UTC 方法创建 Date 对象，这样就不会进行时区转换
-              processedUpdates[actualKey] = new Date(Date.UTC(
-                parseInt(year, 10),
-                parseInt(month, 10) - 1,
-                parseInt(day, 10),
-                parseInt(hours, 10),
-                parseInt(minutes, 10),
-                parseInt(seconds, 10),
-                parseInt(milliseconds, 10)
-              ))
+        // 对于客户表的信用额度字段，如果未填写或为null，自动设置为0
+        if (config.prisma?.model === 'customers' && actualKey === 'credit_limit') {
+          processedUpdates[actualKey] = value !== undefined && value !== null && value !== '' ? value : 0
+          return // 跳过后续处理
+        }
+        
+        // 处理日期字段：与单行更新逻辑一致，即使值为空也要处理
+        if (fieldConfig?.type === 'date') {
+          if (value === '' || value === null || value === undefined) {
+            processedUpdates[actualKey] = null
+          } else if (typeof value === 'string') {
+            // 日期字符串格式：YYYY-MM-DD，转换为完整的 ISO-8601 DateTime
+            const dateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+            if (dateMatch) {
+              const [, year, month, day] = dateMatch
+              // 使用 UTC 时间，设置为 00:00:00.000Z
+              processedUpdates[actualKey] = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), 0, 0, 0, 0))
             } else {
-              // 如果不是预期格式，尝试直接解析（可能会进行时区转换，但这是后备方案）
+              // 如果不是 YYYY-MM-DD 格式，尝试直接解析
               processedUpdates[actualKey] = new Date(value)
             }
-          } else if (actualKey === 'total_pallets') {
+          } else {
+            // 如果不是字符串，可能是 Date 对象，直接使用
+            processedUpdates[actualKey] = value
+          }
+          return // 跳过后续处理
+        }
+        
+        // 处理日期时间字段
+        if (fieldConfig?.type === 'datetime') {
+          if (value === '' || value === null || value === undefined) {
+            processedUpdates[actualKey] = null
+          } else if (typeof value === 'string') {
+            processedUpdates[actualKey] = new Date(value)
+          } else {
+            // 如果不是字符串，可能是 Date 对象，直接使用
+            processedUpdates[actualKey] = value
+          }
+          return // 跳过后续处理
+        }
+        
+        // 处理其他字段（非空值）
+        if (value !== null && value !== undefined && value !== '') {
+          if (actualKey === 'total_pallets') {
             // total_pallets 是计算字段，不能直接更新
             // 如果需要修改，需要更新 order_detail 中的 estimated_pallets
             // 这里我们暂时忽略，不添加到 processedUpdates 中

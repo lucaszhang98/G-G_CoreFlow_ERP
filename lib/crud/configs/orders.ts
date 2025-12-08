@@ -146,7 +146,15 @@ export const orderConfig: EntityConfig = {
     container_type: {
       key: 'container_type',
       label: '货柜类型',
-      type: 'text',
+      type: 'select',
+      options: [
+        { label: '40HQ', value: '40HQ' },
+        { label: '40GP', value: '40GP' },
+        { label: '20GP', value: '20GP' },
+        { label: '20HQ', value: '20HQ' },
+        { label: '45HQ', value: '45HQ' },
+        { label: '其他', value: 'other' },
+      ],
     },
     container_volume: {
       key: 'container_volume',
@@ -296,16 +304,48 @@ export const orderConfig: EntityConfig = {
       // },
     ],
     // 行内编辑配置
+    // 允许编辑的字段：订单号、客户、负责人、订单日期、状态、货柜类型、ETA、LFD、提柜日期、就绪日期、归还截止日期、MBL号码、DO、备注
+    // 排除计算字段：total_amount, discount_amount, tax_amount, final_amount, container_volume
     inlineEdit: {
       enabled: true,
-      fields: ['status', 'order_date', 'total_amount', 'notes'],
+      fields: [
+        'order_number',
+        'customer',
+        'user_id',
+        'order_date',
+        'status',
+        'container_type',
+        'eta_date',
+        'lfd_date',
+        'pickup_date',
+        'ready_date',
+        'return_deadline',
+        'mbl_number',
+        'do_issued',
+        'notes',
+      ],
     },
     // 批量操作配置：禁用删除功能
     batchOperations: {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['status', 'order_date', 'total_amount', 'notes'],
+        fields: [
+          'order_number',
+          'customer',
+          'user_id',
+          'order_date',
+          'status',
+          'container_type',
+          'eta_date',
+          'lfd_date',
+          'pickup_date',
+          'ready_date',
+          'return_deadline',
+          'mbl_number',
+          'do_issued',
+          'notes',
+        ],
       },
       delete: {
         enabled: false, // 订单管理不允许删除

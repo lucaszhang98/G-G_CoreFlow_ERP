@@ -31,6 +31,7 @@ import { SearchModule } from "./search-module"
 import { InlineEditCell } from "./inline-edit-cell"
 import { LocationSelect } from "@/components/ui/location-select"
 import { getAdvancedSearchFields } from "@/lib/crud/advanced-search-generator"
+import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
 
 // 关系字段批量编辑组件（用于处理异步选项加载）
 function RelationFieldBatchEdit({
@@ -118,6 +119,7 @@ interface EntityTableProps<T = any> {
   customColumnLabels?: Record<string, string> // 自定义列标签
   customClickableColumns?: ClickableColumnConfig<T>[] // 自定义可点击列配置
   fieldLoadOptions?: Record<string, () => Promise<Array<{ label: string; value: string }>>> // 字段选项加载函数（用于 select 类型字段）
+  fieldFuzzyLoadOptions?: Record<string, (search: string) => Promise<FuzzySearchOption[]>> // 字段模糊搜索加载函数（用于 relation 类型字段）
   customSaveHandler?: (row: T, updates: Record<string, any>) => Promise<void> // 自定义保存处理函数（如果提供，则使用自定义保存逻辑）
   expandableRows?: {
     enabled: boolean
@@ -134,6 +136,7 @@ export function EntityTable<T = any>({
   customColumnLabels,
   customClickableColumns,
   fieldLoadOptions,
+  fieldFuzzyLoadOptions,
   customSaveHandler,
   expandableRows,
 }: EntityTableProps<T>) {
@@ -455,6 +458,29 @@ export function EntityTable<T = any>({
           // 如果没有 _id 字段，使用原字段的值（可能是 ID 或显示值）
           initialValues[fieldKey] = (row as any)[fieldKey]
         }
+      } else if (fieldConfig?.type === 'date') {
+        // 对于日期字段，格式化为 YYYY-MM-DD 格式
+        const dateValue = (row as any)[fieldKey]
+        if (dateValue === null || dateValue === undefined) {
+          initialValues[fieldKey] = null
+        } else if (dateValue instanceof Date) {
+          initialValues[fieldKey] = dateValue.toISOString().split('T')[0]
+        } else if (typeof dateValue === 'string') {
+          // 可能是 ISO 字符串或 YYYY-MM-DD 格式
+          initialValues[fieldKey] = dateValue.split('T')[0]
+        } else {
+          initialValues[fieldKey] = dateValue
+        }
+      } else if (fieldConfig?.type === 'datetime') {
+        // 对于日期时间字段，格式化为 ISO 字符串
+        const dateValue = (row as any)[fieldKey]
+        if (dateValue === null || dateValue === undefined) {
+          initialValues[fieldKey] = null
+        } else if (dateValue instanceof Date) {
+          initialValues[fieldKey] = dateValue.toISOString()
+        } else {
+          initialValues[fieldKey] = dateValue
+        }
       } else {
         initialValues[fieldKey] = (row as any)[fieldKey]
       }
@@ -530,11 +556,13 @@ export function EntityTable<T = any>({
           return // 跳过后续处理
         }
         
-        // 处理关系字段：关系字段在数据库中存储的是 ID，字段名就是数据库字段名
+        // 处理关系字段：关系字段在数据库中存储的是 ID，需要映射到正确的数据库字段名
         if (fieldConfig?.type === 'relation') {
-          // 对于关系字段，直接使用字段名（如 received_by），值应该是 ID
-          const idKey = key // 关系字段的字段名就是数据库字段名
-          const originalId = (row as any)[idKey] || (row as any)[`${key}_id`]
+          // 对于关系字段，需要确定数据库字段名
+          // 如果字段名以 _id 结尾，直接使用（如 user_id）
+          // 否则，使用 {fieldKey}_id 作为数据库字段名（如 customer -> customer_id）
+          const dbFieldName = key.endsWith('_id') ? key : `${key}_id`
+          const originalId = (row as any)[dbFieldName] || (row as any)[key]
           
           // 处理空值：空字符串、null、undefined 都转换为 null
           let processedValue: number | null
@@ -549,7 +577,8 @@ export function EntityTable<T = any>({
           // 比较处理后的值是否改变
           const originalNum = originalId ? Number(originalId) : null
           if (processedValue !== originalNum) {
-            updates[key] = processedValue
+            // 使用数据库字段名（如 customer_id）而不是配置字段名（如 customer）
+            updates[dbFieldName] = processedValue
           }
           return // 跳过后续处理
         }
@@ -562,7 +591,11 @@ export function EntityTable<T = any>({
           if (!value || value === '') {
             processedValue = null
           } else if (typeof value === 'string') {
-            processedValue = value
+            // 确保是 YYYY-MM-DD 格式（去掉时间部分）
+            processedValue = value.split('T')[0]
+          } else if (value instanceof Date) {
+            // 如果是 Date 对象，转换为 YYYY-MM-DD 格式
+            processedValue = value.toISOString().split('T')[0]
           }
         } else if (fieldConfig?.type === 'datetime') {
           // 日期时间字符串，保持字符串格式
@@ -571,6 +604,9 @@ export function EntityTable<T = any>({
             processedValue = null
           } else if (typeof value === 'string') {
             processedValue = value
+          } else if (value instanceof Date) {
+            // 如果是 Date 对象，转换为 ISO 字符串
+            processedValue = value.toISOString()
           }
         }
         
@@ -583,8 +619,42 @@ export function EntityTable<T = any>({
         
         // 比较值是否改变
         const originalValue = (row as any)[key]
-        const originalStr = originalValue === null || originalValue === undefined ? '' : String(originalValue)
-        const newStr = processedValue === null || processedValue === undefined ? '' : String(processedValue)
+        
+        // 对于日期字段，需要格式化原始值以便比较
+        let originalStr = ''
+        let newStr = ''
+        
+        if (fieldConfig?.type === 'date') {
+          // 日期字段：将原始值格式化为 YYYY-MM-DD 格式
+          if (originalValue === null || originalValue === undefined) {
+            originalStr = ''
+          } else if (originalValue instanceof Date) {
+            originalStr = originalValue.toISOString().split('T')[0]
+          } else if (typeof originalValue === 'string') {
+            // 可能是 ISO 字符串或 YYYY-MM-DD 格式
+            originalStr = originalValue.split('T')[0]
+          } else {
+            originalStr = String(originalValue)
+          }
+          
+          newStr = processedValue === null || processedValue === undefined ? '' : String(processedValue)
+        } else if (fieldConfig?.type === 'datetime') {
+          // 日期时间字段：保持原始格式
+          if (originalValue === null || originalValue === undefined) {
+            originalStr = ''
+          } else if (originalValue instanceof Date) {
+            originalStr = originalValue.toISOString()
+          } else {
+            originalStr = String(originalValue)
+          }
+          
+          newStr = processedValue === null || processedValue === undefined ? '' : String(processedValue)
+        } else {
+          // 其他字段：直接转换为字符串比较
+          originalStr = originalValue === null || originalValue === undefined ? '' : String(originalValue)
+          newStr = processedValue === null || processedValue === undefined ? '' : String(processedValue)
+        }
+        
         if (originalStr !== newStr) {
           updates[key] = processedValue
         }
@@ -901,8 +971,27 @@ export function EntityTable<T = any>({
       })
       
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `批量编辑${config.displayName}失败`)
+        // 尝试解析错误响应，如果失败则使用状态文本
+        let errorMessage = `批量编辑${config.displayName}失败`
+        try {
+          const responseText = await response.text()
+          if (responseText) {
+            try {
+              const errorData = JSON.parse(responseText)
+              errorMessage = errorData.error || errorMessage
+            } catch {
+              // 如果不是 JSON，使用原始文本
+              errorMessage = responseText || errorMessage
+            }
+          } else {
+            // 响应体为空，使用状态文本
+            errorMessage = response.statusText || errorMessage
+          }
+        } catch (e) {
+          // 解析失败，使用状态文本
+          errorMessage = response.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
       }
       
       toast.success(`成功更新 ${ids.length} 条${config.displayName}记录`)
@@ -1022,8 +1111,9 @@ export function EntityTable<T = any>({
             const currentValue = editingValues[columnId] !== undefined 
               ? editingValues[columnId] 
               : row.getValue(columnId)
-            // 获取字段的 loadOptions 函数（如果提供）
+            // 获取字段的 loadOptions 和 loadFuzzyOptions 函数（如果提供）
             const loadOptions = fieldLoadOptions?.[columnId]
+            const loadFuzzyOptions = fieldFuzzyLoadOptions?.[columnId]
             return (
               <InlineEditCell
                 key={`${row.original[getIdField()]}-${columnId}-${editingRowId}`}
@@ -1032,6 +1122,7 @@ export function EntityTable<T = any>({
                 value={currentValue}
                 onChange={fieldOnChangeMap[columnId]}
                 loadOptions={loadOptions}
+                loadFuzzyOptions={loadFuzzyOptions}
               />
             )
           }
@@ -1109,13 +1200,31 @@ export function EntityTable<T = any>({
               // 这种情况通常不会发生，因为 API 应该返回 _id 字段
               initialValue = initialValue
             }
+          } else if (fieldConfig.type === 'date') {
+            // 对于日期字段，格式化为 YYYY-MM-DD 格式
+            if (initialValue === null || initialValue === undefined) {
+              initialValue = null
+            } else if (initialValue instanceof Date) {
+              initialValue = initialValue.toISOString().split('T')[0]
+            } else if (typeof initialValue === 'string') {
+              // 可能是 ISO 字符串或 YYYY-MM-DD 格式
+              initialValue = initialValue.split('T')[0]
+            }
+          } else if (fieldConfig.type === 'datetime') {
+            // 对于日期时间字段，格式化为 ISO 字符串
+            if (initialValue === null || initialValue === undefined) {
+              initialValue = null
+            } else if (initialValue instanceof Date) {
+              initialValue = initialValue.toISOString()
+            }
           }
           
-          // 获取字段的 loadOptions 函数（如果提供）
+          // 获取字段的 loadOptions 和 loadFuzzyOptions 函数（如果提供）
           const loadOptions = fieldLoadOptions?.[fieldKey]
+          const loadFuzzyOptions = fieldFuzzyLoadOptions?.[fieldKey]
           
-          // 对于关系字段，如果没有 loadOptions，尝试使用 select 类型渲染
-          const effectiveType = fieldConfig.type === 'relation' && !loadOptions && fieldConfig.options
+          // 对于关系字段，如果没有 loadOptions 和 loadFuzzyOptions，尝试使用 select 类型渲染
+          const effectiveType = fieldConfig.type === 'relation' && !loadOptions && !loadFuzzyOptions && fieldConfig.options
             ? 'select'
             : fieldConfig.type
           
@@ -1127,6 +1236,7 @@ export function EntityTable<T = any>({
               value={initialValue}
               onChange={fieldOnChangeMap[fieldKey]}
               loadOptions={loadOptions}
+              loadFuzzyOptions={loadFuzzyOptions}
             />
           )
         }
@@ -1703,19 +1813,37 @@ export function EntityTable<T = any>({
                     </div>
                   )
 
-                case 'relation':
-                  // 关系字段：使用 RelationFieldSelect 组件
+                case 'relation': {
+                  // 关系字段：优先使用模糊搜索下拉框
+                  const loadFuzzyOptions = fieldFuzzyLoadOptions?.[fieldKey]
+                  if (loadFuzzyOptions) {
+                    return (
+                      <div key={fieldKey} className="space-y-2">
+                        <label className="text-sm font-medium">
+                          {fieldConfig.label}
+                        </label>
+                        <FuzzySearchSelect
+                          value={fieldValue || null}
+                          onChange={(val) => handleBatchEditValueChange(fieldKey, val)}
+                          placeholder="（留空则不修改）"
+                          loadOptions={loadFuzzyOptions}
+                        />
+                      </div>
+                    )
+                  }
+                  // 如果没有模糊搜索，使用 RelationFieldBatchEdit 组件
                   return (
-                    <RelationFieldSelect
+                    <RelationFieldBatchEdit
                       key={fieldKey}
                       fieldKey={fieldKey}
                       fieldConfig={fieldConfig}
                       fieldValue={fieldValue}
-                      setBatchEditValues={setBatchEditValues}
-                      batchEditValues={batchEditValues}
+                      onValueChange={handleBatchEditValueChange}
                       loadOptions={fieldLoadOptions?.[fieldKey]}
+                      loadFuzzyOptions={fieldFuzzyLoadOptions?.[fieldKey]}
                     />
                   )
+                }
 
                 case 'select':
                   return (
@@ -1801,19 +1929,37 @@ export function EntityTable<T = any>({
                     </div>
                   )
 
-                case 'relation':
-                  // 关系字段：使用 RelationFieldSelect 组件
+                case 'relation': {
+                  // 关系字段：优先使用模糊搜索下拉框
+                  const loadFuzzyOptions = fieldFuzzyLoadOptions?.[fieldKey]
+                  if (loadFuzzyOptions) {
+                    return (
+                      <div key={fieldKey} className="space-y-2">
+                        <label className="text-sm font-medium">
+                          {fieldConfig.label}
+                        </label>
+                        <FuzzySearchSelect
+                          value={fieldValue || null}
+                          onChange={(val) => handleBatchEditValueChange(fieldKey, val)}
+                          placeholder="（留空则不修改）"
+                          loadOptions={loadFuzzyOptions}
+                        />
+                      </div>
+                    )
+                  }
+                  // 如果没有模糊搜索，使用 RelationFieldBatchEdit 组件
                   return (
-                    <RelationFieldSelect
+                    <RelationFieldBatchEdit
                       key={fieldKey}
                       fieldKey={fieldKey}
                       fieldConfig={fieldConfig}
                       fieldValue={fieldValue}
-                      setBatchEditValues={setBatchEditValues}
-                      batchEditValues={batchEditValues}
+                      onValueChange={handleBatchEditValueChange}
                       loadOptions={fieldLoadOptions?.[fieldKey]}
+                      loadFuzzyOptions={fieldFuzzyLoadOptions?.[fieldKey]}
                     />
                   )
+                }
 
                 default:
                   return null
