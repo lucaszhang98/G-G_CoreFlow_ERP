@@ -215,8 +215,19 @@ export async function POST(request: NextRequest) {
     )
   } catch (error: any) {
     console.error('创建仓点明细失败:', error)
+    
+    // 提供更详细的错误信息
+    let errorMessage = '创建仓点明细失败'
+    if (error.code === 'P2002') {
+      errorMessage = '仓点明细已存在'
+    } else if (error.code === 'P2003') {
+      errorMessage = '关联数据错误，请检查订单ID是否正确'
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
     return NextResponse.json(
-      { error: error.message || '创建仓点明细失败' },
+      { error: errorMessage },
       { status: 500 }
     )
   }

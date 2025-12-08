@@ -249,13 +249,13 @@ export function CreateOrderDialog({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               order_id: orderId.toString(),
-              quantity: detail.quantity,
-              volume: detail.volume,
-              delivery_nature: detail.delivery_nature,
-              delivery_location: detail.delivery_location, // 这里应该是 location_id（字符串或数字）
-              unload_type: detail.unload_type,
-              notes: detail.notes,
-              po: detail.po,
+              quantity: detail.quantity || 0,
+              volume: detail.volume || null,
+              delivery_nature: detail.delivery_nature || null,
+              delivery_location: detail.delivery_location || null, // location_id（字符串或数字）
+              unload_type: detail.unload_type || null,
+              notes: detail.notes || null,
+              po: detail.po || null,
             }),
           })
 
@@ -273,19 +273,38 @@ export function CreateOrderDialog({
 
       const detailResults = await Promise.all(detailPromises)
       const failedDetails = detailResults.filter(res => !res.success)
+      const successDetails = detailResults.filter(res => res.success)
       
       if (failedDetails.length > 0) {
         const errorMessages = failedDetails.map(f => `明细 ${f.index + 1}: ${f.error}`).join('; ')
         console.error('部分明细创建失败:', failedDetails)
-        toast.error(`订单已创建，但部分明细创建失败: ${errorMessages}`)
-        // 即使部分失败，也刷新列表，让用户看到已创建的明细
-        onSuccess()
+        
+        // 如果有部分明细创建成功，提示用户
+        if (successDetails.length > 0) {
+          toast.error(`订单已创建，但 ${failedDetails.length} 条明细创建失败: ${errorMessages}`)
+          onSuccess() // 刷新列表显示已创建的明细
+        } else {
+          // 所有明细都创建失败，不关闭对话框，让用户重试
+          toast.error(`所有明细创建失败: ${errorMessages}`)
+          setIsSaving(false)
+          return // 不关闭对话框，不重置表单
+        }
       } else {
         toast.success('订单创建成功')
       }
 
-      handleReset()
-      onOpenChange(false)
+      // 只有成功或部分成功时才关闭对话框
+      if (failedDetails.length === 0) {
+        // 全部成功
+        handleReset()
+        onOpenChange(false)
+        onSuccess()
+      } else if (successDetails.length > 0) {
+        // 部分成功，关闭对话框并刷新
+        handleReset()
+        onOpenChange(false)
+      }
+      // 如果全部失败，不关闭对话框（已在上面处理）
     } catch (error: any) {
       console.error('创建订单失败:', error)
       toast.error(error.message || '创建订单失败')
