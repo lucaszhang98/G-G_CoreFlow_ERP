@@ -563,7 +563,7 @@ export function CreateOrderDialog({
                                   type="text"
                                   value={editingData?.unload_type || ''}
                                   onChange={(e) => setEditingData({ ...editingData, unload_type: e.target.value || null })}
-                                  className="w-32"
+                                  className="min-w-[200px]"
                                   placeholder="拆柜/转仓"
                                 />
                               </TableCell>
@@ -581,7 +581,7 @@ export function CreateOrderDialog({
                                   type="text"
                                   value={editingData?.po || ''}
                                   onChange={(e) => setEditingData({ ...editingData, po: e.target.value || null })}
-                                  className="w-32"
+                                  className="min-w-[200px]"
                                   placeholder="PO"
                                 />
                               </TableCell>

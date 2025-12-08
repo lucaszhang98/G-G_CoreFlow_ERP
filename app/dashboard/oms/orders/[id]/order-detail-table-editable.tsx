@@ -436,7 +436,7 @@ export function OrderDetailTableEditable({ orderId, orderDetails: initialOrderDe
                             )
                             setOrderDetails(updated)
                           }}
-                          className="w-32"
+                          className="min-w-[200px]"
                           placeholder="PO"
                         />
                       </TableCell>
