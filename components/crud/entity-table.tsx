@@ -40,12 +40,14 @@ function RelationFieldBatchEdit({
   fieldValue,
   onValueChange,
   loadOptions,
+  loadFuzzyOptions,
 }: {
   fieldKey: string
   fieldConfig: FieldConfig
   fieldValue: any
   onValueChange: (fieldKey: string, value: any) => void
   loadOptions?: () => Promise<Array<{ label: string; value: string }>>
+  loadFuzzyOptions?: (search: string) => Promise<FuzzySearchOption[]>
 }) {
   const [options, setOptions] = React.useState<Array<{ label: string; value: string }>>([])
   const [loading, setLoading] = React.useState(false)

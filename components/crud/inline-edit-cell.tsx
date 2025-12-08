@@ -27,6 +27,7 @@ interface InlineEditCellProps {
   onChange: (value: any) => void
   className?: string
   loadOptions?: () => Promise<Array<{ label: string; value: string }>>
+  loadFuzzyOptions?: (search: string) => Promise<FuzzySearchOption[]>
 }
 
 export function InlineEditCell({
