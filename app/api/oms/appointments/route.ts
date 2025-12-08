@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
 
     // 应用系统字段
     const user = currentUser.user || null;
-    const finalData = addSystemFields(createData, user, true);
+    const finalData = await addSystemFields(createData, user, true);
 
     // 创建记录
     const newItem = await prisma.delivery_appointments.create({

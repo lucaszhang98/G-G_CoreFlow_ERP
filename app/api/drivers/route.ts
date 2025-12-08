@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         country: data.contact.country,
       };
       // 自动添加系统维护字段
-      addSystemFields(contactData, currentUser, true);
+      await addSystemFields(contactData, currentUser, true);
       
       const contact = await prisma.contact_roles.create({
         data: contactData,
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       notes: data.notes,
     };
     // 自动添加系统维护字段
-    addSystemFields(driverData, currentUser, true);
+    await addSystemFields(driverData, currentUser, true);
     
     const driver = await prisma.drivers.create({
       data: driverData,

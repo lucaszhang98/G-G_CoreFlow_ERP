@@ -30,6 +30,7 @@ import { autoFormatDateField, formatDateDisplay, formatDateTimeDisplay } from "@
 import { SearchModule } from "./search-module"
 import { InlineEditCell } from "./inline-edit-cell"
 import { LocationSelect } from "@/components/ui/location-select"
+import { getAdvancedSearchFields } from "@/lib/crud/advanced-search-generator"
 
 // 关系字段批量编辑组件（用于处理异步选项加载）
 function RelationFieldBatchEdit({
@@ -1430,7 +1431,7 @@ export function EntityTable<T = any>({
         filterValues={filterValues}
         onFilterChange={handleFilterChange}
         onClearFilters={handleClearFilters}
-        advancedSearchFields={config.list.advancedSearchFields}
+        advancedSearchFields={getAdvancedSearchFields(config)}
         advancedSearchOpen={advancedSearchOpen}
         onAdvancedSearchOpenChange={setAdvancedSearchOpen}
         advancedSearchValues={advancedSearchValues}

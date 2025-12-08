@@ -306,7 +306,7 @@ export async function PUT(
 
     // 应用系统字段
     const user = currentUser.user || null;
-    const finalData = addSystemFields(updateData, user, false);
+    const finalData = await addSystemFields(updateData, user, false);
 
     // 先获取原始记录，以判断 delivery_method 是否改变
     const originalItem = await prisma.delivery_appointments.findUnique({

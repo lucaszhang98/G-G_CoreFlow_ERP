@@ -131,8 +131,6 @@ export function LocationSelect({
                 setSelectedType(location.location_type)
                 await loadLocations(location.location_type)
               }
-            } else {
-              console.warn(`无法加载位置 ${value}，可能位置不存在`)
             }
           } else {
             // value可能是location_code，需要通过code查找

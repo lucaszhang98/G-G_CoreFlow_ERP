@@ -40,59 +40,65 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 处理联系人信息
-    // 注意：数据库要求 contact_roles.name 非空，所以只有当提供了 name 时才创建联系人
-    let contactId: bigint | null = null;
-    if (data.contact && data.contact.name) {
-      const contactData: any = {
-        related_entity_type: 'customer',
-        related_entity_id: BigInt(0), // 临时值，创建客户后会更新
-        role: 'primary',
-        name: data.contact.name,
-        phone: data.contact.phone || null,
-        email: data.contact.email || null,
-        address_line1: data.contact.address_line1 || null,
-        address_line2: data.contact.address_line2 || null,
-        city: data.contact.city || null,
-        state: data.contact.state || null,
-        postal_code: data.contact.postal_code || null,
-        country: data.contact.country || null,
+    // 使用事务确保数据一致性
+    const customer = await prisma.$transaction(async (tx) => {
+      // 先创建客户（不设置 contact_id）
+      const customerData: any = {
+        code: data.code,
+        name: data.name,
+        company_name: data.company_name,
+        credit_limit: data.credit_limit !== undefined && data.credit_limit !== null ? data.credit_limit : 0, // 默认值为 0
+        status: data.status,
+        contact_id: null, // 先设置为 null，创建联系人后再更新
       };
-      // 自动添加系统维护字段
-      addSystemFields(contactData, currentUser, true);
+      // 自动添加系统维护字段（在事务内部，跳过用户验证以避免嵌套查询）
+      await addSystemFields(customerData, currentUser, true, true);
       
-      const contact = await prisma.contact_roles.create({
-        data: contactData,
+      const newCustomer = await tx.customers.create({
+        data: customerData,
       });
-      contactId = contact.contact_id;
-    }
 
-    // 创建客户
-    const customerData: any = {
-      code: data.code,
-      name: data.name,
-      company_name: data.company_name,
-      credit_limit: data.credit_limit,
-      status: data.status,
-      contact_id: contactId,
-    };
-    // 自动添加系统维护字段
-    addSystemFields(customerData, currentUser, true);
-    
-    const customer = await prisma.customers.create({
-      data: customerData,
-      include: {
-        contact_roles: true,
-      },
-    });
+      // 处理联系人信息（在客户创建后，使用正确的 customer.id）
+      // 注意：数据库要求 contact_roles.name 非空，所以只有当提供了 name 时才创建联系人
+      let contactId: bigint | null = null;
+      if (data.contact && data.contact.name) {
+        const contactData: any = {
+          related_entity_type: 'customer',
+          related_entity_id: newCustomer.id, // 使用正确的客户 ID
+          role: 'primary',
+          name: data.contact.name,
+          phone: data.contact.phone || null,
+          email: data.contact.email || null,
+          address_line1: data.contact.address_line1 || null,
+          address_line2: data.contact.address_line2 || null,
+          city: data.contact.city || null,
+          state: data.contact.state || null,
+          postal_code: data.contact.postal_code || null,
+          country: data.contact.country || null,
+        };
+        // 自动添加系统维护字段（在事务内部，跳过用户验证）
+        await addSystemFields(contactData, currentUser, true, true);
+        
+        const contact = await tx.contact_roles.create({
+          data: contactData,
+        });
+        contactId = contact.contact_id;
 
-    // 更新联系人的 related_entity_id
-    if (contactId) {
-      await prisma.contact_roles.update({
-        where: { contact_id: contactId },
-        data: { related_entity_id: customer.id },
+        // 更新客户的 contact_id
+        await tx.customers.update({
+          where: { id: newCustomer.id },
+          data: { contact_id: contactId },
+        });
+      }
+
+      // 返回包含联系人信息的客户数据
+      return await tx.customers.findUnique({
+        where: { id: newCustomer.id },
+        include: {
+          contact_roles: true,
+        },
       });
-    }
+    })
 
     return NextResponse.json(
       {

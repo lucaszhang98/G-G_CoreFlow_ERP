@@ -26,9 +26,10 @@ export const locationConfig: EntityConfig = {
       key: 'location_code',
       label: '位置代码',
       type: 'text',
+      required: true,
       sortable: true,
       searchable: true,
-      placeholder: '请输入位置代码（可选）',
+      placeholder: '请输入位置代码',
     },
     name: {
       key: 'name',
@@ -43,6 +44,7 @@ export const locationConfig: EntityConfig = {
       key: 'location_type',
       label: '位置类型',
       type: 'select',
+      required: true,
       sortable: true,
       options: [
         { label: '收货地址', value: 'delivery' },
@@ -58,14 +60,14 @@ export const locationConfig: EntityConfig = {
       label: '城市',
       type: 'text',
       searchable: true,
-      placeholder: '请输入城市',
+      placeholder: '请输入城市（可选）',
     },
     country: {
       key: 'country',
       label: '国家',
       type: 'text',
       searchable: true,
-      placeholder: '请输入国家',
+      placeholder: '请输入国家（可选）',
     },
     address_line1: {
       key: 'address_line1',
@@ -95,19 +97,25 @@ export const locationConfig: EntityConfig = {
       key: 'timezone',
       label: '时区',
       type: 'text',
-      placeholder: '请输入时区（可选）',
+      computed: true,
+      readonly: true,
+      placeholder: '自动计算',
     },
     latitude: {
       key: 'latitude',
       label: '纬度',
       type: 'number',
-      placeholder: '请输入纬度（可选）',
+      computed: true,
+      readonly: true,
+      placeholder: '自动计算',
     },
     longitude: {
       key: 'longitude',
       label: '经度',
       type: 'number',
-      placeholder: '请输入经度（可选）',
+      computed: true,
+      readonly: true,
+      placeholder: '自动计算',
     },
     notes: {
       key: 'notes',
@@ -126,7 +134,7 @@ export const locationConfig: EntityConfig = {
   list: {
     defaultSort: 'location_code',
     defaultOrder: 'asc',
-    columns: ['location_code', 'name', 'location_type', 'city', 'country', 'created_at'],
+    columns: ['location_code', 'name', 'location_type', 'notes', 'created_at'],
     searchFields: ['location_code', 'name', 'city', 'country'],
     pageSize: 10,
     // 筛选配置（快速筛选）
@@ -175,6 +183,8 @@ export const locationConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
+        // 批量编辑字段：只包含主页面字段和详细信息字段，排除自动计算字段
+        fields: ['location_code', 'name', 'location_type', 'notes', 'address_line1', 'address_line2', 'city', 'state', 'postal_code', 'country'],
       },
       delete: {
         enabled: true,
@@ -186,7 +196,10 @@ export const locationConfig: EntityConfig = {
     },
   },
   
-  formFields: ['location_code', 'name', 'location_type', 'address_line1', 'address_line2', 'city', 'state', 'postal_code', 'country', 'timezone', 'latitude', 'longitude', 'notes'],
+  // 主页面字段：location_code, name, location_type, notes
+  // 详细信息字段：address_line1, address_line2, city, state, postal_code, country
+  // 自动计算字段（不在表单中显示）：timezone, latitude, longitude
+  formFields: ['location_code', 'name', 'location_type', 'notes', 'address_line1', 'address_line2', 'city', 'state', 'postal_code', 'country'],
   
   permissions: {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],

@@ -242,35 +242,50 @@ export function CreateOrderDialog({
       }
 
       // 然后创建所有明细
-      const detailPromises = orderDetails.map(detail =>
-        fetch('/api/order-details', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            order_id: orderId.toString(),
-            quantity: detail.quantity,
-            volume: detail.volume,
-            delivery_nature: detail.delivery_nature,
-            delivery_location: detail.delivery_location,
-            unload_type: detail.unload_type,
-            notes: detail.notes,
-            po: detail.po,
-          }),
-        })
-      )
+      const detailPromises = orderDetails.map(async (detail, index) => {
+        try {
+          const response = await fetch('/api/order-details', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              order_id: orderId.toString(),
+              quantity: detail.quantity,
+              volume: detail.volume,
+              delivery_nature: detail.delivery_nature,
+              delivery_location: detail.delivery_location, // 这里应该是 location_id（字符串或数字）
+              unload_type: detail.unload_type,
+              notes: detail.notes,
+              po: detail.po,
+            }),
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new Error(errorData.error || `明细 ${index + 1} 创建失败`)
+          }
+
+          return { success: true, index }
+        } catch (error: any) {
+          console.error(`明细 ${index + 1} 创建失败:`, error)
+          return { success: false, index, error: error.message || '创建失败' }
+        }
+      })
 
       const detailResults = await Promise.all(detailPromises)
-      const failedDetails = detailResults.filter(res => !res.ok)
+      const failedDetails = detailResults.filter(res => !res.success)
       
       if (failedDetails.length > 0) {
+        const errorMessages = failedDetails.map(f => `明细 ${f.index + 1}: ${f.error}`).join('; ')
         console.error('部分明细创建失败:', failedDetails)
-        toast.warning('订单已创建，但部分明细创建失败，请检查')
+        toast.error(`订单已创建，但部分明细创建失败: ${errorMessages}`)
+        // 即使部分失败，也刷新列表，让用户看到已创建的明细
+        onSuccess()
+      } else {
+        toast.success('订单创建成功')
       }
 
-      toast.success('订单创建成功')
       handleReset()
       onOpenChange(false)
-      onSuccess()
     } catch (error: any) {
       console.error('创建订单失败:', error)
       toast.error(error.message || '创建订单失败')
@@ -316,37 +331,24 @@ export function CreateOrderDialog({
                       }
                       
                       const url = `/api/customers?${params.toString()}`
-                      console.log('[客户搜索] 请求URL:', url)
-                      
                       const response = await fetch(url)
                       if (!response.ok) {
-                        const errorText = await response.text()
-                        console.error('[客户搜索] API错误:', response.status, response.statusText, errorText)
                         return []
                       }
                       
                       const data = await response.json()
-                      console.log('[客户搜索] API响应:', { 
-                        hasData: !!data.data, 
-                        dataLength: Array.isArray(data.data) ? data.data.length : 0,
-                        search: search.trim(),
-                        sample: Array.isArray(data.data) && data.data.length > 0 ? data.data[0] : null
-                      })
                       
                       // API返回格式: { data: [...], pagination: {...} }
                       if (data && Array.isArray(data.data)) {
-                        const options = data.data.map((customer: any) => ({
+                        return data.data.map((customer: any) => ({
                           label: customer.name || customer.company_name || customer.code || '',
                           value: customer.id?.toString() || '',
                         }))
-                        console.log('[客户搜索] 转换后的选项数量:', options.length)
-                        return options
                       }
                       
-                      console.warn('[客户搜索] 返回格式异常:', data)
                       return []
                     } catch (err) {
-                      console.error('[客户搜索] 异常:', err)
+                      // 静默处理错误
                       return []
                     }
                   }}
@@ -502,23 +504,18 @@ export function CreateOrderDialog({
                                           const data = await response.json()
                                           // API 返回格式可能是 { data: { location_code: ... } } 或直接是 { location_code: ... }
                                           locationCode = data.data?.location_code || data.location_code || null
-                                          console.log('[位置编码] 查询结果:', { locationId, locationCode, data })
-                                        } else {
-                                          console.warn('[位置编码] API 请求失败:', response.status)
                                         }
                                       } catch (err) {
-                                        console.error('获取位置编码失败:', err)
+                                        // 静默处理错误，不影响用户体验
                                       }
                                     }
                                     
                                     // 更新编辑数据，确保 location_code 被保存
-                                    const updatedData = { 
+                                    setEditingData({ 
                                       ...editingData, 
                                       delivery_location: locationId,
                                       delivery_location_code: locationCode,
-                                    }
-                                    console.log('[位置编码] 更新编辑数据:', updatedData)
-                                    setEditingData(updatedData)
+                                    })
                                   }}
                                   placeholder="选择送仓地点"
                                 />

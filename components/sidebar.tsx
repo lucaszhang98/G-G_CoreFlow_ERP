@@ -82,11 +82,13 @@ const menuItems: MenuItem[] = [
           title: "仓库管理",
           icon: Building2,
           href: "/dashboard/warehouses",
+          roles: ["admin", "wms_manager", "tms_manager"], // 排除 oms_manager
         },
         {
           title: "部门管理",
           icon: Building2,
           href: "/dashboard/settings/departments",
+          roles: ["admin"], // 只有 admin 可以访问
         },
         {
           title: "位置管理",
@@ -97,21 +99,25 @@ const menuItems: MenuItem[] = [
           title: "承运商管理",
           icon: TruckIcon,
           href: "/dashboard/settings/carriers",
+          roles: ["admin", "tms_manager"], // 排除 oms_manager
         },
         {
           title: "车辆管理",
           icon: Car,
           href: "/dashboard/settings/vehicles",
+          roles: ["admin", "tms_manager"], // 排除 oms_manager
         },
         {
           title: "货柜管理",
           icon: Container,
           href: "/dashboard/settings/trailers",
+          roles: ["admin", "tms_manager", "wms_manager"], // 排除 oms_manager
         },
         {
           title: "司机管理",
           icon: UserCog,
           href: "/dashboard/settings/drivers",
+          roles: ["admin", "tms_manager"], // 排除 oms_manager
         },
       ],
     },
@@ -135,7 +141,7 @@ const menuItems: MenuItem[] = [
   {
     title: "运输管理 (TMS)",
     icon: Truck,
-    roles: ["admin", "tms_manager", "oms_manager", "wms_manager", "employee", "user"],
+    roles: ["admin", "tms_manager", "wms_manager", "employee", "user"], // 排除 oms_manager
     children: [
       {
         title: "海柜管理",
@@ -147,7 +153,7 @@ const menuItems: MenuItem[] = [
   {
     title: "仓库管理 (WMS)",
     icon: Warehouse,
-    roles: ["admin", "wms_manager", "oms_manager", "tms_manager", "employee", "user"],
+    roles: ["admin", "wms_manager", "tms_manager", "employee", "user"], // 排除 oms_manager
     children: [
       {
         title: "入库管理",
@@ -169,7 +175,7 @@ const menuItems: MenuItem[] = [
   {
     title: "报表分析",
     icon: BarChart3,
-    roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user"],
+    roles: ["admin", "tms_manager", "wms_manager", "employee", "user"], // 排除 oms_manager
     children: [
       {
         title: "订单报表",
@@ -197,7 +203,7 @@ const menuItems: MenuItem[] = [
   {
     title: "工具",
     icon: Settings,
-    roles: ["admin", "oms_manager", "tms_manager", "wms_manager"],
+    roles: ["admin", "tms_manager", "wms_manager"], // 排除 oms_manager
     children: [
       {
         title: "文档管理",

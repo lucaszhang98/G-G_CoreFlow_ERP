@@ -209,14 +209,14 @@ export async function PUT(
         notes: updateData.notes || null,
       };
       
-      const finalCreateData = addSystemFields(createData, user, true);
+      const finalCreateData = await addSystemFields(createData, user, true);
       
       outboundShipment = await prisma.outbound_shipments.create({
         data: finalCreateData,
       });
     } else {
       // 更新现有记录
-      const finalUpdateData = addSystemFields(updateData, user, false);
+      const finalUpdateData = await addSystemFields(updateData, user, false);
       
       outboundShipment = await prisma.outbound_shipments.update({
         where: { appointment_id: BigInt(appointmentId) },

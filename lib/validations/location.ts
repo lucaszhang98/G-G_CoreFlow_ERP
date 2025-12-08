@@ -3,8 +3,7 @@ import { z } from 'zod';
 export const locationCreateSchema = z.object({
   location_code: z.string()
     .min(1, '位置代码不能为空')
-    .max(50, '位置代码长度不能超过 50')
-    .optional(),
+    .max(50, '位置代码长度不能超过 50'),
   name: z.string()
     .min(1, '位置名称不能为空')
     .max(200, '位置名称长度不能超过 200'),

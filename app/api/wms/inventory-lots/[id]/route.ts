@@ -199,7 +199,7 @@ export async function PUT(
     }
 
     // 应用审计字段
-    addSystemFields(updateData, currentUser, false);
+    await addSystemFields(updateData, currentUser, false);
 
     // 更新记录
     const updated = await prisma.inventory_lots.update({

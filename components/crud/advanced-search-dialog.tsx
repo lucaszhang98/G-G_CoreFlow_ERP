@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { AdvancedSearchFieldConfig } from "@/lib/crud/types"
+import { loadRelationOptions } from "@/lib/crud/relation-loader"
+import { Loader2 } from "lucide-react"
 
 interface AdvancedSearchDialogProps {
   open: boolean
@@ -139,6 +141,32 @@ export function AdvancedSearchDialog({
 
               if (field.type === 'select') {
                 const currentValue = searchValues[field.field]
+                // 关系字段需要动态加载选项
+                const [relationOptions, setRelationOptions] = React.useState<Array<{ label: string; value: string }>>([])
+                const [loadingRelation, setLoadingRelation] = React.useState(false)
+                const [relationOptionsLoaded, setRelationOptionsLoaded] = React.useState(false)
+
+                // 加载关系字段选项
+                React.useEffect(() => {
+                  if (field.relation && !relationOptionsLoaded && !loadingRelation) {
+                    setLoadingRelation(true)
+                    loadRelationOptions(field)
+                      .then((options) => {
+                        setRelationOptions(options)
+                        setRelationOptionsLoaded(true)
+                      })
+                      .catch((error) => {
+                        console.error(`加载${field.label}选项失败:`, error)
+                      })
+                      .finally(() => {
+                        setLoadingRelation(false)
+                      })
+                  }
+                }, [field, relationOptionsLoaded, loadingRelation])
+
+                // 使用静态选项或动态加载的选项
+                const selectOptions = field.options || relationOptions
+
                 return (
                   <div key={field.field} className="space-y-2 group">
                     <Label htmlFor={field.field} className="text-sm font-medium text-gray-700 dark:text-gray-300 group-focus-within:text-indigo-600 dark:group-focus-within:text-indigo-400 transition-colors">
@@ -154,17 +182,24 @@ export function AdvancedSearchDialog({
                           onSearchChange(field.field, value)
                         }
                       }}
+                      disabled={loadingRelation}
                     >
                       <SelectTrigger id={field.field} className="h-10 border-2 border-gray-200 dark:border-gray-800 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 transition-all duration-200">
-                        <SelectValue placeholder={`请选择${field.label}`} />
+                        <SelectValue placeholder={loadingRelation ? '加载中...' : `请选择${field.label}`} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__all__">全部</SelectItem>
-                        {field.options?.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
+                        {loadingRelation ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                          </div>
+                        ) : (
+                          selectOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

@@ -11,6 +11,7 @@ import { applyTransform, applyTransformList } from '@/lib/api/transformers'
 import { resolveParams, withApiHandler } from '@/lib/api/middleware'
 import { EntityConfig } from './types'
 import { getSchema } from './schema-loader'
+import { getAdvancedSearchFields } from './advanced-search-generator'
 import prisma from '@/lib/prisma'
 
 /**
@@ -130,10 +131,12 @@ export function createListHandler(config: EntityConfig) {
 
       // 高级搜索条件（多条件组合）
       const advancedLogic = searchParams.get('advanced_logic') || 'AND'
-      if (config.list.advancedSearchFields) {
+      // 使用自动生成的高级搜索字段（如果配置了则使用配置，否则自动生成）
+      const advancedSearchFields = getAdvancedSearchFields(config)
+      if (advancedSearchFields && advancedSearchFields.length > 0) {
         const advancedConditions: any[] = []
         
-        config.list.advancedSearchFields.forEach((searchField) => {
+        advancedSearchFields.forEach((searchField: any) => {
           if (searchField.type === 'text' || searchField.type === 'number') {
             const value = searchParams.get(`advanced_${searchField.field}`)
             if (value) {
@@ -176,7 +179,7 @@ export function createListHandler(config: EntityConfig) {
                 dateCondition.lte = endDate
               }
               if (searchField.dateFields && searchField.dateFields.length > 0) {
-                searchField.dateFields.forEach((dateField) => {
+                searchField.dateFields.forEach((dateField: string) => {
                   advancedConditions.push({ [dateField]: dateCondition })
                 })
               } else {
@@ -195,7 +198,7 @@ export function createListHandler(config: EntityConfig) {
                 numCondition.lte = Number(numMax)
               }
               if (searchField.numberFields && searchField.numberFields.length > 0) {
-                searchField.numberFields.forEach((numField) => {
+                searchField.numberFields.forEach((numField: string) => {
                   advancedConditions.push({ [numField]: numCondition })
                 })
               } else {
@@ -865,7 +868,7 @@ export function createCreateHandler(config: EntityConfig) {
 
       // 自动添加系统维护字段（创建人/时间、修改人/时间）
       const { addSystemFields } = await import('@/lib/api/helpers')
-      addSystemFields(processedData, permissionResult.user, true)
+      await addSystemFields(processedData, permissionResult.user, true)
 
       const prismaModel = getPrismaModel(config)
       const item = await prismaModel.create({
@@ -977,7 +980,7 @@ export function createUpdateHandler(config: EntityConfig) {
 
       // 自动添加系统维护字段（只更新修改人/时间）
       const { addSystemFields } = await import('@/lib/api/helpers')
-      addSystemFields(processedData, permissionResult.user, false)
+      await addSystemFields(processedData, permissionResult.user, false)
 
       const prismaModel = getPrismaModel(config)
       

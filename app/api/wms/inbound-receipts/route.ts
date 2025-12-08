@@ -335,7 +335,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 自动添加系统维护字段
-    addSystemFields(createData, currentUser, true);
+    await addSystemFields(createData, currentUser, true);
 
     // 创建拆柜规划
     const inboundReceipt = await prisma.inbound_receipt.create({

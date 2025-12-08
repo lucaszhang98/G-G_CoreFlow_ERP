@@ -179,7 +179,7 @@ export async function PUT(
     }
 
     // 自动添加系统维护字段（只更新修改人/时间）
-    addSystemFields(updateData, currentUser, false);
+    await addSystemFields(updateData, currentUser, false);
 
     // 更新拆柜规划
     // 添加调试日志

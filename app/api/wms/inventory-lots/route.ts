@@ -460,7 +460,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 应用审计字段
-    addSystemFields(createData, currentUser, true);
+    await addSystemFields(createData, currentUser, true);
 
     // 创建记录
     const newItem = await prisma.inventory_lots.create({

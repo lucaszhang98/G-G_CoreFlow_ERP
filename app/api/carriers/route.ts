@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         country: data.contact.country,
       };
       // 自动添加系统维护字段
-      addSystemFields(contactData, currentUser, true);
+      await addSystemFields(contactData, currentUser, true);
       
       const contact = await prisma.contact_roles.create({
         data: contactData,
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       contact_id: contactId,
     };
     // 自动添加系统维护字段
-    addSystemFields(carrierData, currentUser, true);
+    await addSystemFields(carrierData, currentUser, true);
     
     const carrier = await prisma.carriers.create({
       data: carrierData,

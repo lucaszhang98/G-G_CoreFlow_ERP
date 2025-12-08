@@ -101,8 +101,11 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
       if (data.company_name) {
         submitData.company_name = data.company_name
       }
-      if (data.credit_limit !== undefined && data.credit_limit !== null) {
+      // 信用额度：如果用户不填或为 NaN，设置为 0（数据库默认值）
+      if (data.credit_limit !== undefined && data.credit_limit !== null && !isNaN(data.credit_limit)) {
         submitData.credit_limit = data.credit_limit
+      } else {
+        submitData.credit_limit = 0 // 默认值为 0
       }
 
       // 联系人信息

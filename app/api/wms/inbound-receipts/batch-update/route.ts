@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 自动添加系统维护字段（只更新修改人/时间）
-    addSystemFields(updateData, currentUser, false);
+    await addSystemFields(updateData, currentUser, false);
 
     // 批量更新
     const result = await prisma.inbound_receipt.updateMany({

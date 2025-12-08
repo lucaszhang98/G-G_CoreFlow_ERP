@@ -177,6 +177,19 @@ export function handleUniqueConstraintError(error: any, fieldName: string) {
  */
 export function handleForeignKeyError(error: any, message: string) {
   if (error.code === 'P2003') {
+    // 根据错误消息判断是创建还是删除操作
+    // 如果是创建操作，提供更合适的错误消息
+    const errorMessage = error.message || ''
+    if (errorMessage.includes('create') || errorMessage.includes('insert') || errorMessage.includes('Foreign key constraint')) {
+      // 创建操作的外键错误，提供更具体的错误信息
+      return NextResponse.json(
+        {
+          error: message || '数据关联错误，请检查关联字段是否正确',
+        },
+        { status: 400 }
+      );
+    }
+    // 删除操作的外键错误
     return NextResponse.json(
       {
         error: message || '有关联数据，无法删除',
@@ -191,13 +204,19 @@ export function handleForeignKeyError(error: any, message: string) {
  * 处理通用错误
  */
 export function handleError(error: any, defaultMessage: string = '操作失败') {
-  console.error('API Error:', error);
-  console.error('API Error Details:', {
-    message: error?.message,
-    code: error?.code,
-    meta: error?.meta,
-    name: error?.name,
-  });
+  // 生产环境只记录错误，不输出详细信息
+  if (process.env.NODE_ENV === 'development') {
+    console.error('API Error:', error);
+    console.error('API Error Details:', {
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+      name: error?.name,
+    });
+  } else {
+    // 生产环境只记录错误消息
+    console.error('API Error:', error?.message || defaultMessage);
+  }
 
   // 尝试处理已知错误
   const uniqueError = handleUniqueConstraintError(error, '资源');
@@ -227,30 +246,51 @@ export function handleError(error: any, defaultMessage: string = '操作失败')
  * @param data 要处理的数据对象
  * @param user 当前用户对象
  * @param isCreate 是否为创建操作（true: 创建, false: 更新）
+ * @param skipUserValidation 是否跳过用户验证（用于事务内部，避免嵌套查询）
  */
-export function addSystemFields(data: any, user: any, isCreate: boolean = true): any {
+export async function addSystemFields(data: any, user: any, isCreate: boolean = true, skipUserValidation: boolean = false): Promise<any> {
   const userId = user?.id ? BigInt(user.id) : null
   const now = new Date()
   
+  // 如果提供了 userId 且不需要跳过验证，验证用户是否存在于数据库中
+  let validUserId: bigint | null = null
+  if (userId && !skipUserValidation) {
+    try {
+      const userExists = await prisma.users.findUnique({
+        where: { id: userId },
+        select: { id: true },
+      })
+      if (userExists) {
+        validUserId = userId
+      }
+    } catch (error) {
+      // 如果查询失败，不设置 userId（允许为 null）
+      // 静默处理，避免在生产环境输出过多日志
+    }
+  } else if (userId && skipUserValidation) {
+    // 在事务内部，假设用户存在（由调用方保证）
+    validUserId = userId
+  }
+  
   if (isCreate) {
     // 创建操作：设置 created_by 和 created_at
-    if (!data.created_by && userId) {
-      data.created_by = userId
+    if (!data.created_by && validUserId) {
+      data.created_by = validUserId
     }
     if (!data.created_at) {
       data.created_at = now
     }
     // 创建时也设置 updated_by 和 updated_at
-    if (!data.updated_by && userId) {
-      data.updated_by = userId
+    if (!data.updated_by && validUserId) {
+      data.updated_by = validUserId
     }
     if (!data.updated_at) {
       data.updated_at = now
     }
   } else {
     // 更新操作：只更新 updated_by 和 updated_at
-    if (userId) {
-      data.updated_by = userId
+    if (validUserId) {
+      data.updated_by = validUserId
     }
     data.updated_at = now
     // 更新时不能修改 created_by 和 created_at

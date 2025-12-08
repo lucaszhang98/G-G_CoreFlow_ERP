@@ -140,7 +140,7 @@ export async function PUT(
             country: data.contact.country || null,
           };
           // 自动添加系统维护字段（只更新修改人/时间）
-          addSystemFields(contactUpdateData, currentUser, false);
+          await addSystemFields(contactUpdateData, currentUser, false);
           
           await prisma.contact_roles.update({
             where: { contact_id: existing.contact_id },
@@ -163,7 +163,7 @@ export async function PUT(
             country: data.contact.country || null,
           };
           // 自动添加系统维护字段
-          addSystemFields(contactData, currentUser, true);
+          await addSystemFields(contactData, currentUser, true);
           
           const contact = await prisma.contact_roles.create({
             data: contactData,
@@ -180,7 +180,7 @@ export async function PUT(
     }
 
     // 自动添加系统维护字段（只更新修改人/时间）
-    addSystemFields(updateData, currentUser, false);
+    await addSystemFields(updateData, currentUser, false);
     
     const customer = await prisma.customers.update({
       where: { id: BigInt(resolvedParams.id) },
@@ -246,17 +246,50 @@ export async function DELETE(
       );
     }
 
-    // 删除联系人（如果存在）
-    if (customer.contact_id) {
-      await prisma.contact_roles.delete({
-        where: { contact_id: customer.contact_id },
-      });
-    }
+    // 使用事务确保数据一致性
+    await prisma.$transaction(async (tx) => {
+      const customerId = customer.id
 
-    // 删除客户
-    await prisma.customers.delete({
-      where: { id: BigInt(resolvedParams.id) },
-    });
+      // 1. 先将客户的 contact_id 设置为 null，解除外键约束
+      if (customer.contact_id) {
+        await tx.customers.update({
+          where: { id: customerId },
+          data: { contact_id: null },
+        })
+      }
+
+      // 2. 删除所有通过 related_entity_id 关联的联系人记录
+      await tx.contact_roles.deleteMany({
+        where: {
+          related_entity_type: 'customer',
+          related_entity_id: customerId,
+        },
+      })
+
+      // 3. 如果还有通过 contact_id 关联的联系人（但 related_entity_id 不是这个客户的情况）
+      // 检查这个联系人是否还被其他表引用，如果没有则可以删除
+      if (customer.contact_id) {
+        const contactStillReferenced = await tx.carriers.findFirst({
+          where: { contact_id: customer.contact_id },
+        }) || await tx.drivers.findFirst({
+          where: { contact_id: customer.contact_id },
+        })
+
+        // 如果没有被其他表引用，可以安全删除
+        if (!contactStillReferenced) {
+          await tx.contact_roles.delete({
+            where: { contact_id: customer.contact_id },
+          }).catch(() => {
+            // 如果删除失败（可能已经被第二步删除），继续执行
+          })
+        }
+      }
+
+      // 4. 最后删除客户
+      await tx.customers.delete({
+        where: { id: customerId },
+      })
+    })
 
     return NextResponse.json({
       message: '客户删除成功',
