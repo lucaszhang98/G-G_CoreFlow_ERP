@@ -69,20 +69,20 @@ export function InventoryForecastClient() {
       setCalculating(true)
       setError(null)
       
-      // 获取当前本地时间，不进行时区转换，直接当作 UTC 使用
-      // 例如：本地时间是 2025-12-11 00:42，就当作 UTC 的 2025-12-11 00:42
-      const now = new Date()
-      const year = now.getFullYear()
-      const month = String(now.getMonth() + 1).padStart(2, '0')
-      const day = String(now.getDate()).padStart(2, '0')
-      const hours = String(now.getHours()).padStart(2, '0')
-      const minutes = String(now.getMinutes()).padStart(2, '0')
-      const seconds = String(now.getSeconds()).padStart(2, '0')
+      // 从服务器获取当前时间（确保本地和正式环境使用相同的逻辑）
+      // 本地开发：从本地开发服务器获取时间
+      // 正式环境：从 Netlify 服务器获取时间
+      const timeResponse = await fetch("/api/system/current-time")
+      if (!timeResponse.ok) {
+        throw new Error("获取服务器时间失败")
+      }
+      const timeData = await timeResponse.json()
       
-      // 日期部分（YYYY-MM-DD）用于计算基准日期
-      const baseDateString = `${year}-${month}-${day}`
-      // 完整时间戳（YYYY-MM-DDTHH:mm:ss）用于 calculated_at
-      const timestampString = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`
+      // 使用服务器返回的时间
+      const baseDateString = timeData.date
+      const timestampString = timeData.timestamp
+      
+      console.log('[前端] 使用服务器时间:', { baseDateString, timestampString })
       
       const response = await fetch("/api/reports/inventory-forecast/calculate", {
         method: "POST",
