@@ -107,53 +107,12 @@ export const userConfig: EntityConfig = {
     defaultSort: 'username',
     defaultOrder: 'asc',
     columns: ['username', 'email', 'full_name', 'role', 'status', 'department'],
-    searchFields: ['username', 'email', 'full_name'],
+    searchFields: ['username'], // 只搜索用户名（最重要的字段）
     pageSize: 10,
-    // 筛选配置（快速筛选）
-    filterFields: [
-      {
-        field: 'role',
-        label: '角色',
-        type: 'select',
-        options: [
-          { label: '管理员', value: 'admin' },
-          { label: 'OMS经理', value: 'oms_manager' },
-          { label: 'TMS经理', value: 'tms_manager' },
-          { label: 'WMS经理', value: 'wms_manager' },
-          { label: '员工', value: 'employee' },
-          { label: '用户', value: 'user' },
-        ],
-      },
-      {
-        field: 'status',
-        label: '状态',
-        type: 'select',
-        options: [
-          { label: '活跃', value: 'active' },
-          { label: '停用', value: 'inactive' },
-        ],
-      },
-      // created_at 是审计字段，不在筛选配置中显示
-      // {
-      //   field: 'created_at',
-      //   label: '创建日期',
-      //   type: 'dateRange',
-      //   dateFields: ['created_at'],
-      // },
-    ],
-    // 高级搜索配置（多条件组合）
-    advancedSearchFields: [
-      {
-        field: 'email',
-        label: '邮箱',
-        type: 'text',
-      },
-      {
-        field: 'full_name',
-        label: '姓名',
-        type: 'text',
-      },
-    ],
+    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
+    // filterFields 已由 search-config-generator 自动生成
+    // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
+    // advancedSearchFields 已由 search-config-generator 自动生成
     // 批量操作配置
     batchOperations: {
       enabled: true,

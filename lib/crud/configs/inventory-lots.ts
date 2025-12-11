@@ -47,13 +47,19 @@ export const inventoryLotConfig: EntityConfig = {
     delivery_nature: {
       key: 'delivery_nature',
       label: '送仓性质',
-      type: 'text',
+      type: 'select',
       sortable: true,
+      options: [
+        { label: 'AMZ', value: 'AMZ' },
+        { label: '扣货', value: '扣货' },
+        { label: '已放行', value: '已放行' },
+        { label: '私仓', value: '私仓' },
+      ],
     },
     delivery_location: {
       key: 'delivery_location',
       label: '仓点',
-      type: 'text',
+      type: 'location',
       sortable: true,
       searchable: true,
     },
@@ -175,56 +181,73 @@ export const inventoryLotConfig: EntityConfig = {
       'unbooked_pallet_count',
       'delivery_progress',
     ],
-    searchFields: ['customer_name', 'container_number', 'storage_location_code', 'lot_number'],
+    searchFields: ['container_number'], // 只搜索柜号（最重要的字段）
     pageSize: 20,
-    // 筛选配置（快速筛选）
+    // 筛选配置（快速筛选）- 手动定义，排除 warehouse_id，添加送仓性质、仓点、剩余板数、未约板数、送仓进度
     filterFields: [
+      // 送仓性质筛选
       {
-        field: 'status',
-        label: '状态',
+        field: 'delivery_nature',
+        label: '送仓性质',
         type: 'select',
         options: [
-          { label: '可用', value: 'available' },
-          { label: '已分配', value: 'allocated' },
-          { label: '已发货', value: 'shipped' },
-          { label: '已预留', value: 'reserved' },
+          { label: 'AMZ', value: 'AMZ' },
+          { label: '扣货', value: '扣货' },
+          { label: '已放行', value: '已放行' },
+          { label: '私仓', value: '私仓' },
         ],
       },
+      // 仓点筛选（带模糊搜索）
       {
-        field: 'warehouse_id',
-        label: '仓库',
+        field: 'delivery_location',
+        label: '仓点',
         type: 'select',
         relation: {
-          model: 'warehouses',
+          model: 'locations',
           displayField: 'name',
-          valueField: 'warehouse_id',
+          valueField: 'location_id',
         },
       },
-    ],
-    // 高级搜索配置（多条件组合）
-    advancedSearchFields: [
+      // 剩余板数筛选（零/非零）
       {
-        field: 'customer_name',
-        label: '客户名称',
-        type: 'text',
-      },
-      {
-        field: 'container_number',
-        label: '柜号',
-        type: 'text',
-      },
-      {
-        field: 'status',
-        label: '状态',
+        field: 'remaining_pallet_count',
+        label: '剩余板数',
         type: 'select',
         options: [
-          { label: '可用', value: 'available' },
-          { label: '已分配', value: 'allocated' },
-          { label: '已发货', value: 'shipped' },
-          { label: '已预留', value: 'reserved' },
+          { label: '有剩余', value: 'non_zero' },
+          { label: '无剩余', value: 'zero' },
         ],
       },
+      // 未约板数筛选（零/非零）
+      {
+        field: 'unbooked_pallet_count',
+        label: '未约板数',
+        type: 'select',
+        options: [
+          { label: '有未约', value: 'non_zero' },
+          { label: '无未约', value: 'zero' },
+        ],
+      },
+      // 送仓进度筛选（100%/非100%）
+      {
+        field: 'delivery_progress',
+        label: '送仓进度',
+        type: 'select',
+        options: [
+          { label: '已完成', value: 'complete' },
+          { label: '未完成', value: 'incomplete' },
+        ],
+      },
+      // 日期筛选
+      {
+        field: 'planned_unload_at',
+        label: '预计拆柜日期',
+        type: 'dateRange',
+        dateFields: ['planned_unload_at'],
+      },
     ],
+    // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
+    // advancedSearchFields 已由 search-config-generator 自动生成
     // 批量操作配置
     batchOperations: {
       enabled: true,
@@ -268,9 +291,9 @@ export const inventoryLotConfig: EntityConfig = {
   
   permissions: {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: ['admin', 'wms_manager'],
+    create: [], // WMS 模块不允许手动创建
     update: ['admin', 'wms_manager'],
-    delete: ['admin'],
+    delete: [], // WMS 模块不允许删除
   },
   
   prisma: {

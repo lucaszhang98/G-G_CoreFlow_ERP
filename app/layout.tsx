@@ -6,11 +6,17 @@ import { Providers } from "@/components/providers";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: "swap",
+  preload: false, // 禁用预加载以避免 Turbopack 字体加载问题
+  fallback: ["system-ui", "arial"],
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
+  preload: false, // 禁用预加载以避免 Turbopack 字体加载问题
+  fallback: ["monospace"],
 });
 
 export const metadata: Metadata = {

@@ -71,10 +71,12 @@ export function FuzzySearchSelect({
 
   // 当有值但选项不在列表中时，需要加载该选项（用于显示已选中的值）
   const [selectedOptionCache, setSelectedOptionCache] = React.useState<FuzzySearchOption | null>(null)
+  const [isLoadingSelected, setIsLoadingSelected] = React.useState(false)
   
   React.useEffect(() => {
-    if (value && !selectedOption && !selectedOptionCache) {
+    if (value && !selectedOption && !selectedOptionCache && !isLoadingSelected) {
       // 有值但不在当前选项中，尝试加载
+      setIsLoadingSelected(true)
       loadOptions('')
         .then(results => {
           const found = results.find((opt) => String(opt.value) === String(value))
@@ -86,10 +88,18 @@ export function FuzzySearchSelect({
               if (exists) return prev
               return [...prev, found]
             })
+          } else {
+            // 如果找不到，可能是值无效，清空缓存
+            console.warn(`[FuzzySearchSelect] 找不到值为 ${value} 的选项`)
+            setSelectedOptionCache(null)
           }
         })
         .catch(err => {
-          console.error('加载选中选项失败:', err)
+          console.error('[FuzzySearchSelect] 加载选中选项失败:', err)
+          setSelectedOptionCache(null)
+        })
+        .finally(() => {
+          setIsLoadingSelected(false)
         })
     } else if (!value) {
       // 值被清空时，清空缓存
@@ -98,7 +108,7 @@ export function FuzzySearchSelect({
       // 如果找到了，更新缓存
       setSelectedOptionCache(selectedOption)
     }
-  }, [value, selectedOption, selectedOptionCache, loadOptions])
+  }, [value, selectedOption, selectedOptionCache, loadOptions, isLoadingSelected])
 
   // 搜索选项 - 优化防抖和状态管理，避免闪烁和跳动
   const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
@@ -209,9 +219,24 @@ export function FuzzySearchSelect({
 
   // 显示值（优先使用 selectedOption，如果不存在则使用缓存）
   const displayOption = selectedOption || selectedOptionCache
-  const displayText = displayValue 
-    ? displayValue(displayOption)
-    : (displayOption?.label || placeholder)
+  // 如果有值但没有找到选项，显示加载中或占位符，而不是显示 ID
+  // 只有在找到选项时才显示 label，否则显示占位符或加载中
+  let displayText: string
+  if (displayValue) {
+    displayText = displayValue(displayOption)
+  } else if (displayOption?.label) {
+    // 找到了选项，显示 label
+    displayText = displayOption.label
+  } else if (value && isLoadingSelected) {
+    // 正在加载选中选项
+    displayText = loadingText
+  } else if (value) {
+    // 有值但找不到选项，显示占位符（不显示 ID）
+    displayText = placeholder
+  } else {
+    // 没有值，显示占位符
+    displayText = placeholder
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

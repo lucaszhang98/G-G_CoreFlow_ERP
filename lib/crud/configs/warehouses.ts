@@ -77,38 +77,12 @@ export const warehouseConfig: EntityConfig = {
     defaultSort: 'warehouse_code',
     defaultOrder: 'asc',
     columns: ['warehouse_code', 'name', 'location', 'capacity_cbm', 'contact_user', 'created_at'],
-    searchFields: ['warehouse_code', 'name'],
+    searchFields: ['name'], // 只搜索仓库名称（最重要的字段）
     pageSize: 10,
-    // 筛选配置（快速筛选）
-    filterFields: [
-      {
-        field: 'created_at',
-        label: '创建日期',
-        type: 'dateRange',
-        dateFields: ['created_at'],
-      },
-      {
-        field: 'capacity_cbm',
-        label: '容量范围',
-        type: 'numberRange',
-        numberFields: ['capacity_cbm'],
-      },
-    ],
-    // 高级搜索配置（多条件组合）
-    advancedSearchFields: [
-      {
-        field: 'capacity_cbm',
-        label: '容量范围 (CBM)',
-        type: 'numberRange',
-        numberFields: ['capacity_cbm'],
-      },
-      {
-        field: 'created_at',
-        label: '创建日期',
-        type: 'dateRange',
-        dateFields: ['created_at'],
-      },
-    ],
+    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
+    // filterFields 已由 search-config-generator 自动生成
+    // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
+    // advancedSearchFields 已由 search-config-generator 自动生成
     // 批量操作配置
     batchOperations: {
       enabled: true,

@@ -71,7 +71,7 @@ export function InventoryLotTable() {
 
   // 隐藏查看详情、删除和新建按钮（库存都是自动来的）
   const customActions = React.useMemo(() => ({
-    onView: undefined, // 隐藏查看详情按钮
+    onView: null, // 隐藏查看详情按钮（null 表示隐藏）
     onDelete: undefined, // 隐藏删除按钮
     onAdd: undefined, // 隐藏新建按钮
   }), [])

@@ -28,6 +28,7 @@ import {
   PackageCheck,
   Users2,
   MapPin,
+  TrendingUp,
   TruckIcon,
   Car,
   ClipboardCheck,
@@ -144,9 +145,14 @@ const menuItems: MenuItem[] = [
     roles: ["admin", "tms_manager", "wms_manager", "employee", "user"], // 排除 oms_manager
     children: [
       {
-        title: "海柜管理",
+        title: "提柜管理",
         icon: Container,
-        href: "/dashboard/tms/sea-containers",
+        href: "/dashboard/tms/pickup-management",
+      },
+      {
+        title: "送仓管理",
+        icon: Package,
+        href: "/dashboard/tms/delivery-management",
       },
     ],
   },
@@ -178,25 +184,9 @@ const menuItems: MenuItem[] = [
     roles: ["admin", "tms_manager", "wms_manager", "employee", "user"], // 排除 oms_manager
     children: [
       {
-        title: "订单报表",
-        icon: FileText,
-        href: "/dashboard/reports/orders",
-      },
-      {
-        title: "库存报表",
-        icon: Package,
-        href: "/dashboard/reports/inventory",
-      },
-      {
-        title: "运输报表",
-        icon: Truck,
-        href: "/dashboard/reports/transportation",
-      },
-      {
-        title: "财务报表",
-        icon: Receipt,
-        href: "/dashboard/reports/financial",
-        roles: ["admin"],
+        title: "库存预测",
+        icon: TrendingUp,
+        href: "/dashboard/reports/inventory-forecast",
       },
     ],
   },
@@ -499,7 +489,7 @@ export function Sidebar({ userRole = "user" }: SidebarProps) {
   }
 
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-background overflow-hidden" suppressHydrationWarning>
+    <div className="flex h-full w-full flex-col border-r bg-background overflow-hidden" suppressHydrationWarning>
       <div className="flex h-16 items-center border-b px-6 flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">

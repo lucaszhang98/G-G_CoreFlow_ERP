@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import prisma from '@/lib/prisma';
+import { outboundShipmentConfig } from '@/lib/crud/configs/outbound-shipments';
+import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper';
+import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
 
 // GET - 获取出库管理列表（从 outbound_shipments 表查询，关联 delivery_appointments 获取其他字段）
 export async function GET(request: NextRequest) {
@@ -15,6 +18,9 @@ export async function GET(request: NextRequest) {
     const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc';
     const search = searchParams.get('search') || '';
 
+    // 增强配置，确保 filterFields 已生成
+    const enhancedConfig = enhanceConfigWithSearchFields(outboundShipmentConfig)
+
     // 构建查询条件：只显示非直送的预约
     // 直接从 delivery_appointments 查询非直送的预约，然后关联 outbound_shipments
     // 这样即使 outbound_shipments 记录不存在，也能显示所有非直送预约
@@ -26,28 +32,37 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // 搜索条件
-    if (search) {
-      const searchConditions: any[] = [
-        { notes: { contains: search, mode: 'insensitive' } },
-        { delivery_appointments: { reference_number: { contains: search } } },
-        { delivery_appointments: { delivery_method: { contains: search, mode: 'insensitive' } } },
-        { delivery_appointments: { appointment_account: { contains: search, mode: 'insensitive' } } },
-      ];
-      
-      // 如果已有 where.AND，合并条件；否则创建新的 AND 数组
-      if (where.AND) {
-        where.AND.push({
-          OR: searchConditions,
-        });
-      } else {
-        where.AND = [
-          {
-            OR: searchConditions,
-          },
-        ];
-      }
-    }
+    // 使用统一的筛选逻辑
+    const filterConditions = buildFilterConditions(enhancedConfig, searchParams)
+    
+    // 注意：出库管理实际查询的是 delivery_appointments 表，所以筛选条件应该直接应用到 appointmentWhere
+    // 分离主表字段和关联表字段的筛选条件
+    const appointmentsConditions: any = {}
+    const dateConditions: any[] = [] // 用于存储 delivery_date 和 appointment_time 的日期筛选条件
+    
+    filterConditions.forEach((condition) => {
+      Object.keys(condition).forEach((fieldName) => {
+        // 所有字段都来自 delivery_appointments 表（因为实际查询的是 delivery_appointments）
+        // 需要映射字段名：
+        // - destination_location_id -> location_id
+        // - confirmed_start 和 requested_start 的日期筛选需要特殊处理
+        let mappedFieldName = fieldName
+        
+        if (fieldName === 'destination_location_id') {
+          mappedFieldName = 'location_id'
+          appointmentsConditions[mappedFieldName] = condition[fieldName]
+        } else if (fieldName === 'confirmed_start') {
+          // confirmed_start 是 datetime 类型，直接使用
+          appointmentsConditions[fieldName] = condition[fieldName]
+        } else if (fieldName === 'origin_location_id') {
+          // origin_location_id 直接使用
+          appointmentsConditions[fieldName] = condition[fieldName]
+        } else {
+          // 其他字段直接映射
+          appointmentsConditions[fieldName] = condition[fieldName]
+        }
+      })
+    })
 
     // 排序
     const orderBy: any = {};
@@ -66,11 +81,30 @@ export async function GET(request: NextRequest) {
     let total = 0;
     
     // 先查询所有非直送的预约
+    // 注意：由于实际查询的是 delivery_appointments 表，筛选条件应该直接应用到 appointmentWhere
     const appointmentWhere: any = {
       delivery_method: {
         not: '直送',
       },
     };
+    
+    // 将筛选条件应用到 appointmentWhere（因为实际查询的是 delivery_appointments 表）
+    if (Object.keys(appointmentsConditions).length > 0) {
+      // 如果有多个条件，使用 AND 逻辑组合
+      const conditionKeys = Object.keys(appointmentsConditions)
+      if (conditionKeys.length === 1) {
+        // 只有一个条件，直接合并
+        Object.assign(appointmentWhere, appointmentsConditions)
+      } else {
+        // 多个条件，使用 AND 逻辑
+        appointmentWhere.AND = [
+          { delivery_method: { not: '直送' } },
+          ...conditionKeys.map(key => ({ [key]: appointmentsConditions[key] })),
+        ]
+        // 移除单独的 delivery_method 条件，因为已经在 AND 中
+        delete appointmentWhere.delivery_method
+      }
+    }
     
     // 搜索条件
     if (search) {
@@ -79,7 +113,19 @@ export async function GET(request: NextRequest) {
         { appointment_account: { contains: search, mode: 'insensitive' } },
         { notes: { contains: search, mode: 'insensitive' } },
       ];
-      appointmentWhere.OR = searchConditions;
+      
+      // 如果已有 AND 条件，将搜索条件添加到 AND 中
+      if (appointmentWhere.AND) {
+        appointmentWhere.AND.push({
+          OR: searchConditions,
+        })
+      } else if (appointmentWhere.OR) {
+        // 如果已有 OR 条件，合并
+        appointmentWhere.OR = [...(Array.isArray(appointmentWhere.OR) ? appointmentWhere.OR : [appointmentWhere.OR]), ...searchConditions];
+      } else {
+        // 创建新的 OR 条件
+        appointmentWhere.OR = searchConditions
+      }
     }
     
     try {

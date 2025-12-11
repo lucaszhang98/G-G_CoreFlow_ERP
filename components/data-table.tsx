@@ -13,8 +13,9 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { ChevronDown, ChevronRight, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Columns3 } from "lucide-react"
+import { ChevronDown, ChevronRight, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Columns3, Copy, Check } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { toast } from "sonner"
 
 import {
   DropdownMenu,
@@ -115,6 +116,8 @@ export function DataTable<TData, TValue>({
   const [mounted, setMounted] = React.useState(false)
   // 展开行状态
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set())
+  // 复制状态（用于显示复制成功提示）
+  const [copiedCellId, setCopiedCellId] = React.useState<string | null>(null)
   
   React.useEffect(() => {
     setMounted(true)
@@ -445,7 +448,7 @@ export function DataTable<TData, TValue>({
       {/* 表格 */}
       <div className="border-0 bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <Table className="w-full border-collapse table-auto">
+          <Table className="w-full border-collapse table-auto sticky-table">
             <TableHeader className="bg-gradient-to-r from-gray-50/80 to-gray-100/80 dark:from-gray-800/80 dark:to-gray-700/80">
             {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="hover:bg-transparent border-b-2 border-border/50 [&_th]:pb-3 [&_th]:pt-3 [&_th]:border-t-0 [&_th]:first:pl-4 [&_th]:last:pr-4">
@@ -459,7 +462,16 @@ export function DataTable<TData, TValue>({
                   const canSort = header.column.getCanSort()
                   const columnId = header.column.id
                   const isActionsColumn = columnId === 'actions'
+                  const isSelectColumn = columnId === 'select'
                   const isLastHeader = headerIndex === headerGroup.headers.length - 1
+                  
+                  // 确定哪些列需要固定（只固定复选框列和操作列）
+                  const shouldSticky = isSelectColumn || isActionsColumn
+                  const stickyPosition = isSelectColumn 
+                    ? 'left' 
+                    : isActionsColumn 
+                    ? 'right' 
+                    : null
                   
                   // 检查该列是否可以排序（根据 sortableColumns 配置）
                   const canSortColumn = sortableColumns.length === 0 || sortableColumns.includes(columnId)
@@ -511,7 +523,16 @@ export function DataTable<TData, TValue>({
                   // 如果是操作列，在表头显示列切换按钮和"操作"标题
                   if (isActionsColumn) {
                     return (
-                      <TableHead key={header.id} className="font-semibold text-sm text-foreground/90 px-2 py-3 whitespace-nowrap relative">
+                      <TableHead 
+                        key={header.id} 
+                        className={cn(
+                          "font-semibold text-sm text-foreground/90 px-2 py-3 whitespace-nowrap relative",
+                          shouldSticky && stickyPosition === 'right' && "sticky right-0 z-20 bg-gradient-to-r from-transparent via-gray-50/95 to-gray-50/95 dark:via-gray-800/95 dark:to-gray-800/95"
+                        )}
+                        style={shouldSticky && stickyPosition === 'right' ? { 
+                          boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
+                        } : undefined}
+                      >
                         <div className="flex items-center justify-center gap-2">
                           {showColumnToggle && mounted && (
                             <DropdownMenu>
@@ -606,7 +627,21 @@ export function DataTable<TData, TValue>({
                   const alignRight = (header.column.columnDef.meta as any)?.alignRight || false
                   
                   return (
-                    <TableHead key={header.id} className={`font-semibold text-sm text-foreground/90 py-3 ${isActionsColumn ? 'px-2' : 'px-3'} ${widthClass} whitespace-nowrap`}>
+                    <TableHead 
+                      key={header.id} 
+                      className={cn(
+                        "font-semibold text-sm text-foreground/90 py-3",
+                        isActionsColumn ? 'px-2' : 'px-3',
+                        widthClass,
+                        "whitespace-nowrap",
+                        shouldSticky && stickyPosition === 'left' && "sticky z-20",
+                        isSelectColumn && "left-0 bg-gradient-to-r from-gray-50/95 via-gray-50/95 to-transparent dark:from-gray-800/95 dark:via-gray-800/95"
+                      )}
+                      style={shouldSticky && stickyPosition === 'left' ? { 
+                        left: 0,
+                        boxShadow: '2px 0 4px -2px rgba(0, 0, 0, 0.1)'
+                      } : undefined}
+                    >
                       {header.isPlaceholder ? null : (
                         <div className="flex items-center justify-center">
                           <div className="flex items-center gap-2 justify-center">
@@ -718,13 +753,127 @@ export function DataTable<TData, TValue>({
                           )}
                         </TableCell>
                       )}
-                      {row.getVisibleCells().map((cell) => {
+                      {row.getVisibleCells().map((cell, cellIndex) => {
                         const isActionsCell = cell.column.id === 'actions'
+                        const isSelectCell = cell.column.id === 'select'
                         const widthClass = (cell.column.columnDef.meta as any)?.widthClass || ''
+                        
+                        // 确定哪些单元格需要固定（只固定复选框列和操作列）
+                        const shouldSticky = isSelectCell || isActionsCell
+                        const stickyPosition = isSelectCell 
+                          ? 'left' 
+                          : isActionsCell 
+                          ? 'right' 
+                          : null
+                        
+                        // 提取单元格文本内容用于复制
+                        const extractCellText = (): string => {
+                          // 如果是操作列或复选框列，不复制
+                          if (isActionsCell || isSelectCell) {
+                            return ''
+                          }
+                          
+                          // 尝试从 cell 的原始值获取文本
+                          const cellValue = cell.getValue()
+                          if (cellValue !== null && cellValue !== undefined) {
+                            // 处理不同类型的值
+                            if (typeof cellValue === 'object') {
+                              // 如果是对象，尝试获取显示文本
+                              if ('name' in cellValue) {
+                                return String(cellValue.name)
+                              }
+                              if ('label' in cellValue) {
+                                return String(cellValue.label)
+                              }
+                              return JSON.stringify(cellValue)
+                            }
+                            return String(cellValue)
+                          }
+                          
+                          return ''
+                        }
+                        
+                        // 处理右键复制
+                        const handleContextMenu = async (e: React.MouseEvent<HTMLTableCellElement>) => {
+                          // 如果是操作列或复选框列，不显示复制菜单
+                          if (isActionsCell || isSelectCell) {
+                            return
+                          }
+                          
+                          // 如果行正在编辑，不处理右键复制（让浏览器默认行为处理）
+                          if (isEditing) {
+                            return
+                          }
+                          
+                          // 如果点击的是可编辑元素，不处理
+                          if (e.target instanceof HTMLElement) {
+                            const target = e.target as HTMLElement
+                            if (target.closest('.inline-edit-cell') || 
+                                target.closest('input') || 
+                                target.closest('textarea') || 
+                                target.closest('select') ||
+                                target.closest('[contenteditable="true"]')) {
+                              return
+                            }
+                          }
+                          
+                          e.preventDefault()
+                          
+                          const textToCopy = extractCellText()
+                          
+                          if (!textToCopy) {
+                            return
+                          }
+                          
+                          try {
+                            // 使用 Clipboard API 复制文本
+                            await navigator.clipboard.writeText(textToCopy)
+                            
+                            // 显示复制成功提示
+                            setCopiedCellId(cell.id)
+                            toast.success('已复制到剪贴板', {
+                              duration: 1500,
+                            })
+                            
+                            // 1.5秒后清除复制状态
+                            setTimeout(() => {
+                              setCopiedCellId(null)
+                            }, 1500)
+                          } catch (error) {
+                            console.error('复制失败:', error)
+                            toast.error('复制失败，请手动选择文本复制')
+                          }
+                        }
+                        
+                        const isCopied = copiedCellId === cell.id
+                        
+                        // 确定 cursor 样式：编辑状态下不显示 context-menu
+                        // 只有在非编辑状态、非操作列、非复选框列时才显示右键菜单图标
+                        const shouldShowContextMenu = !isActionsCell && !isSelectCell && !isEditing
+                        
                         return (
                           <TableCell 
                             key={cell.id} 
-                            className={`py-3 group-hover:text-foreground transition-colors ${isActionsCell ? 'px-2' : 'px-3'} ${widthClass}`}
+                            className={cn(
+                              "py-3 group-hover:text-foreground transition-colors relative",
+                              isActionsCell ? 'px-2' : 'px-3',
+                              widthClass,
+                              shouldSticky && stickyPosition === 'left' && "sticky z-10 left-0",
+                              shouldSticky && stickyPosition === 'right' && "sticky right-0 z-10",
+                              shouldShowContextMenu && "cursor-context-menu",
+                              isCopied && "bg-green-50 dark:bg-green-950/20"
+                            )}
+                            style={shouldSticky ? { 
+                              left: stickyPosition === 'left' ? 0 : undefined,
+                              right: stickyPosition === 'right' ? 0 : undefined,
+                              backgroundColor: shouldSticky ? 'var(--background)' : undefined,
+                              boxShadow: shouldSticky 
+                                ? (stickyPosition === 'left' 
+                                  ? '2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
+                                  : '-2px 0 4px -2px rgba(0, 0, 0, 0.1)')
+                                : undefined
+                            } : undefined}
+                            onContextMenu={handleContextMenu}
                             onClick={(e) => {
                               // 如果点击的是可编辑单元格，阻止事件冒泡到行
                               if (e.target instanceof HTMLElement) {
@@ -738,12 +887,21 @@ export function DataTable<TData, TValue>({
                                 }
                               }
                             }}
+                            data-tooltip={!isActionsCell && !isSelectCell && !isEditing ? '右键点击复制' : undefined}
                           >
-                            <div className="flex justify-center truncate">
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext()
-                          )}
+                            <div className={cn(
+                              "flex justify-center truncate relative",
+                              shouldShowContextMenu && "cursor-context-menu"
+                            )}>
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                              {isCopied && (
+                                <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-0.5 animate-in fade-in zoom-in duration-200">
+                                  <Check className="h-3 w-3" />
+                                </div>
+                              )}
                             </div>
                         </TableCell>
                         )

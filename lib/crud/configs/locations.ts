@@ -136,49 +136,12 @@ export const locationConfig: EntityConfig = {
     defaultSort: 'location_code',
     defaultOrder: 'asc',
     columns: ['location_code', 'name', 'location_type', 'notes', 'created_at'],
-    searchFields: ['location_code', 'name', 'city', 'country'],
+    searchFields: ['name'], // 只搜索位置名称（最重要的字段）
     pageSize: 10,
-    // 筛选配置（快速筛选）
-    filterFields: [
-      {
-        field: 'location_type',
-        label: '位置类型',
-        type: 'select',
-        options: [
-          { label: '收货地址', value: 'delivery' },
-          { label: '发货地址', value: 'pickup' },
-          { label: '中转站', value: 'transit' },
-          { label: '码头', value: 'port' },
-          { label: '查验站', value: 'inspection' },
-          { label: '仓库', value: 'warehouse' },
-        ],
-      },
-      {
-        field: 'created_at',
-        label: '创建日期',
-        type: 'dateRange',
-        dateFields: ['created_at'],
-      },
-    ],
-    // 高级搜索配置（多条件组合）
-    advancedSearchFields: [
-      {
-        field: 'city',
-        label: '城市',
-        type: 'text',
-      },
-      {
-        field: 'country',
-        label: '国家',
-        type: 'text',
-      },
-      {
-        field: 'created_at',
-        label: '创建日期',
-        type: 'dateRange',
-        dateFields: ['created_at'],
-      },
-    ],
+    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
+    // filterFields 已由 search-config-generator 自动生成
+    // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
+    // advancedSearchFields 已由 search-config-generator 自动生成
     // 批量操作配置
     batchOperations: {
       enabled: true,

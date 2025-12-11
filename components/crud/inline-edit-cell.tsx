@@ -104,7 +104,7 @@ export function InlineEditCell({
             onChange={(e) => handleInternalChange(e.target.value)}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-            className={cn("h-8 text-sm", className)}
+            className={cn("h-10 text-sm min-w-[120px] w-full", className)}
           />
         </div>
       )
@@ -120,7 +120,7 @@ export function InlineEditCell({
             onChange={(e) => handleInternalChange(e.target.value ? Number(e.target.value) : '')}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-            className={cn("h-8 text-sm", className)}
+            className={cn("h-10 text-sm min-w-[100px] w-full", className)}
           />
         </div>
       )
@@ -141,7 +141,7 @@ export function InlineEditCell({
             value={dateValue}
             onChange={(e) => handleInternalChange(e.target.value || null)}
             onBlur={handleBlur}
-            className={cn("h-8 text-sm", className)}
+            className={cn("h-10 text-sm min-w-[140px] w-full", className)}
           />
         </div>
       )
@@ -172,7 +172,7 @@ export function InlineEditCell({
             value={datetimeValue}
             onChange={(e) => handleInternalChange(e.target.value || null)}
             onBlur={handleBlur}
-            className={cn("h-8 text-sm", className)}
+            className={cn("h-10 text-sm min-w-[140px] w-full", className)}
           />
         </div>
       )
@@ -196,7 +196,7 @@ export function InlineEditCell({
             }}
             disabled={loadingOptions}
           >
-            <SelectTrigger className={cn("h-8 text-sm", className)}>
+            <SelectTrigger className={cn("h-10 text-sm min-w-[120px] w-full", className)}>
               <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
             </SelectTrigger>
             <SelectContent>
@@ -333,7 +333,7 @@ export function InlineEditCell({
               }}
               disabled={loadingOptions}
             >
-              <SelectTrigger className={cn("h-8 text-sm", className)}>
+              <SelectTrigger className={cn("h-10 text-sm min-w-[120px] w-full", className)}>
                 <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
               </SelectTrigger>
               <SelectContent>

@@ -137,14 +137,30 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
     notFound()
   }
 
-  // 获取所有唯一的 delivery_location（location_id）用于查询 location_code
-  const locationIds = inboundReceipt.orders?.order_detail
+  // 获取所有唯一的 delivery_location 用于查询 location_code
+  // delivery_location 可能是 location_id（数字字符串）或 location_code（字符串）
+  const deliveryLocations = inboundReceipt.orders?.order_detail
     ?.map((detail: any) => detail.delivery_location)
-    .filter((id: any) => id !== null && id !== undefined)
-    .map((id: any) => BigInt(id)) || []
+    .filter((id: any) => id !== null && id !== undefined) || []
+  
+  // 分离数字字符串（location_id）和非数字字符串（location_code）
+  const locationIds: bigint[] = []
+  const locationCodes: string[] = []
+  
+  deliveryLocations.forEach((loc: any) => {
+    const locStr = String(loc)
+    // 判断是否为数字字符串
+    if (/^\d+$/.test(locStr)) {
+      locationIds.push(BigInt(locStr))
+    } else {
+      locationCodes.push(locStr)
+    }
+  })
   
   // 批量查询 locations 获取 location_code
   const locationsMap = new Map<string, string>()
+  
+  // 通过 location_id 查询
   if (locationIds.length > 0) {
     const locations = await prisma.locations.findMany({
       where: {
@@ -159,6 +175,28 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
     })
     
     locations.forEach((loc: any) => {
+      locationsMap.set(loc.location_id.toString(), loc.location_code || '')
+    })
+  }
+  
+  // 通过 location_code 查询（如果 delivery_location 本身就是 location_code）
+  if (locationCodes.length > 0) {
+    const locations = await prisma.locations.findMany({
+      where: {
+        location_code: {
+          in: locationCodes,
+        },
+      },
+      select: {
+        location_id: true,
+        location_code: true,
+      },
+    })
+    
+    locations.forEach((loc: any) => {
+      // 将 location_code 映射到 location_code（用于显示）
+      locationsMap.set(loc.location_code || '', loc.location_code || '')
+      // 同时也将 location_id 映射到 location_code
       locationsMap.set(loc.location_id.toString(), loc.location_code || '')
     })
   }
@@ -217,9 +255,21 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
               }}
               orderDetails={serialized.orders?.order_detail?.map((detail: any) => {
                 // 获取 location_code
-                const deliveryLocationCode = detail.delivery_location 
-                  ? locationsMap.get(detail.delivery_location.toString()) || detail.delivery_location
-                  : null
+                // delivery_location 可能是 location_id（数字字符串）或 location_code（字符串）
+                let deliveryLocationCode: string | null = null
+                if (detail.delivery_location) {
+                  const locStr = String(detail.delivery_location)
+                  // 先尝试直接查找（如果是 location_code）
+                  deliveryLocationCode = locationsMap.get(locStr) || null
+                  // 如果不是，且是数字字符串，尝试通过 location_id 查找
+                  if (!deliveryLocationCode && /^\d+$/.test(locStr)) {
+                    deliveryLocationCode = locationsMap.get(locStr) || null
+                  }
+                  // 如果还是找不到，使用原值（可能是 location_code）
+                  if (!deliveryLocationCode) {
+                    deliveryLocationCode = locStr
+                  }
+                }
 
                 // 计算该明细的体积（从 order_detail.volume 获取）
                 const detailVolume = detail.volume ? Number(detail.volume) : null

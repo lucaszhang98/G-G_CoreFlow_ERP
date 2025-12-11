@@ -30,7 +30,7 @@ import { autoFormatDateField, formatDateDisplay, formatDateTimeDisplay } from "@
 import { SearchModule } from "./search-module"
 import { InlineEditCell } from "./inline-edit-cell"
 import { LocationSelect } from "@/components/ui/location-select"
-import { getAdvancedSearchFields } from "@/lib/crud/advanced-search-generator"
+import { enhanceConfigWithSearchFields } from "@/lib/crud/search-config-generator"
 import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
 
 // 关系字段批量编辑组件（用于处理异步选项加载）
@@ -142,6 +142,11 @@ export function EntityTable<T = any>({
   customSaveHandler,
   expandableRows,
 }: EntityTableProps<T>) {
+  // 自动增强配置，生成 filterFields 和 advancedSearchFields（如果未配置）
+  const enhancedConfig = React.useMemo(() => {
+    return enhanceConfigWithSearchFields(config)
+  }, [config])
+  
   const router = useRouter()
   const pathname = usePathname()
   const [data, setData] = React.useState<T[]>([])
@@ -284,6 +289,8 @@ export function EntityTable<T = any>({
       if (currentFilters) {
         Object.entries(currentFilters).forEach(([key, value]) => {
           if (value !== null && value !== undefined && value !== '') {
+            // 日期范围筛选的参数名已经包含 _from 或 _to，直接使用
+            // 例如：order_date_from, order_date_to
             params.append(`filter_${key}`, String(value))
           }
         })
@@ -1330,22 +1337,43 @@ export function EntityTable<T = any>({
           )
         }
         
-        // 特殊处理：送货进度（实时计算：(实际板数 - 剩余板数) / 实际板数 * 100%）
-        // 即：已送板数 / 实际板数 * 100%
+        // 特殊处理：送货进度
+        // 对于库存明细（inventory_lots）：实时计算 (实际板数 - 剩余板数) / 实际板数 * 100%
+        // 对于入库管理（inbound_receipts）：直接显示 API 返回的计算值（按板数加权平均）
         if (fieldKey === 'delivery_progress') {
           const rowData = row.original as any
-          const palletCount = rowData.pallet_count ?? 0
-          const remainingCount = rowData.remaining_pallet_count ?? 0
           
-          // 如果实际板数为0，返回100%（没有库存，视为已送完）
-          let progress = 100
-          if (palletCount > 0) {
-            // 已送板数 = 实际板数 - 剩余板数
-            const deliveredCount = palletCount - remainingCount
-            progress = (deliveredCount / palletCount) * 100
-            progress = Math.round(progress * 100) / 100 // 保留两位小数
-            // 确保进度在 0-100 之间
-            progress = Math.max(0, Math.min(100, progress))
+          // 判断是否为库存明细表（有 pallet_count 和 remaining_pallet_count 字段）
+          const isInventoryLot = rowData.pallet_count !== undefined && rowData.remaining_pallet_count !== undefined
+          
+          let progress = 0
+          
+          if (isInventoryLot) {
+            // 库存明细：实时计算
+            const palletCount = rowData.pallet_count ?? 0
+            const remainingCount = rowData.remaining_pallet_count ?? 0
+            
+            // 如果实际板数为0，返回100%（没有库存，视为已送完）
+            progress = 100
+            if (palletCount > 0) {
+              // 已送板数 = 实际板数 - 剩余板数
+              const deliveredCount = palletCount - remainingCount
+              progress = (deliveredCount / palletCount) * 100
+              progress = Math.round(progress * 100) / 100 // 保留两位小数
+              // 确保进度在 0-100 之间
+              progress = Math.max(0, Math.min(100, progress))
+            }
+          } else {
+            // 入库管理：直接使用 API 返回的值（已按板数加权平均计算）
+            const value = row.getValue(fieldKey)
+            if (value === null || value === undefined) {
+              progress = 0
+            } else {
+              progress = typeof value === 'number' ? value : parseFloat(String(value))
+              if (isNaN(progress)) progress = 0
+              // 确保进度在 0-100 之间
+              progress = Math.max(0, Math.min(100, progress))
+            }
           }
           
           const isComplete = progress >= 100
@@ -1507,7 +1535,7 @@ export function EntityTable<T = any>({
     : '搜索...'
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 px-4">
       {/* 页面头部 */}
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3 flex-1">
@@ -1539,11 +1567,11 @@ export function EntityTable<T = any>({
         searchValue={searchInput}
         onSearchChange={setSearchInput}
         total={total}
-        filterFields={config.list.filterFields}
+        filterFields={enhancedConfig.list.filterFields}
         filterValues={filterValues}
         onFilterChange={handleFilterChange}
         onClearFilters={handleClearFilters}
-        advancedSearchFields={getAdvancedSearchFields(config)}
+        advancedSearchFields={enhancedConfig.list.advancedSearchFields}
         advancedSearchOpen={advancedSearchOpen}
         onAdvancedSearchOpenChange={setAdvancedSearchOpen}
         advancedSearchValues={advancedSearchValues}
@@ -1816,7 +1844,23 @@ export function EntityTable<T = any>({
                   )
 
                 case 'relation': {
-                  // 关系字段：优先使用模糊搜索下拉框
+                  // 如果是 location 类型字段（relation.model === 'locations'），使用 LocationSelect（分步选择）
+                  if (fieldConfig.relation?.model === 'locations') {
+                    return (
+                      <div key={fieldKey} className="space-y-2">
+                        <label className="text-sm font-medium">
+                          {fieldConfig.label}
+                        </label>
+                        <LocationSelect
+                          value={fieldValue || null}
+                          onChange={(val) => handleBatchEditValueChange(fieldKey, val)}
+                          placeholder="（留空则不修改）"
+                        />
+                      </div>
+                    )
+                  }
+                  
+                  // 其他关系字段：优先使用模糊搜索下拉框
                   const loadFuzzyOptions = fieldFuzzyLoadOptions?.[fieldKey]
                   if (loadFuzzyOptions) {
                     return (
@@ -1932,7 +1976,23 @@ export function EntityTable<T = any>({
                   )
 
                 case 'relation': {
-                  // 关系字段：优先使用模糊搜索下拉框
+                  // 如果是 location 类型字段（relation.model === 'locations'），使用 LocationSelect（分步选择）
+                  if (fieldConfig.relation?.model === 'locations') {
+                    return (
+                      <div key={fieldKey} className="space-y-2">
+                        <label className="text-sm font-medium">
+                          {fieldConfig.label}
+                        </label>
+                        <LocationSelect
+                          value={fieldValue || null}
+                          onChange={(val) => handleBatchEditValueChange(fieldKey, val)}
+                          placeholder="（留空则不修改）"
+                        />
+                      </div>
+                    )
+                  }
+                  
+                  // 其他关系字段：优先使用模糊搜索下拉框
                   const loadFuzzyOptions = fieldFuzzyLoadOptions?.[fieldKey]
                   if (loadFuzzyOptions) {
                     return (

@@ -18,6 +18,31 @@ export async function PUT(
     const body = await request.json()
     const { quantity, volume, delivery_nature, delivery_location, unload_type, notes, po } = body
 
+    // 验证和转换 delivery_location：如果是 location_code，转换为 location_id
+    let validatedDeliveryLocation: string | null = null
+    if (delivery_location) {
+      const locStr = String(delivery_location)
+      // 如果是数字字符串，直接使用（location_id）
+      if (/^\d+$/.test(locStr)) {
+        validatedDeliveryLocation = locStr
+      } else {
+        // 如果是 location_code，查询对应的 location_id
+        const location = await prisma.locations.findFirst({
+          where: { location_code: locStr },
+          select: { location_id: true },
+        })
+        if (location) {
+          validatedDeliveryLocation = location.location_id.toString()
+        } else {
+          // 如果找不到对应的 location，返回错误
+          return NextResponse.json(
+            { error: `无效的送仓地点: ${locStr}` },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
     // 获取当前明细，用于计算
     const currentDetail = await prisma.order_detail.findUnique({
       where: { id: BigInt(resolvedParams.id) },
@@ -60,7 +85,7 @@ export async function PUT(
       volume: volume !== undefined ? (volume ? parseFloat(volume) : null) : undefined,
       estimated_pallets: calculatedEstimatedPallets, // 自动计算，不允许用户修改
       delivery_nature: delivery_nature !== undefined ? delivery_nature : undefined,
-      delivery_location: delivery_location !== undefined ? (delivery_location ? String(delivery_location) : null) : undefined,
+      delivery_location: delivery_location !== undefined ? validatedDeliveryLocation : undefined,
       unload_type: unload_type !== undefined ? unload_type : undefined,
       volume_percentage: calculatedVolumePercentage ? parseFloat(calculatedVolumePercentage.toFixed(2)) : null, // 自动计算，不允许用户修改
       notes: notes !== undefined ? notes : undefined,

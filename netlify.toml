@@ -3,13 +3,21 @@
 
 [build]
   # 构建命令
+  # 如果 package-lock.json 存在，使用 npm ci（更快且确保版本一致）
+  # 否则使用 npm install
   command = "npm run build"
+  # 发布目录（Next.js 插件会自动处理，但明确指定以确保正确）
+  publish = ".next"
 
 [build.environment]
   # Node.js 版本
   NODE_VERSION = "20"
+  # NPM 版本（使用最新稳定版）
+  NPM_VERSION = "10"
   # Prisma 二进制目标，确保在 Netlify 服务器上使用正确的查询引擎
   PRISMA_CLI_BINARY_TARGETS = "rhel-openssl-3.0.x"
+  # 禁用 Next.js 的 Telemetry（可选，减少构建日志）
+  NEXT_TELEMETRY_DISABLED = "1"
 
 # Netlify Next.js 插件配置
 # 这个插件会自动处理 Next.js 的构建和部署，包括函数打包和依赖管理
@@ -28,5 +36,24 @@
 [functions]
   # 使用 esbuild 进行打包（默认值，明确指定以确保一致性）
   node_bundler = "esbuild"
-  # 函数超时时间在 Netlify 控制台的函数设置中配置
-  # 或者在每个函数的配置文件中单独设置
+  # 函数超时时间（秒）- 默认 10 秒，对于复杂查询可以增加到 26 秒（Netlify 免费版最大）
+  # 注意：在 Netlify 控制台也可以为特定函数设置超时时间
+  # 对于库存预测等复杂计算，建议在控制台设置为 26 秒
+  # 函数内存限制（MB）- 默认 1024MB，可以根据需要调整
+  # 注意：内存限制在 Netlify 控制台的函数设置中配置
+
+# 重定向规则
+# Next.js 插件会自动处理所有路由重定向，不需要手动配置
+# 如果需要自定义重定向，可以在这里添加
+
+# 环境变量配置说明
+# 以下环境变量需要在 Netlify 控制台的 "Site settings" → "Environment variables" 中配置：
+# 
+# 必需的环境变量：
+# - DATABASE_URL: Neon DB 连接字符串
+# - NEXTAUTH_SECRET: NextAuth.js 密钥（用于加密 session）
+# - NEXTAUTH_URL: 生产环境 URL（例如：https://your-site.netlify.app）
+# 
+# 可选的环境变量：
+# - NODE_ENV: 设置为 "production"
+# - PRISMA_CLI_BINARY_TARGETS: 如果与上面的配置不同，可以在这里覆盖

@@ -34,7 +34,7 @@ export function OutboundShipmentTable() {
       config={outboundShipmentConfig}
       customClickableColumns={customClickableColumns}
       customActions={{
-        onView: undefined, // 隐藏查看详情
+        onView: null, // 隐藏查看详情（null 表示隐藏）
         onAdd: undefined, // 隐藏新建
         onDelete: undefined, // 隐藏删除
       }}

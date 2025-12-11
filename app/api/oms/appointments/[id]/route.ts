@@ -97,6 +97,9 @@ export async function GET(
 
     const serialized = serializeBigInt(item);
     
+    // 导入时间格式化函数（直接显示 UTC 时间，不做时区转换）
+    const { formatUTCDateTimeString } = await import('@/lib/utils/datetime-pst')
+    
     // 格式化数据
     const deliveryMethod = serialized.delivery_method || null;
     const appointmentAccount = serialized.appointment_account || null;
@@ -110,6 +113,20 @@ export async function GET(
     const totalPallets = serialized.orders?.order_detail?.reduce((sum: number, detail: any) => {
       return sum + (Number(detail.estimated_pallets) || 0);
     }, 0) || null;
+    
+    // 时间字段：直接格式化 UTC 时间，不做时区转换
+    const requestedStart = serialized.requested_start 
+      ? formatUTCDateTimeString(serialized.requested_start) 
+      : null
+    const requestedEnd = serialized.requested_end 
+      ? formatUTCDateTimeString(serialized.requested_end) 
+      : null
+    const confirmedStart = serialized.confirmed_start 
+      ? formatUTCDateTimeString(serialized.confirmed_start) 
+      : null
+    const confirmedEnd = serialized.confirmed_end 
+      ? formatUTCDateTimeString(serialized.confirmed_end) 
+      : null
     
     // 拒收字段
     const rejected = serialized.rejected ?? false;
@@ -125,6 +142,11 @@ export async function GET(
       // 返回location_code用于列表显示（而不是name）
       origin_location: originLocationCode,
       destination_location: destinationLocationCode,
+      // 时间字段：转换为 PST/PDT 显示
+      requested_start: requestedStart,
+      requested_end: requestedEnd,
+      confirmed_start: confirmedStart,
+      confirmed_end: confirmedEnd,
       total_pallets: totalPallets ?? 0,
       rejected: rejected,
     });
@@ -227,24 +249,13 @@ export async function PUT(
     }
     // 处理时间戳字段：不进行时区转换，直接使用原始值
     // 如果前端发送的是 YYYY-MM-DDTHH:mm 格式的字符串，手动解析为 Date 对象（不进行时区转换）
+    // 导入时间解析函数（直接当作 UTC 时间处理，不做时区转换）
+    const { parseDateTimeAsUTC } = await import('@/lib/utils/datetime-pst')
+    
     const parseDateTimeWithoutTimezone = (value: string): Date => {
+      // 用户输入的时间直接当作 UTC 时间处理，不做任何时区转换
       // 格式：YYYY-MM-DDTHH:mm 或 YYYY-MM-DDTHH:mm:ss
-      const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{3}))?/)
-      if (match) {
-        const [, year, month, day, hours, minutes, seconds = '0', milliseconds = '0'] = match
-        // 使用 UTC 方法创建 Date 对象，这样就不会进行时区转换
-        return new Date(Date.UTC(
-          parseInt(year, 10),
-          parseInt(month, 10) - 1,
-          parseInt(day, 10),
-          parseInt(hours, 10),
-          parseInt(minutes, 10),
-          parseInt(seconds, 10),
-          parseInt(milliseconds, 10)
-        ))
-      }
-      // 如果不是预期格式，尝试直接解析（可能会进行时区转换，但这是后备方案）
-      return new Date(value)
+      return parseDateTimeAsUTC(value)
     }
     
     if (data.requested_start !== undefined) {
@@ -327,9 +338,38 @@ export async function PUT(
         appointment_id: BigInt(id),
       },
       data: finalData,
+      include: {
+        orders: {
+          select: {
+            order_id: true,
+            operation_mode: true,
+          },
+        },
+      },
     });
 
     const serialized = serializeBigInt(updatedItem);
+    
+    // 导入时间格式化函数（直接显示 UTC 时间，不做时区转换）
+    const { formatUTCDateTimeString } = await import('@/lib/utils/datetime-pst')
+    
+    // 时间字段：直接格式化 UTC 时间，不做时区转换
+    const requestedStart = serialized.requested_start 
+      ? formatUTCDateTimeString(serialized.requested_start) 
+      : null
+    const requestedEnd = serialized.requested_end 
+      ? formatUTCDateTimeString(serialized.requested_end) 
+      : null
+    const confirmedStart = serialized.confirmed_start 
+      ? formatUTCDateTimeString(serialized.confirmed_start) 
+      : null
+    const confirmedEnd = serialized.confirmed_end 
+      ? formatUTCDateTimeString(serialized.confirmed_end) 
+      : null
+
+    // 注意：预约更新时不需要处理 delivery_management 的创建/删除
+    // 因为送仓管理的字段都是从 delivery_appointments 表读取的，会自动同步
+    // 只有在预约创建和删除时才需要处理 delivery_management 记录
 
     // 处理 outbound_shipments 的自动同步
     const appointmentId = BigInt(id);
@@ -412,7 +452,14 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      data: serialized
+      data: {
+        ...serialized,
+        // 时间字段：转换为 PST/PDT 显示
+        requested_start: requestedStart,
+        requested_end: requestedEnd,
+        confirmed_start: confirmedStart,
+        confirmed_end: confirmedEnd,
+      }
     });
   } catch (error: any) {
     console.error('更新预约管理记录失败:', error);
@@ -447,6 +494,23 @@ export async function DELETE(
         appointment_id: BigInt(id),
       },
     });
+
+    // 删除关联的 delivery_management 记录
+    try {
+      const appointmentId = BigInt(id);
+      const existingDelivery = await prisma.delivery_management.findUnique({
+        where: { appointment_id: appointmentId },
+        select: { delivery_id: true },
+      });
+
+      if (existingDelivery) {
+        await prisma.delivery_management.delete({
+          where: { delivery_id: existingDelivery.delivery_id },
+        });
+      }
+    } catch (deliveryError: any) {
+      console.warn('自动删除送仓管理记录失败:', deliveryError);
+    }
 
     return NextResponse.json({ message: '预约管理记录已删除' });
   } catch (error: any) {

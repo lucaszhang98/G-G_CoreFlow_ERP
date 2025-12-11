@@ -104,7 +104,7 @@ export const inboundReceiptConfig: EntityConfig = {
       label: '送货进度',
       type: 'number',
       sortable: true,
-      placeholder: '请输入送货进度（0-100）',
+      computed: true, // 计算字段：从关联的 inventory_lots 按板数加权平均计算
     },
     notes: {
       key: 'notes',
@@ -164,19 +164,62 @@ export const inboundReceiptConfig: EntityConfig = {
       'delivery_progress',
       'notes',
     ],
-    searchFields: ['customer_name', 'container_number', 'unloaded_by'],
+    searchFields: ['container_number'], // 只搜索柜号（最重要的字段）
     pageSize: 20,
-    // 筛选配置（快速筛选）
+    // 筛选配置（快速筛选）- 手动定义，排除 warehouse_id 和 created_at
     filterFields: [
+      // 状态筛选
       {
         field: 'status',
         label: '状态',
         type: 'select',
         options: [
+          { label: '待处理', value: 'pending' },
           { label: '已到仓', value: 'arrived' },
           { label: '已入库', value: 'received' },
-          { label: '待处理', value: 'pending' },
         ],
+      },
+      // 入库人员筛选
+      {
+        field: 'received_by',
+        label: '入库人员',
+        type: 'select',
+        relation: {
+          model: 'users',
+          displayField: 'full_name',
+          valueField: 'id',
+        },
+      },
+      // 日期筛选（排除 created_at）
+      {
+        field: 'order_date',
+        label: '预报日期',
+        type: 'dateRange',
+        dateFields: ['order_date'],
+      },
+      {
+        field: 'eta_date',
+        label: '到港日期',
+        type: 'dateRange',
+        dateFields: ['eta_date'],
+      },
+      {
+        field: 'ready_date',
+        label: 'Ready日期',
+        type: 'dateRange',
+        dateFields: ['ready_date'],
+      },
+      {
+        field: 'lfd_date',
+        label: 'LFD',
+        type: 'dateRange',
+        dateFields: ['lfd_date'],
+      },
+      {
+        field: 'pickup_date',
+        label: '提柜日期',
+        type: 'dateRange',
+        dateFields: ['pickup_date'],
       },
       {
         field: 'planned_unload_at',
@@ -184,30 +227,19 @@ export const inboundReceiptConfig: EntityConfig = {
         type: 'dateRange',
         dateFields: ['planned_unload_at'],
       },
-    ],
-    // 高级搜索配置（多条件组合）
-    advancedSearchFields: [
+      // 送仓进度筛选（100%/非100%）
       {
-        field: 'customer_name',
-        label: '客户名称',
-        type: 'text',
-      },
-      {
-        field: 'container_number',
-        label: '柜号',
-        type: 'text',
-      },
-      {
-        field: 'status',
-        label: '状态',
+        field: 'delivery_progress',
+        label: '送仓进度',
         type: 'select',
         options: [
-          { label: '已到仓', value: 'arrived' },
-          { label: '已入库', value: 'received' },
-          { label: '待处理', value: 'pending' },
+          { label: '已完成', value: 'complete' },
+          { label: '未完成', value: 'incomplete' },
         ],
       },
     ],
+    // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
+    // advancedSearchFields 已由 search-config-generator 自动生成
     // 批量操作配置
     batchOperations: {
       enabled: true,

@@ -95,6 +95,33 @@ export async function GET(
       return sum + volume;
     }, 0) || 0;
 
+    // 计算送货进度：从关联的 inventory_lots 按板数加权平均
+    // 公式：delivery_progress = Σ(delivery_progress_i * pallet_count_i) / Σ(pallet_count_i)
+    let calculatedDeliveryProgress = 0;
+    const inventoryLots = serialized.inventory_lots || [];
+    if (inventoryLots.length > 0) {
+      let totalWeightedProgress = 0;
+      let totalPallets = 0;
+      
+      inventoryLots.forEach((lot: any) => {
+        const progress = lot.delivery_progress !== null && lot.delivery_progress !== undefined 
+          ? Number(lot.delivery_progress) 
+          : 0;
+        const pallets = lot.pallet_count !== null && lot.pallet_count !== undefined 
+          ? Number(lot.pallet_count) 
+          : 0;
+        
+        if (pallets > 0) {
+          totalWeightedProgress += progress * pallets;
+          totalPallets += pallets;
+        }
+      });
+      
+      if (totalPallets > 0) {
+        calculatedDeliveryProgress = totalWeightedProgress / totalPallets;
+      }
+    }
+
     return NextResponse.json({
       data: {
         ...serialized,
@@ -109,6 +136,8 @@ export async function GET(
         received_by_id: serialized.received_by || null,
         warehouse_name: serialized.warehouses?.name || null,
         unload_method_name: serialized.unload_methods?.description || null,
+        // 计算后的送货进度（按板数加权平均）
+        delivery_progress: calculatedDeliveryProgress,
         total_container_volume: totalContainerVolume,
         order_details: orderData?.order_detail || [],
         inventory_lots: serialized.inventory_lots || [],
@@ -190,12 +219,47 @@ export async function PUT(
     const inboundReceipt = await prisma.inbound_receipt.update({
       where: { inbound_receipt_id: BigInt(resolvedParams.id) },
       data: updateData,
-      include: inboundReceiptConfig.prisma?.include,
+      include: {
+        ...inboundReceiptConfig.prisma?.include,
+        inventory_lots: {
+          select: {
+            delivery_progress: true,
+            pallet_count: true,
+          },
+        },
+      },
     });
 
     // 转换数据格式
     const serialized = serializeBigInt(inboundReceipt);
     const orderData = serialized.orders;
+
+    // 计算送货进度：从关联的 inventory_lots 按板数加权平均
+    // 公式：delivery_progress = Σ(delivery_progress_i * pallet_count_i) / Σ(pallet_count_i)
+    let calculatedDeliveryProgress = 0;
+    const inventoryLots = serialized.inventory_lots || [];
+    if (inventoryLots.length > 0) {
+      let totalWeightedProgress = 0;
+      let totalPallets = 0;
+      
+      inventoryLots.forEach((lot: any) => {
+        const progress = lot.delivery_progress !== null && lot.delivery_progress !== undefined 
+          ? Number(lot.delivery_progress) 
+          : 0;
+        const pallets = lot.pallet_count !== null && lot.pallet_count !== undefined 
+          ? Number(lot.pallet_count) 
+          : 0;
+        
+        if (pallets > 0) {
+          totalWeightedProgress += progress * pallets;
+          totalPallets += pallets;
+        }
+      });
+      
+      if (totalPallets > 0) {
+        calculatedDeliveryProgress = totalWeightedProgress / totalPallets;
+      }
+    }
 
     return NextResponse.json({
       data: {
@@ -211,6 +275,8 @@ export async function PUT(
         received_by_id: serialized.received_by || null,
         warehouse_name: serialized.warehouses?.name || null,
         unload_method_name: serialized.unload_methods?.description || null,
+        // 计算后的送货进度（按板数加权平均）
+        delivery_progress: calculatedDeliveryProgress,
       },
       message: '拆柜规划更新成功',
     });

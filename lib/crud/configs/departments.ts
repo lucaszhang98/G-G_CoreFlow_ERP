@@ -77,31 +77,12 @@ export const departmentConfig: EntityConfig = {
     defaultSort: 'code',
     defaultOrder: 'asc',
     columns: ['code', 'name', 'parent', 'manager', 'created_at'],
-    searchFields: ['code', 'name'],
+    searchFields: ['name'], // 只搜索部门名称（最重要的字段）
     pageSize: 10,
-    // 筛选配置（快速筛选）
-    filterFields: [
-      {
-        field: 'created_at',
-        label: '创建日期',
-        type: 'dateRange',
-        dateFields: ['created_at'],
-      },
-    ],
-    // 高级搜索配置（多条件组合）
-    advancedSearchFields: [
-      {
-        field: 'description',
-        label: '描述',
-        type: 'text',
-      },
-      {
-        field: 'created_at',
-        label: '创建日期',
-        type: 'dateRange',
-        dateFields: ['created_at'],
-      },
-    ],
+    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
+    // filterFields 已由 search-config-generator 自动生成
+    // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
+    // advancedSearchFields 已由 search-config-generator 自动生成
     // 批量操作配置
     batchOperations: {
       enabled: true,

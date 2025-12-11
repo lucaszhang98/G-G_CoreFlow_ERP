@@ -193,7 +193,7 @@ export function LocationSelect({
           aria-expanded={open}
           className={cn(
             // 基础样式 - 统一白色样式，所有位置选择字段都使用这个
-            "w-full justify-between h-9 font-medium transition-all duration-200",
+            "w-full justify-between h-10 min-w-[120px] font-medium transition-all duration-200",
             "border border-input/50 bg-white shadow-sm",
             "hover:border-input hover:bg-gray-50/50",
             "focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:border-blue-500",

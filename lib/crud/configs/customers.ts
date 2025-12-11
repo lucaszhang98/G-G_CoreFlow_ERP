@@ -86,41 +86,12 @@ export const customerConfig: EntityConfig = {
     defaultSort: 'code',
     defaultOrder: 'asc',
     columns: ['code', 'name', 'company_name', 'status', 'credit_limit', 'contact'],
-    searchFields: ['code', 'name', 'company_name'],
+    searchFields: ['name'], // 只搜索客户名称（最重要的字段）
     pageSize: 10,
-    // 筛选配置（快速筛选）
-    filterFields: [
-      {
-        field: 'status',
-        label: '状态',
-        type: 'select',
-        options: [
-          { label: '活跃', value: 'active' },
-          { label: '停用', value: 'inactive' },
-        ],
-      },
-      // created_at 是审计字段，不在筛选配置中显示
-      // {
-      //   field: 'created_at',
-      //   label: '创建日期',
-      //   type: 'dateRange',
-      //   dateFields: ['created_at'],
-      // },
-    ],
-    // 高级搜索配置（多条件组合）
-    advancedSearchFields: [
-      {
-        field: 'contact',
-        label: '联系人',
-        type: 'text',
-      },
-      {
-        field: 'credit_limit',
-        label: '信用额度',
-        type: 'numberRange',
-        numberFields: ['credit_limit'],
-      },
-    ],
+    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
+    // filterFields 已由 search-config-generator 自动生成
+    // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
+    // advancedSearchFields 已由 search-config-generator 自动生成
     // 批量操作配置
     batchOperations: {
       enabled: true,

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import { deliveryAppointmentCreateSchema } from '@/lib/validations/delivery-appointment';
+import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper';
+import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
+import { deliveryAppointmentConfig } from '@/lib/crud/configs/delivery-appointments';
 import prisma from '@/lib/prisma';
 
 // GET - 获取预约管理列表
@@ -19,15 +22,29 @@ export async function GET(request: NextRequest) {
     // 构建查询条件
     const where: any = {};
 
-    // 搜索条件
-    if (search) {
-      const searchConditions: any[] = [
-        { reference_number: { contains: search } },
-        { notes: { contains: search } },
-      ];
-      
-      where.OR = searchConditions;
+    // 增强配置，确保 filterFields 已生成
+    const enhancedConfig = enhanceConfigWithSearchFields(deliveryAppointmentConfig);
+
+    // 搜索条件（模糊搜索）
+    if (search && enhancedConfig.list.searchFields) {
+      const searchConditions: any[] = [];
+      enhancedConfig.list.searchFields.forEach(field => {
+        const fieldConfig = enhancedConfig.fields[field];
+        // 只处理非关系字段的文本搜索
+        if (!fieldConfig?.relation && fieldConfig?.type !== 'relation' && !fieldConfig?.computed) {
+          searchConditions.push({
+            [field]: { contains: search, mode: 'insensitive' as const }
+          });
+        }
+      });
+      if (searchConditions.length > 0) {
+        where.OR = searchConditions;
+      }
     }
+
+    // 筛选条件（快速筛选）- 使用统一的筛选逻辑辅助函数
+    const filterConditions = buildFilterConditions(enhancedConfig, searchParams);
+    mergeFilterConditions(where, filterConditions);
 
     // 排序
     const orderBy: any = {};
@@ -137,7 +154,10 @@ export async function GET(request: NextRequest) {
     // 注意：outbound_shipment_lines 表已被删除，total_pallets 现在从 order_detail.estimated_pallets 计算
     
     // 格式化数据
-    const serializedItems = items.map((item: any) => {
+    // 导入时间格式化函数（直接显示 UTC 时间，不做时区转换）
+    const { formatUTCDateTimeString } = await import('@/lib/utils/datetime-pst')
+    
+    const serializedItems = await Promise.all(items.map(async (item: any) => {
       const serialized = serializeBigInt(item);
       
       // 预约号码
@@ -159,8 +179,19 @@ export async function GET(request: NextRequest) {
       const destinationLocationId = serialized.location_id || null;
       const destinationLocationCode = serialized.locations?.location_code || null;
       
-      // 送货时间
-      const confirmedStart = serialized.confirmed_start || null;
+      // 时间字段：直接格式化 UTC 时间，不做时区转换
+      const requestedStart = serialized.requested_start 
+        ? formatUTCDateTimeString(serialized.requested_start) 
+        : null
+      const requestedEnd = serialized.requested_end 
+        ? formatUTCDateTimeString(serialized.requested_end) 
+        : null
+      const confirmedStart = serialized.confirmed_start 
+        ? formatUTCDateTimeString(serialized.confirmed_start) 
+        : null
+      const confirmedEnd = serialized.confirmed_end 
+        ? formatUTCDateTimeString(serialized.confirmed_end) 
+        : null
       
       // 计算板数：从 appointment_detail_lines.estimated_pallets 累加
       let totalPallets = 0
@@ -199,14 +230,17 @@ export async function GET(request: NextRequest) {
         // 返回location_code用于列表显示（而不是name）
         origin_location: originLocationCode,
         destination_location: destinationLocationCode,
+        requested_start: requestedStart,
+        requested_end: requestedEnd,
         confirmed_start: confirmedStart,
+        confirmed_end: confirmedEnd,
         total_pallets: totalPallets, // 从 order_detail.estimated_pallets 计算
         rejected: rejected,
         notes: notes,
         // 保留 orders 对象，用于展开行获取 order_detail
         orders: serialized.orders || null,
       };
-    });
+    }))
 
     return NextResponse.json({
       data: serializedItems,
@@ -267,10 +301,11 @@ export async function POST(request: NextRequest) {
       appointment_type: data.appointment_type || null,
       delivery_method: data.delivery_method || null,
       appointment_account: data.appointment_account || null,
-      requested_start: data.requested_start ? new Date(data.requested_start) : null,
-      requested_end: data.requested_end ? new Date(data.requested_end) : null,
-      confirmed_start: data.confirmed_start ? new Date(data.confirmed_start) : null,
-      confirmed_end: data.confirmed_end ? new Date(data.confirmed_end) : null,
+      // 用户输入的时间直接当作 UTC 时间处理，不做任何时区转换
+      requested_start: data.requested_start ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.requested_start) : null,
+      requested_end: data.requested_end ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.requested_end) : null,
+      confirmed_start: data.confirmed_start ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.confirmed_start) : null,
+      confirmed_end: data.confirmed_end ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.confirmed_end) : null,
       status: data.status || 'requested',
       rejected: data.rejected !== undefined ? Boolean(data.rejected) : false,
       notes: data.notes || null,
@@ -306,6 +341,30 @@ export async function POST(request: NextRequest) {
         // 如果创建失败（例如已存在），记录错误但不影响预约创建
         console.warn('自动创建 outbound_shipments 记录失败:', outboundError);
       }
+    }
+
+    // 所有预约都自动创建 delivery_management（送仓管理）记录
+    try {
+      const appointmentId = BigInt(serialized.appointment_id);
+      // 检查是否已存在送仓管理记录
+      const existingDelivery = await prisma.delivery_management.findUnique({
+        where: { appointment_id: appointmentId },
+        select: { delivery_id: true },
+      });
+
+      if (!existingDelivery) {
+        // 创建送仓管理记录
+        await prisma.delivery_management.create({
+          data: {
+            appointment_id: appointmentId,
+            status: 'planned',
+            created_by: user?.id ? BigInt(user.id) : null,
+            updated_by: user?.id ? BigInt(user.id) : null,
+          },
+        });
+      }
+    } catch (deliveryError: any) {
+      console.warn('自动创建送仓管理记录失败:', deliveryError);
     }
     
     // 新建时，total_pallets默认为0（因为还没有outbound_shipment_lines）

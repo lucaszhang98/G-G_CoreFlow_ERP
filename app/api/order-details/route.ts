@@ -128,6 +128,31 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { order_id, quantity, volume, delivery_nature, delivery_location, unload_type, notes, po, estimated_pallets } = body
 
+    // 验证和转换 delivery_location：如果是 location_code，转换为 location_id
+    let validatedDeliveryLocation: string | null = null
+    if (delivery_location) {
+      const locStr = String(delivery_location)
+      // 如果是数字字符串，直接使用（location_id）
+      if (/^\d+$/.test(locStr)) {
+        validatedDeliveryLocation = locStr
+      } else {
+        // 如果是 location_code，查询对应的 location_id
+        const location = await prisma.locations.findFirst({
+          where: { location_code: locStr },
+          select: { location_id: true },
+        })
+        if (location) {
+          validatedDeliveryLocation = location.location_id.toString()
+        } else {
+          // 如果找不到对应的 location，返回错误
+          return NextResponse.json(
+            { error: `无效的送仓地点: ${locStr}` },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
     // 计算预计板数：如果用户没有输入，则根据体积除以2后四舍五入，最小值为1
     const volumeNum = volume ? parseFloat(volume) : 0
     const calculatedEstimatedPallets = estimated_pallets !== undefined && estimated_pallets !== null 
@@ -160,7 +185,7 @@ export async function POST(request: NextRequest) {
         estimated_pallets: calculatedEstimatedPallets, // 自动计算
         remaining_pallets: calculatedEstimatedPallets, // 初始化剩余板数 = 总板数
         delivery_nature: delivery_nature || null,
-        delivery_location: delivery_location ? String(delivery_location) : null,
+        delivery_location: validatedDeliveryLocation,
         unload_type: unload_type || null,
         volume_percentage: calculatedVolumePercentage ? parseFloat(calculatedVolumePercentage.toFixed(2)) : null, // 自动计算，保留2位小数
         notes: notes || null,

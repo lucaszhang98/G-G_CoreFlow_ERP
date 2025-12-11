@@ -458,16 +458,15 @@ export function CreateOrderDialog({
               <div className="space-y-2">
                 <Label htmlFor="operation_mode">操作方式</Label>
                 <Select
-                  value={orderData.operation_mode || ''}
-                  onValueChange={(value: 'unload' | 'direct_delivery' | '') => 
-                    setOrderData({ ...orderData, operation_mode: value || null })
+                  value={orderData.operation_mode || undefined}
+                  onValueChange={(value: 'unload' | 'direct_delivery') => 
+                    setOrderData({ ...orderData, operation_mode: value })
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="选择操作方式" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">未选择</SelectItem>
                     <SelectItem value="unload">拆柜</SelectItem>
                     <SelectItem value="direct_delivery">直送</SelectItem>
                   </SelectContent>

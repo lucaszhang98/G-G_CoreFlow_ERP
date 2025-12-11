@@ -12,7 +12,10 @@ import { resolveParams, withApiHandler } from '@/lib/api/middleware'
 import { EntityConfig } from './types'
 import { getSchema } from './schema-loader'
 import { getAdvancedSearchFields } from './advanced-search-generator'
+import { enhanceConfigWithSearchFields } from './search-config-generator'
 import prisma from '@/lib/prisma'
+
+// 已删除 createContainerAndLegForOrder 函数 - 不再需要，现在直接使用 pickup_management 和 delivery_management 表
 
 /**
  * 获取 Prisma 模型
@@ -36,9 +39,13 @@ function getPrismaModel(config: EntityConfig) {
  */
 export function createListHandler(config: EntityConfig) {
   return async (request: NextRequest) => {
+    // 增强配置，确保 filterFields 和 advancedSearchFields 已生成
+    // 在 try 块外定义，确保 catch 块中可以使用
+    const enhancedConfig = enhanceConfigWithSearchFields(config)
+    
     try {
       // 检查权限
-      const permissionResult = await checkPermission(config.permissions.list)
+      const permissionResult = await checkPermission(enhancedConfig.permissions.list)
       if (permissionResult.error) return permissionResult.error
 
       const searchParams = request.nextUrl.searchParams
@@ -46,8 +53,8 @@ export function createListHandler(config: EntityConfig) {
       // 默认maxLimit为100，但可以通过unlimited=true来支持更大的limit
       let { page, limit, sort, order } = parsePaginationParams(
         searchParams,
-        config.list.defaultSort,
-        config.list.defaultOrder,
+        enhancedConfig.list.defaultSort,
+        enhancedConfig.list.defaultOrder,
         100 // 默认最大limit为100
       )
       const search = searchParams.get('search') || ''
@@ -56,110 +63,43 @@ export function createListHandler(config: EntityConfig) {
       const where: any = {}
       
       // 简单搜索条件（模糊搜索）
-      if (search && config.list.searchFields) {
-        where.OR = config.list.searchFields.map(field => {
-          const fieldConfig = config.fields[field]
-          if (fieldConfig?.relation) {
-            // 关系字段搜索需要特殊处理
-            return {}
-          }
-          return {
-            [field]: { contains: search, mode: 'insensitive' as const }
-          }
-        }).filter(Boolean)
-      }
-
-      // 筛选条件（快速筛选）- 所有筛选字段使用 AND 逻辑组合
-      const filterConditions: any[] = []
-      if (config.list.filterFields) {
-        config.list.filterFields.forEach((filterField) => {
-          if (filterField.type === 'select') {
-            const filterValue = searchParams.get(`filter_${filterField.field}`)
-            // 忽略 "__all__" 值（表示清除筛选）
-            if (filterValue && filterValue !== '__all__') {
-              filterConditions.push({ [filterField.field]: filterValue })
-            }
-          } else if (filterField.type === 'dateRange') {
-            const dateFrom = searchParams.get(`filter_${filterField.field}_from`)
-            const dateTo = searchParams.get(`filter_${filterField.field}_to`)
-            if (dateFrom || dateTo) {
-              const dateCondition: any = {}
-              if (dateFrom) {
-                dateCondition.gte = new Date(dateFrom)
-              }
-              if (dateTo) {
-                // 结束日期应该包含整天，所以设置为当天的 23:59:59
-                const endDate = new Date(dateTo)
-                endDate.setHours(23, 59, 59, 999)
-                dateCondition.lte = endDate
-              }
-              // 如果指定了多个日期字段，使用 OR 逻辑（同一筛选条件的多个字段）
-              if (filterField.dateFields && filterField.dateFields.length > 0) {
-                const dateFieldConditions: any[] = []
-                filterField.dateFields.forEach((dateField) => {
-                  dateFieldConditions.push({ [dateField]: dateCondition })
-                })
-                // 同一筛选条件的多个字段使用 OR，但整个筛选条件与其他筛选条件使用 AND
-                if (dateFieldConditions.length === 1) {
-                  filterConditions.push(dateFieldConditions[0])
-                } else {
-                  filterConditions.push({ OR: dateFieldConditions })
-                }
-              } else {
-                // 默认使用 filterField.field
-                filterConditions.push({ [filterField.field]: dateCondition })
-              }
-            }
-          } else if (filterField.type === 'numberRange') {
-            const numMin = searchParams.get(`filter_${filterField.field}_min`)
-            const numMax = searchParams.get(`filter_${filterField.field}_max`)
-            if (numMin || numMax) {
-              const numCondition: any = {}
-              if (numMin) {
-                numCondition.gte = Number(numMin)
-              }
-              if (numMax) {
-                numCondition.lte = Number(numMax)
-              }
-              // 如果指定了多个数值字段，使用 OR 逻辑（同一筛选条件的多个字段）
-              if (filterField.numberFields && filterField.numberFields.length > 0) {
-                const numFieldConditions: any[] = []
-                filterField.numberFields.forEach((numField) => {
-                  numFieldConditions.push({ [numField]: numCondition })
-                })
-                // 同一筛选条件的多个字段使用 OR，但整个筛选条件与其他筛选条件使用 AND
-                if (numFieldConditions.length === 1) {
-                  filterConditions.push(numFieldConditions[0])
-                } else {
-                  filterConditions.push({ OR: numFieldConditions })
-                }
-              } else {
-                // 默认使用 filterField.field
-                filterConditions.push({ [filterField.field]: numCondition })
-              }
+      // 只搜索文本字段，关系字段应该通过筛选（filter）来搜索
+      if (search && enhancedConfig.list.searchFields) {
+        const searchConditions: any[] = []
+        enhancedConfig.list.searchFields.forEach(field => {
+          const fieldConfig = enhancedConfig.fields[field]
+          // 只处理非关系字段的文本搜索
+          if (!fieldConfig?.relation && fieldConfig?.type !== 'relation') {
+            // 确保字段在 Prisma 模型中存在（排除计算字段）
+            if (!fieldConfig.computed) {
+              searchConditions.push({
+                [field]: { contains: search, mode: 'insensitive' as const }
+              })
             }
           }
         })
-        
-        // 将所有筛选条件使用 AND 逻辑组合
-        if (filterConditions.length > 0) {
-          if (filterConditions.length === 1) {
-            Object.assign(where, filterConditions[0])
-          } else {
-            // 如果已有 where.AND，合并到其中；否则创建新的 AND 数组
-            if (where.AND) {
-              where.AND = [...where.AND, ...filterConditions]
-            } else {
-              where.AND = filterConditions
-            }
-          }
+        if (searchConditions.length > 0) {
+          where.OR = searchConditions
         }
+      }
+
+      // 筛选条件（快速筛选）- 使用统一的筛选逻辑辅助函数
+      const { buildFilterConditions, mergeFilterConditions } = await import('./filter-helper')
+      const { getRelationDbFieldName, convertRelationFilterValue } = await import('./relation-filter-helper')
+      const filterConditions = buildFilterConditions(enhancedConfig, searchParams)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[createListHandler] 筛选条件构建结果:', filterConditions.length, '个条件')
+        console.log('[createListHandler] 筛选前的 where:', JSON.stringify(where, (key, value) => typeof value === 'bigint' ? value.toString() + 'n' : value, 2))
+      }
+      mergeFilterConditions(where, filterConditions)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[createListHandler] 筛选后的 where:', JSON.stringify(where, (key, value) => typeof value === 'bigint' ? value.toString() + 'n' : value, 2))
       }
 
       // 高级搜索条件（多条件组合）
       const advancedLogic = searchParams.get('advanced_logic') || 'AND'
-      // 使用自动生成的高级搜索字段（如果配置了则使用配置，否则自动生成）
-      const advancedSearchFields = getAdvancedSearchFields(config)
+      // 使用增强配置中的高级搜索字段
+      const advancedSearchFields = enhancedConfig.list.advancedSearchFields || []
       if (advancedSearchFields && advancedSearchFields.length > 0) {
         const advancedConditions: any[] = []
         
@@ -188,9 +128,23 @@ export function createListHandler(config: EntityConfig) {
             const value = searchParams.get(`advanced_${searchField.field}`)
             // 忽略 "__all__" 值（表示清除条件）
             if (value && value !== '__all__') {
-              advancedConditions.push({
-                [searchField.field]: value
-              })
+              // 检查是否是关系字段
+              const fieldConfig = enhancedConfig.fields[searchField.field]
+              if (searchField.relation || fieldConfig?.type === 'relation' || fieldConfig?.type === 'location') {
+                // 关系字段：需要转换为 ID 字段并转换为 BigInt
+                const dbFieldName = getRelationDbFieldName(searchField as any, fieldConfig)
+                const convertedValue = convertRelationFilterValue(value, dbFieldName, fieldConfig)
+                if (convertedValue !== null) {
+                  advancedConditions.push({
+                    [dbFieldName]: convertedValue
+                  })
+                }
+              } else {
+                // 普通 select 字段
+                advancedConditions.push({
+                  [searchField.field]: value
+                })
+              }
             }
           } else if (searchField.type === 'dateRange') {
             const dateFrom = searchParams.get(`advanced_${searchField.field}_from`)
@@ -246,51 +200,62 @@ export function createListHandler(config: EntityConfig) {
             }
           } else {
             // AND 逻辑：所有条件都必须满足
-            if (advancedConditions.length === 1) {
-              // 如果已有 where.AND，合并到其中；否则直接设置
-              if (where.AND) {
-                where.AND.push(advancedConditions[0])
-              } else {
-                Object.assign(where, advancedConditions[0])
+            // 如果 where 中已经有其他顶级条件（除了 AND/OR），需要将它们也合并到 AND 数组中
+            const existingTopLevelConditions: any = {}
+            const keysToPreserve = ['AND', 'OR']
+            
+            // 收集现有的顶级条件（除了 AND/OR）
+            Object.keys(where).forEach(key => {
+              if (!keysToPreserve.includes(key)) {
+                existingTopLevelConditions[key] = where[key]
+                delete where[key]
               }
-            } else {
-              // 如果已有 where.AND，合并到其中；否则创建新的 AND 数组
-              if (where.AND) {
-                where.AND = [...where.AND, ...advancedConditions]
-              } else {
-                where.AND = advancedConditions
-              }
+            })
+            
+            // 构建最终的 AND 数组
+            const finalAndConditions: any[] = []
+            
+            // 如果有现有的顶级条件，先添加到 AND 数组
+            if (Object.keys(existingTopLevelConditions).length > 0) {
+              finalAndConditions.push(existingTopLevelConditions)
             }
+            
+            // 添加现有的 AND 条件（如果有）
+            if (where.AND && Array.isArray(where.AND)) {
+              finalAndConditions.push(...where.AND)
+            }
+            
+            // 添加高级搜索条件
+            finalAndConditions.push(...advancedConditions)
+            
+            // 设置最终的 AND 数组
+            where.AND = finalAndConditions
           }
         }
       }
 
       // 状态筛选（如果有 status 字段）
-      if (config.fields.status) {
-        const status = searchParams.get('status')
-        const includeArchived = searchParams.get('includeArchived') === 'true'
-        
-        if (status) {
-          where.status = status
-        } else if (!includeArchived && config.prisma?.model === 'orders') {
-          // 对于订单表，默认排除"完成留档"状态（除非明确要求包含）
-          where.status = { not: 'archived' }
-        }
-      } else if (!searchParams.get('includeArchived') && config.prisma?.model === 'orders') {
-        // 如果没有 status 字段配置但需要过滤归档订单
+      // 注意：状态筛选现在通过 buildFilterConditions 处理（使用 filter_status）
+      // 这里只处理默认排除归档订单的逻辑
+      const includeArchived = searchParams.get('includeArchived') === 'true'
+      const filterStatus = searchParams.get('filter_status')
+      
+      // 如果没有通过筛选器选择状态，且没有明确要求包含归档订单，则默认排除归档订单
+      if (!filterStatus && !includeArchived && enhancedConfig.prisma?.model === 'orders') {
+        // 对于订单表，默认排除"完成留档"状态（除非明确要求包含）
         where.status = { not: 'archived' }
       }
 
       // 查询数据
-      const prismaModel = getPrismaModel(config)
+      const prismaModel = getPrismaModel(enhancedConfig)
 
       // 验证排序字段是否有效（检查字段是否存在且可排序）
-      const sortFieldConfig = config.fields[sort]
+      const sortFieldConfig = enhancedConfig.fields[sort]
       if (!sortFieldConfig || sortFieldConfig.hidden) {
         // 如果排序字段无效或已隐藏，使用默认排序
-        console.warn(`[createListHandler] 无效的排序字段: ${sort}，使用默认排序: ${config.list.defaultSort}`)
-        const defaultSort = config.list.defaultSort || 'id'
-        const defaultOrder = config.list.defaultOrder || 'desc'
+        console.warn(`[createListHandler] 无效的排序字段: ${sort}，使用默认排序: ${enhancedConfig.list.defaultSort}`)
+        const defaultSort = enhancedConfig.list.defaultSort || 'id'
+        const defaultOrder = enhancedConfig.list.defaultOrder || 'desc'
         sort = defaultSort
         order = defaultOrder
       }
@@ -303,17 +268,18 @@ export function createListHandler(config: EntityConfig) {
       }
 
       // 添加 include 或 select
-      if (config.prisma?.include) {
-        queryOptions.include = config.prisma.include
-      } else if (config.prisma?.select) {
-        queryOptions.select = config.prisma.select
+      if (enhancedConfig.prisma?.include) {
+        queryOptions.include = enhancedConfig.prisma.include
+      } else if (enhancedConfig.prisma?.select) {
+        queryOptions.select = enhancedConfig.prisma.select
       }
 
       // 添加详细的查询日志（开发环境）
       if (process.env.NODE_ENV === 'development') {
         console.log('[createListHandler] 查询配置:', {
           model: config.prisma?.model || config.name,
-          where: Object.keys(where),
+          where: JSON.stringify(where, (key, value) => typeof value === 'bigint' ? value.toString() + 'n' : value, 2),
+          whereKeys: Object.keys(where),
           hasInclude: !!queryOptions.include,
           hasSelect: !!queryOptions.select,
           skip: queryOptions.skip,
@@ -409,7 +375,14 @@ export function createListHandler(config: EntityConfig) {
           stack: queryError?.stack,
         })
         console.error('查询配置:', {
-          model: config.prisma?.model || config.name,
+          model: enhancedConfig.prisma?.model || enhancedConfig.name,
+          where: JSON.stringify(where, (key, value) => {
+            // 处理 BigInt 序列化
+            if (typeof value === 'bigint') {
+              return value.toString()
+            }
+            return value
+          }, 2),
           whereKeys: Object.keys(where),
           hasInclude: !!queryOptions.include,
           hasSelect: !!queryOptions.select,
@@ -422,6 +395,12 @@ export function createListHandler(config: EntityConfig) {
               details: process.env.NODE_ENV === 'development' ? {
                 code: queryError.code,
                 meta: queryError.meta,
+                where: JSON.stringify(where, (key, value) => {
+                  if (typeof value === 'bigint') {
+                    return value.toString()
+                  }
+                  return value
+                }, 2),
               } : undefined,
             },
             { status: 500 }
@@ -497,7 +476,7 @@ export function createListHandler(config: EntityConfig) {
             }
           }
           // 处理用户数据：departments_users_department_idTodepartments -> department
-          if (config.prisma?.model === 'users') {
+          if (enhancedConfig.prisma?.model === 'users') {
             if (serialized.departments_users_department_idTodepartments) {
               serialized.department = serialized.departments_users_department_idTodepartments
               delete serialized.departments_users_department_idTodepartments
@@ -506,7 +485,7 @@ export function createListHandler(config: EntityConfig) {
             }
           }
           // 处理客户数据：contact_roles -> contact, credit_limit 转换
-          if (config.prisma?.model === 'customers') {
+          if (enhancedConfig.prisma?.model === 'customers') {
             if (serialized.contact_roles) {
               serialized.contact = {
                 name: serialized.contact_roles.name || '',
@@ -613,14 +592,14 @@ export function createListHandler(config: EntityConfig) {
         buildPaginationResponse(transformedItems, total, page, limit)
       )
     } catch (error: any) {
-      console.error(`[createListHandler] 获取${config.displayName}列表失败:`, error)
+      console.error(`[createListHandler] 获取${enhancedConfig.displayName}列表失败:`, error)
       console.error('错误详情:', {
         message: error?.message,
         stack: error?.stack,
         name: error?.name,
         code: error?.code,
       })
-      return handleError(error, `获取${config.displayName}列表失败`)
+      return handleError(error, `获取${enhancedConfig.displayName}列表失败`)
     }
   }
 }
@@ -912,38 +891,63 @@ export function createCreateHandler(config: EntityConfig) {
         data: processedData,
       })
 
-      // 对于订单表，如果操作方式是"拆柜"（unload），自动创建入库记录
-      if (config.prisma?.model === 'orders' && processedData.operation_mode === 'unload') {
+      // 对于订单表，处理入库单和提柜管理记录
+      if (config.prisma?.model === 'orders') {
+        // 1. 如果操作方式是"拆柜"（unload），自动创建入库记录
+        if (processedData.operation_mode === 'unload') {
+          try {
+            // 获取第一个可用的 warehouse_id，如果没有则使用 1000 作为默认值
+            const firstWarehouse = await prisma.warehouses.findFirst({
+              select: { warehouse_id: true },
+              orderBy: { warehouse_id: 'asc' },
+            })
+            
+            const warehouseId = firstWarehouse?.warehouse_id || BigInt(1000)
+            
+            // 检查是否已存在入库记录（理论上不应该存在，因为刚创建）
+            const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
+              where: { order_id: item.order_id },
+              select: { inbound_receipt_id: true },
+            })
+            
+            // 如果不存在，则创建入库记录
+            if (!existingInboundReceipt) {
+              await prisma.inbound_receipt.create({
+                data: {
+                  order_id: item.order_id,
+                  warehouse_id: warehouseId,
+                  status: 'pending',
+                  created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+                  updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+                },
+              })
+            }
+          } catch (inboundError: any) {
+            // 如果创建失败（例如已存在），记录错误但不影响订单创建
+            console.warn('自动创建入库记录失败:', inboundError)
+          }
+        }
+
+        // 2. 所有订单都自动创建 pickup_management（提柜管理）记录
         try {
-          // 获取第一个可用的 warehouse_id，如果没有则使用 1000 作为默认值
-          const firstWarehouse = await prisma.warehouses.findFirst({
-            select: { warehouse_id: true },
-            orderBy: { warehouse_id: 'asc' },
-          })
-          
-          const warehouseId = firstWarehouse?.warehouse_id || BigInt(1000)
-          
-          // 检查是否已存在入库记录（理论上不应该存在，因为刚创建）
-          const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
+          // 检查是否已存在提柜管理记录
+          const existingPickup = await prisma.pickup_management.findUnique({
             where: { order_id: item.order_id },
-            select: { inbound_receipt_id: true },
+            select: { pickup_id: true },
           })
-          
-          // 如果不存在，则创建入库记录
-          if (!existingInboundReceipt) {
-            await prisma.inbound_receipt.create({
+
+          if (!existingPickup) {
+            await prisma.pickup_management.create({
               data: {
                 order_id: item.order_id,
-                warehouse_id: warehouseId,
-                status: 'pending',
+                status: 'planned',
                 created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                 updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
               },
             })
           }
-        } catch (inboundError: any) {
-          // 如果创建失败（例如已存在），记录错误但不影响订单创建
-          console.warn('自动创建入库记录失败:', inboundError)
+        } catch (pickupError: any) {
+          console.warn('自动创建提柜管理记录失败:', pickupError)
         }
       }
 
@@ -1071,7 +1075,7 @@ export function createUpdateHandler(config: EntityConfig) {
         const oldOperationMode = currentOrder.operation_mode
         const newOperationMode = processedData.operation_mode
         
-        // 情况1：操作方式从非"拆柜"变为"拆柜"，自动创建入库单
+        // 情况1：操作方式从非"拆柜"变为"拆柜"，自动创建入库单和提柜管理记录
         if (oldOperationMode !== 'unload' && newOperationMode === 'unload') {
           try {
             // 检查是否已存在入库记录
@@ -1100,13 +1104,16 @@ export function createUpdateHandler(config: EntityConfig) {
                 },
               })
             }
+
+            // 注意：不在这里创建 pickup_management，因为所有订单都应该在提柜管理中
+            // 如果订单创建时没有创建，这里也不需要创建（因为订单更新时不应该改变提柜管理的行数）
           } catch (inboundError: any) {
             // 如果创建失败（例如已存在），记录错误但不影响订单更新
-            console.warn('自动创建入库记录失败:', inboundError)
+            console.warn('自动创建入库记录或提柜管理记录失败:', inboundError)
           }
         }
         
-        // 情况2：操作方式从"拆柜"变为非"拆柜"（如"直送"），删除入库单（如果入库单状态还是pending且没有库存批次）
+        // 情况2：操作方式从"拆柜"变为非"拆柜"（如"直送"），删除入库单和提柜管理记录（如果入库单状态还是pending且没有库存批次）
         if (oldOperationMode === 'unload' && newOperationMode !== 'unload') {
           try {
             const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
@@ -1133,9 +1140,12 @@ export function createUpdateHandler(config: EntityConfig) {
                 )
               }
             }
+
+            // 注意：不删除 pickup_management 记录，因为所有订单都应该在提柜管理中
+            // 订单更新时不应该改变提柜管理的行数
           } catch (inboundError: any) {
             // 如果删除失败，记录错误但不影响订单更新
-            console.warn('自动删除入库记录失败:', inboundError)
+            console.warn('自动删除入库记录或提柜管理记录失败:', inboundError)
           }
         }
       }
@@ -1177,10 +1187,28 @@ export function createDeleteHandler(config: EntityConfig) {
       // 获取主键字段名（默认为 'id'）
       const idField = config.idField || 'id'
       
-      // 对于订单表，使用软删除（更新状态为 'archived'）
+      // 对于订单表，使用软删除（更新状态为 'archived'），同时删除对应的提柜管理记录
       if (config.prisma?.model === 'orders' && config.fields.status) {
+        const orderId = BigInt(resolvedParams.id)
+        
+        // 删除对应的 pickup_management 记录
+        try {
+          const existingPickup = await prisma.pickup_management.findUnique({
+            where: { order_id: orderId },
+            select: { pickup_id: true },
+          })
+
+          if (existingPickup) {
+            await prisma.pickup_management.delete({
+              where: { pickup_id: existingPickup.pickup_id },
+            })
+          }
+        } catch (pickupError: any) {
+          console.warn('自动删除提柜管理记录失败:', pickupError)
+        }
+
         const item = await prismaModel.update({
-          where: { [idField]: BigInt(resolvedParams.id) },
+          where: { [idField]: orderId },
           data: { status: 'archived' },
         })
         return NextResponse.json({ 

@@ -29,6 +29,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { AdvancedSearchFieldConfig } from "@/lib/crud/types"
 import { loadRelationOptions } from "@/lib/crud/relation-loader"
 import { Loader2 } from "lucide-react"
+import { LocationSelect } from "@/components/ui/location-select"
 
 interface AdvancedSearchDialogProps {
   open: boolean
@@ -141,7 +142,25 @@ export function AdvancedSearchDialog({
 
               if (field.type === 'select') {
                 const currentValue = searchValues[field.field]
-                // 关系字段需要动态加载选项
+                
+                // 如果是 location 类型字段（relation.model === 'locations'），使用 LocationSelect（分步选择）
+                if (field.relation && field.relation.model === 'locations') {
+                  return (
+                    <div key={field.field} className="space-y-2 group">
+                      <Label htmlFor={field.field} className="text-sm font-medium text-gray-700 dark:text-gray-300 group-focus-within:text-indigo-600 dark:group-focus-within:text-indigo-400 transition-colors">
+                        {field.label}
+                      </Label>
+                      <LocationSelect
+                        value={currentValue || null}
+                        onChange={(value) => onSearchChange(field.field, value || null)}
+                        placeholder={`请选择${field.label}`}
+                        className="h-10 border-2 border-gray-200 dark:border-gray-800 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 transition-all duration-200"
+                      />
+                    </div>
+                  )
+                }
+                
+                // 其他关系字段需要动态加载选项
                 const [relationOptions, setRelationOptions] = React.useState<Array<{ label: string; value: string }>>([])
                 const [loadingRelation, setLoadingRelation] = React.useState(false)
                 const [relationOptionsLoaded, setRelationOptionsLoaded] = React.useState(false)

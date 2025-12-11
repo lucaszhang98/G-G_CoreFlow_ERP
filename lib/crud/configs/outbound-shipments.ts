@@ -139,59 +139,11 @@ export const outboundShipmentConfig: EntityConfig = {
       'total_pallets',
       'notes',
     ],
-    searchFields: ['reference_number', 'appointment_account', 'loaded_by_name'],
-    // 筛选配置（快速筛选）
-    filterFields: [
-      {
-        field: 'delivery_method',
-        label: '派送方式',
-        type: 'select',
-        options: [
-          { label: '私仓', value: '私仓' },
-          { label: '自提', value: '自提' },
-          { label: '卡派', value: '卡派' },
-        ],
-      },
-      {
-        field: 'rejected',
-        label: '拒收',
-        type: 'select',
-        options: [
-          { label: '是', value: 'true' },
-          { label: '否', value: 'false' },
-        ],
-      },
-      {
-        field: 'confirmed_start',
-        label: '送货时间',
-        type: 'dateRange',
-        dateFields: ['confirmed_start'],
-      },
-    ],
-    // 高级搜索配置（多条件组合）
-    advancedSearchFields: [
-      {
-        field: 'reference_number',
-        label: '预约号码',
-        type: 'text',
-      },
-      {
-        field: 'appointment_account',
-        label: '预约账号',
-        type: 'text',
-      },
-      {
-        field: 'loaded_by_name',
-        label: '装车人',
-        type: 'text',
-      },
-      {
-        field: 'total_pallets',
-        label: '板数',
-        type: 'numberRange',
-        numberFields: ['total_pallets'],
-      },
-    ],
+    searchFields: ['reference_number'], // 只搜索预约号码（最重要的字段）
+    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
+    // filterFields 已由 search-config-generator 自动生成
+    // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
+    // advancedSearchFields 已由 search-config-generator 自动生成
     // 批量操作配置：只允许批量修改 trailer_id, loaded_by, notes
     batchOperations: {
       enabled: true,
@@ -218,9 +170,9 @@ export const outboundShipmentConfig: EntityConfig = {
   
   permissions: {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: ['admin', 'wms_manager'], // 虽然不允许手动创建，但保留权限配置
+    create: [], // WMS 模块不允许手动创建
     update: ['admin', 'wms_manager'],
-    delete: ['admin'], // 虽然不允许删除，但保留权限配置
+    delete: [], // WMS 模块不允许删除
   },
   
   // 注意：由于数据来自 delivery_appointments，这里不需要 prisma.include

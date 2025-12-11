@@ -32,6 +32,8 @@ import {
 import { Label } from "@/components/ui/label"
 import { FilterFieldConfig, AdvancedSearchFieldConfig } from "@/lib/crud/types"
 import { AdvancedSearchDialog } from "./advanced-search-dialog"
+import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
+import { LocationSelect } from "@/components/ui/location-select"
 
 interface SearchModuleProps {
   // 简单搜索
@@ -86,6 +88,88 @@ export function SearchModule({
   
   // 维护筛选选项映射（用于显示标签）
   const [filterOptionsMap, setFilterOptionsMap] = React.useState<Record<string, Record<string, string>>>({})
+  // 维护关系字段的标签映射（用于显示关系字段的筛选标签）
+  const [relationFilterLabelsMap, setRelationFilterLabelsMap] = React.useState<Record<string, Record<string, string>>>({})
+  
+  // 稳定 advancedSearchFields 的引用，避免 React 静态标志错误
+  const stableAdvancedSearchFields = React.useMemo(() => {
+    return advancedSearchFields || []
+  }, [advancedSearchFields])
+  
+  // 生成稳定的 key，用于 AdvancedSearchDialog 组件
+  const advancedSearchKey = React.useMemo(() => {
+    return stableAdvancedSearchFields.map(f => f.field).join(',')
+  }, [stableAdvancedSearchFields])
+  
+  // 加载关系字段标签的辅助函数
+  const loadRelationFieldLabel = React.useCallback(async (
+    filter: FilterFieldConfig,
+    value: string | number,
+    loadFuzzyOptions: (search: string) => Promise<FuzzySearchOption[]>
+  ) => {
+    try {
+      const options = await loadFuzzyOptions('')
+      const selectedOption = options.find(opt => String(opt.value) === String(value))
+      if (selectedOption) {
+        setRelationFilterLabelsMap((prev) => ({
+          ...prev,
+          [filter.field]: {
+            ...prev[filter.field],
+            [String(value)]: selectedOption.label,
+          },
+        }))
+      }
+    } catch (error) {
+      console.error(`加载${filter.label}标签失败:`, error)
+    }
+  }, [])
+  
+  // 在组件顶层统一处理关系字段标签的加载
+  React.useEffect(() => {
+    if (!mounted) return
+    
+    filterFields.forEach((filter) => {
+      if (filter.type === 'select' && filter.relation) {
+        const currentValue = filterValues[filter.field]
+        if (currentValue && currentValue !== '__all__' && !relationFilterLabelsMap[filter.field]?.[String(currentValue)]) {
+          // 需要加载标签
+          const loadFuzzyOptions = async (search: string): Promise<FuzzySearchOption[]> => {
+            try {
+              const params = new URLSearchParams()
+              if (search) {
+                params.append('search', search)
+              }
+              params.append('unlimited', 'true')
+              const modelName = filter.relation!.model
+              const apiPath = `/api/${modelName}?${params.toString()}`
+              const response = await fetch(apiPath)
+              if (!response.ok) {
+                throw new Error(`加载${filter.label}选项失败`)
+              }
+              const data = await response.json()
+              const items = data.data || []
+              const displayField = filter.relation!.displayField
+              const valueField = filter.relation!.valueField || 'id'
+              return items.map((item: any) => {
+                const itemValue = item[valueField] !== undefined ? item[valueField] : item.id
+                const itemLabel = item[displayField] || String(itemValue || '')
+                return {
+                  value: String(itemValue || ''),
+                  label: itemLabel,
+                  description: item[displayField] || undefined,
+                }
+              })
+            } catch (error) {
+              console.error(`加载${filter.label}选项失败:`, error)
+              return []
+            }
+          }
+          
+          loadRelationFieldLabel(filter, currentValue, loadFuzzyOptions)
+        }
+      }
+    })
+  }, [mounted, filterFields, filterValues, relationFilterLabelsMap, loadRelationFieldLabel])
 
   // 计算活跃的筛选数量（考虑范围类型）
   const activeFilterCount = React.useMemo(() => {
@@ -132,7 +216,7 @@ export function SearchModule({
       {/* 主搜索区域 */}
       <div className="relative group">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        <div className="relative bg-white dark:bg-gray-900/50 border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-lg shadow-gray-900/5 dark:shadow-gray-900/20 p-6 backdrop-blur-sm">
+        <div className="relative bg-white dark:bg-gray-900/50 border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-lg shadow-gray-900/5 dark:shadow-gray-900/20 p-4 backdrop-blur-sm">
           {/* 搜索框行 */}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-3">
             {/* 主要搜索框 */}
@@ -172,7 +256,7 @@ export function SearchModule({
             {/* 操作按钮组 */}
             <div className="flex items-center gap-2 shrink-0">
               {/* 高级搜索按钮 */}
-              {advancedSearchFields.length > 0 && (
+              {stableAdvancedSearchFields.length > 0 && (
                 <Button
                   variant={hasActiveAdvancedSearch ? "default" : "outline"}
                   onClick={() => onAdvancedSearchOpenChange(true)}
@@ -227,6 +311,194 @@ export function SearchModule({
                 </div>
                 
                 {filterFields.map((filter) => {
+                  // 如果是 location 类型的筛选字段（relation.model === 'locations'），使用 LocationSelect（分步选择）
+                  if (filter.type === 'select' && filter.relation && filter.relation.model === 'locations') {
+                    const currentValue = filterValues[filter.field]
+                    const isActive = currentValue && currentValue !== '__all__' && currentValue !== null && currentValue !== ''
+                    
+                    // 只在客户端挂载后渲染 LocationSelect，避免 hydration 错误
+                    if (!mounted) {
+                      return (
+                        <Button
+                          key={filter.field}
+                          variant={isActive ? "default" : "outline"}
+                          className={`
+                            h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+                            ${isActive
+                              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
+                              : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
+                            }
+                          `}
+                          disabled
+                        >
+                          <span className="truncate">{filter.label}</span>
+                          <ChevronDown className="ml-2 h-3 w-3 opacity-70 shrink-0" />
+                        </Button>
+                      )
+                    }
+                    
+                    // 当值改变时，更新标签映射
+                    const handleLocationFilterChange = async (value: string | number | null) => {
+                      onFilterChange(filter.field, value || null)
+                      
+                      // 如果有值，加载对应的标签（通过 LocationSelect 的 API）
+                      if (value) {
+                        try {
+                          const response = await fetch(`/api/locations/${value}`)
+                          if (response.ok) {
+                            const location = await response.json()
+                            const label = location.location_code || location.name || String(value)
+                            setRelationFilterLabelsMap((prev) => ({
+                              ...prev,
+                              [filter.field]: {
+                                ...(prev[filter.field] || {}),
+                                [String(value)]: label,
+                              },
+                            }))
+                          }
+                        } catch (error) {
+                          console.error(`加载${filter.label}标签失败:`, error)
+                        }
+                      } else {
+                        // 清空时，清除该字段的映射
+                        setRelationFilterLabelsMap((prev) => {
+                          const newMap = { ...prev }
+                          delete newMap[filter.field]
+                          return newMap
+                        })
+                      }
+                    }
+                    
+                    return (
+                      <div key={filter.field} className="relative">
+                        <LocationSelect
+                          value={currentValue || null}
+                          onChange={handleLocationFilterChange}
+                          placeholder={filter.label}
+                          className={`
+                            h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+                            ${isActive
+                              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20 border-0"
+                              : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
+                            }
+                          `}
+                        />
+                        {isActive && (
+                          <Badge 
+                            variant="secondary" 
+                            className="absolute -top-2 -right-2 h-4 min-w-4 px-1 bg-white/20 text-white border-0 shrink-0 z-10"
+                          >
+                            1
+                          </Badge>
+                        )}
+                      </div>
+                    )
+                  }
+                  
+                  // 如果是其他 relation 类型的筛选字段，使用模糊搜索下拉框
+                  if (filter.type === 'select' && filter.relation) {
+                    const currentValue = filterValues[filter.field]
+                    const isActive = currentValue && currentValue !== '__all__' && currentValue !== null && currentValue !== ''
+                    
+                    // 创建模糊搜索加载函数
+                    const loadFuzzyOptions = async (search: string): Promise<FuzzySearchOption[]> => {
+                      try {
+                        const params = new URLSearchParams()
+                        if (search) {
+                          params.append('search', search)
+                        }
+                        params.append('unlimited', 'true')
+                        const modelName = filter.relation!.model
+                        const apiPath = `/api/${modelName}?${params.toString()}`
+                        const response = await fetch(apiPath)
+                        if (!response.ok) {
+                          throw new Error(`加载${filter.label}选项失败`)
+                        }
+                        const data = await response.json()
+                        const items = data.data || []
+                        const displayField = filter.relation!.displayField
+                        const valueField = filter.relation!.valueField || 'id'
+                        return items.map((item: any) => {
+                          const itemValue = item[valueField] !== undefined ? item[valueField] : item.id
+                          const itemLabel = item[displayField] || String(itemValue || '')
+                          return {
+                            value: String(itemValue || ''),
+                            label: itemLabel,
+                            description: item[displayField] || undefined,
+                          }
+                        })
+                      } catch (error) {
+                        console.error(`加载${filter.label}选项失败:`, error)
+                        return []
+                      }
+                    }
+                    
+                    // 只在客户端挂载后渲染 FuzzySearchSelect，避免 hydration 错误
+                    if (!mounted) {
+                      return (
+                        <Button
+                          key={filter.field}
+                          variant={isActive ? "default" : "outline"}
+                          className={`
+                            h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+                            ${isActive
+                              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
+                              : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
+                            }
+                          `}
+                          disabled
+                        >
+                          <span className="truncate">{filter.label}</span>
+                          <ChevronDown className="ml-2 h-3 w-3 opacity-70 shrink-0" />
+                        </Button>
+                      )
+                    }
+                    
+                    // 当值改变时，更新标签映射（不使用 useCallback，避免违反 Hooks 规则）
+                    const handleRelationFilterChange = async (value: string | number | null) => {
+                      onFilterChange(filter.field, value || null)
+                      
+                      // 如果有值，加载对应的标签
+                      if (value) {
+                        loadRelationFieldLabel(filter, value, loadFuzzyOptions)
+                      } else {
+                        // 清空时，清除该字段的映射
+                        setRelationFilterLabelsMap((prev) => {
+                          const newMap = { ...prev }
+                          delete newMap[filter.field]
+                          return newMap
+                        })
+                      }
+                    }
+                    
+                    return (
+                      <div key={filter.field} className="relative">
+                        <FuzzySearchSelect
+                          value={currentValue || null}
+                          onChange={handleRelationFilterChange}
+                          placeholder={filter.label}
+                          loadOptions={loadFuzzyOptions}
+                          className={`
+                            h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+                            ${isActive
+                              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20 border-0"
+                              : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
+                            }
+                          `}
+                        />
+                        {isActive && (
+                          <Badge 
+                            variant="secondary" 
+                            className="absolute -top-2 -right-2 h-4 min-w-4 px-1 bg-white/20 text-white border-0 shrink-0 z-10"
+                          >
+                            1
+                          </Badge>
+                        )}
+                      </div>
+                    )
+                  }
+                  
+                  // 普通 select 类型（静态选项或动态加载选项）
                   if (filter.type === 'select') {
                     const currentValue = filterValues[filter.field]
                     const isActive = currentValue && currentValue !== '__all__'
@@ -575,9 +847,17 @@ export function SearchModule({
             if (filter.type === 'select') {
               const value = filterValues[filter.field]
               if (!value || value === '__all__') return null
-              // 优先从静态选项查找，然后从动态加载的选项映射查找
-              const option = filter.options?.find(opt => opt.value === value)
-              const label = option?.label || filterOptionsMap[filter.field]?.[value] || value
+              
+              // 如果是关系字段，优先从关系字段标签映射查找
+              let label: string
+              if (filter.relation) {
+                label = relationFilterLabelsMap[filter.field]?.[String(value)] || value
+              } else {
+                // 普通 select 字段：优先从静态选项查找，然后从动态加载的选项映射查找
+                const option = filter.options?.find(opt => opt.value === value)
+                label = option?.label || filterOptionsMap[filter.field]?.[value] || value
+              }
+              
               return (
                 <Badge
                   key={filter.field}
@@ -668,11 +948,12 @@ export function SearchModule({
       )}
 
       {/* 高级搜索对话框 */}
-      {advancedSearchFields.length > 0 && (
+      {stableAdvancedSearchFields.length > 0 && (
         <AdvancedSearchDialog
+          key={advancedSearchKey}
           open={advancedSearchOpen}
           onOpenChange={onAdvancedSearchOpenChange}
-          fields={advancedSearchFields}
+          fields={stableAdvancedSearchFields}
           searchValues={advancedSearchValues}
           logic={advancedSearchLogic}
           onSearchChange={onAdvancedSearchChange}

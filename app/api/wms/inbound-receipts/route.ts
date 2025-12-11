@@ -4,6 +4,8 @@ import { inboundReceiptConfig } from '@/lib/crud/configs/inbound-receipts';
 import { checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import { inboundReceiptCreateSchema } from '@/lib/validations/inbound-receipt';
 import prisma from '@/lib/prisma';
+import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper';
+import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
 
 // GET - 获取拆柜规划列表（使用统一框架，但需要自定义处理关联数据）
 export async function GET(request: NextRequest) {
@@ -18,6 +20,9 @@ export async function GET(request: NextRequest) {
     const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc';
     const search = searchParams.get('search') || '';
 
+    // 增强配置，确保 filterFields 已生成
+    const enhancedConfig = enhanceConfigWithSearchFields(inboundReceiptConfig)
+
     // 构建查询条件（只查询入库单表，不查询订单表）
     // 入库单应该只关联操作方式为"拆柜"的订单，这个关联关系在入库单创建时已经保证
     const where: any = {
@@ -26,6 +31,44 @@ export async function GET(request: NextRequest) {
         operation_mode: 'unload',
       },
     };
+
+    // 使用统一的筛选逻辑
+    const filterConditions = buildFilterConditions(enhancedConfig, searchParams)
+    
+    // 分离主表字段和关联表字段的筛选条件
+    const mainTableConditions: any[] = []
+    const ordersConditions: any = {}
+    
+    filterConditions.forEach((condition) => {
+      Object.keys(condition).forEach((fieldName) => {
+        // 判断字段是否来自 orders 表
+        // 主表字段：inbound_receipt_id, order_id, status, planned_unload_at, unloaded_by, received_by, notes
+        const mainTableFields = ['inbound_receipt_id', 'order_id', 'status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes']
+        if (mainTableFields.includes(fieldName)) {
+          mainTableConditions.push(condition)
+        } else {
+          // 字段来自 orders 表
+          Object.assign(ordersConditions, condition)
+        }
+      })
+    })
+    
+    // 合并主表筛选条件
+    if (mainTableConditions.length > 0) {
+      mergeFilterConditions(where, mainTableConditions)
+    }
+    
+    // 合并 orders 表的筛选条件（需要与现有的 operation_mode 条件合并）
+    if (Object.keys(ordersConditions).length > 0) {
+      if (where.orders) {
+        where.orders = {
+          ...where.orders,
+          ...ordersConditions,
+        }
+      } else {
+        where.orders = ordersConditions
+      }
+    }
 
     // 搜索条件
     if (search) {
@@ -129,6 +172,12 @@ export async function GET(request: NextRequest) {
             description: true,
           },
         },
+        inventory_lots: {
+          select: {
+            delivery_progress: true,
+            pallet_count: true,
+          },
+        },
       };
 
       // 检查 Prisma 客户端是否有 inbound_receipt 模型
@@ -192,6 +241,33 @@ export async function GET(request: NextRequest) {
         // 柜号使用订单号（order_number），与海柜管理保持一致
         const containerNumber = order?.order_number || null;
         
+        // 计算送货进度：从关联的 inventory_lots 按板数加权平均
+        // 公式：delivery_progress = Σ(delivery_progress_i * pallet_count_i) / Σ(pallet_count_i)
+        let calculatedDeliveryProgress = 0;
+        const inventoryLots = serialized.inventory_lots || [];
+        if (inventoryLots.length > 0) {
+          let totalWeightedProgress = 0;
+          let totalPallets = 0;
+          
+          inventoryLots.forEach((lot: any) => {
+            const progress = lot.delivery_progress !== null && lot.delivery_progress !== undefined 
+              ? Number(lot.delivery_progress) 
+              : 0;
+            const pallets = lot.pallet_count !== null && lot.pallet_count !== undefined 
+              ? Number(lot.pallet_count) 
+              : 0;
+            
+            if (pallets > 0) {
+              totalWeightedProgress += progress * pallets;
+              totalPallets += pallets;
+            }
+          });
+          
+          if (totalPallets > 0) {
+            calculatedDeliveryProgress = totalWeightedProgress / totalPallets;
+          }
+        }
+        
         return {
           ...serialized,
           customer_name: customerName,
@@ -205,6 +281,8 @@ export async function GET(request: NextRequest) {
           received_by_id: serialized.received_by || null,
           warehouse_name: serialized.warehouses?.name || null,
           unload_method_name: serialized.unload_methods?.description || null,
+          // 计算后的送货进度（按板数加权平均）
+          delivery_progress: calculatedDeliveryProgress,
           // 确保 order_id 也被包含，用于超链接
           order_id: order?.order_id || serialized.order_id || null,
         };
@@ -325,7 +403,8 @@ export async function POST(request: NextRequest) {
       notes: data.notes || null,
       unloaded_by: data.unloaded_by || null,
       received_by: data.received_by ? BigInt(data.received_by) : null,
-      delivery_progress: data.delivery_progress !== undefined && data.delivery_progress !== null ? data.delivery_progress : null,
+      // delivery_progress 默认值为 0，后续会根据关联的 inventory_lots 按板数加权平均计算
+      delivery_progress: data.delivery_progress !== undefined && data.delivery_progress !== null ? data.delivery_progress : 0,
       unload_method_code: data.unload_method_code || null,
     };
 

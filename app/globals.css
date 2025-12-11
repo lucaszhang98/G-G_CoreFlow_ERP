@@ -142,4 +142,167 @@
   .animation-delay-4000 {
     animation-delay: 4s;
   }
+  
+  /* ============================================
+   * 专业鼠标图标系统 - 简洁、直观、专业
+   * 参考：Excel, Airtable, Notion 等专业系统
+   * ============================================ */
+  
+  /* 基础规则：默认使用系统默认光标 */
+  * {
+    cursor: default;
+  }
+  
+  /* 可点击元素 - 标准指针 */
+  .cursor-pointer,
+  button:not(:disabled),
+  a:not([aria-disabled="true"]):not([href="#"]):not([href=""]),
+  [role="button"]:not([aria-disabled="true"]),
+  [onclick]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  
+  /* 文本输入 - 文本光标 */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="number"],
+  textarea,
+  [contenteditable="true"]:not(button):not(a) {
+    cursor: text;
+  }
+  
+  /* 日期/时间/选择框 - 指针 */
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  input[type="month"],
+  input[type="week"],
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+  
+  /* 复选框和单选框 - 指针 */
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  label:has(input[type="checkbox"]:not(:disabled)),
+  label:has(input[type="radio"]:not(:disabled)) {
+    cursor: pointer;
+  }
+  
+  /* 右键菜单 - 上下文菜单（仅在明确需要时，且不在编辑状态） */
+  [oncontextmenu]:not([data-no-context-cursor]):not(:has(.inline-edit-cell)):not(:has(input)):not(:has(textarea)):not(:has(select)):not(:has([contenteditable="true"])),
+  .cursor-context-menu:not(:has(.inline-edit-cell)):not(:has(input)):not(:has(textarea)):not(:has(select)):not(:has([contenteditable="true"])) {
+    cursor: context-menu !important;
+  }
+  
+  /* 确保单元格内部所有子元素都继承 context-menu cursor */
+  .cursor-context-menu *:not(input):not(textarea):not(select):not([contenteditable="true"]):not(button):not(a):not(.inline-edit-cell) {
+    cursor: inherit !important;
+  }
+  
+  /* 如果单元格包含可编辑元素，使用文本光标 */
+  .cursor-context-menu:has(.inline-edit-cell),
+  .cursor-context-menu:has(input),
+  .cursor-context-menu:has(textarea),
+  .cursor-context-menu:has(select),
+  .cursor-context-menu:has([contenteditable="true"]) {
+    cursor: text !important;
+  }
+  
+  /* 禁用状态 - 禁止操作 */
+  :disabled,
+  [disabled],
+  .cursor-not-allowed,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  
+  /* 等待/加载中 */
+  [aria-busy="true"],
+  .loading {
+    cursor: wait;
+  }
+  
+  /* 拖拽元素 */
+  [draggable="true"]:not(:disabled),
+  .cursor-grab {
+    cursor: grab;
+  }
+  
+  [draggable="true"]:not(:disabled):active,
+  .cursor-grabbing {
+    cursor: grabbing;
+  }
+  
+  /* 调整大小 */
+  textarea[resize="both"],
+  [resize="both"] {
+    cursor: nwse-resize;
+  }
+  
+  textarea[resize="vertical"],
+  [resize="vertical"] {
+    cursor: ns-resize;
+  }
+  
+  textarea[resize="horizontal"],
+  [resize="horizontal"] {
+    cursor: ew-resize;
+  }
+  
+  /* 移动 */
+  .cursor-move {
+    cursor: move;
+  }
+  
+  /* 复制 */
+  .cursor-copy {
+    cursor: copy;
+  }
+  
+  /* 表格单元格 - 默认不显示问号，除非明确需要帮助 */
+  table td,
+  table th {
+    cursor: default;
+  }
+  
+  /* 可编辑单元格 */
+  .inline-edit-cell,
+  [contenteditable="true"]:not(input):not(textarea) {
+    cursor: text;
+  }
+  
+  /* 表格行 - 如果可点击则使用指针，否则默认 */
+  table tbody tr[data-clickable="true"],
+  table tbody tr[onclick],
+  table tbody tr.cursor-pointer {
+    cursor: pointer;
+  }
+  
+  /* 移除 title 属性导致的 help cursor（除非明确需要帮助） */
+  [title]:not([data-cursor-help="true"]) {
+    cursor: inherit;
+  }
+  
+  /* 只有明确标记为帮助的元素才显示问号 */
+  [data-cursor-help="true"],
+  .cursor-help {
+    cursor: help;
+  }
+  
+  /* 链接样式优化 */
+  a[href]:not([aria-disabled="true"]):not([href="#"]):not([href=""]) {
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+  
+  a[href]:not([aria-disabled="true"]):not([href="#"]):not([href=""]):hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 }

@@ -128,7 +128,7 @@ export const orderConfig: EntityConfig = {
     },
     pickup_date: {
       key: 'pickup_date',
-      label: '提货日期',
+      label: '提柜日期',
       type: 'date',
     },
     ready_date: {
@@ -165,6 +165,7 @@ export const orderConfig: EntityConfig = {
       key: 'mbl_number',
       label: 'MBL号码',
       type: 'text',
+      searchable: true,
     },
     do_issued: {
       key: 'do_issued',
@@ -242,78 +243,12 @@ export const orderConfig: EntityConfig = {
     defaultSort: 'order_date',
     defaultOrder: 'desc',
     columns: ['order_number', 'customer', 'user_id', 'order_date', 'status', 'operation_mode', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'container_volume', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'notes'],
-    searchFields: ['order_number', 'mbl_number'],
+    searchFields: ['order_number'], // 只搜索订单号（最重要的字段）
     pageSize: 10,
-    // 筛选配置（快速筛选）
-    filterFields: [
-      {
-        field: 'status',
-        label: '状态',
-        type: 'select',
-        options: [
-          { label: '待处理', value: 'pending' },
-          { label: '已确认', value: 'confirmed' },
-          { label: '已发货', value: 'shipped' },
-          { label: '已交付', value: 'delivered' },
-          { label: '已取消', value: 'cancelled' },
-          { label: '完成留档', value: 'archived' },
-        ],
-      },
-      {
-        field: 'operation_mode',
-        label: '操作方式',
-        type: 'select',
-        options: [
-          { label: '拆柜', value: 'unload' },
-          { label: '直送', value: 'direct_delivery' },
-        ],
-      },
-      {
-        field: 'order_date',
-        label: '订单日期',
-        type: 'dateRange',
-        dateFields: ['order_date'],
-      },
-      {
-        field: 'eta_date',
-        label: 'ETA日期',
-        type: 'dateRange',
-        dateFields: ['eta_date'],
-      },
-    ],
-    // 高级搜索配置（多条件组合）
-    advancedSearchFields: [
-      {
-        field: 'mbl_number',
-        label: 'MBL号码',
-        type: 'text',
-      },
-      // container_number 已隐藏，不在高级搜索中显示
-      // {
-      //   field: 'container_number',
-      //   label: '柜号',
-      //   type: 'text',
-      // },
-      {
-        field: 'total_amount',
-        label: '订单金额',
-        type: 'numberRange',
-        numberFields: ['total_amount'],
-      },
-      {
-        field: 'final_amount',
-        label: '最终金额',
-        type: 'numberRange',
-        numberFields: ['final_amount'],
-      },
-      // created_at 是审计字段，不在高级搜索中显示
-      // {
-      //   field: 'created_at',
-      //   label: '创建日期',
-      //   type: 'dateRange',
-      //   dateFields: ['created_at'],
-      // },
-    ],
+    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
+    // filterFields 已由 search-config-generator 自动生成
+    // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
+    // advancedSearchFields 已由 search-config-generator 自动生成
     // 行内编辑配置
     // 允许编辑的字段：订单号、客户、负责人、订单日期、状态、货柜类型、ETA、LFD、提柜日期、就绪日期、归还截止日期、MBL号码、DO、备注
     // 排除计算字段：total_amount, discount_amount, tax_amount, final_amount, container_volume

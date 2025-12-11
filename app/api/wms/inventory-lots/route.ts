@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth, checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import { inventoryLotCreateSchema } from '@/lib/validations/inventory-lot';
 import prisma from '@/lib/prisma';
+import { inventoryLotConfig } from '@/lib/crud/configs/inventory-lots';
+import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper';
+import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
 
 // GET - 获取库存管理列表
 export async function GET(request: NextRequest) {
@@ -12,6 +15,9 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get('sort') || 'created_at';
     const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc';
     const search = searchParams.get('search') || '';
+
+    // 增强配置，确保 filterFields 已生成
+    const enhancedConfig = enhanceConfigWithSearchFields(inventoryLotConfig)
 
     // 构建查询条件
     // 只显示已入库的数据：已填位置和板数，且关联的入库管理状态为'received'
@@ -27,6 +33,56 @@ export async function GET(request: NextRequest) {
         status: 'received',
       },
     };
+
+    // 使用统一的筛选逻辑
+    const filterConditions = buildFilterConditions(enhancedConfig, searchParams)
+    
+    // 分离主表字段和关联表字段的筛选条件
+    const mainTableConditions: any[] = []
+    const ordersConditions: any = {}
+    const orderDetailConditions: any = {}
+    
+    filterConditions.forEach((condition) => {
+      Object.keys(condition).forEach((fieldName) => {
+        // 判断字段是否来自 order_detail 表
+        // order_detail 字段：delivery_nature, delivery_location
+        if (fieldName === 'delivery_nature' || fieldName === 'delivery_location') {
+          Object.assign(orderDetailConditions, condition)
+        }
+        // 判断字段是否来自主表
+        // 主表字段：lot_id, inbound_receipt_id, order_detail_id, storage_location_code, pallet_count, notes, remaining_pallet_count, unbooked_pallet_count, delivery_progress
+        else if (['lot_id', 'inbound_receipt_id', 'order_detail_id', 'storage_location_code', 'pallet_count', 'notes', 'remaining_pallet_count', 'unbooked_pallet_count', 'delivery_progress'].includes(fieldName)) {
+          mainTableConditions.push(condition)
+        } else {
+          // 字段来自 orders 表
+          Object.assign(ordersConditions, condition)
+        }
+      })
+    })
+    
+    // 合并主表筛选条件
+    if (mainTableConditions.length > 0) {
+      mergeFilterConditions(where, mainTableConditions)
+    }
+    
+    // 合并 orders 表的筛选条件
+    if (Object.keys(ordersConditions).length > 0) {
+      if (where.orders) {
+        where.orders = {
+          ...where.orders,
+          ...ordersConditions,
+        }
+      } else {
+        where.orders = ordersConditions
+      }
+    }
+    
+    // 合并 order_detail 表的筛选条件
+    if (Object.keys(orderDetailConditions).length > 0) {
+      where.order_detail = {
+        is: orderDetailConditions
+      }
+    }
 
     // 搜索条件
     if (search && search.trim()) {
