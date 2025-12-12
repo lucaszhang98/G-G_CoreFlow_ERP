@@ -1326,13 +1326,13 @@ export function EntityTable<T = any>({
         }
         
         // 特殊处理：未约板数 < 0 时红色显示
-        if (fieldKey === 'unbooked_pallet_count') {
+        if (fieldKey === 'unbooked_pallet_count' || fieldKey === 'unbooked_pallets') {
           const value = row.getValue(fieldKey)
-          const numValue = typeof value === 'number' ? value : (value ? parseFloat(String(value)) : 0)
-          const isNegative = !isNaN(numValue) && numValue < 0
+          const numValue = typeof value === 'number' ? value : (value !== null && value !== undefined ? parseFloat(String(value)) : null)
+          const isNegative = numValue !== null && !isNaN(numValue) && numValue < 0
           return (
             <div className={isNegative ? 'text-red-600 font-semibold' : ''}>
-              {value || value === 0 ? numValue.toLocaleString() : '-'}
+              {numValue !== null && !isNaN(numValue) ? numValue.toLocaleString() : '-'}
             </div>
           )
         }

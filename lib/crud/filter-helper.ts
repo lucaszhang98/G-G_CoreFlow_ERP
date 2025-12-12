@@ -52,8 +52,26 @@ export function buildFilterConditions(
         // 获取字段配置，判断字段类型
         const fieldConfig = config.fields[filterField.field]
         
+        // 特殊处理：delivery_location 在 order_detail 表中是字符串类型，存储 location_id 的字符串形式
+        // 即使使用 relation 筛选，也需要确保值被转换为字符串，而不是 BigInt
+        if (filterField.field === 'delivery_location') {
+          if (filterField.relation) {
+            // 使用 relation 筛选，但值需要转换为字符串（因为 delivery_location 是字符串字段）
+            // 直接使用字符串值，不转换为 BigInt
+            filterConditions.push({ [filterField.field]: String(filterValue) })
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`[buildFilterConditions] 添加 delivery_location relation 筛选（字符串）: ${filterField.field} = ${String(filterValue)}`)
+            }
+          } else {
+            // delivery_location 是字符串字段，直接使用字符串匹配
+            filterConditions.push({ [filterField.field]: filterValue })
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`[buildFilterConditions] 添加 delivery_location 字符串筛选: ${filterField.field} = ${filterValue}`)
+            }
+          }
+        }
         // 如果是 relation 类型或 location 类型，使用统一的 relation 筛选处理
-        if (fieldConfig?.type === 'relation' || fieldConfig?.type === 'location') {
+        else if (fieldConfig?.type === 'relation' || (fieldConfig?.type === 'location' && filterField.relation)) {
           const condition = buildRelationFilterCondition(filterField, filterValue, config)
           if (condition) {
             filterConditions.push(condition)

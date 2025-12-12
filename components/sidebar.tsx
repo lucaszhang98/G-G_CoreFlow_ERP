@@ -133,6 +133,11 @@ const menuItems: MenuItem[] = [
         href: "/dashboard/oms/orders",
       },
       {
+        title: "订单明细",
+        icon: ClipboardList,
+        href: "/dashboard/oms/order-details",
+      },
+      {
         title: "预约管理",
         icon: Calendar,
         href: "/dashboard/oms/appointments",
@@ -181,7 +186,7 @@ const menuItems: MenuItem[] = [
   {
     title: "报表分析",
     icon: BarChart3,
-    roles: ["admin", "tms_manager", "wms_manager", "employee", "user"], // 排除 oms_manager
+    roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user"],
     children: [
       {
         title: "库存预测",

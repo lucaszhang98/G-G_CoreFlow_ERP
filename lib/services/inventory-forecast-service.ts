@@ -3,11 +3,9 @@
  * 负责计算和更新库存预测日报表数据
  * 
  * 🌍 时区处理：
- * - 系统统一使用 'America/Los_Angeles' 时区（PST/PDT）
- * - PostgreSQL 的 AT TIME ZONE 会自动处理夏令时/冬令时的切换
- * - PST（太平洋标准时间，UTC-8）：冬令时，通常在 11 月第一个星期日到 3 月第二个星期日
- * - PDT（太平洋夏令时，UTC-7）：夏令时，通常在 3 月第二个星期日到 11 月第一个星期日
- * - 系统无需手动干预，PostgreSQL 会根据日期自动应用正确的时区偏移
+ * - 系统统一使用 UTC 时区，不进行任何时区转换
+ * - 数据库存储的时间戳（TIMESTAMPTZ）直接使用，不转换
+ * - 所有日期比较直接使用 DATE() 函数提取日期部分进行比较
  */
 
 import prisma from '@/lib/prisma'
@@ -132,16 +130,18 @@ export async function getAllLocationRows(): Promise<LocationRow[]> {
 }
 
 /**
- * 计算历史库存（截至指定日期之前）
+ * 计算历史库存（当前所有库存）
+ * 
+ * 注意：不再使用 received_date 和 status 字段过滤，直接统计所有库存的剩余板数
  * 
  * @param locationRow - 仓点行
- * @param beforeDateString - 日期字符串（YYYY-MM-DD），计算此日期之前的历史库存
+ * @param beforeDateString - 日期字符串（YYYY-MM-DD），已废弃，不再使用
  */
 export async function calculateHistoricalInventory(
   locationRow: LocationRow,
   beforeDateString: string
 ): Promise<number> {
-  const beforeDate = formatDateString(beforeDateString)
+  // beforeDateString 参数已废弃，不再使用（因为 received_date 是废字段）
   if (locationRow.location_group === 'private_warehouse') {
     // 私仓：按 delivery_nature 汇总，但排除 UPS 和 FEDEX
     // UPS location_id = 30, FEDEX location_id = 31
@@ -151,8 +151,6 @@ export async function calculateHistoricalInventory(
       INNER JOIN order_detail od ON il.order_detail_id = od.id
       WHERE od.delivery_nature = '私仓'
         AND od.delivery_location NOT IN ('30', '31', 'UPS', 'FEDEX')
-        AND (il.received_date IS NULL OR il.received_date < ${beforeDate}::DATE)
-        AND il.status = 'available'
     `
     return Number(result[0]?.sum || 0)
   }
@@ -164,8 +162,6 @@ export async function calculateHistoricalInventory(
       FROM wms.inventory_lots il
       INNER JOIN order_detail od ON il.order_detail_id = od.id
       WHERE od.delivery_nature = '扣货'
-        AND (il.received_date IS NULL OR il.received_date < ${beforeDate}::DATE)
-        AND il.status = 'available'
     `
     return Number(result[0]?.sum || 0)
   }
@@ -178,8 +174,6 @@ export async function calculateHistoricalInventory(
     FROM wms.inventory_lots il
     INNER JOIN order_detail od ON il.order_detail_id = od.id
     WHERE od.delivery_location = ${String(locationRow.location_id)}
-      AND (il.received_date IS NULL OR il.received_date < ${beforeDate}::DATE)
-      AND il.status = 'available'
   `
 
   return Number(result[0]?.sum || 0)
@@ -220,7 +214,6 @@ export async function calculatePlannedInbound(
       INNER JOIN orders o ON ir.order_id = o.order_id
       INNER JOIN order_detail od ON o.order_id = od.order_id
       LEFT JOIN wms.inventory_lots il ON il.order_detail_id = od.id 
-        AND il.status = 'available'
         AND il.inbound_receipt_id = ir.inbound_receipt_id
       WHERE DATE(ir.planned_unload_at) = ${date}::DATE
         AND od.delivery_nature = '私仓'
@@ -245,7 +238,6 @@ export async function calculatePlannedInbound(
       INNER JOIN orders o ON ir.order_id = o.order_id
       INNER JOIN order_detail od ON o.order_id = od.order_id
       LEFT JOIN wms.inventory_lots il ON il.order_detail_id = od.id 
-        AND il.status = 'available'
         AND il.inbound_receipt_id = ir.inbound_receipt_id
       WHERE DATE(ir.planned_unload_at) = ${date}::DATE
         AND od.delivery_nature = '扣货'
@@ -299,9 +291,7 @@ export async function calculatePlannedOutbound(
       FROM oms.appointment_detail_lines adl
       INNER JOIN order_detail od ON adl.order_detail_id = od.id
       INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
-      -- 使用 AT TIME ZONE 将 TIMESTAMPTZ 转换为 PST/PDT 时区，然后提取日期
-      -- PostgreSQL 会自动处理夏令时/冬令时的切换（PST/PDT）
-      WHERE DATE(da.confirmed_start AT TIME ZONE 'America/Los_Angeles') = ${date}::DATE
+      WHERE DATE(da.confirmed_start) = ${date}::DATE
         AND od.delivery_nature = '私仓'
         AND od.delivery_location NOT IN ('30', '31', 'UPS', 'FEDEX')
         AND da.status = 'confirmed'
@@ -316,9 +306,7 @@ export async function calculatePlannedOutbound(
       FROM oms.appointment_detail_lines adl
       INNER JOIN order_detail od ON adl.order_detail_id = od.id
       INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
-      -- 使用 AT TIME ZONE 将 TIMESTAMPTZ 转换为 PST/PDT 时区，然后提取日期
-      -- PostgreSQL 会自动处理夏令时/冬令时的切换（PST/PDT）
-      WHERE DATE(da.confirmed_start AT TIME ZONE 'America/Los_Angeles') = ${date}::DATE
+      WHERE DATE(da.confirmed_start) = ${date}::DATE
         AND od.delivery_nature = '扣货'
         AND da.status = 'confirmed'
     `
@@ -393,31 +381,22 @@ async function cleanupOldForecastData(
 /**
  * 计算库存预测
  * 
- * @param baseDateString - 基准日期字符串（YYYY-MM-DD），如果不提供则必须从 system_config 获取
+ * @param baseDateString - 基准日期字符串（YYYY-MM-DD），必须提供，不允许读取外部时间
  * @param timestampString - 时间戳字符串（YYYY-MM-DDTHH:mm:ss），用于 calculated_at 字段，如果不提供则使用 baseDateString + 00:00:00
  */
 export async function calculateInventoryForecast(
   baseDateString?: string,
   timestampString?: string
 ): Promise<void> {
-  // 确定基准日期：优先使用传入的日期，否则使用业务日期
+  // 确定基准日期：必须由外部提供，不允许读取外部时间
   let baseDate: string
   
   if (baseDateString) {
     // 使用传入的日期（来自前端，不进行时区转换）
     baseDate = formatDateString(baseDateString)
   } else {
-    // 如果没有传入日期，使用业务日期作为基准（从 system_config 表获取）
-    const businessDateResult = await prisma.$queryRaw<Array<{ business_date: Date }>>`
-      SELECT public.get_current_business_date() as business_date
-    `
-    
-    if (businessDateResult[0]?.business_date) {
-      baseDate = formatDateString(businessDateResult[0].business_date)
-    } else {
-      // 如果业务日期未配置，抛出错误，不允许使用外部时间
-      throw new Error('业务日期未配置，请先设置业务日期。系统不允许读取外部时间。')
-    }
+    // 如果没有传入日期，直接抛出错误，不允许读取外部时间
+    throw new Error('计算库存预测必须提供基准日期。系统不允许读取外部时间。')
   }
   
   // 确定时间戳：优先使用传入的时间戳，否则使用基准日期 + 00:00:00

@@ -357,7 +357,7 @@ model order_detail {
   created_at                                                  DateTime?                  @default(now()) @db.Timestamptz(6)
   volume                                                      Decimal?                   @db.Decimal
   estimated_pallets                                           Int?
-  remaining_pallets                                           Int? // 剩余板数（总板数 - 所有预约的预计板数之和）
+  remaining_pallets                                           Int? // 未约板数（预计板数 - 所有预约的预计板数之和，仅未入库时使用）
   created_by                                                  BigInt?
   updated_at                                                  DateTime?                  @default(now()) @db.Timestamptz(6)
   updated_by                                                  BigInt?
@@ -893,5 +893,26 @@ model inventory_forecast_daily {
   @@index([forecast_date], map: "idx_forecast_date")
   @@index([location_group, forecast_date], map: "idx_forecast_location_group")
   @@index([calculated_at], map: "idx_forecast_calculated_at")
+  @@schema("analytics")
+}
+
+model inventory_forecast_weekly {
+  forecast_id          BigInt    @id @default(autoincrement())
+  location_id          BigInt?
+  location_group       String    @db.VarChar(50)
+  location_name        String    @db.VarChar(200)
+  week_start_date      DateTime  @db.Date
+  week_number          Int       // 第几周（1-8）
+  planned_inbound      Int       @default(0) // 本周入库板数（周汇总）
+  planned_outbound      Int       @default(0) // 本周出库板数（周汇总）
+  remaining_pallets    Int       @default(0) // 未出板数（入库 - 出库）
+  calculated_at        DateTime? @default(now()) @db.Timestamptz(6)
+  calculation_version  Int       @default(1)
+
+  @@unique([location_id, location_group, week_start_date], map: "unique_location_week")
+  @@index([location_id, location_group, week_start_date], map: "idx_forecast_weekly_location_week")
+  @@index([week_start_date], map: "idx_forecast_weekly_week_start")
+  @@index([location_group, week_start_date], map: "idx_forecast_weekly_location_group")
+  @@index([calculated_at], map: "idx_forecast_weekly_calculated_at")
   @@schema("analytics")
 }

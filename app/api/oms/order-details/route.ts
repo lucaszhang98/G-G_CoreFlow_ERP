@@ -1,0 +1,358 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { checkAuth, serializeBigInt } from '@/lib/api/helpers'
+import prisma from '@/lib/prisma'
+
+/**
+ * GET /api/oms/order-details
+ * 获取所有订单明细（已入库 + 未入库）
+ * 
+ * 查询参数：
+ * - page: 页码（默认1）
+ * - limit: 每页数量（默认20，最大100）
+ * - sort: 排序字段（默认id）
+ * - order: 排序方向（asc/desc，默认desc）
+ * - search: 搜索关键词（仅搜索柜号/订单号）
+ * - filter_customer_name: 客户筛选
+ * - filter_delivery_nature: 送仓性质筛选
+ * - filter_delivery_location_code: 仓点筛选
+ * - filter_unbooked_pallets: 未约板数筛选（zero/non_zero/negative）
+ * - filter_planned_unload_at_from/to: 预计拆柜日期范围筛选
+ * 
+ * 特殊说明：
+ * - 未约板数是实时计算的（已入库用inventory_lots.unbooked_pallet_count，未入库用预计板数-预约板数之和）
+ * - 未约板数允许负数（表示多约，会用红色显示）
+ * - 当使用未约板数筛选时，会先查询所有数据再筛选，可能有性能影响
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const authResult = await checkAuth()
+    if (authResult.error) return authResult.error
+
+    const { searchParams } = new URL(request.url)
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)))
+    const sort = searchParams.get('sort') || 'id'
+    const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
+    const search = searchParams.get('search') || ''
+
+    // 构建查询条件
+    const where: any = {
+      // 不筛选已入库，显示所有订单明细
+    }
+
+    // 搜索条件（只搜索柜号，即订单号）
+    if (search && search.trim()) {
+      where.orders = {
+        ...where.orders,
+        order_number: { contains: search, mode: 'insensitive' },
+      }
+    }
+
+    // 筛选条件
+    // 客户筛选
+    const customer_name = searchParams.get('filter_customer_name')
+    if (customer_name && customer_name !== '__all__') {
+      where.orders = {
+        ...where.orders,
+        customers: {
+          id: BigInt(customer_name),
+        },
+      }
+    }
+
+    const delivery_nature = searchParams.get('filter_delivery_nature')
+    if (delivery_nature && delivery_nature !== '__all__') {
+      where.delivery_nature = delivery_nature
+    }
+
+    const delivery_location = searchParams.get('filter_delivery_location_code')
+    if (delivery_location && delivery_location !== '__all__') {
+      where.delivery_location = delivery_location
+    }
+
+    // 未约板数筛选（由于未约板数是实时计算的，需要在查询后筛选）
+    // 先不在这里处理，在查询后根据计算出的未约板数筛选
+    const unbooked_pallets_filter = searchParams.get('filter_unbooked_pallets')
+
+    const planned_unload_at_from = searchParams.get('filter_planned_unload_at_from')
+    const planned_unload_at_to = searchParams.get('filter_planned_unload_at_to')
+    if (planned_unload_at_from || planned_unload_at_to) {
+      where.orders = {
+        ...where.orders,
+        inbound_receipt: {
+          ...(where.orders?.inbound_receipt || {}),
+          planned_unload_at: {},
+        },
+      }
+      if (planned_unload_at_from) {
+        where.orders.inbound_receipt.planned_unload_at.gte = new Date(planned_unload_at_from)
+      }
+      if (planned_unload_at_to) {
+        where.orders.inbound_receipt.planned_unload_at.lte = new Date(planned_unload_at_to)
+      }
+    }
+
+    // 排序
+    const orderBy: any = {}
+    if (sort === 'container_number') {
+      orderBy.orders = { inbound_receipt: { container_number: order } }
+    } else if (sort === 'customer_name') {
+      orderBy.orders = { customers: { name: order } }
+    } else if (sort === 'planned_unload_at') {
+      orderBy.orders = { inbound_receipt: { planned_unload_at: order } }
+    } else if (sort === 'delivery_location_code') {
+      orderBy.delivery_location = order
+    } else {
+      orderBy[sort] = order
+    }
+
+    // 查询数据
+    // 如果有未约板数筛选，需要先查询所有数据（因为未约板数是实时计算的），筛选后再分页
+    // 为了性能考虑，设置最大查询限制（1000条）
+    const hasUnbookedFilter = unbooked_pallets_filter && unbooked_pallets_filter !== '__all__'
+    const MAX_QUERY_LIMIT = 1000
+    const queryLimit = hasUnbookedFilter ? MAX_QUERY_LIMIT : limit
+    const querySkip = hasUnbookedFilter ? undefined : (page - 1) * limit
+    
+    const [items, total] = await Promise.all([
+      prisma.order_detail.findMany({
+        where,
+        orderBy,
+        skip: querySkip,
+        take: queryLimit,
+        include: {
+          orders: {
+            include: {
+              customers: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+              inbound_receipt: {
+                select: {
+                  inbound_receipt_id: true,
+                  planned_unload_at: true,
+                  status: true,
+                },
+              },
+            },
+          },
+          inventory_lots: {
+            select: {
+              inventory_lot_id: true,
+              pallet_count: true,
+              remaining_pallet_count: true,
+              unbooked_pallet_count: true, // inventory_lots 中的字段（已入库时使用）
+              storage_location_code: true,
+              notes: true,
+            },
+            take: 1, // 只取第一个（一个 order_detail 可能对应多个 inventory_lots）
+          },
+          appointment_detail_lines: {
+            select: {
+              id: true,
+              appointment_id: true,
+              order_detail_id: true,
+              estimated_pallets: true,
+              delivery_appointments: {
+                select: {
+                  appointment_id: true,
+                  reference_number: true,
+                  confirmed_start: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      prisma.order_detail.count({ where }),
+    ])
+
+    // 获取所有唯一的 delivery_location（location_id）用于查询 location_code
+    const locationIdStrings = new Set<string>()
+    items.forEach((item: any) => {
+      const deliveryLocation = item?.delivery_location
+      if (deliveryLocation !== null && deliveryLocation !== undefined && deliveryLocation !== '') {
+        const idStr = String(deliveryLocation).trim()
+        const numId = Number(idStr)
+        if (idStr && !isNaN(numId) && numId > 0 && Number.isInteger(numId)) {
+          locationIdStrings.add(idStr)
+        }
+      }
+    })
+
+    // 批量查询 locations 获取 location_code
+    const locationsMap = new Map<string, string>()
+    if (locationIdStrings.size > 0) {
+      const locationIds: bigint[] = []
+      for (const idStr of locationIdStrings) {
+        try {
+          const numId = Number(idStr)
+          if (!isNaN(numId) && numId > 0 && Number.isInteger(numId)) {
+            locationIds.push(BigInt(idStr))
+          }
+        } catch (e) {
+          // 忽略
+        }
+      }
+
+      if (locationIds.length > 0) {
+        const locations = await prisma.locations.findMany({
+          where: {
+            location_id: {
+              in: locationIds,
+            },
+          },
+          select: {
+            location_id: true,
+            location_code: true,
+          },
+        })
+
+        locations.forEach((loc: any) => {
+          const locId = typeof loc.location_id === 'bigint' 
+            ? loc.location_id.toString() 
+            : String(loc.location_id)
+          const locCode = loc.location_code || ''
+          locationsMap.set(locId, locCode)
+        })
+      }
+    }
+
+    // 转换数据格式
+    const transformedItems = items.map((item: any) => {
+      const il = item.inventory_lots?.[0] || null
+      const ir = item.orders?.inbound_receipt || null
+      const customer = item.orders?.customers || null
+      
+      // 计算送货进度
+      let delivery_progress = 0
+      if (il?.pallet_count && il.pallet_count > 0) {
+        const shipped = il.pallet_count - (il.remaining_pallet_count || 0)
+        delivery_progress = Math.round((shipped / il.pallet_count) * 100)
+      }
+
+      // 聚合预约信息
+      const appointments = item.appointment_detail_lines?.map((adl: any) => ({
+        appointment_id: adl.delivery_appointments?.appointment_id ? String(adl.delivery_appointments.appointment_id) : null,
+        reference_number: adl.delivery_appointments?.reference_number || null,
+        confirmed_start: adl.delivery_appointments?.confirmed_start || null,
+        estimated_pallets: adl.estimated_pallets || 0,
+        status: adl.delivery_appointments?.status || null,
+      })) || []
+
+      // 计算所有预约的预计板数之和
+      const totalAppointmentPallets = appointments.reduce((sum: number, appt: any) => sum + (appt.estimated_pallets || 0), 0)
+
+      // 计算未约板数
+      // 已入库：使用 inventory_lots.unbooked_pallet_count
+      // 未入库：实时计算 = 预计板数 - 所有预约板数之和（允许负数，负数表示多约）
+      const unbooked_pallets: number | null = il
+        ? (il.unbooked_pallet_count ?? null) // 已入库，使用 inventory_lots 的 unbooked_pallet_count
+        : (item.estimated_pallets || 0) - totalAppointmentPallets // 未入库，实时计算（允许负数）
+
+      // 获取 location_code
+      const deliveryLocationId = item.delivery_location
+      const delivery_location_code = deliveryLocationId 
+        ? locationsMap.get(String(deliveryLocationId)) || null
+        : null
+
+      return {
+        id: String(item.id),
+        order_id: item.order_id ? String(item.order_id) : null,
+        order_number: item.orders?.order_number || null,
+        customer_name: customer?.name || null,
+        container_number: item.orders?.order_number || null, // container_number 实际是 order_number
+        planned_unload_at: ir?.planned_unload_at || null,
+        delivery_location: item.delivery_location,
+        delivery_location_code,
+        delivery_nature: item.delivery_nature,
+        estimated_pallets: item.estimated_pallets || 0,
+        actual_pallets: il?.pallet_count || null,
+        remaining_pallets: il?.remaining_pallet_count || null,
+        unbooked_pallets, // 已入库用 inventory_lots.unbooked_pallet_count，未入库实时计算
+        storage_location_code: il?.storage_location_code || null,
+        notes: il?.notes || item.notes || null,
+        delivery_progress,
+        appointments,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+      }
+    })
+
+    /**
+     * 未约板数筛选函数
+     * 在查询后筛选，因为未约板数是实时计算的
+     * @param items 待筛选的数据项数组
+     * @param filterValue 筛选值：'zero'（无未约）、'non_zero'（有未约）、'negative'（多约）
+     * @returns 筛选后的数据项数组
+     */
+    const filterByUnbookedPallets = (items: any[], filterValue: string): any[] => {
+      if (!filterValue || filterValue === '__all__') {
+        return items
+      }
+      
+      return items.filter((item: any) => {
+        const unbooked = item.unbooked_pallets
+        // 如果未约板数为null或undefined，不匹配任何筛选
+        if (unbooked === null || unbooked === undefined) {
+          return false
+        }
+        
+        switch (filterValue) {
+          case 'zero':
+            // 无未约：等于0
+            return unbooked === 0
+          case 'non_zero':
+            // 有未约：大于0
+            return unbooked > 0
+          case 'negative':
+            // 多约：小于0
+            return unbooked < 0
+          default:
+            return true
+        }
+      })
+    }
+
+    // 应用未约板数筛选
+    const filteredItems = filterByUnbookedPallets(transformedItems, unbooked_pallets_filter || '')
+    const finalTotal = hasUnbookedFilter ? filteredItems.length : total
+
+    // 性能提示：如果筛选后的数据量很大，建议添加其他筛选条件
+    if (hasUnbookedFilter && filteredItems.length > MAX_QUERY_LIMIT) {
+      console.warn(`[order-details] 未约板数筛选返回了超过 ${MAX_QUERY_LIMIT} 条记录，建议添加其他筛选条件以提高性能`)
+    }
+
+    // 应用分页（在筛选后，如果有筛选的话）
+    const paginatedItems = hasUnbookedFilter
+      ? filteredItems.slice((page - 1) * limit, page * limit)
+      : filteredItems
+
+    // 序列化 BigInt
+    const serialized = serializeBigInt(paginatedItems)
+
+    return NextResponse.json({
+      data: serialized,
+      pagination: {
+        page,
+        limit,
+        total: finalTotal,
+        totalPages: Math.ceil(finalTotal / limit),
+      },
+    })
+  } catch (error: any) {
+    console.error('获取订单明细列表失败:', error)
+    return NextResponse.json(
+      {
+        error: error.message || '获取订单明细列表失败',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      },
+      { status: 500 }
+    )
+  }
+}
+

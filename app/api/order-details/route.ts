@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
         quantity: quantity || 0,
         volume: volumeNum || null,
         estimated_pallets: calculatedEstimatedPallets, // 自动计算
-        remaining_pallets: calculatedEstimatedPallets, // 初始化剩余板数 = 总板数
+        remaining_pallets: calculatedEstimatedPallets, // 初始化未约板数 = 预计板数（还没有预约）
         delivery_nature: delivery_nature || null,
         delivery_location: validatedDeliveryLocation,
         unload_type: unload_type || null,

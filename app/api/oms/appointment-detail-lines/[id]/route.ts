@@ -117,17 +117,28 @@ export async function PUT(
             data: { unbooked_pallet_count: newUnbookedCount },
           })
         } else {
-          // 未入库：更新 order_detail.remaining_pallets（减去差值）
+          // 未入库：更新 order_detail.remaining_pallets（未约板数 = 预计板数 - 所有预约板数之和）
           const orderDetail = await tx.order_detail.findUnique({
             where: { id: orderDetailId },
             select: { remaining_pallets: true, estimated_pallets: true },
           })
           if (orderDetail) {
-            const currentRemaining = orderDetail.remaining_pallets ?? orderDetail.estimated_pallets ?? 0
-            const newRemaining = Math.max(0, currentRemaining - palletsDiff)
+            // 获取所有预约的板数之和
+            const allAppointmentLines = await tx.appointment_detail_lines.findMany({
+              where: { order_detail_id: orderDetailId },
+              select: { estimated_pallets: true },
+            })
+            const totalAppointmentPallets = allAppointmentLines.reduce((sum, line) => sum + (line.estimated_pallets || 0), 0)
+            
+            // 计算未约板数：estimated_pallets - 所有预约板数之和
+            const estimatedPallets = orderDetail.estimated_pallets ?? 0
+            const newRemaining = Math.max(0, estimatedPallets - totalAppointmentPallets)
+            
             await tx.order_detail.update({
               where: { id: orderDetailId },
-              data: { remaining_pallets: newRemaining },
+              data: {
+                remaining_pallets: newRemaining,
+              },
             })
           }
         }
@@ -241,19 +252,28 @@ export async function DELETE(
           data: { unbooked_pallet_count: newUnbookedCount },
         })
       } else {
-        // 未入库：回退 order_detail.remaining_pallets（加上旧值）
+        // 未入库：更新 order_detail.remaining_pallets（未约板数 = 预计板数 - 所有预约板数之和）
         const orderDetail = await tx.order_detail.findUnique({
           where: { id: orderDetailId },
           select: { remaining_pallets: true, estimated_pallets: true },
         })
         if (orderDetail) {
-          const currentRemaining = orderDetail.remaining_pallets ?? orderDetail.estimated_pallets ?? 0
-          const newRemaining = currentRemaining + estimatedPalletsToRevert
-          // 不能超过 estimated_pallets
-          const maxRemaining = orderDetail.estimated_pallets ?? 0
+          // 获取所有剩余预约的板数之和（删除后）
+          const allAppointmentLines = await tx.appointment_detail_lines.findMany({
+            where: { order_detail_id: orderDetailId },
+            select: { estimated_pallets: true },
+          })
+          const totalAppointmentPallets = allAppointmentLines.reduce((sum, line) => sum + (line.estimated_pallets || 0), 0)
+          
+          // 计算未约板数：estimated_pallets - 所有预约板数之和
+          const estimatedPallets = orderDetail.estimated_pallets ?? 0
+          const newRemaining = Math.max(0, estimatedPallets - totalAppointmentPallets)
+          
           await tx.order_detail.update({
             where: { id: orderDetailId },
-            data: { remaining_pallets: Math.min(newRemaining, maxRemaining) },
+            data: {
+              remaining_pallets: newRemaining,
+            },
           })
         }
       }

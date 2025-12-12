@@ -108,6 +108,30 @@ export function SearchModule({
     loadFuzzyOptions: (search: string) => Promise<FuzzySearchOption[]>
   ) => {
     try {
+      // 对于 locations 模型，直接通过 ID 获取详情（更高效且确保能获取到 location_code）
+      if (filter.relation?.model === 'locations') {
+        try {
+          const response = await fetch(`/api/locations/${value}`)
+          if (response.ok) {
+            const data = await response.json()
+            const location = data.data || data
+            const displayField = filter.relation.displayField || 'location_code'
+            const label = location[displayField] || location.location_code || location.name || String(value)
+            setRelationFilterLabelsMap((prev) => ({
+              ...prev,
+              [filter.field]: {
+                ...prev[filter.field],
+                [String(value)]: label,
+              },
+            }))
+            return
+          }
+        } catch (error) {
+          console.error(`通过 ID 加载${filter.label}标签失败，尝试使用模糊搜索:`, error)
+        }
+      }
+      
+      // 对于其他模型，使用模糊搜索选项
       const options = await loadFuzzyOptions('')
       const selectedOption = options.find(opt => String(opt.value) === String(value))
       if (selectedOption) {
@@ -500,130 +524,20 @@ export function SearchModule({
                   
                   // 普通 select 类型（静态选项或动态加载选项）
                   if (filter.type === 'select') {
-                    const currentValue = filterValues[filter.field]
-                    const isActive = currentValue && currentValue !== '__all__'
-                    
-                    // 动态加载选项的状态
-                    const [selectOptions, setSelectOptions] = React.useState<Array<{ label: string; value: string }>>(filter.options || [])
-                    const [loadingOptions, setLoadingOptions] = React.useState(false)
-                    const [optionsLoaded, setOptionsLoaded] = React.useState(!filter.loadOptions) // 如果有静态选项，则已经加载
-                    
-                    // 加载选项
-                    React.useEffect(() => {
-                      if (filter.loadOptions && !optionsLoaded && !loadingOptions) {
-                        setLoadingOptions(true)
-                        filter.loadOptions()
-                          .then((loadedOptions) => {
-                            setSelectOptions(loadedOptions)
-                            setOptionsLoaded(true)
-                            // 更新选项映射，用于显示标签
-                            const valueToLabelMap: Record<string, string> = {}
-                            loadedOptions.forEach((opt) => {
-                              valueToLabelMap[opt.value] = opt.label
-                            })
-                            setFilterOptionsMap((prev) => ({
-                              ...prev,
-                              [filter.field]: valueToLabelMap,
-                            }))
-                          })
-                          .catch((error) => {
-                            console.error(`加载筛选选项失败 (${filter.field}):`, error)
-                          })
-                          .finally(() => {
-                            setLoadingOptions(false)
-                          })
-                      } else if (filter.options && filter.options.length > 0) {
-                        // 静态选项，也更新映射
-                        const valueToLabelMap: Record<string, string> = {}
-                        filter.options.forEach((opt) => {
-                          valueToLabelMap[opt.value] = opt.label
-                        })
-                        setFilterOptionsMap((prev) => ({
-                          ...prev,
-                          [filter.field]: valueToLabelMap,
-                        }))
-                      }
-                    }, [filter.loadOptions, filter.options, filter.field, optionsLoaded, loadingOptions])
-                    
-                    // 使用 DropdownMenu，Button 显示标签，点击后直接显示选项列表
-                    const selectedLabel = React.useMemo(() => {
-                      if (!currentValue || currentValue === '__all__') {
-                        return null
-                      }
-                      const option = filter.options?.find(opt => opt.value === currentValue)
-                      return option?.label || filterOptionsMap[filter.field]?.[currentValue] || currentValue
-                    }, [currentValue, filter.options, filter.field, filterOptionsMap])
-                    
-                    // 只在客户端挂载后渲染 DropdownMenu，避免 hydration 错误
-                    if (!mounted) {
-                      return (
-                        <Button
-                          key={filter.field}
-                          variant={isActive ? "default" : "outline"}
-                          className={`
-                            h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
-                            ${isActive
-                              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
-                              : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
-                            }
-                          `}
-                          disabled
-                        >
-                          <span className="truncate">{filter.label}</span>
-                          <ChevronDown className="ml-2 h-3 w-3 opacity-70 shrink-0" />
-                        </Button>
-                      )
-                    }
-                    
                     return (
-                      <DropdownMenu key={filter.field}>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant={isActive ? "default" : "outline"}
-                            className={`
-                              h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
-                              ${isActive
-                                ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
-                                : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
-                              }
-                            `}
-                            disabled={loadingOptions}
-                          >
-                            <span className="truncate">
-                              {loadingOptions ? "加载中..." : (selectedLabel || filter.label)}
-                            </span>
-                            <ChevronDown className="ml-2 h-3 w-3 opacity-70 shrink-0" />
-                            {isActive && (
-                              <Badge 
-                                variant="secondary" 
-                                className="ml-2 h-4 min-w-4 px-1 bg-white/20 text-white border-0 shrink-0"
-                              >
-                                1
-                              </Badge>
-                            )}
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="max-h-[300px] overflow-y-auto">
-                          <DropdownMenuItem
-                            onClick={() => onFilterChange(filter.field, null)}
-                            className={!currentValue || currentValue === '__all__' ? "bg-accent" : ""}
-                          >
-                            全部
-                          </DropdownMenuItem>
-                          {selectOptions.map((option) => (
-                            <DropdownMenuItem
-                              key={option.value}
-                              onClick={() => onFilterChange(filter.field, option.value)}
-                              className={currentValue === option.value ? "bg-accent" : ""}
-                            >
-                              {option.label}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <SelectFilterField
+                        key={filter.field}
+                        filter={filter}
+                        currentValue={filterValues[filter.field]}
+                        onFilterChange={onFilterChange}
+                        mounted={mounted}
+                        filterOptionsMap={filterOptionsMap}
+                        setFilterOptionsMap={setFilterOptionsMap}
+                      />
                     )
                   }
-
+                  
+                  // 其他类型的筛选字段（dateRange, numberRange 等）
                   if (filter.type === 'dateRange') {
                     const fromValue = filterValues[`${filter.field}_from`]
                     const toValue = filterValues[`${filter.field}_to`]
@@ -677,27 +591,27 @@ export function SearchModule({
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-4" align="start">
                           <div className="space-y-3">
-                            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">{filter.label}</div>
-                            <div className="flex items-center gap-3">
-                              <div className="space-y-2">
-                                <Label className="text-xs text-gray-500">开始日期</Label>
-                                <Input
-                                  type="date"
-                                  value={fromValue || ''}
-                                  onChange={(e) => onFilterChange(`${filter.field}_from`, e.target.value || null)}
-                                  className="h-9 w-[160px]"
-                                />
-                              </div>
-                              <div className="pt-6 text-gray-400">至</div>
-                              <div className="space-y-2">
-                                <Label className="text-xs text-gray-500">结束日期</Label>
-                                <Input
-                                  type="date"
-                                  value={toValue || ''}
-                                  onChange={(e) => onFilterChange(`${filter.field}_to`, e.target.value || null)}
-                                  className="h-9 w-[160px]"
-                                />
-                              </div>
+                            <div className="flex items-center gap-2">
+                              <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
+                                开始日期
+                              </Label>
+                              <Input
+                                type="date"
+                                value={fromValue || ''}
+                                onChange={(e) => onFilterChange(`${filter.field}_from`, e.target.value || null)}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
+                                结束日期
+                              </Label>
+                              <Input
+                                type="date"
+                                value={toValue || ''}
+                                onChange={(e) => onFilterChange(`${filter.field}_to`, e.target.value || null)}
+                                className="h-8 text-sm"
+                              />
                             </div>
                             <div className="flex justify-end gap-2 pt-2 border-t">
                               <Button
@@ -707,7 +621,7 @@ export function SearchModule({
                                   onFilterChange(`${filter.field}_from`, null)
                                   onFilterChange(`${filter.field}_to`, null)
                                 }}
-                                className="h-8 text-xs"
+                                className="h-7 text-xs"
                               >
                                 清除
                               </Button>
@@ -717,7 +631,7 @@ export function SearchModule({
                       </Popover>
                     )
                   }
-
+                  
                   if (filter.type === 'numberRange') {
                     const minValue = filterValues[`${filter.field}_min`]
                     const maxValue = filterValues[`${filter.field}_max`]
@@ -771,29 +685,27 @@ export function SearchModule({
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-4" align="start">
                           <div className="space-y-3">
-                            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">{filter.label}</div>
-                            <div className="flex items-center gap-3">
-                              <div className="space-y-2">
-                                <Label className="text-xs text-gray-500">最小值</Label>
-                                <Input
-                                  type="number"
-                                  value={minValue || ''}
-                                  onChange={(e) => onFilterChange(`${filter.field}_min`, e.target.value || null)}
-                                  className="h-9 w-[140px]"
-                                  placeholder="最小值"
-                                />
-                              </div>
-                              <div className="pt-6 text-gray-400">至</div>
-                              <div className="space-y-2">
-                                <Label className="text-xs text-gray-500">最大值</Label>
-                                <Input
-                                  type="number"
-                                  value={maxValue || ''}
-                                  onChange={(e) => onFilterChange(`${filter.field}_max`, e.target.value || null)}
-                                  className="h-9 w-[140px]"
-                                  placeholder="最大值"
-                                />
-                              </div>
+                            <div className="flex items-center gap-2">
+                              <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
+                                最小值
+                              </Label>
+                              <Input
+                                type="number"
+                                value={minValue || ''}
+                                onChange={(e) => onFilterChange(`${filter.field}_min`, e.target.value ? Number(e.target.value) : null)}
+                                className="h-8 text-sm w-24"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
+                                最大值
+                              </Label>
+                              <Input
+                                type="number"
+                                value={maxValue || ''}
+                                onChange={(e) => onFilterChange(`${filter.field}_max`, e.target.value ? Number(e.target.value) : null)}
+                                className="h-8 text-sm w-24"
+                              />
                             </div>
                             <div className="flex justify-end gap-2 pt-2 border-t">
                               <Button
@@ -803,7 +715,7 @@ export function SearchModule({
                                   onFilterChange(`${filter.field}_min`, null)
                                   onFilterChange(`${filter.field}_max`, null)
                                 }}
-                                className="h-8 text-xs"
+                                className="h-7 text-xs"
                               >
                                 清除
                               </Button>
@@ -813,7 +725,7 @@ export function SearchModule({
                       </Popover>
                     )
                   }
-
+                  
                   return null
                 })}
               </div>
@@ -963,6 +875,146 @@ export function SearchModule({
         />
       )}
     </div>
+  )
+}
+
+// 子组件：Select 类型的筛选字段
+interface SelectFilterFieldProps {
+  filter: FilterFieldConfig
+  currentValue: any
+  onFilterChange: (field: string, value: any) => void
+  mounted: boolean
+  filterOptionsMap: Record<string, Record<string, string>>
+  setFilterOptionsMap: React.Dispatch<React.SetStateAction<Record<string, Record<string, string>>>>
+}
+
+function SelectFilterField({
+  filter,
+  currentValue,
+  onFilterChange,
+  mounted,
+  filterOptionsMap,
+  setFilterOptionsMap,
+}: SelectFilterFieldProps) {
+  const isActive = currentValue && currentValue !== '__all__'
+  
+  // 动态加载选项的状态
+  const [selectOptions, setSelectOptions] = React.useState<Array<{ label: string; value: string }>>(filter.options || [])
+  const [loadingOptions, setLoadingOptions] = React.useState(false)
+  const [optionsLoaded, setOptionsLoaded] = React.useState(!filter.loadOptions) // 如果有静态选项，则已经加载
+  
+  // 加载选项
+  React.useEffect(() => {
+    if (filter.loadOptions && !optionsLoaded && !loadingOptions) {
+      setLoadingOptions(true)
+      filter.loadOptions()
+        .then((loadedOptions) => {
+          setSelectOptions(loadedOptions)
+          setOptionsLoaded(true)
+          // 更新选项映射，用于显示标签
+          const valueToLabelMap: Record<string, string> = {}
+          loadedOptions.forEach((opt) => {
+            valueToLabelMap[opt.value] = opt.label
+          })
+          setFilterOptionsMap((prev) => ({
+            ...prev,
+            [filter.field]: valueToLabelMap,
+          }))
+        })
+        .catch((error) => {
+          console.error(`加载筛选选项失败 (${filter.field}):`, error)
+        })
+        .finally(() => {
+          setLoadingOptions(false)
+        })
+    } else if (filter.options && filter.options.length > 0) {
+      // 静态选项，也更新映射
+      const valueToLabelMap: Record<string, string> = {}
+      filter.options.forEach((opt) => {
+        valueToLabelMap[opt.value] = opt.label
+      })
+      setFilterOptionsMap((prev) => ({
+        ...prev,
+        [filter.field]: valueToLabelMap,
+      }))
+    }
+  }, [filter.loadOptions, filter.options, filter.field, optionsLoaded, loadingOptions, setFilterOptionsMap])
+  
+  // 使用 DropdownMenu，Button 显示标签，点击后直接显示选项列表
+  const selectedLabel = React.useMemo(() => {
+    if (!currentValue || currentValue === '__all__') {
+      return null
+    }
+    const option = filter.options?.find(opt => opt.value === currentValue)
+    return option?.label || filterOptionsMap[filter.field]?.[currentValue] || currentValue
+  }, [currentValue, filter.options, filter.field, filterOptionsMap])
+  
+  // 只在客户端挂载后渲染 DropdownMenu，避免 hydration 错误
+  if (!mounted) {
+    return (
+      <Button
+        variant={isActive ? "default" : "outline"}
+        className={`
+          h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+          ${isActive
+            ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
+            : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
+          }
+        `}
+        disabled
+      >
+        <span className="truncate">{filter.label}</span>
+        <ChevronDown className="ml-2 h-3 w-3 opacity-70 shrink-0" />
+      </Button>
+    )
+  }
+  
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant={isActive ? "default" : "outline"}
+          className={`
+            h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
+            ${isActive
+              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
+              : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
+            }
+          `}
+          disabled={loadingOptions}
+        >
+          <span className="truncate">
+            {loadingOptions ? "加载中..." : (selectedLabel || filter.label)}
+          </span>
+          <ChevronDown className="ml-2 h-3 w-3 opacity-70 shrink-0" />
+          {isActive && (
+            <Badge 
+              variant="secondary" 
+              className="ml-2 h-4 min-w-4 px-1 bg-white/20 text-white border-0 shrink-0"
+            >
+              1
+            </Badge>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-[300px] overflow-y-auto">
+        <DropdownMenuItem
+          onClick={() => onFilterChange(filter.field, null)}
+          className={!currentValue || currentValue === '__all__' ? "bg-accent" : ""}
+        >
+          全部
+        </DropdownMenuItem>
+        {selectOptions.map((option) => (
+          <DropdownMenuItem
+            key={option.value}
+            onClick={() => onFilterChange(filter.field, option.value)}
+            className={currentValue === option.value ? "bg-accent" : ""}
+          >
+            {option.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

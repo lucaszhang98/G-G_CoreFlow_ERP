@@ -70,7 +70,7 @@ export async function GET(
         quantity: true,
         volume: true,
         estimated_pallets: true,
-        remaining_pallets: true, // 剩余板数
+        remaining_pallets: true, // 未约板数（预计板数 - 所有预约板数之和）
         delivery_nature: true,
         delivery_location: true,
         unload_type: true,
@@ -136,9 +136,9 @@ export async function GET(
 
         const hasInventory = inventoryLots.length > 0 && totalInventoryPallets > 0
 
-        // 确定总板数：已入库使用 unbooked_pallet_count，未入库使用 remaining_pallets
+        // 确定未约板数：已入库使用 inventory_lots.unbooked_pallet_count，未入库使用 order_detail.remaining_pallets
         // 如果有多个库存记录，使用第一个的 unbooked_pallet_count（通常一个明细只有一个库存记录）
-        const totalPallets = hasInventory && inventoryLots.length > 0
+        const unbookedPallets = hasInventory && inventoryLots.length > 0
           ? (inventoryLots[0].unbooked_pallet_count ?? inventoryLots[0].pallet_count ?? 0)
           : (detail.remaining_pallets ?? detail.estimated_pallets ?? 0)
 
@@ -170,7 +170,8 @@ export async function GET(
           quantity: detail.quantity,
           volume: detail.volume ? Number(detail.volume) : null,
           estimated_pallets: detail.estimated_pallets,
-          remaining_pallets: totalPallets, // 总板数（已入库用 unbooked_pallet_count，未入库用 remaining_pallets）
+          remaining_pallets: unbookedPallets, // 未约板数（已入库用 inventory_lots.unbooked_pallet_count，未入库用 order_detail.remaining_pallets）
+          unbooked_pallets: unbookedPallets, // 未约板数（已入库用 inventory_lots.unbooked_pallet_count，未入库用 order_detail.remaining_pallets）
           delivery_nature: detail.delivery_nature,
           delivery_location: detail.delivery_location || null,
           location_code: locationCode, // 新增：location_code

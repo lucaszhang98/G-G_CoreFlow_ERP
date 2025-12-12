@@ -197,16 +197,18 @@ export const inventoryLotConfig: EntityConfig = {
           { label: '私仓', value: '私仓' },
         ],
       },
-      // 仓点筛选（带模糊搜索）
+      // 仓点筛选（通过 order_detail 关联筛选）
       {
         field: 'delivery_location',
         label: '仓点',
         type: 'select',
         relation: {
           model: 'locations',
-          displayField: 'name',
+          displayField: 'location_code',
           valueField: 'location_id',
         },
+        // 注意：delivery_location 是 order_detail 表的字段，存储的是 location_id 的字符串形式
+        // 通过 relation 配置，使用模糊搜索下拉框来选择位置
       },
       // 剩余板数筛选（零/非零）
       {

@@ -47,7 +47,7 @@ export function AdvancedSearchDialog({
   open,
   onOpenChange,
   fields,
-  searchValues,
+  searchValues = {},
   logic,
   onSearchChange,
   onLogicChange,
@@ -55,6 +55,9 @@ export function AdvancedSearchDialog({
   onReset,
 }: AdvancedSearchDialogProps) {
   if (!fields || fields.length === 0) return null
+  
+  // 确保 searchValues 始终是一个对象
+  const safeSearchValues = searchValues || {}
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -114,7 +117,7 @@ export function AdvancedSearchDialog({
                     <Input
                       id={field.field}
                       type={field.type === 'number' ? 'number' : 'text'}
-                      value={searchValues[field.field] || ''}
+                      value={safeSearchValues[field.field] || ''}
                       onChange={(e) => onSearchChange(field.field, e.target.value || null)}
                       placeholder={`请输入${field.label}`}
                       className="h-10 border-2 border-gray-200 dark:border-gray-800 focus:border-blue-500 dark:focus:border-blue-600 focus:ring-4 focus:ring-blue-500/10 dark:focus:ring-blue-500/20 transition-all duration-200"
@@ -132,7 +135,7 @@ export function AdvancedSearchDialog({
                     <Input
                       id={field.field}
                       type={field.type === 'datetime' ? 'datetime-local' : 'date'}
-                      value={searchValues[field.field] || ''}
+                      value={safeSearchValues[field.field] || ''}
                       onChange={(e) => onSearchChange(field.field, e.target.value || null)}
                       className="h-10 border-2 border-gray-200 dark:border-gray-800 focus:border-cyan-500 dark:focus:border-cyan-600 focus:ring-4 focus:ring-cyan-500/10 dark:focus:ring-cyan-500/20 transition-all duration-200"
                     />
@@ -141,7 +144,7 @@ export function AdvancedSearchDialog({
               }
 
               if (field.type === 'select') {
-                const currentValue = searchValues[field.field]
+                const currentValue = safeSearchValues[field.field]
                 
                 // 如果是 location 类型字段（relation.model === 'locations'），使用 LocationSelect（分步选择）
                 if (field.relation && field.relation.model === 'locations') {
@@ -234,7 +237,7 @@ export function AdvancedSearchDialog({
                         <Label className="text-xs text-gray-500">开始日期</Label>
                         <Input
                           type="date"
-                          value={searchValues[`${field.field}_from`] || ''}
+                          value={safeSearchValues[`${field.field}_from`] || ''}
                           onChange={(e) => onSearchChange(`${field.field}_from`, e.target.value || null)}
                           className="h-10 border-2 border-gray-200 dark:border-gray-800 focus:border-cyan-500 dark:focus:border-cyan-600 focus:ring-4 focus:ring-cyan-500/10 dark:focus:ring-cyan-500/20 transition-all duration-200"
                         />
@@ -244,7 +247,7 @@ export function AdvancedSearchDialog({
                         <Label className="text-xs text-gray-500">结束日期</Label>
                         <Input
                           type="date"
-                          value={searchValues[`${field.field}_to`] || ''}
+                          value={safeSearchValues[`${field.field}_to`] || ''}
                           onChange={(e) => onSearchChange(`${field.field}_to`, e.target.value || null)}
                           className="h-10 border-2 border-gray-200 dark:border-gray-800 focus:border-cyan-500 dark:focus:border-cyan-600 focus:ring-4 focus:ring-cyan-500/10 dark:focus:ring-cyan-500/20 transition-all duration-200"
                         />
@@ -263,7 +266,7 @@ export function AdvancedSearchDialog({
                         <Label className="text-xs text-gray-500">最小值</Label>
                         <Input
                           type="number"
-                          value={searchValues[`${field.field}_min`] || ''}
+                          value={safeSearchValues[`${field.field}_min`] || ''}
                           onChange={(e) => onSearchChange(`${field.field}_min`, e.target.value || null)}
                           placeholder="最小值"
                           className="h-10 border-2 border-gray-200 dark:border-gray-800 focus:border-emerald-500 dark:focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/10 dark:focus:ring-emerald-500/20 transition-all duration-200"
@@ -274,7 +277,7 @@ export function AdvancedSearchDialog({
                         <Label className="text-xs text-gray-500">最大值</Label>
                         <Input
                           type="number"
-                          value={searchValues[`${field.field}_max`] || ''}
+                          value={safeSearchValues[`${field.field}_max`] || ''}
                           onChange={(e) => onSearchChange(`${field.field}_max`, e.target.value || null)}
                           placeholder="最大值"
                           className="h-10 border-2 border-gray-200 dark:border-gray-800 focus:border-emerald-500 dark:focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/10 dark:focus:ring-emerald-500/20 transition-all duration-200"

@@ -305,4 +305,16 @@
     text-decoration: underline;
     text-underline-offset: 2px;
   }
+  
+  /* 修复 Next.js Portal 定位问题 */
+  /* 确保 portal 容器正确定位 */
+  nextjs-portal {
+    position: fixed !important;
+    pointer-events: none !important;
+  }
+  
+  /* 确保 portal 内容可以交互 */
+  nextjs-portal > * {
+    pointer-events: auto !important;
+  }
 }
