@@ -317,4 +317,19 @@
   nextjs-portal > * {
     pointer-events: auto !important;
   }
+  
+  /* 确保 Next.js 开发指示器永远可点击 */
+  nextjs-portal,
+  nextjs-portal * {
+    pointer-events: auto !important;
+  }
+  
+  /* Next.js 开发指示器的z-index提升 */
+  #nextjs__container_errors_label,
+  [data-nextjs-dialog],
+  [data-nextjs-toast],
+  button[data-nextjs-errors] {
+    z-index: 99999 !important;
+    pointer-events: auto !important;
+  }
 }

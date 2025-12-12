@@ -212,7 +212,8 @@ export async function GET(request: NextRequest) {
         })))
       }
       
-      // 备注
+      // PO和备注
+      const po = serialized.po || null;
       const notes = serialized.notes || null;
       
       // 拒收字段
@@ -236,6 +237,7 @@ export async function GET(request: NextRequest) {
         confirmed_end: confirmedEnd,
         total_pallets: totalPallets, // 从 order_detail.estimated_pallets 计算
         rejected: rejected,
+        po: po,
         notes: notes,
         // 保留 orders 对象，用于展开行获取 order_detail
         orders: serialized.orders || null,
@@ -308,6 +310,7 @@ export async function POST(request: NextRequest) {
       confirmed_end: data.confirmed_end ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.confirmed_end) : null,
       status: data.status || 'requested',
       rejected: data.rejected !== undefined ? Boolean(data.rejected) : false,
+      po: data.po || null,
       notes: data.notes || null,
     };
 

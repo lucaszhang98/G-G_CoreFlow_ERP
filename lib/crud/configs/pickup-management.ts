@@ -39,12 +39,7 @@ export const pickupManagementConfig: EntityConfig = {
     port_location: {
       key: 'port_location',
       label: '码头/查验站',
-      type: 'relation',
-      relation: {
-        model: 'locations',
-        displayField: 'name',
-        valueField: 'location_id',
-      },
+      type: 'location',
     },
     port_location_id: {
       key: 'port_location_id',

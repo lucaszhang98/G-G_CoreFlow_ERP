@@ -11,6 +11,8 @@ import { applyTransform, applyTransformList } from '@/lib/api/transformers'
 import { resolveParams, withApiHandler } from '@/lib/api/middleware'
 import { EntityConfig } from './types'
 import { getSchema } from './schema-loader'
+import { buildRelationFilterCondition } from './relation-filter-helper'
+import { enhanceConfigWithSearchFields } from './search-config-generator'
 import prisma from '@/lib/prisma'
 
 /**
@@ -36,8 +38,11 @@ function getPrismaModel(config: EntityConfig) {
 export function createListHandler(config: EntityConfig) {
   return async (request: NextRequest) => {
     try {
+      // 增强配置，确保 filterFields 和 advancedSearchFields 已生成
+      const enhancedConfig = enhanceConfigWithSearchFields(config)
+      
       // 检查权限
-      const permissionResult = await checkPermission(config.permissions.list)
+      const permissionResult = await checkPermission(enhancedConfig.permissions.list)
       if (permissionResult.error) return permissionResult.error
 
       const searchParams = request.nextUrl.searchParams
@@ -45,8 +50,8 @@ export function createListHandler(config: EntityConfig) {
       // 默认maxLimit为100，但可以通过unlimited=true来支持更大的limit
       let { page, limit, sort, order } = parsePaginationParams(
         searchParams,
-        config.list.defaultSort,
-        config.list.defaultOrder,
+        enhancedConfig.list.defaultSort,
+        enhancedConfig.list.defaultOrder,
         100 // 默认最大limit为100
       )
       const search = searchParams.get('search') || ''
@@ -55,9 +60,9 @@ export function createListHandler(config: EntityConfig) {
       const where: any = {}
       
       // 简单搜索条件（模糊搜索）
-      if (search && config.list.searchFields) {
-        where.OR = config.list.searchFields.map(field => {
-          const fieldConfig = config.fields[field]
+      if (search && enhancedConfig.list.searchFields) {
+        where.OR = enhancedConfig.list.searchFields.map(field => {
+          const fieldConfig = enhancedConfig.fields[field]
           if (fieldConfig?.relation) {
             // 关系字段搜索需要特殊处理
             return {}
@@ -69,13 +74,34 @@ export function createListHandler(config: EntityConfig) {
       }
 
       // 筛选条件（快速筛选）
-      if (config.list.filterFields) {
-        config.list.filterFields.forEach((filterField) => {
+      if (enhancedConfig.list.filterFields) {
+        enhancedConfig.list.filterFields.forEach((filterField) => {
           if (filterField.type === 'select') {
             const filterValue = searchParams.get(`filter_${filterField.field}`)
+            
+            // 开发环境：输出调试信息
+            if (process.env.NODE_ENV === 'development' && filterValue) {
+              console.log(`[createListHandler] 筛选字段: ${filterField.field}, 值: ${filterValue}`)
+            }
+            
             // 忽略 "__all__" 值（表示清除筛选）
             if (filterValue && filterValue !== '__all__') {
-              where[filterField.field] = filterValue
+              // 检查是否是 relation 字段
+              const fieldConfig = enhancedConfig.fields[filterField.field]
+              if (fieldConfig?.type === 'relation' || fieldConfig?.type === 'location') {
+                // 使用辅助函数构建 relation 筛选条件
+                const relationCondition = buildRelationFilterCondition(filterField, filterValue, enhancedConfig)
+                if (relationCondition) {
+                  Object.assign(where, relationCondition)
+                }
+              } else {
+                // 普通 select 字段（包括状态）
+                where[filterField.field] = filterValue
+                
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`[createListHandler] 设置筛选条件: ${filterField.field} = ${filterValue}`)
+                }
+              }
             }
           } else if (filterField.type === 'dateRange') {
             const dateFrom = searchParams.get(`filter_${filterField.field}_from`)
@@ -91,12 +117,20 @@ export function createListHandler(config: EntityConfig) {
                 endDate.setHours(23, 59, 59, 999)
                 dateCondition.lte = endDate
               }
-              // 如果指定了多个日期字段，使用 OR 逻辑
-              if (filterField.dateFields && filterField.dateFields.length > 0) {
-                if (!where.OR) where.OR = []
-                filterField.dateFields.forEach((dateField) => {
-                  where.OR!.push({ [dateField]: dateCondition })
-                })
+              // 如果一个filter指定了多个日期字段（如"任意日期"filter匹配order_date或lfd_date），使用OR逻辑
+              // 如果只有一个dateField，直接设置AND条件
+              if (filterField.dateFields && filterField.dateFields.length > 1) {
+                // 多个dateFields：在filter内部使用OR逻辑（这个filter匹配多个日期字段中的任一个）
+                // 但不同filter之间仍然是AND逻辑
+                const orConditions = filterField.dateFields.map((dateField) => ({
+                  [dateField]: dateCondition
+                }))
+                // 将这个filter的OR条件作为一个整体添加到where中
+                if (!where.AND) where.AND = []
+                where.AND.push({ OR: orConditions })
+              } else if (filterField.dateFields && filterField.dateFields.length === 1) {
+                // 单个dateField：直接设置AND条件
+                where[filterField.dateFields[0]] = dateCondition
               } else {
                 // 默认使用 filterField.field
                 where[filterField.field] = dateCondition
@@ -113,12 +147,19 @@ export function createListHandler(config: EntityConfig) {
               if (numMax) {
                 numCondition.lte = Number(numMax)
               }
-              // 如果指定了多个数值字段，使用 OR 逻辑
-              if (filterField.numberFields && filterField.numberFields.length > 0) {
-                if (!where.OR) where.OR = []
-                filterField.numberFields.forEach((numField) => {
-                  where.OR!.push({ [numField]: numCondition })
-                })
+              // 如果一个filter指定了多个数值字段，使用OR逻辑
+              // 如果只有一个numberField，直接设置AND条件
+              if (filterField.numberFields && filterField.numberFields.length > 1) {
+                // 多个numberFields：在filter内部使用OR逻辑
+                const orConditions = filterField.numberFields.map((numField) => ({
+                  [numField]: numCondition
+                }))
+                // 将这个filter的OR条件作为一个整体添加到where中
+                if (!where.AND) where.AND = []
+                where.AND.push({ OR: orConditions })
+              } else if (filterField.numberFields && filterField.numberFields.length === 1) {
+                // 单个numberField：直接设置AND条件
+                where[filterField.numberFields[0]] = numCondition
               } else {
                 // 默认使用 filterField.field
                 where[filterField.field] = numCondition
@@ -130,10 +171,10 @@ export function createListHandler(config: EntityConfig) {
 
       // 高级搜索条件（多条件组合）
       const advancedLogic = searchParams.get('advanced_logic') || 'AND'
-      if (config.list.advancedSearchFields) {
+      if (enhancedConfig.list.advancedSearchFields) {
         const advancedConditions: any[] = []
         
-        config.list.advancedSearchFields.forEach((searchField) => {
+        enhancedConfig.list.advancedSearchFields.forEach((searchField) => {
           if (searchField.type === 'text' || searchField.type === 'number') {
             const value = searchParams.get(`advanced_${searchField.field}`)
             if (value) {
@@ -225,32 +266,25 @@ export function createListHandler(config: EntityConfig) {
         }
       }
 
-      // 状态筛选（如果有 status 字段）
-      if (config.fields.status) {
-        const status = searchParams.get('status')
-        const includeArchived = searchParams.get('includeArchived') === 'true'
-        
-        if (status) {
-          where.status = status
-        } else if (!includeArchived && config.prisma?.model === 'orders') {
-          // 对于订单表，默认排除"完成留档"状态（除非明确要求包含）
+      // 状态筛选通过快速筛选处理，这里只处理特殊的归档逻辑
+      if (!searchParams.get('includeArchived') && enhancedConfig.prisma?.model === 'orders') {
+        // 对于订单表，如果没有明确选择状态，默认排除"完成留档"状态
+        const statusFilterValue = searchParams.get('filter_status')
+        if (!statusFilterValue || statusFilterValue === '__all__') {
           where.status = { not: 'archived' }
         }
-      } else if (!searchParams.get('includeArchived') && config.prisma?.model === 'orders') {
-        // 如果没有 status 字段配置但需要过滤归档订单
-        where.status = { not: 'archived' }
       }
 
       // 查询数据
-      const prismaModel = getPrismaModel(config)
+      const prismaModel = getPrismaModel(enhancedConfig)
 
       // 验证排序字段是否有效（检查字段是否存在且可排序）
-      const sortFieldConfig = config.fields[sort]
+      const sortFieldConfig = enhancedConfig.fields[sort]
       if (!sortFieldConfig || sortFieldConfig.hidden) {
         // 如果排序字段无效或已隐藏，使用默认排序
-        console.warn(`[createListHandler] 无效的排序字段: ${sort}，使用默认排序: ${config.list.defaultSort}`)
-        const defaultSort = config.list.defaultSort || 'id'
-        const defaultOrder = config.list.defaultOrder || 'desc'
+        console.warn(`[createListHandler] 无效的排序字段: ${sort}，使用默认排序: ${enhancedConfig.list.defaultSort}`)
+        const defaultSort = enhancedConfig.list.defaultSort || 'id'
+        const defaultOrder = enhancedConfig.list.defaultOrder || 'desc'
         sort = defaultSort
         order = defaultOrder
       }
@@ -263,16 +297,16 @@ export function createListHandler(config: EntityConfig) {
       }
 
       // 添加 include 或 select
-      if (config.prisma?.include) {
-        queryOptions.include = config.prisma.include
-      } else if (config.prisma?.select) {
-        queryOptions.select = config.prisma.select
+      if (enhancedConfig.prisma?.include) {
+        queryOptions.include = enhancedConfig.prisma.include
+      } else if (enhancedConfig.prisma?.select) {
+        queryOptions.select = enhancedConfig.prisma.select
       }
 
       // 添加详细的查询日志（开发环境）
       if (process.env.NODE_ENV === 'development') {
         console.log('[createListHandler] 查询配置:', {
-          model: config.prisma?.model || config.name,
+          model: enhancedConfig.prisma?.model || enhancedConfig.name,
           where: Object.keys(where),
           hasInclude: !!queryOptions.include,
           hasSelect: !!queryOptions.select,
@@ -293,7 +327,7 @@ export function createListHandler(config: EntityConfig) {
         
         // 如果是 orders 模型，需要处理 location 字段（delivery_location 和 port_location）
         // 如果这些字段存储的是 location_id（数字字符串），需要查询 locations 表获取 location_code
-        if (config.prisma?.model === 'orders' && items.length > 0) {
+        if (enhancedConfig.prisma?.model === 'orders' && items.length > 0) {
           // 收集所有可能的 location_id（从 delivery_location 和 port_location）
           const locationIds = new Set<bigint>()
           items.forEach((item: any) => {
@@ -369,7 +403,7 @@ export function createListHandler(config: EntityConfig) {
           stack: queryError?.stack,
         })
         console.error('查询配置:', {
-          model: config.prisma?.model || config.name,
+          model: enhancedConfig.prisma?.model || enhancedConfig.name,
           whereKeys: Object.keys(where),
           hasInclude: !!queryOptions.include,
           hasSelect: !!queryOptions.select,
@@ -405,7 +439,7 @@ export function createListHandler(config: EntityConfig) {
             })
           }
           // 处理订单数据：确保 order_id 是字符串，处理关联数据
-          if (config.prisma?.model === 'orders') {
+          if (enhancedConfig.prisma?.model === 'orders') {
             if (serialized.order_id) {
               serialized.order_id = String(serialized.order_id)
             }

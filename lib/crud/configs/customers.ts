@@ -86,7 +86,7 @@ export const customerConfig: EntityConfig = {
     defaultSort: 'code',
     defaultOrder: 'asc',
     columns: ['code', 'name', 'company_name', 'status', 'credit_limit', 'contact'],
-    searchFields: ['name'], // 只搜索客户名称（最重要的字段）
+    searchFields: ['code'], // 只搜索客户代码（最重要的字段）
     pageSize: 10,
     // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
     // filterFields 已由 search-config-generator 自动生成

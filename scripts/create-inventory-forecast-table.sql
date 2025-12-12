@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS analytics.inventory_forecast_daily (
   
   -- 仓点标识（用于区分不同的行）
   location_id BIGINT,                    -- 仓点ID（亚马逊/FEDEX/UPS用，私仓/扣货为NULL）
-  location_group VARCHAR(50) NOT NULL,    -- 仓点分组：'amazon', 'fedex', 'ups', 'private_warehouse', 'detained'
+  location_group VARCHAR(50) NOT NULL,    -- 仓点分组：'amazon', 'fedex', 'ups', 'private_warehouse', 'hold'
   location_name VARCHAR(200) NOT NULL,    -- 仓点显示名称（前端表格第一列）
   
   -- 时间维度
@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_forecast_calculated_at
 -- 4. 添加注释（便于理解）
 COMMENT ON TABLE analytics.inventory_forecast_daily IS '库存预测日报表（15天预测）';
 COMMENT ON COLUMN analytics.inventory_forecast_daily.location_id IS '仓点ID（亚马逊/FEDEX/UPS用，私仓/扣货为NULL）';
-COMMENT ON COLUMN analytics.inventory_forecast_daily.location_group IS '仓点分组：amazon/fedex/ups/private_warehouse/detained';
+COMMENT ON COLUMN analytics.inventory_forecast_daily.location_group IS '仓点分组：amazon/fedex/ups/private_warehouse/hold';
 COMMENT ON COLUMN analytics.inventory_forecast_daily.location_name IS '仓点显示名称（前端表格第一列）';
 COMMENT ON COLUMN analytics.inventory_forecast_daily.forecast_date IS '预测日期（绝对日期）';
 COMMENT ON COLUMN analytics.inventory_forecast_daily.historical_inventory IS '历史库存板数（截至该日期之前）';

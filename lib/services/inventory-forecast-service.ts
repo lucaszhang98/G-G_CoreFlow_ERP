@@ -9,11 +9,11 @@
  */
 
 import prisma from '@/lib/prisma'
-import { formatDateString, addDaysToDateString } from '@/lib/utils/timezone'
+import { formatDateString, addDaysToDateString, getMondayOfWeek } from '@/lib/utils/timezone'
 
 interface LocationRow {
   location_id: bigint | null
-  location_group: 'amazon' | 'fedex' | 'ups' | 'private_warehouse' | 'detained'
+  location_group: 'amazon' | 'fedex' | 'ups' | 'private_warehouse' | 'hold'
   location_name: string
 }
 
@@ -122,7 +122,7 @@ export async function getAllLocationRows(): Promise<LocationRow[]> {
   // 5. 扣货（不需要 location_id）
   rows.push({
     location_id: null,
-    location_group: 'detained',
+    location_group: 'hold',
     location_name: '扣货',
   })
 
@@ -155,7 +155,7 @@ export async function calculateHistoricalInventory(
     return Number(result[0]?.sum || 0)
   }
 
-  if (locationRow.location_group === 'detained') {
+  if (locationRow.location_group === 'hold') {
     // 扣货：按 delivery_nature 汇总
     const result = await prisma.$queryRaw<Array<{ sum: bigint }>>`
       SELECT COALESCE(SUM(il.remaining_pallet_count), 0)::INTEGER as sum
@@ -223,7 +223,7 @@ export async function calculatePlannedInbound(
     return Number(result[0]?.sum || 0)
   }
 
-  if (locationRow.location_group === 'detained') {
+  if (locationRow.location_group === 'hold') {
     // 扣货：按 delivery_nature 汇总
     // 如果已入库（ir.status = 'received'），用 inventory_lots 的实际板数
     // 如果未入库，用 order_detail 的预计板数
@@ -275,6 +275,8 @@ export async function calculatePlannedInbound(
 /**
  * 计算预计出库
  * 
+ * 注意：业务逻辑要求提前一天出库（预约时间 12-12 算作 12-11 出库）
+ * 
  * @param locationRow - 仓点行
  * @param dateString - 日期字符串（YYYY-MM-DD）
  */
@@ -286,34 +288,39 @@ export async function calculatePlannedOutbound(
   if (locationRow.location_group === 'private_warehouse') {
     // 私仓：按 delivery_nature 汇总，但排除 UPS 和 FEDEX
     // UPS location_id = 30, FEDEX location_id = 31
+    // 预约时间提前一天：预约 12-12 算作 12-11 出库
     const result = await prisma.$queryRaw<Array<{ sum: bigint }>>`
       SELECT COALESCE(SUM(adl.estimated_pallets), 0)::INTEGER as sum
       FROM oms.appointment_detail_lines adl
       INNER JOIN order_detail od ON adl.order_detail_id = od.id
       INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
-      WHERE DATE(da.confirmed_start) = ${date}::DATE
+      WHERE (da.confirmed_start - INTERVAL '1 day')::DATE = ${date}::DATE
         AND od.delivery_nature = '私仓'
         AND od.delivery_location NOT IN ('30', '31', 'UPS', 'FEDEX')
-        AND da.status = 'confirmed'
+        AND da.confirmed_start IS NOT NULL
+        AND (da.rejected = false OR da.rejected IS NULL)
     `
     return Number(result[0]?.sum || 0)
   }
 
-  if (locationRow.location_group === 'detained') {
+  if (locationRow.location_group === 'hold') {
     // 扣货：按 delivery_nature 汇总
+    // 预约时间提前一天：预约 12-12 算作 12-11 出库
     const result = await prisma.$queryRaw<Array<{ sum: bigint }>>`
       SELECT COALESCE(SUM(adl.estimated_pallets), 0)::INTEGER as sum
       FROM oms.appointment_detail_lines adl
       INNER JOIN order_detail od ON adl.order_detail_id = od.id
       INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
-      WHERE DATE(da.confirmed_start) = ${date}::DATE
+      WHERE (da.confirmed_start - INTERVAL '1 day')::DATE = ${date}::DATE
         AND od.delivery_nature = '扣货'
-        AND da.status = 'confirmed'
+        AND da.confirmed_start IS NOT NULL
+        AND (da.rejected = false OR da.rejected IS NULL)
     `
     return Number(result[0]?.sum || 0)
   }
 
   // 亚马逊/FEDEX/UPS：按 location_id 匹配（delivery_location 存的是 location_id 的字符串形式）
+  // 预约时间提前一天：预约 12-12 算作 12-11 出库
   if (!locationRow.location_id) return 0
 
   const result = await prisma.$queryRaw<Array<{ sum: bigint }>>`
@@ -322,8 +329,9 @@ export async function calculatePlannedOutbound(
     INNER JOIN order_detail od ON adl.order_detail_id = od.id
     INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
       WHERE od.delivery_location = ${String(locationRow.location_id)}
-      AND DATE(da.confirmed_start) = ${date}::DATE
-      AND da.status = 'confirmed'
+      AND (da.confirmed_start - INTERVAL '1 day')::DATE = ${date}::DATE
+      AND da.confirmed_start IS NOT NULL
+      AND (da.rejected = false OR da.rejected IS NULL)
   `
 
   return Number(result[0]?.sum || 0)
@@ -410,12 +418,30 @@ export async function calculateInventoryForecast(
     calculatedTimestamp = new Date(baseDate + 'T00:00:00Z')
   }
 
-  // 计算日期范围：基准日期到未来14天（共15天）
-  const startDate = baseDate
-  const endDate = addDaysToDateString(baseDate, 14)
+  // 计算日期范围：
+  // - 起始日期：本周一（确保周预测有完整的周数据）
+  // - 结束日期：取两者较大值
+  //   1. 今天+14天（日预测需要15天）
+  //   2. 本周一+55天（周预测需要8周）
+  const monday = getMondayOfWeek(baseDate)
+  const dailyEndDate = addDaysToDateString(baseDate, 14) // 日预测：今天+14天
+  const weeklyEndDate = addDaysToDateString(monday, 55)   // 周预测：本周一+55天
+  
+  const startDate = monday
+  const endDate = dailyEndDate > weeklyEndDate ? dailyEndDate : weeklyEndDate
+  
+  // 计算总天数
+  const [y1, m1, d1] = startDate.split('-').map(Number)
+  const [y2, m2, d2] = endDate.split('-').map(Number)
+  const date1 = new Date(y1, m1 - 1, d1)
+  const date2 = new Date(y2, m2 - 1, d2)
+  const totalDays = Math.ceil((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-  console.log(`[库存预测] 开始计算，基准日期: ${startDate}`)
-  console.log(`[库存预测] 计算范围: ${startDate} 至 ${endDate}`)
+  console.log(`[库存预测] 开始计算，基准日期: ${baseDate}`)
+  console.log(`[库存预测] 本周星期一: ${monday}`)
+  console.log(`[库存预测] 计算范围: ${startDate} 至 ${endDate} (${totalDays}天)`)
+  console.log(`[库存预测]   - 日预测：${baseDate} 至 ${dailyEndDate} (15天)`)
+  console.log(`[库存预测]   - 周预测：${monday} 至 ${weeklyEndDate} (8周)`)
 
   // 0. 清空整个预测表（每次重新计算都清空，确保数据干净）
   console.log(`[库存预测] 清空预测表所有数据...`)
@@ -434,8 +460,15 @@ export async function calculateInventoryForecast(
 
     let previousDayInventory = 0
 
-    for (let day = 0; day < 15; day++) {
-      // 计算当前预测日期（基准日期 + day 天）
+    // 计算总天数
+    const [y1, m1, d1] = startDate.split('-').map(Number)
+    const [y2, m2, d2] = endDate.split('-').map(Number)
+    const date1 = new Date(y1, m1 - 1, d1)
+    const date2 = new Date(y2, m2 - 1, d2)
+    const totalDays = Math.ceil((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
+    for (let day = 0; day < totalDays; day++) {
+      // 计算当前预测日期（本周一 + day 天）
       const forecastDateString = addDaysToDateString(startDate, day)
 
       // 计算数据
@@ -457,7 +490,7 @@ export async function calculateInventoryForecast(
       const finalForecastInventory = Math.max(0, forecastInventory)
 
       // 调试日志（仅对私仓和扣货）
-      if (locationRow.location_group === 'private_warehouse' || locationRow.location_group === 'detained') {
+      if (locationRow.location_group === 'private_warehouse' || locationRow.location_group === 'hold') {
         console.log(`[库存预测] ${locationRow.location_name} ${forecastDateString}: 历史=${historicalInventory}, 入库=${plannedInbound}, 出库=${plannedOutbound}, 预计=${finalForecastInventory}`)
       }
 

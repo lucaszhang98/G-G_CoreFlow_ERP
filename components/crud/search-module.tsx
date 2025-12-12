@@ -345,7 +345,7 @@ export function SearchModule({
                       return (
                         <Button
                           key={filter.field}
-                          variant={isActive ? "default" : "outline"}
+                          variant="outline"
                           className={`
                             h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
                             ${isActive
@@ -402,7 +402,7 @@ export function SearchModule({
                           className={`
                             h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
                             ${isActive
-                              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20 border-0"
+                              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
                               : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
                             }
                           `}
@@ -462,7 +462,7 @@ export function SearchModule({
                       return (
                         <Button
                           key={filter.field}
-                          variant={isActive ? "default" : "outline"}
+                          variant="outline"
                           className={`
                             h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
                             ${isActive
@@ -505,7 +505,7 @@ export function SearchModule({
                           className={`
                             h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
                             ${isActive
-                              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20 border-0"
+                              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
                               : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
                             }
                           `}
@@ -548,7 +548,7 @@ export function SearchModule({
                       return (
                         <Button
                           key={filter.field}
-                          variant={isActive ? "default" : "outline"}
+                          variant="outline"
                           className={`
                             h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
                             ${isActive
@@ -568,7 +568,7 @@ export function SearchModule({
                       <Popover key={filter.field}>
                         <PopoverTrigger asChild>
                           <Button
-                            variant={isActive ? "default" : "outline"}
+                            variant="outline"
                             className={`
                               h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
                               ${isActive
@@ -642,7 +642,7 @@ export function SearchModule({
                       return (
                         <Button
                           key={filter.field}
-                          variant={isActive ? "default" : "outline"}
+                          variant="outline"
                           className={`
                             h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
                             ${isActive
@@ -662,7 +662,7 @@ export function SearchModule({
                       <Popover key={filter.field}>
                         <PopoverTrigger asChild>
                           <Button
-                            variant={isActive ? "default" : "outline"}
+                            variant="outline"
                             className={`
                               h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
                               ${isActive
@@ -774,7 +774,7 @@ export function SearchModule({
                 <Badge
                   key={filter.field}
                   variant="secondary"
-                  className="px-3 py-1.5 text-sm font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg"
+                  className="px-3 py-1.5 text-sm font-medium bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded-lg shadow-sm"
                 >
                   <Filter className="h-3 w-3 mr-1.5" />
                   {filter.label}: {label}
@@ -798,7 +798,7 @@ export function SearchModule({
                 <Badge
                   key={filter.field}
                   variant="secondary"
-                  className="px-3 py-1.5 text-sm font-medium bg-cyan-50 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 rounded-lg"
+                  className="px-3 py-1.5 text-sm font-medium bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded-lg shadow-sm"
                 >
                   <Filter className="h-3 w-3 mr-1.5" />
                   {filter.label}: {from || '...'} 至 {to || '...'}
@@ -809,7 +809,7 @@ export function SearchModule({
                       onFilterChange(`${filter.field}_from`, null)
                       onFilterChange(`${filter.field}_to`, null)
                     }}
-                    className="h-4 w-4 ml-2 -mr-1 hover:bg-cyan-100 dark:hover:bg-cyan-900/50 rounded-full"
+                    className="h-4 w-4 ml-2 -mr-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-full"
                   >
                     <X className="h-3 w-3" />
                   </Button>
@@ -825,7 +825,7 @@ export function SearchModule({
                 <Badge
                   key={filter.field}
                   variant="secondary"
-                  className="px-3 py-1.5 text-sm font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg"
+                  className="px-3 py-1.5 text-sm font-medium bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded-lg shadow-sm"
                 >
                   <Filter className="h-3 w-3 mr-1.5" />
                   {filter.label}: {min || '...'} 至 {max || '...'}
@@ -836,7 +836,7 @@ export function SearchModule({
                       onFilterChange(`${filter.field}_min`, null)
                       onFilterChange(`${filter.field}_max`, null)
                     }}
-                    className="h-4 w-4 ml-2 -mr-1 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-full"
+                    className="h-4 w-4 ml-2 -mr-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-full"
                   >
                     <X className="h-3 w-3" />
                   </Button>
@@ -850,7 +850,7 @@ export function SearchModule({
           {hasActiveAdvancedSearch && (
             <Badge 
               variant="secondary" 
-              className="px-3 py-1.5 text-sm font-medium bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-lg"
+              className="px-3 py-1.5 text-sm font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700 rounded-lg shadow-sm"
             >
               <Sparkles className="h-3 w-3 mr-1.5" />
               高级搜索 ({activeAdvancedSearchCount} 个条件)
@@ -953,12 +953,12 @@ function SelectFilterField({
   if (!mounted) {
     return (
       <Button
-        variant={isActive ? "default" : "outline"}
+        variant="outline"
         className={`
           h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
           ${isActive
-            ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
-            : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
+            ? "border-indigo-200 dark:border-indigo-600 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-200 dark:hover:bg-indigo-900/60 shadow-sm"
+            : "border-gray-200 dark:border-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
           }
         `}
         disabled
@@ -973,12 +973,12 @@ function SelectFilterField({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant={isActive ? "default" : "outline"}
+          variant="outline"
           className={`
             h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
             ${isActive
-              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
-              : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
+              ? "border-indigo-200 dark:border-indigo-600 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-200 dark:hover:bg-indigo-900/60 shadow-sm"
+              : "border-gray-200 dark:border-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
             }
           `}
           disabled={loadingOptions}

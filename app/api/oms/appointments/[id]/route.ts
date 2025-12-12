@@ -311,6 +311,9 @@ export async function PUT(
     if (data.rejected !== undefined) {
       updateData.rejected = Boolean(data.rejected);
     }
+    if (data.po !== undefined) {
+      updateData.po = data.po;
+    }
     if (data.notes !== undefined) {
       updateData.notes = data.notes;
     }

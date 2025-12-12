@@ -40,8 +40,7 @@ export async function GET(request: NextRequest) {
         if (mainTableFields.includes(fieldName)) {
           mainTableConditions.push(condition)
         } else {
-          // 字段来自 orders 表，需要映射到 orders 表的字段
-          // 例如：port_location_id -> port_location_id, customer_id -> customer_id
+          // 字段来自 orders 表
           Object.assign(ordersConditions, condition)
         }
       })
@@ -181,14 +180,14 @@ export async function GET(request: NextRequest) {
         eta_date: order?.eta_date || null,
         operation_mode: order?.operation_mode || null,
         operation_mode_display: order?.operation_mode === 'unload' ? '拆柜' : order?.operation_mode || null,
-        delivery_location: order?.locations_orders_delivery_location_idTolocations?.name || order?.delivery_location || null,
+        delivery_location: order?.locations_orders_delivery_location_idTolocations?.location_code || order?.delivery_location || null,
         delivery_location_id: order?.delivery_location_id ? String(order.delivery_location_id) : null,
         lfd_date: order?.lfd_date || null,
         pickup_date: order?.pickup_date || null,
         ready_date: order?.ready_date || null,
         return_date: order?.return_deadline || null,
         warehouse_account: order?.warehouse_account || null,
-        port_location: order?.locations_orders_port_location_idTolocations || null, // 返回完整的 location 对象，用于 relation 类型字段
+        port_location: order?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）
         port_location_id: order?.port_location_id ? String(order.port_location_id) : null,
         carrier: order?.carriers || null, // 返回完整的 carrier 对象，用于 relation 类型字段
         carrier_id: order?.carrier_id ? String(order.carrier_id) : null,

@@ -81,6 +81,33 @@ export function addDaysToDateString(dateString: string, days: number): string {
 }
 
 /**
+ * 获取指定日期所在周的星期一日期
+ * 
+ * @param dateString - YYYY-MM-DD 格式的日期字符串
+ * @returns YYYY-MM-DD 格式的星期一日期字符串
+ */
+export function getMondayOfWeek(dateString: string): string {
+  if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    throw new Error('Invalid date string format. Expected YYYY-MM-DD')
+  }
+  
+  const [year, month, day] = dateString.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  
+  // 获取星期几（0 = 周日, 1 = 周一, ..., 6 = 周六）
+  const dayOfWeek = date.getDay()
+  
+  // 计算距离周一的天数
+  // 如果是周日(0)，则距离周一是 6 天前；如果是周一(1)，则距离是 0 天
+  const daysToMonday = dayOfWeek === 0 ? -6 : -(dayOfWeek - 1)
+  
+  // 设置为周一
+  date.setDate(date.getDate() + daysToMonday)
+  
+  return formatDateString(date)
+}
+
+/**
  * 比较两个日期字符串是否在同一天
  * 
  * @param date1 - 第一个日期字符串

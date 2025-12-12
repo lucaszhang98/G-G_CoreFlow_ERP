@@ -33,11 +33,17 @@ export async function loadRelationOptions(
     const displayField = field.relation.displayField
     const valueField = field.relation.valueField || 'id'
 
-    return items.map((item: any) => {
-      const label = item[displayField] || String(item[valueField] || '')
-      const value = String(item[valueField] || item.id || '')
-      return { label, value }
-    })
+    return items
+      .filter((item: any) => {
+        // 过滤掉 value 为空的项
+        const val = item[valueField] || item.id
+        return val != null && val !== ''
+      })
+      .map((item: any, index: number) => {
+        const label = item[displayField] || String(item[valueField] || '')
+        const value = String(item[valueField] || item.id || '')
+        return { label, value }
+      })
   } catch (error) {
     console.error(`加载关系字段选项失败 (${field.field}):`, error)
     return []

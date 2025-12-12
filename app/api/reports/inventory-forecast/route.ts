@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
           WHEN 'fedex' THEN 2
           WHEN 'ups' THEN 3
           WHEN 'private_warehouse' THEN 4
-          WHEN 'detained' THEN 5
+          WHEN 'hold' THEN 5
         END,
         location_id NULLS LAST,
         forecast_date

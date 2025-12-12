@@ -92,14 +92,14 @@ export async function GET(
       eta_date: order?.eta_date || null,
       operation_mode: order?.operation_mode || null,
       operation_mode_display: order?.operation_mode === 'unload' ? '拆柜' : order?.operation_mode || null,
-      delivery_location: order?.locations_orders_delivery_location_idTolocations?.name || order?.delivery_location || null,
+      delivery_location: order?.locations_orders_delivery_location_idTolocations?.location_code || order?.delivery_location || null,
       delivery_location_id: order?.delivery_location_id ? String(order.delivery_location_id) : null,
       lfd_date: order?.lfd_date || null,
       pickup_date: order?.pickup_date || null,
       ready_date: order?.ready_date || null,
       return_date: order?.return_deadline || null,
       warehouse_account: order?.warehouse_account || null,
-      port_location: order?.locations_orders_port_location_idTolocations || null, // 返回完整的 location 对象，用于 relation 类型字段
+      port_location: order?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）
       port_location_id: order?.port_location_id ? String(order.port_location_id) : null,
       carrier: order?.carriers || null, // 返回完整的 carrier 对象，用于 relation 类型字段
       carrier_id: order?.carrier_id ? String(order.carrier_id) : null,
@@ -122,10 +122,10 @@ export async function GET(
   }
 }
 
-// PATCH - 更新提柜管理记录
-export async function PATCH(
+// 更新提柜管理记录的共享逻辑
+async function updatePickupManagement(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  params: Promise<{ id: string }> | { id: string }
 ) {
   try {
     const authResult = await checkAuth()
@@ -226,7 +226,7 @@ export async function PATCH(
         pickup_id: String(serializedUpdated.pickup_id || ''),
         status: serializedUpdated.status || null,
         notes: serializedUpdated.notes || null,
-        port_location: updatedOrder?.locations_orders_port_location_idTolocations || null,
+        port_location: updatedOrder?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）
         port_location_id: updatedOrder?.port_location_id ? String(updatedOrder.port_location_id) : null,
         carrier: updatedOrder?.carriers || null,
         carrier_id: updatedOrder?.carrier_id ? String(updatedOrder.carrier_id) : null,
@@ -239,5 +239,21 @@ export async function PATCH(
       { status: 500 }
     )
   }
+}
+
+// PATCH - 更新提柜管理记录
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  return updatePickupManagement(request, params)
+}
+
+// PUT - 更新提柜管理记录（兼容标准 REST API）
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  return updatePickupManagement(request, params)
 }
 

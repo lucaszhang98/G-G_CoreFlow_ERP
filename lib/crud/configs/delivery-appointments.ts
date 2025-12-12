@@ -91,6 +91,12 @@ export const deliveryAppointmentConfig: EntityConfig = {
       type: 'boolean',
       sortable: true,
     },
+    po: {
+      key: 'po',
+      label: 'PO',
+      type: 'textarea',
+      placeholder: '请输入PO信息',
+    },
     notes: {
       key: 'notes',
       label: '备注',
@@ -111,6 +117,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       'confirmed_start',
       'total_pallets',
       'rejected',
+      'po',
       'notes',
     ],
     searchFields: ['reference_number'], // 只搜索预约号码（最重要的字段）
@@ -123,7 +130,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'notes'],
+        fields: ['origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'po', 'notes'],
       },
       delete: {
         enabled: true,
@@ -132,7 +139,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'notes'],
+      fields: ['origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'po', 'notes'],
     },
   },
   
@@ -146,6 +153,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
     'appointment_account',
     'confirmed_start',
     'rejected',
+    'po',
     'notes',
   ],
   

@@ -252,9 +252,9 @@ export async function GET(request: NextRequest) {
         appointment_number: appointment?.reference_number || null,
         container_number: order?.order_number || null,
         delivery_date: deliveryDate,
-        origin_location: appointment?.locations_delivery_appointments_origin_location_idTolocations?.name || null,
+        origin_location: appointment?.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
         origin_location_id: appointment?.origin_location_id ? String(appointment.origin_location_id) : null,
-        destination_location: appointment?.locations?.name || null,
+        destination_location: appointment?.locations?.location_code || null,
         destination_location_id: appointment?.location_id ? String(appointment.location_id) : null,
         po: po,
         pallet_type: appointment?.appointment_type || null, // 地板/卡板

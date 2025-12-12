@@ -14,6 +14,7 @@ export const deliveryAppointmentCreateSchema = z.object({
   confirmed_end: z.string().optional().nullable(),
   status: z.string().optional().nullable(),
   rejected: z.boolean().optional().nullable(),
+  po: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   total_pallets: z.number().optional().nullable(), // 添加 total_pallets 支持（虽然它是计算字段）
 })

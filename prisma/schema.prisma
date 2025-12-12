@@ -24,6 +24,7 @@ model delivery_appointments {
   appointment_account                                           String?                    @db.VarChar(100)
   rejected                                                      Boolean?                   @default(false)
   total_pallets                                                 Int                        @default(0) // 预约总板数（累加所有预约明细的estimated_pallets）
+  po                                                            String?                    @db.VarChar(1000)
   notes                                                         String?
   created_at                                                    DateTime?                  @default(now()) @db.Timestamptz(6)
   updated_at                                                    DateTime?                  @default(now()) @db.Timestamptz(6)

@@ -565,6 +565,42 @@ export function EntityTable<T = any>({
           return // 跳过后续处理
         }
         
+        // 处理location字段：location字段在数据库中存储的是 ID，需要映射到正确的数据库字段名
+        if (fieldConfig?.type === 'location') {
+          // 对于location字段，确定数据库字段名
+          // location类型字段的数据库字段名通常是 {fieldKey}_id
+          // 例外：destination_location -> location_id
+          let dbFieldName: string
+          if (key === 'destination_location') {
+            dbFieldName = 'location_id'
+          } else {
+            dbFieldName = `${key}_id`
+          }
+          
+          const originalId = (row as any)[dbFieldName] || (row as any)[key]
+          
+          // 处理空值：空字符串、null、undefined 都转换为 null
+          let processedValue: number | null
+          if (value === '' || value === null || value === undefined) {
+            processedValue = null
+          } else {
+            const numValue = Number(value)
+            // 如果转换后是 NaN，设置为 null；如果是 0，也设置为 null（0 通常不是有效的 ID）
+            processedValue = (isNaN(numValue) || numValue === 0) ? null : numValue
+          }
+          
+          // 比较处理后的值是否改变
+          const originalNum = originalId ? Number(originalId) : null
+          if (processedValue !== originalNum) {
+            // 使用数据库字段名（如 port_location_id）而不是配置字段名（如 port_location）
+            updates[dbFieldName] = processedValue
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`[EntityTable] Location字段 ${key} -> ${dbFieldName} 更新:`, { original: originalNum, new: processedValue })
+            }
+          }
+          return // 跳过后续处理
+        }
+        
         // 处理关系字段：关系字段在数据库中存储的是 ID，需要映射到正确的数据库字段名
         if (fieldConfig?.type === 'relation') {
           // 对于关系字段，需要确定数据库字段名
@@ -1197,8 +1233,22 @@ export function EntityTable<T = any>({
             ? editingValues[fieldKey] 
             : row.getValue(fieldKey)
           
-          // 对于关系字段，如果存在 _id 字段，使用 ID 值
-          if (fieldConfig.type === 'relation') {
+          // 对于location字段，从 _id 字段读取ID值
+          if (fieldConfig.type === 'location') {
+            // location类型字段的数据库字段名通常是 {fieldKey}_id
+            // 例外：destination_location -> location_id
+            let idKey: string
+            if (fieldKey === 'destination_location') {
+              idKey = 'location_id'
+            } else {
+              idKey = `${fieldKey}_id`
+            }
+            const idValue = (row.original as any)[idKey]
+            // 优先使用 _id 字段的值（这是实际的 ID）
+            if (idValue !== undefined && idValue !== null) {
+              initialValue = String(idValue)
+            }
+          } else if (fieldConfig.type === 'relation') {
             const idKey = `${fieldKey}_id`
             const idValue = (row.original as any)[idKey]
             // 优先使用 _id 字段的值（这是实际的 ID）
@@ -1284,6 +1334,12 @@ export function EntityTable<T = any>({
         if (fieldConfig.type === 'datetime') {
           const value = row.getValue(fieldKey)
           return <div>{formatDateTimeDisplay(value)}</div>
+        }
+        
+        if (fieldConfig.type === 'location') {
+          const value = row.getValue(fieldKey)
+          // location字段统一返回location_code字符串
+          return <div>{value || '-'}</div>
         }
         
         if (fieldConfig.type === 'relation') {

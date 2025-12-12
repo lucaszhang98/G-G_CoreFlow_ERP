@@ -189,9 +189,14 @@ const menuItems: MenuItem[] = [
     roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user"],
     children: [
       {
-        title: "库存预测",
+        title: "库存预测 - 日",
         icon: TrendingUp,
         href: "/dashboard/reports/inventory-forecast",
+      },
+      {
+        title: "库存预测 - 周",
+        icon: Calendar,
+        href: "/dashboard/reports/inventory-forecast-weekly",
       },
     ],
   },

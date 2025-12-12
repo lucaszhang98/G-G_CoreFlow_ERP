@@ -329,11 +329,11 @@ export function FuzzySearchSelect({
             ) : null}
             {!loading && options.length > 0 && (
               <CommandGroup>
-                {options.map((option) => {
+                {options.map((option, index) => {
                 const isSelected = String(value) === String(option.value)
                 return (
                   <div
-                    key={String(option.value)}
+                    key={String(option.value) || `option-${index}`}
                     role="option"
                     aria-selected={isSelected}
                     className={cn(

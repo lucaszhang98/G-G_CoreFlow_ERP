@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { RefreshCw, TrendingUp, Calendar, AlertCircle, BarChart3 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatDateString, addDaysToDateString } from "@/lib/utils/timezone"
+import { formatDateString, addDaysToDateString, getMondayOfWeek } from "@/lib/utils/timezone"
 
 interface DailyData {
   forecast_date: string
@@ -25,64 +25,137 @@ interface LocationData {
   daily_data: DailyData[]
 }
 
-export function InventoryForecastClient() {
-  const [data, setData] = React.useState<LocationData[]>([])
+interface WeeklyData {
+  week_number: number
+  week_label: string
+  week_start: string
+  week_end: string
+  starting_inventory: number
+  total_inbound: number
+  total_outbound: number
+  ending_inventory: number
+}
+
+interface WeeklyLocationData {
+  location_id: string | null
+  location_group: string
+  location_name: string
+  weekly_data: WeeklyData[]
+}
+
+export function InventoryForecastWeeklyClient() {
+  const [data, setData] = React.useState<WeeklyLocationData[]>([])
   const [loading, setLoading] = React.useState(true)
   const [calculating, setCalculating] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [lastCalculated, setLastCalculated] = React.useState<string | null>(null)
   const [startDate, setStartDate] = React.useState<string | null>(null)
 
+  // 将日数据汇总为周数据
+  const aggregateToWeekly = React.useCallback((locationData: LocationData[]): WeeklyLocationData[] => {
+    return locationData.map(location => {
+      const weeklyData: WeeklyData[] = []
+      const dailyData = location.daily_data
+
+      if (dailyData.length === 0) {
+        return {
+          location_id: location.location_id,
+          location_group: location.location_group,
+          location_name: location.location_name,
+          weekly_data: []
+        }
+      }
+
+      // 按周分组（假设数据从周一开始，每7天一周）
+      for (let weekNum = 0; weekNum < 8; weekNum++) {
+        const weekStart = weekNum * 7
+        const weekEnd = Math.min(weekStart + 7, dailyData.length)
+        const weekDays = dailyData.slice(weekStart, weekEnd)
+
+        if (weekDays.length === 0) break
+
+        // 汇总一周的数据
+        const starting_inventory = weekDays[0]?.historical_inventory || 0
+        const total_inbound = weekDays.reduce((sum, day) => sum + day.planned_inbound, 0)
+        const total_outbound = weekDays.reduce((sum, day) => sum + day.planned_outbound, 0)
+        const ending_inventory = weekDays[weekDays.length - 1]?.forecast_inventory || 0
+
+        weeklyData.push({
+          week_number: weekNum + 1,
+          week_label: `第${weekNum + 1}周`,
+          week_start: weekDays[0]?.forecast_date || '',
+          week_end: weekDays[weekDays.length - 1]?.forecast_date || '',
+          starting_inventory,
+          total_inbound,
+          total_outbound,
+          ending_inventory
+        })
+      }
+
+      return {
+        location_id: location.location_id,
+        location_group: location.location_group,
+        location_name: location.location_name,
+        weekly_data: weeklyData
+      }
+    })
+  }, [])
+
   const fetchData = React.useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
       
-      // 获取服务器当前日期，用于查询从今天开始的15天数据
+      // 获取服务器当前日期
       const timeResponse = await fetch("/api/system/current-time")
       if (!timeResponse.ok) {
         throw new Error("获取服务器时间失败")
       }
       const timeData = await timeResponse.json()
       const todayString = timeData.date
-      const endDateString = addDaysToDateString(todayString, 14)
       
-      console.log('[前端] 查询日预测数据:', { todayString, endDateString })
+      // 计算本周一
+      const mondayString = getMondayOfWeek(todayString)
+      const endDateString = addDaysToDateString(mondayString, 55) // 8周 = 56天
       
-      // 查询从今天开始的15天数据
-      const response = await fetch(`/api/reports/inventory-forecast?start_date=${todayString}&end_date=${endDateString}`)
+      console.log('[前端-周预测] 查询数据:', { mondayString, endDateString })
+      
+      // 查询从本周一开始的56天数据
+      const response = await fetch(`/api/reports/inventory-forecast?start_date=${mondayString}&end_date=${endDateString}`)
       if (!response.ok) {
         throw new Error("获取数据失败")
       }
       const result = await response.json()
-      console.log('[前端] API返回的数据:', {
+      console.log('[前端-周预测] API返回的数据:', {
         summary: result.summary,
         dataCount: result.data?.length,
         firstLocationData: result.data?.[0]?.daily_data?.length,
       })
-      setData(result.data || [])
-      // 设置基准日期为今天
-      console.log('[前端] 设置基准日期:', todayString)
-      setStartDate(todayString)
-      // 不读取外部时间，使用API返回的计算时间或显示"刚刚"
-      // 如果API返回了calculated_at，可以使用它，否则显示"刚刚"
+      
+      // 将日数据汇总为周数据
+      const weeklyData = aggregateToWeekly(result.data || [])
+      console.log('[前端-周预测] 汇总后的周数据:', {
+        locationsCount: weeklyData.length,
+        firstLocationWeeks: weeklyData[0]?.weekly_data?.length
+      })
+      
+      setData(weeklyData)
+      setStartDate(mondayString)
       setLastCalculated("刚刚")
     } catch (err: any) {
       setError(err.message || "获取数据失败")
-      console.error("获取库存预测数据失败:", err)
+      console.error("获取周预测数据失败:", err)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [aggregateToWeekly])
 
   const handleCalculate = async () => {
     try {
       setCalculating(true)
       setError(null)
       
-      // 从服务器获取当前时间（确保本地和正式环境使用相同的逻辑）
-      // 本地开发：从本地开发服务器获取时间
-      // 正式环境：从 Netlify 服务器获取时间
+      // 从服务器获取当前时间
       const timeResponse = await fetch("/api/system/current-time")
       if (!timeResponse.ok) {
         throw new Error("获取服务器时间失败")
@@ -93,7 +166,7 @@ export function InventoryForecastClient() {
       const baseDateString = timeData.date
       const timestampString = timeData.timestamp
       
-      console.log('[前端] 使用服务器时间:', { baseDateString, timestampString })
+      console.log('[前端-周预测] 使用服务器时间:', { baseDateString, timestampString })
       
       const response = await fetch("/api/reports/inventory-forecast/calculate", {
         method: "POST",
@@ -110,12 +183,12 @@ export function InventoryForecastClient() {
         const errorData = await response.json()
         throw new Error(errorData.error || "计算失败")
       }
-      // 计算完成后刷新数据（先重置 startDate，确保使用新的基准日期）
-      setStartDate(null)
+      
+      // 计算成功后重新获取数据
       await fetchData()
     } catch (err: any) {
       setError(err.message || "计算失败")
-      console.error("计算库存预测失败:", err)
+      console.error("计算周预测失败:", err)
     } finally {
       setCalculating(false)
     }
@@ -125,42 +198,6 @@ export function InventoryForecastClient() {
     fetchData()
   }, [fetchData])
 
-  // 生成日期列标题（15天）- 使用API返回的基准日期
-  const dateColumns = React.useMemo(() => {
-    if (!startDate) {
-      // 如果还没有获取到基准日期，返回空数组
-      return []
-    }
-    
-    const columns = Array.from({ length: 15 }, (_, i) => {
-      const dateString = addDaysToDateString(startDate, i)
-      const date = new Date(dateString + 'T00:00:00Z') // 解析为UTC日期
-      const weekdays = ['日', '一', '二', '三', '四', '五', '六']
-      const weekday = weekdays[date.getUTCDay()]
-      const month = date.getUTCMonth() + 1
-      const day = date.getUTCDate()
-      return {
-        date: dateString,
-        dayNumber: i + 1,
-        dateLabel: `${month}-${day}`,
-        weekdayLabel: `星期${weekday}`,
-        isToday: i === 0,
-        isWeekend: date.getUTCDay() === 0 || date.getUTCDay() === 6,
-      }
-    })
-    console.log('[前端] 生成的日期列:', {
-      startDate,
-      columns: columns.map(c => `${c.dateLabel} (day ${c.dayNumber})`),
-    })
-    return columns
-  }, [startDate])
-
-  // 获取某个仓点某天的数据
-  const getDayData = (locationData: LocationData, dayNumber: number) => {
-    return locationData.daily_data.find((d) => d.day_number === dayNumber)
-  }
-
-  // 获取仓点分组标签颜色
   const getLocationGroupBadge = (group: string) => {
     switch (group) {
       case 'amazon':
@@ -181,63 +218,43 @@ export function InventoryForecastClient() {
   // 计算统计数据
   const stats = React.useMemo(() => {
     if (data.length === 0) return null
-    
-    let totalLocations = data.length
+
     let totalInventory = 0
     let totalInbound = 0
     let totalOutbound = 0
-    let lowStockLocations = 0
 
-    data.forEach((location) => {
-      const todayData = location.daily_data.find((d) => d.day_number === 1)
-      if (todayData) {
-        totalInventory += todayData.forecast_inventory
-        totalInbound += todayData.planned_inbound
-        totalOutbound += todayData.planned_outbound
-      }
-      
-      // 库存预警：检查所有天数，只要有任何一天 > 100 或 < 0 就算预警
-      const hasWarning = location.daily_data.some(day => 
-        day.forecast_inventory > 100 || day.forecast_inventory < 0
-      )
-      if (hasWarning) {
-        lowStockLocations++
-      }
+    data.forEach(location => {
+      location.weekly_data.forEach(week => {
+        totalInventory += week.ending_inventory
+        totalInbound += week.total_inbound
+        totalOutbound += week.total_outbound
+      })
     })
 
     return {
-      totalLocations,
+      totalLocations: data.length,
       totalInventory,
       totalInbound,
       totalOutbound,
-      lowStockLocations,
     }
   }, [data])
 
   return (
     <div className="space-y-6">
-      {/* 页面标题和操作栏 */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
-              <TrendingUp className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                库存预测报表
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                未来15天的库存、入库、出库预测分析
-              </p>
-            </div>
-          </div>
-          {lastCalculated && (
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              最后更新：{lastCalculated}
-            </p>
-          )}
+      {/* 页面标题和操作 */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            库存预测 - 周视图
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            未来8周库存预测汇总（从本周一开始）
+            {lastCalculated && (
+              <span className="ml-2 text-xs">
+                · 最后更新: {lastCalculated}
+              </span>
+            )}
+          </p>
         </div>
         <Button
           variant="outline"
@@ -252,7 +269,7 @@ export function InventoryForecastClient() {
 
       {/* 统计卡片 */}
       {stats && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -271,15 +288,15 @@ export function InventoryForecastClient() {
           <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                总库存
+                预测周数
               </CardTitle>
               <div className="p-2 rounded-lg bg-gradient-to-br from-green-500 to-green-600 shadow-lg">
-                <TrendingUp className="h-4 w-4 text-white" />
+                <Calendar className="h-4 w-4 text-white" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalInventory.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">板数</p>
+              <div className="text-2xl font-bold">8 周</div>
+              <p className="text-xs text-muted-foreground mt-1">从 {startDate} 开始</p>
             </CardContent>
           </Card>
 
@@ -310,21 +327,6 @@ export function InventoryForecastClient() {
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">{stats.totalOutbound.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground mt-1">板数</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                库存预警
-              </CardTitle>
-              <div className="p-2 rounded-lg bg-gradient-to-br from-red-500 to-red-600 shadow-lg">
-                <AlertCircle className="h-4 w-4 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">{stats.lowStockLocations}</div>
-              <p className="text-xs text-muted-foreground mt-1">个仓点</p>
             </CardContent>
           </Card>
         </div>
@@ -381,7 +383,7 @@ export function InventoryForecastClient() {
               <div>
                 <CardTitle className="text-xl font-bold">库存预测表格</CardTitle>
                 <CardDescription className="mt-1">
-                  横向为时间（今天到未来15天），纵向为各仓点
+                  横向为时间（未来8周），纵向为各仓点
                 </CardDescription>
               </div>
               <Badge variant="secondary" className="text-sm">
@@ -402,24 +404,14 @@ export function InventoryForecastClient() {
                         <span className="text-base">仓点</span>
                       </div>
                     </TableHead>
-                    {dateColumns.map((col) => (
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((weekNum) => (
                       <TableHead
-                        key={col.date}
-                        className={cn(
-                          "text-center min-w-[150px] font-semibold border-x",
-                          col.isToday && "bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/50 dark:to-blue-800/30",
-                          col.isWeekend && !col.isToday && "bg-gradient-to-br from-orange-50 to-yellow-50 dark:from-orange-950/30 dark:to-yellow-950/20"
-                        )}
+                        key={weekNum}
+                        className="text-center min-w-[170px] font-semibold border-x"
                       >
                         <div className="flex flex-col gap-1.5 py-2">
-                          <span className="text-sm font-bold">{col.dateLabel}</span>
-                          <span className={cn(
-                            "text-xs font-medium",
-                            col.isToday && "text-blue-600 dark:text-blue-400",
-                            col.isWeekend && !col.isToday && "text-orange-600 dark:text-orange-400",
-                            !col.isToday && !col.isWeekend && "text-muted-foreground"
-                          )}>
-                            {col.weekdayLabel}
+                          <span className="text-sm font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                            第 {weekNum} 周
                           </span>
                         </div>
                       </TableHead>
@@ -454,17 +446,13 @@ export function InventoryForecastClient() {
                             <span className="font-medium text-sm text-slate-700 dark:text-slate-300">{locationData.location_name}</span>
                           </div>
                         </TableCell>
-                        {dateColumns.map((col) => {
-                          const dayData = getDayData(locationData, col.dayNumber)
-                          if (!dayData) {
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((weekNum) => {
+                          const weekData = locationData.weekly_data.find(w => w.week_number === weekNum)
+                          if (!weekData) {
                             return (
                               <TableCell
-                                key={col.date}
-                                className={cn(
-                                  "text-center border-x border-slate-100 dark:border-slate-800",
-                                  col.isToday && "bg-blue-50/50 dark:bg-blue-950/20",
-                                  col.isWeekend && !col.isToday && "bg-amber-50/30 dark:bg-amber-950/10"
-                                )}
+                                key={weekNum}
+                                className="text-center border-x border-slate-100 dark:border-slate-800"
                               >
                                 <span className="text-slate-400 dark:text-slate-600">-</span>
                               </TableCell>
@@ -472,18 +460,13 @@ export function InventoryForecastClient() {
                           }
 
                           // 判断库存状态：库存预警当 > 100 或 < 0 时
-                          const isWarning = dayData.forecast_inventory > 100 || dayData.forecast_inventory < 0
-                          const isNormal = dayData.forecast_inventory >= 0 && dayData.forecast_inventory <= 100
+                          const isWarning = weekData.ending_inventory > 100 || weekData.ending_inventory < 0
+                          const isNormal = weekData.ending_inventory >= 0 && weekData.ending_inventory <= 100
 
                           return (
                             <TableCell
-                              key={col.date}
-                              className={cn(
-                                "text-center py-3 border-x border-slate-100 dark:border-slate-800",
-                                col.isToday && "bg-blue-50/50 dark:bg-blue-950/20",
-                                col.isWeekend && !col.isToday && "bg-amber-50/30 dark:bg-amber-950/10",
-                                "hover:bg-slate-100/50 dark:hover:bg-slate-800/30 transition-all duration-150"
-                              )}
+                              key={weekNum}
+                              className="text-center py-3 border-x border-slate-100 dark:border-slate-800 hover:bg-slate-100/50 dark:hover:bg-slate-800/30 transition-all duration-150"
                             >
                               <div className="flex flex-col gap-2">
                                 <div
@@ -495,19 +478,19 @@ export function InventoryForecastClient() {
                                       "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
                                   )}
                                 >
-                                  {dayData.forecast_inventory.toLocaleString()}
+                                  {weekData.ending_inventory.toLocaleString()}
                                 </div>
                                 <div className="text-xs space-y-1">
                                   <div className="flex items-center justify-center gap-1 text-indigo-600 dark:text-indigo-400">
                                     <span className="font-medium">↑</span>
                                     <span className="font-semibold">
-                                      {dayData.planned_inbound}
+                                      {weekData.total_inbound.toLocaleString()}
                                     </span>
                                   </div>
                                   <div className="flex items-center justify-center gap-1 text-orange-600 dark:text-orange-400">
                                     <span className="font-medium">↓</span>
                                     <span className="font-semibold">
-                                      {dayData.planned_outbound}
+                                      {weekData.total_outbound.toLocaleString()}
                                     </span>
                                   </div>
                                 </div>
@@ -527,4 +510,3 @@ export function InventoryForecastClient() {
     </div>
   )
 }
-

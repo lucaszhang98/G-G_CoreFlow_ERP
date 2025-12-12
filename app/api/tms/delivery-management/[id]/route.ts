@@ -104,9 +104,9 @@ export async function GET(
       appointment_number: appointment?.reference_number || null,
       container_number: order?.order_number || null,
       delivery_date: deliveryDate,
-      origin_location: appointment?.locations_delivery_appointments_origin_location_idTolocations?.name || null,
+      origin_location: appointment?.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
       origin_location_id: appointment?.origin_location_id ? String(appointment.origin_location_id) : null,
-      destination_location: appointment?.locations?.name || null,
+      destination_location: appointment?.locations?.location_code || null,
       destination_location_id: appointment?.location_id ? String(appointment.location_id) : null,
       po: po,
       pallet_type: appointment?.appointment_type || null,
@@ -131,10 +131,10 @@ export async function GET(
   }
 }
 
-// PATCH - 更新送仓管理记录
-export async function PATCH(
+// 更新送仓管理记录的共享逻辑
+async function updateDeliveryManagement(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  params: Promise<{ id: string }> | { id: string }
 ) {
   try {
     const authResult = await checkAuth()
@@ -177,5 +177,21 @@ export async function PATCH(
       { status: 500 }
     )
   }
+}
+
+// PATCH - 更新送仓管理记录
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  return updateDeliveryManagement(request, params)
+}
+
+// PUT - 更新送仓管理记录（兼容标准 REST API）
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  return updateDeliveryManagement(request, params)
 }
 

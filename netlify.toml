@@ -1,23 +1,18 @@
 # Netlify 配置文件
-# 这个文件会被 Netlify 自动读取，用于配置构建和部署过程
 
 [build]
-  # 构建命令
-  # 如果 package-lock.json 存在，使用 npm ci（更快且确保版本一致）
-  # 否则使用 npm install
   command = "npm run build"
-  # 发布目录（Next.js 插件会自动处理，但明确指定以确保正确）
   publish = ".next"
 
 [build.environment]
-  # Node.js 版本
   NODE_VERSION = "20"
-  # NPM 版本（使用最新稳定版）
   NPM_VERSION = "10"
-  # Prisma 二进制目标，确保在 Netlify 服务器上使用正确的查询引擎
   PRISMA_CLI_BINARY_TARGETS = "rhel-openssl-3.0.x"
-  # 禁用 Next.js 的 Telemetry（可选，减少构建日志）
   NEXT_TELEMETRY_DISABLED = "1"
+  # 生产优化
+  NODE_ENV = "production"
+  # 减少构建日志
+  CI = "true"
 
 # Netlify Next.js 插件配置
 # 这个插件会自动处理 Next.js 的构建和部署，包括函数打包和依赖管理
@@ -31,16 +26,9 @@
   package = "@netlify/plugin-nextjs"
 
 # 函数配置
-# Netlify Next.js 插件会自动处理必要的文件打包
-# 注意：不要使用 included_files = ["**"]，这会让函数包变得非常大
 [functions]
-  # 使用 esbuild 进行打包（默认值，明确指定以确保一致性）
   node_bundler = "esbuild"
-  # 函数超时时间（秒）- 默认 10 秒，对于复杂查询可以增加到 26 秒（Netlify 免费版最大）
-  # 注意：在 Netlify 控制台也可以为特定函数设置超时时间
-  # 对于库存预测等复杂计算，建议在控制台设置为 26 秒
-  # 函数内存限制（MB）- 默认 1024MB，可以根据需要调整
-  # 注意：内存限制在 Netlify 控制台的函数设置中配置
+  # 库存预测等复杂计算在 Netlify 控制台设置超时为 26 秒
 
 # 重定向规则
 # Next.js 插件会自动处理所有路由重定向，不需要手动配置
