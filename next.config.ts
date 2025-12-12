@@ -13,9 +13,6 @@ const nextConfig: NextConfig = {
   poweredByHeader: false, // 禁用X-Powered-By响应头
   compress: true, // 启用gzip压缩
   
-  // 编译优化
-  swcMinify: true, // 使用SWC进行代码压缩（默认已启用）
-  
   // 性能优化
   images: {
     formats: ['image/webp'], // 使用WebP格式优化图片
