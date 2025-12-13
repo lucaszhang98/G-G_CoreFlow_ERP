@@ -11,7 +11,7 @@
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit",
     "postinstall": "prisma generate",
-    "prebuild": "tsc --noEmit",
+    "prebuild": "prisma generate",
     "create-user": "tsx scripts/create-test-user.ts",
     "schemaspy": "node scripts/generate_schemaspy.js"
   },
