@@ -135,20 +135,10 @@ export const orderDetailConfig: EntityConfig = {
       'notes',
       'delivery_progress',
     ],
-    searchFields: ['container_number'],
+    searchFields: ['container_number', 'order_number'],
     pageSize: 20,
     // 筛选配置
     filterFields: [
-      {
-        field: 'customer_name',
-        label: '客户',
-        type: 'select',
-        relation: {
-          model: 'customers',
-          displayField: 'name',
-          valueField: 'id',
-        },
-      },
       {
         field: 'delivery_nature',
         label: '送仓性质',
@@ -169,16 +159,6 @@ export const orderDetailConfig: EntityConfig = {
           displayField: 'location_code',
           valueField: 'location_id',
         },
-      },
-      {
-        field: 'unbooked_pallets',
-        label: '未约板数',
-        type: 'select',
-        options: [
-          { label: '有未约', value: 'non_zero' },
-          { label: '无未约', value: 'zero' },
-          { label: '多约', value: 'negative' },
-        ],
       },
       {
         field: 'planned_unload_at',
