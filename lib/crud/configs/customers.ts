@@ -108,6 +108,10 @@ export const customerConfig: EntityConfig = {
       enabled: true,
       fields: ['code', 'name', 'company_name', 'status', 'credit_limit'], // 可编辑的字段
     },
+    // 批量导入配置
+    import: {
+      enabled: true,
+    },
   },
   
   formFields: ['code', 'name', 'company_name', 'status', 'credit_limit', 'contact'],

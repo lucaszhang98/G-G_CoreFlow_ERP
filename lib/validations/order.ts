@@ -12,6 +12,7 @@ export const orderCreateSchema = z.object({
   order_date: z.string().or(z.date()),
   status: z.enum(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'archived']).optional(),
   operation_mode: z.enum(['unload', 'direct_delivery']).optional().nullable(),
+  delivery_location_id: z.number().optional().nullable(),
   total_amount: z.number().min(0, '订单金额不能为负数'),
   discount_amount: z.number().min(0, '折扣金额不能为负数').optional().nullable(),
   tax_amount: z.number().min(0, '税费不能为负数').optional().nullable(),

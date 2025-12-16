@@ -73,7 +73,7 @@ export async function GET(
         remaining_pallets: true, // 未约板数（预计板数 - 所有预约板数之和）
         delivery_nature: true,
         delivery_location: true,
-        unload_type: true,
+        fba: true,
         volume_percentage: true,
         notes: true,
         po: true, // PO字段
@@ -175,7 +175,7 @@ export async function GET(
           delivery_nature: detail.delivery_nature,
           delivery_location: detail.delivery_location || null,
           location_code: locationCode, // 新增：location_code
-          unload_type: detail.unload_type || null,
+          fba: detail.fba || null,
           volume_percentage: detail.volume_percentage ? Number(detail.volume_percentage) : null,
           notes: detail.notes || null,
           po: detail.po || null, // PO字段

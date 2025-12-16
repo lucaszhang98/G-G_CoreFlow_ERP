@@ -68,3 +68,4 @@ export const contactRoleConfig: EntityConfig = {
     model: 'contact_roles',
   },
 }
+

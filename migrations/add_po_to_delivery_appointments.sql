@@ -6,3 +6,4 @@ ALTER TABLE oms.delivery_appointments
 ADD COLUMN IF NOT EXISTS po VARCHAR(1000);
 
 COMMENT ON COLUMN oms.delivery_appointments.po IS 'PO信息';
+

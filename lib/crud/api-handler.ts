@@ -459,6 +459,14 @@ export function createListHandler(config: EntityConfig) {
               // 如果关联不存在，设置为 null（前端会显示 '-'）
               serialized.user_id = null
             }
+            // 处理 locations_orders_delivery_location_idTolocations 关联：-> delivery_location
+            if (serialized.locations_orders_delivery_location_idTolocations) {
+              serialized.delivery_location = serialized.locations_orders_delivery_location_idTolocations
+              delete serialized.locations_orders_delivery_location_idTolocations
+            } else if (serialized.delivery_location_id) {
+              // 如果有ID但没有关联数据，设置为null（前端会显示'-'）
+              serialized.delivery_location = null
+            }
             // 处理 carriers 关联：carriers -> carrier
             if (serialized.carriers) {
               serialized.carrier = serialized.carriers
@@ -998,9 +1006,11 @@ export function createUpdateHandler(config: EntityConfig) {
           continue // 跳过后续处理
         }
         
-        if (fieldConfig?.relation && fieldConfig.relation.valueField) {
+        if (fieldConfig?.relation) {
           if (value) {
-            processedData[fieldConfig.relation.valueField] = BigInt(value as number)
+            // 优先使用 relationField，否则使用 valueField
+            const targetField = fieldConfig.relationField || fieldConfig.relation.valueField || key
+            processedData[targetField] = BigInt(value as number)
           }
         } else if (typeof value === 'number' && key.endsWith('_id')) {
           processedData[key] = BigInt(value)
@@ -1235,19 +1245,17 @@ export function createBatchUpdateHandler(config: EntityConfig) {
       // 处理字段映射和类型转换
       const processedUpdates: any = {}
       Object.entries(updates).forEach(([key, value]) => {
-        // 字段名映射：origin_location -> origin_location_id, destination_location -> location_id
+        // 查找字段配置
+        const fieldConfig = config.fields[key]
+        
+        // 如果是relation字段，使用relationField映射
         let actualKey = key
-        if (key === 'origin_location') {
+        if (fieldConfig?.relation) {
+          actualKey = fieldConfig.relationField || fieldConfig.relation.valueField || key
+        } else if (key === 'origin_location') {
           actualKey = 'origin_location_id'
         } else if (key === 'destination_location') {
           actualKey = 'location_id'
-        }
-        
-        // 尝试查找字段配置（先尝试映射后的字段名，再尝试原始字段名）
-        let fieldConfig = config.fields[actualKey]
-        if (!fieldConfig && key.endsWith('_location_id')) {
-          const baseKey = key.replace('_location_id', '_location')
-          fieldConfig = config.fields[baseKey]
         }
         
         // 处理 boolean 字段：确保 false 值不被过滤，并转换为布尔类型

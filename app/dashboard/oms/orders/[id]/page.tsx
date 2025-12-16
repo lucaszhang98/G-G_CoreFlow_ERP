@@ -95,7 +95,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             estimated_pallets: true,
             delivery_nature: true,
             delivery_location: true,
-            unload_type: true,
+            fba: true,
             volume_percentage: true,
             notes: true,
             po: true, // PO字段
@@ -378,7 +378,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                 volume: detail.volume ? Number(detail.volume) : null,
                 delivery_location: detail.delivery_location_code || detail.delivery_location || null, // 优先使用 location_code
                 location_code: detail.delivery_location_code || null, // 添加 location_code 字段供 detail-table 使用
-                unload_type: detail.unload_type || null,
+                fba: detail.fba || null,
                 volume_percentage: detail.volume_percentage ? Number(detail.volume_percentage) : null,
                 notes: detail.notes || null,
                 po: detail.po || null, // PO字段

@@ -4,10 +4,11 @@ import * as React from "react"
 import { EntityTable } from "@/components/crud/entity-table"
 import { orderConfig } from "@/lib/crud/configs/orders"
 import { CreateOrderDialog } from "./create-order-dialog"
+import { OrderImportDialog } from "./order-import-dialog"
 import { FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
-
 export function OrdersPageClient() {
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false)
+  const [importDialogOpen, setImportDialogOpen] = React.useState(false)
   const [refreshKey, setRefreshKey] = React.useState(0)
 
   const handleCreateSuccess = () => {
@@ -18,6 +19,12 @@ export function OrdersPageClient() {
   const customActions = {
     onDelete: undefined, // 禁用单个删除
     onAdd: () => setCreateDialogOpen(true), // 自定义创建操作
+  }
+
+  // 批量导入配置
+  const importConfig = {
+    enabled: true,
+    onImport: () => setImportDialogOpen(true),
   }
 
   // 为客户字段提供模糊搜索选项加载函数
@@ -36,8 +43,8 @@ export function OrdersPageClient() {
       const customers = data.data || []
       return customers.map((customer: any) => ({
         value: String(customer.id),
-        label: customer.name || customer.code || String(customer.id),
-        description: customer.company_name || customer.code,
+        label: customer.code || customer.name || String(customer.id),
+        description: customer.name || customer.company_name,
       }))
     } catch (error) {
       console.error('加载客户选项失败:', error)
@@ -83,10 +90,16 @@ export function OrdersPageClient() {
         config={orderConfig} 
         customActions={customActions}
         fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}
+        importConfig={importConfig}
       />
       <CreateOrderDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
+        onSuccess={handleCreateSuccess}
+      />
+      <OrderImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
         onSuccess={handleCreateSuccess}
       />
     </>

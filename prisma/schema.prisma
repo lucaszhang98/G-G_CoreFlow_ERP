@@ -39,6 +39,8 @@ model delivery_appointments {
   outbound_shipments                                            outbound_shipments?
   delivery_management                                           delivery_management?
 
+  @@index([confirmed_start], map: "idx_delivery_appointments_confirmed_start")
+  @@index([rejected], map: "idx_delivery_appointments_rejected")
   @@schema("oms")
 }
 
@@ -365,7 +367,7 @@ model order_detail {
   delivery_nature                                             String?                    @db.VarChar(50)
   volume_percentage                                           Decimal?                   @db.Decimal(5, 2)
   delivery_location                                           String?                    @db.VarChar(200)
-  unload_type                                                 String?                    @db.VarChar(1000)
+  fba                                                         String?                    @db.VarChar(1000)
   notes                                                       String?
   po                                                          String?                    @db.VarChar(1000)
   users_order_detail_created_byTousers                        users?                     @relation("order_detail_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -379,6 +381,8 @@ model order_detail {
 
   @@index([detail_id], map: "idx_order_detail_detail")
   @@index([order_id], map: "idx_order_detail_order")
+  @@index([delivery_location], map: "idx_order_detail_delivery_location")
+  @@index([delivery_nature], map: "idx_order_detail_delivery_nature")
   @@schema("public")
 }
 
@@ -753,6 +757,8 @@ model inbound_receipt {
   inventory_lots                           inventory_lots[]
   putaway_tasks                            putaway_tasks[]
 
+  @@index([planned_unload_at], map: "idx_inbound_receipt_planned_unload_at")
+  @@index([status], map: "idx_inbound_receipt_status")
   @@schema("wms")
 }
 

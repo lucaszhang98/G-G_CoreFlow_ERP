@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
         remaining_pallets: true, // 剩余板数
         delivery_nature: true,
         delivery_location: true,
-        unload_type: true,
+        fba: true,
         volume_percentage: true,
         notes: true,
         po: true,
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { order_id, quantity, volume, delivery_nature, delivery_location, unload_type, notes, po, estimated_pallets } = body
+    const { order_id, quantity, volume, delivery_nature, delivery_location, fba, notes, po, estimated_pallets } = body
 
     // 验证和转换 delivery_location：如果是 location_code，转换为 location_id
     let validatedDeliveryLocation: string | null = null
@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
         remaining_pallets: calculatedEstimatedPallets, // 初始化未约板数 = 预计板数（还没有预约）
         delivery_nature: delivery_nature || null,
         delivery_location: validatedDeliveryLocation,
-        unload_type: unload_type || null,
+        fba: fba || null,
         volume_percentage: calculatedVolumePercentage ? parseFloat(calculatedVolumePercentage.toFixed(2)) : null, // 自动计算，保留2位小数
         notes: notes || null,
         po: po || null,

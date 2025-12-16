@@ -80,6 +80,8 @@ export interface FieldConfig {
     displayField: string
     valueField?: string
   }
+  // 关系字段映射到的数据库字段名（用于filter和update）
+  relationField?: string
   hidden?: boolean // 标记为隐藏字段（如审计字段），不在前端显示
   readonly?: boolean // 标记为只读字段，用户不能编辑
   computed?: boolean // 标记为计算字段，由系统自动计算
@@ -134,6 +136,10 @@ export interface EntityConfig {
     inlineEdit?: {
       enabled?: boolean // 是否启用行内编辑（默认 true，如果有 update 权限）
       fields?: string[] // 可编辑的字段列表（如果为空，则所有可更新字段都可编辑）
+    }
+    // 批量导入配置
+    import?: {
+      enabled: boolean // 是否启用批量导入
     }
   }
   

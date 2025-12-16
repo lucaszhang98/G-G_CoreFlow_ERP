@@ -28,6 +28,11 @@ export function getRelationDbFieldName(
     return filterField.field
   }
 
+  // 🆕 如果配置了 relationField，优先使用
+  if (fieldConfig.relationField) {
+    return fieldConfig.relationField
+  }
+
   const valueField = fieldConfig.relation.valueField || 'id'
   
   // 如果 valueField 是 'id'，需要根据字段名判断

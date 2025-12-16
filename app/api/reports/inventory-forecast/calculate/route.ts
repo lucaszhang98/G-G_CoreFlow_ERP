@@ -7,8 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth } from '@/lib/api/helpers'
-// 使用优化版计算服务（性能提升 85-90%）
-import { calculateInventoryForecast } from '@/lib/services/inventory-forecast-service-optimized'
+// 使用优化版计算服务
+import { calculateInventoryForecast } from '@/lib/services/inventory-forecast-service'
 
 // 设置函数最大执行时间（Netlify 免费版最大 26 秒）
 export const maxDuration = 26

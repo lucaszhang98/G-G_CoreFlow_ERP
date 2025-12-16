@@ -1,3 +1,0 @@
-container_legs
-freight_bills
-containers

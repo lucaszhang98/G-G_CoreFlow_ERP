@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import { Menu, LogOut, Bell, Package2, ChevronLeft, ChevronRight } from "lucide-react"
 import dynamic from "next/dynamic"
 import { useState, useEffect } from "react"
@@ -151,6 +151,7 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
                     </Button>
                   </SheetTrigger>
                   <SheetContent side="left" className="w-64 p-0">
+                    <SheetTitle className="sr-only">导航菜单</SheetTitle>
                     <Sidebar userRole={user.role || "user"} />
                   </SheetContent>
                 </Sheet>

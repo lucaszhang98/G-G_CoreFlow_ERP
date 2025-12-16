@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
             remaining_pallets: true, // 剩余板数
             delivery_nature: true,
             delivery_location: true,
-            unload_type: true,
+            fba: true,
             volume_percentage: true,
             notes: true,
             po: true, // PO字段
@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
         delivery_nature: orderDetail.delivery_nature,
         delivery_location: locationCode || orderDetail.delivery_location,
         delivery_location_code: locationCode,
-        unload_type: orderDetail.unload_type,
+        fba: orderDetail.fba,
         volume_percentage: orderDetail.volume_percentage,
         notes: orderDetail.notes,
         // 从 delivery_appointments 获取的数据

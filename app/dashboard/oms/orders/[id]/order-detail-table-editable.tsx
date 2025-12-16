@@ -811,7 +811,7 @@ function AddDetailDialog({ open, onOpenChange, onSave }: { open: boolean; onOpen
     volume: '',
     delivery_location: null as string | null,
     delivery_nature: null as string | null,
-    unload_type: null as string | null,
+    fba: null as string | null,
     notes: null as string | null,
     estimated_pallets: null as number | null,
     po: null as string | null,
@@ -824,7 +824,7 @@ function AddDetailDialog({ open, onOpenChange, onSave }: { open: boolean; onOpen
         volume: '',
         delivery_location: null,
         delivery_nature: null,
-        unload_type: null,
+        fba: null,
         notes: null,
         estimated_pallets: null,
         po: null,
@@ -919,13 +919,13 @@ function AddDetailDialog({ open, onOpenChange, onSave }: { open: boolean; onOpen
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="unload_type">拆柜/转仓</Label>
+            <Label htmlFor="fba">FBA</Label>
             <Input
-              id="unload_type"
+              id="fba"
               type="text"
-              value={formData.unload_type || ''}
-              onChange={(e) => setFormData({ ...formData, unload_type: e.target.value || null })}
-              placeholder="请输入拆柜/转仓"
+              value={formData.fba || ''}
+              onChange={(e) => setFormData({ ...formData, fba: e.target.value || null })}
+              placeholder="请输入FBA"
             />
           </div>
           <div className="space-y-2">

@@ -7,7 +7,7 @@
 import * as React from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { ColumnDef } from "@tanstack/react-table"
-import { Plus, Trash2, Edit, CheckCircle, XCircle } from "lucide-react"
+import { Plus, Trash2, Edit, CheckCircle, XCircle, Upload } from "lucide-react"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -127,6 +127,11 @@ interface EntityTableProps<T = any> {
     enabled: boolean
     getExpandedContent?: (row: T) => React.ReactNode | null // 获取展开内容
   } // 可展开行配置
+  customToolbarButtons?: React.ReactNode // 自定义工具栏按钮（显示在新建按钮旁边）
+  importConfig?: {
+    enabled: boolean // 是否启用批量导入
+    onImport: () => void // 导入按钮点击回调
+  } // 批量导入配置
 }
 
 export function EntityTable<T = any>({ 
@@ -141,6 +146,8 @@ export function EntityTable<T = any>({
   fieldFuzzyLoadOptions,
   customSaveHandler,
   expandableRows,
+  customToolbarButtons,
+  importConfig,
 }: EntityTableProps<T>) {
   // 自动增强配置，生成 filterFields 和 advancedSearchFields（如果未配置）
   const enhancedConfig = React.useMemo(() => {
@@ -1602,9 +1609,26 @@ export function EntityTable<T = any>({
             管理系统中所有{config.pluralName}信息，支持搜索、筛选和批量操作
           </p>
         </div>
-        {/* 只有配置了创建权限才显示新建按钮 */}
-        {config.permissions.create && config.permissions.create.length > 0 && (
-          <div className="flex-shrink-0">
+        {/* 工具栏按钮区域 */}
+        <div className="flex-shrink-0 flex items-center gap-3">
+          {/* 批量导入按钮 */}
+          {importConfig?.enabled && (
+            <Button
+              onClick={importConfig.onImport}
+              variant="outline"
+              size="lg"
+              className="group relative h-11 px-6 text-base font-medium border-2 border-blue-200 hover:border-blue-400 bg-white hover:bg-blue-50 text-blue-600 hover:text-blue-700 shadow-sm hover:shadow-md transition-all duration-200"
+            >
+              <Upload className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+              <span>批量导入</span>
+            </Button>
+          )}
+          
+          {/* 自定义工具栏按钮 */}
+          {customToolbarButtons}
+          
+          {/* 只有配置了创建权限才显示新建按钮 */}
+          {config.permissions.create && config.permissions.create.length > 0 && (
             <Button 
               onClick={handleCreate}
               className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/40 transition-all duration-200 h-11 px-6 text-base font-medium"
@@ -1613,8 +1637,8 @@ export function EntityTable<T = any>({
               <Plus className="mr-2 h-5 w-5" />
               新建{config.displayName}
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* 专业搜索模块 */}

@@ -1,3 +1,0 @@
-delivery_appointments
-order_requirements
-order_allocations

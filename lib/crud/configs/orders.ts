@@ -39,7 +39,7 @@ export const orderConfig: EntityConfig = {
       type: 'relation',
       relation: {
         model: 'customers',
-        displayField: 'name',
+        displayField: 'code',
         valueField: 'id',
       },
     },
@@ -202,11 +202,22 @@ export const orderConfig: EntityConfig = {
         { label: '直送', value: 'direct_delivery' },
       ],
     },
+    delivery_location_id: {
+      key: 'delivery_location_id',
+      label: '目的地ID',
+      type: 'number',
+      hidden: true,
+    },
     delivery_location: {
       key: 'delivery_location',
-      label: '送货地',
-      type: 'text',
-      hidden: true,
+      label: '目的地',
+      type: 'relation',
+      relation: {
+        model: 'locations',
+        displayField: 'name',
+        valueField: 'location_id',
+      },
+      relationField: 'delivery_location_id', // 指向数据库中的实际字段
     },
     carrier_id: {
       key: 'carrier_id',
@@ -242,7 +253,7 @@ export const orderConfig: EntityConfig = {
   list: {
     defaultSort: 'order_date',
     defaultOrder: 'desc',
-    columns: ['order_number', 'customer', 'user_id', 'order_date', 'status', 'operation_mode', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'container_volume', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'notes'],
+    columns: ['order_number', 'customer', 'user_id', 'order_date', 'status', 'operation_mode', 'delivery_location', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'container_volume', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'notes'],
     searchFields: ['order_number'], // 只搜索订单号（最重要的字段）
     pageSize: 10,
     // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
@@ -261,6 +272,7 @@ export const orderConfig: EntityConfig = {
         'order_date',
         'status',
         'operation_mode',
+        'delivery_location',
         'container_type',
         'eta_date',
         'lfd_date',
@@ -284,6 +296,7 @@ export const orderConfig: EntityConfig = {
           'order_date',
           'status',
           'operation_mode',
+          'delivery_location',
           'container_type',
           'eta_date',
           'lfd_date',
@@ -301,7 +314,7 @@ export const orderConfig: EntityConfig = {
     },
   },
   
-  formFields: ['order_number', 'customer_id', 'order_date', 'status', 'operation_mode', 'total_amount', 'container_type', 'notes'],
+  formFields: ['order_number', 'customer_id', 'order_date', 'status', 'operation_mode', 'delivery_location_id', 'total_amount', 'container_type', 'notes'],
   
   permissions: {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
@@ -332,6 +345,13 @@ export const orderConfig: EntityConfig = {
         select: {
           id: true,
           full_name: true,
+        },
+      },
+      locations_orders_delivery_location_idTolocations: {
+        select: {
+          location_id: true,
+          location_code: true,
+          name: true,
         },
       },
       order_detail: {

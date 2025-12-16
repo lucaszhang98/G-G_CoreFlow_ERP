@@ -325,7 +325,7 @@ export function InboundReceiptDetailsTable({
             <TableHead>实际板数</TableHead>
             <TableHead>剩余板数</TableHead>
             <TableHead>送货进度</TableHead>
-            <TableHead>拆柜/转仓</TableHead>
+            <TableHead>FBA</TableHead>
             <TableHead>备注</TableHead>
             <TableHead className="w-20">操作</TableHead>
           </TableRow>

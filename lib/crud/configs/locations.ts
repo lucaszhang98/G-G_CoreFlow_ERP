@@ -47,13 +47,9 @@ export const locationConfig: EntityConfig = {
       required: true,
       sortable: true,
       options: [
-        { label: '收货地址', value: 'delivery' },
-        { label: '发货地址', value: 'pickup' },
-        { label: '中转站', value: 'transit' },
-        { label: '码头', value: 'port' },
-        { label: '查验站', value: 'inspection' },
-        { label: '仓库', value: 'warehouse' },
+        { label: '码头/查验站', value: 'port' },
         { label: '亚马逊', value: 'amazon' },
+        { label: '仓库', value: 'warehouse' },
       ],
     },
     city: {

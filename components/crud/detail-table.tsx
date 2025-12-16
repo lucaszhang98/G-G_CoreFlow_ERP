@@ -50,7 +50,7 @@ export interface DetailData {
   remaining_pallets?: number | null // 剩余板数（用于显示总板数）
   delivery_nature?: string | null
   delivery_location?: string | null
-  unload_type?: string | null
+  fba?: string | null
   volume_percentage?: number | string | null
   notes?: string | null
   po?: string | null // PO字段
@@ -90,7 +90,7 @@ export interface DetailTableConfig {
     totalPallets?: boolean // 总板数
     estimatedPallets?: boolean // 预计板数
     volumePercentage?: boolean // 分仓占比
-    unloadType?: boolean // 拆柜/转仓
+    unloadType?: boolean // FBA
     notes?: boolean // 备注
     po?: boolean // PO
     detailId?: boolean // 仓点ID（隐藏）
@@ -257,7 +257,7 @@ export function DetailTable({
         delivery_location: detail.delivery_location,
         delivery_nature: detail.delivery_nature,
         volume: detail.volume,
-        unload_type: detail.unload_type,
+        fba: detail.fba,
         notes: detail.notes,
       })
     }
@@ -471,7 +471,7 @@ export function DetailTable({
     estimated_pallets?: number | null
     delivery_nature?: string | null
     delivery_location?: string | null
-    unload_type?: string | null
+    fba?: string | null
     volume_percentage?: number | null
     notes?: string | null
     order_detail_id?: string | number | null
@@ -579,7 +579,7 @@ export function DetailTable({
           volume: data.volume,
           delivery_nature: data.delivery_nature,
           delivery_location: data.delivery_location,
-          unload_type: data.unload_type,
+          fba: data.fba,
           notes: data.notes,
           po: data.po,
         }),
@@ -600,7 +600,7 @@ export function DetailTable({
     }
   }
 
-  // 获取显示的列（按照指定顺序：送仓地点-性质-数量-体积-预计板数-分仓占比-拆柜/转仓-备注）
+  // 获取显示的列（按照指定顺序：送仓地点-性质-数量-体积-预计板数-分仓占比-FBA-备注）
   const getVisibleColumns = () => {
     const cols: string[] = []
     if (config.showExpandable) cols.push('expand')
@@ -613,7 +613,7 @@ export function DetailTable({
     if (config.showColumns?.volume) cols.push('volume') // 体积
     if (config.showColumns?.estimatedPallets) cols.push('estimatedPallets') // 预计板数
     if (config.showColumns?.volumePercentage) cols.push('volumePercentage') // 分仓占比
-    if (config.showColumns?.unloadType) cols.push('unloadType') // 拆柜/转仓
+    if (config.showColumns?.unloadType) cols.push('unloadType') // FBA
     if (config.showColumns?.notes) cols.push('notes') // 备注
     // 其他可选字段
     if (config.showColumns?.totalVolume) cols.push('totalVolume')
@@ -685,7 +685,7 @@ export function DetailTable({
                   case 'volumePercentage':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">分仓占比</th>
                   case 'unloadType':
-                    return <th key={col} className="text-left p-2 font-semibold text-sm">拆柜/转仓</th>
+                    return <th key={col} className="text-left p-2 font-semibold text-sm">FBA</th>
                   case 'notes':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">备注</th>
                   case 'po':
@@ -834,21 +834,21 @@ export function DetailTable({
                         case 'volumePercentage':
                           return <td key={col} className="p-2 text-sm">{detail.volume_percentage ? `${formatNumber(detail.volume_percentage)}%` : '-'}</td>
                         case 'unloadType':
-                          // 订单明细可以编辑拆柜/转仓，预约明细不允许编辑
+                          // 订单明细可以编辑FBA，预约明细不允许编辑
                           if (editingRowId === detailId && editingData && !appointmentId) {
                             return (
                               <td key={col} className="p-2 text-sm">
                                 <Input
                                   type="text"
-                                  value={editingData.unload_type || ''}
-                                  onChange={(e) => setEditingData({ ...editingData, unload_type: e.target.value || null })}
+                                  value={editingData.fba || ''}
+                                  onChange={(e) => setEditingData({ ...editingData, fba: e.target.value || null })}
                                   className="w-full"
-                                  placeholder="拆柜/转仓"
+                                  placeholder="FBA"
                                 />
                               </td>
                             )
                           }
-                          return <td key={col} className="p-2 text-sm">{detail.unload_type || '-'}</td>
+                          return <td key={col} className="p-2 text-sm">{detail.fba || '-'}</td>
                         case 'notes':
                           // 订单明细可以编辑备注，预约明细不允许编辑
                           if (editingRowId === detailId && editingData && !appointmentId) {
@@ -1304,7 +1304,7 @@ function AddDetailDialog({
     estimated_pallets?: number | null
     delivery_nature?: string | null
     delivery_location?: string | null
-    unload_type?: string | null
+    fba?: string | null
     volume_percentage?: number | null
     notes?: string | null
     order_detail_id?: string | number | null
@@ -1551,7 +1551,7 @@ function AddDetailDialog({
       volume: '',
       delivery_location: null as string | number | null,
       delivery_nature: '',
-      unload_type: '',
+      fba: '',
       notes: '',
       po: '',
     })
@@ -1563,7 +1563,7 @@ function AddDetailDialog({
           volume: '',
           delivery_location: null,
           delivery_nature: '',
-          unload_type: '',
+          fba: '',
           notes: '',
           po: '',
         })
@@ -1583,7 +1583,7 @@ function AddDetailDialog({
           volume: parseFloat(formData.volume),
           delivery_location: formData.delivery_location ? (typeof formData.delivery_location === 'number' ? String(formData.delivery_location) : formData.delivery_location) : null,
           delivery_nature: formData.delivery_nature || null,
-          unload_type: formData.unload_type || null,
+          fba: formData.fba || null,
           notes: formData.notes || null,
           po: formData.po || null,
           order_id: orderId,
@@ -1659,13 +1659,13 @@ function AddDetailDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="unload_type">拆柜/转仓</Label>
+              <Label htmlFor="fba">FBA</Label>
               <Input
-                id="unload_type"
+                id="fba"
                 type="text"
-                value={formData.unload_type}
-                onChange={(e) => setFormData({ ...formData, unload_type: e.target.value })}
-                placeholder="请输入拆柜/转仓"
+                value={formData.fba}
+                onChange={(e) => setFormData({ ...formData, fba: e.target.value })}
+                placeholder="请输入FBA"
               />
             </div>
 

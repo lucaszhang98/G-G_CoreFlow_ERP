@@ -56,7 +56,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 estimated_pallets: true,
                 delivery_nature: true,
                 delivery_location: true,
-                unload_type: true,
+                fba: true,
                 volume_percentage: true,
                 notes: true,
                 order_id: true,
@@ -110,7 +110,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 id: true,
                 delivery_nature: true,
                 delivery_location: true,
-                unload_type: true,
+                fba: true,
                 volume: true,
                 estimated_pallets: true,
                 volume_percentage: true,
@@ -282,7 +282,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                   container_volume: detailVolume, // 明细的体积就是 container_volume（用于显示）
                   volume_percentage: detail.volume_percentage ? Number(detail.volume_percentage) : null,
                   delivery_location: deliveryLocationCode, // 显示 location_code
-                  unload_type: detail.unload_type || null,
+                  fba: detail.fba || null,
                   notes: detail.notes || null,
                 }
               }) || []}
@@ -299,7 +299,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                   id: lot.order_detail.id.toString(),
                   volume: lot.order_detail.volume ? Number(lot.order_detail.volume) : null,
                   delivery_location: lot.order_detail.delivery_location || null,
-                  unload_type: lot.order_detail.unload_type || null,
+                  fba: lot.order_detail.fba || null,
                   volume_percentage: lot.order_detail.volume_percentage ? Number(lot.order_detail.volume_percentage) : null,
                   notes: lot.order_detail.notes || null,
                 } : null,

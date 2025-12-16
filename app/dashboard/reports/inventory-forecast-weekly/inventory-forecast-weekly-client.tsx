@@ -75,17 +75,19 @@ export function InventoryForecastWeeklyClient() {
         if (weekDays.length === 0) break
 
         // 汇总一周的数据
-        const starting_inventory = weekDays[0]?.historical_inventory || 0
+        // 每周独立计算：只看当周的总入库和总出库，不考虑上周累积
         const total_inbound = weekDays.reduce((sum, day) => sum + day.planned_inbound, 0)
         const total_outbound = weekDays.reduce((sum, day) => sum + day.planned_outbound, 0)
-        const ending_inventory = weekDays[weekDays.length - 1]?.forecast_inventory || 0
+        // 🎯 当周库存 = 当周入库 - 当周出库（每周独立，不累加上周）
+        // 例如：上周剩200板，本周入30出20，本周库存 = 30 - 20 = 10（不是210）
+        const ending_inventory = total_inbound - total_outbound
 
         weeklyData.push({
           week_number: weekNum + 1,
           week_label: `第${weekNum + 1}周`,
           week_start: weekDays[0]?.forecast_date || '',
           week_end: weekDays[weekDays.length - 1]?.forecast_date || '',
-          starting_inventory,
+          starting_inventory: 0,  // 不再使用周初库存（每周独立计算）
           total_inbound,
           total_outbound,
           ending_inventory
@@ -510,3 +512,4 @@ export function InventoryForecastWeeklyClient() {
     </div>
   )
 }
+

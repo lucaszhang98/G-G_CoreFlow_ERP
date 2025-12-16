@@ -40,7 +40,7 @@ interface OrderDetailRow {
   delivery_location_code: string | null // 送仓地点编码（用于显示）
   quantity: number // 数量
   volume: number | null // 体积
-  unload_type: string | null // 拆柜/转仓
+  fba: string | null // FBA
   notes: string | null // 备注
   po: string | null // PO
 }
@@ -129,7 +129,7 @@ export function CreateOrderDialog({
       delivery_location_code: null,
       quantity: 0,
       volume: null,
-      unload_type: null,
+      fba: null,
       notes: null,
       po: null,
     }
@@ -256,7 +256,7 @@ export function CreateOrderDialog({
               volume: detail.volume || null,
               delivery_nature: detail.delivery_nature || null,
               delivery_location: detail.delivery_location || null, // location_id（字符串或数字）
-              unload_type: detail.unload_type || null,
+              fba: detail.fba || null,
               notes: detail.notes || null,
               po: detail.po || null,
             }),
@@ -502,7 +502,7 @@ export function CreateOrderDialog({
                       <TableHead>送仓地点</TableHead>
                       <TableHead>数量</TableHead>
                       <TableHead>体积</TableHead>
-                      <TableHead>拆柜/转仓</TableHead>
+                      <TableHead>FBA</TableHead>
                       <TableHead>备注</TableHead>
                       <TableHead>PO</TableHead>
                       <TableHead className="w-24">操作</TableHead>
@@ -585,10 +585,10 @@ export function CreateOrderDialog({
                               <TableCell>
                                 <Input
                                   type="text"
-                                  value={editingData?.unload_type || ''}
-                                  onChange={(e) => setEditingData({ ...editingData, unload_type: e.target.value || null })}
+                                  value={editingData?.fba || ''}
+                                  onChange={(e) => setEditingData({ ...editingData, fba: e.target.value || null })}
                                   className="min-w-[200px]"
-                                  placeholder="拆柜/转仓"
+                                  placeholder="FBA"
                                 />
                               </TableCell>
                               <TableCell>
@@ -637,7 +637,7 @@ export function CreateOrderDialog({
                               <TableCell>{row.delivery_location_code || row.delivery_location || '-'}</TableCell>
                               <TableCell>{row.quantity}</TableCell>
                               <TableCell>{row.volume || '-'}</TableCell>
-                              <TableCell>{row.unload_type || '-'}</TableCell>
+                              <TableCell>{row.fba || '-'}</TableCell>
                               <TableCell>{row.notes || '-'}</TableCell>
                               <TableCell>{row.po || '-'}</TableCell>
                               <TableCell>

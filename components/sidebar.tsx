@@ -34,7 +34,6 @@ import {
   ClipboardCheck,
   UserCog,
   FileCheck,
-  Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -201,28 +200,6 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
-    title: "工具",
-    icon: Settings,
-    roles: ["admin", "tms_manager", "wms_manager"], // 排除 oms_manager
-    children: [
-      {
-        title: "文档管理",
-        icon: FileText,
-        href: "/dashboard/documents",
-      },
-      {
-        title: "数据导入导出",
-        icon: Download,
-        href: "/dashboard/tools/import-export",
-      },
-      {
-        title: "系统帮助",
-        icon: HelpCircle,
-        href: "/dashboard/help",
-      },
-    ],
-  },
-  {
     title: "系统设置",
     icon: Settings,
     roles: ["admin"],
@@ -276,11 +253,6 @@ function getModuleFromPath(pathname: string): string | null {
   if (pathname.startsWith('/dashboard/tms')) return '运输管理 (TMS)'
   if (pathname.startsWith('/dashboard/wms')) return '仓库管理 (WMS)'
   if (pathname.startsWith('/dashboard/reports')) return '报表分析'
-  if (pathname.startsWith('/dashboard/documents') || 
-      pathname.startsWith('/dashboard/tools') || 
-      pathname.startsWith('/dashboard/help')) {
-    return '工具'
-  }
   return null
 }
 

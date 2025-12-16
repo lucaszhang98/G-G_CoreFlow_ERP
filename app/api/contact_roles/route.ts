@@ -7,3 +7,4 @@ export const GET = createListHandler(contactRoleConfig)
 
 // POST - 创建联系人
 export const POST = createCreateHandler(contactRoleConfig)
+
