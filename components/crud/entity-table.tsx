@@ -1533,9 +1533,12 @@ export function EntityTable<T = any>({
     
     // 使用自定义操作或默认操作
     // 如果 customActions.onView 是 undefined，则使用默认的 handleView；如果是 null，则隐藏查看详情按钮
+    // 如果 customActions.onDelete 是 undefined，则使用默认的 handleDelete；如果是 null，则隐藏删除按钮
     const actionsConfig = customActions ? {
       onView: customActions.onView === null ? undefined : (customActions.onView !== undefined ? customActions.onView : handleView),
-      onDelete: customActions.onDelete && hasDeletePermission ? customActions.onDelete : undefined,
+      onDelete: customActions.onDelete === null 
+        ? undefined 
+        : (customActions.onDelete !== undefined ? customActions.onDelete : (hasDeletePermission ? handleDelete : undefined)),
       // 如果自定义操作没有提供行内编辑，则使用默认的
       onEdit: inlineEditEnabled ? handleStartEdit : undefined,
       onSave: inlineEditEnabled ? handleSaveEdit : undefined,
@@ -1784,7 +1787,15 @@ export function EntityTable<T = any>({
           <DialogHeader className="space-y-3 pb-4 border-b">
             <DialogTitle className="text-2xl font-bold text-destructive">确认删除</DialogTitle>
             <DialogDescription className="text-base">
-              确定要删除{config.displayName} <span className="font-semibold text-foreground">"{itemToDelete ? (itemToDelete as any).name || (itemToDelete as any).code : ''}"</span> 吗？此操作无法撤销。
+              确定要删除{config.displayName} <span className="font-semibold text-foreground">"{itemToDelete ? (() => {
+                // 优先使用第一个显示列的值
+                const firstColumn = config.list.columns?.[0]
+                if (firstColumn && (itemToDelete as any)[firstColumn]) {
+                  return (itemToDelete as any)[firstColumn]
+                }
+                // 回退到 name、code 或 id
+                return (itemToDelete as any).name || (itemToDelete as any).code || (itemToDelete as any)[config.idField || 'id']
+              })() : ''}"</span> 吗？此操作无法撤销。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

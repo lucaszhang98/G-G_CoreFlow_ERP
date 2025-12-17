@@ -101,11 +101,13 @@ export function BaseImportDialog({
       // 如果需要先获取参考数据
       let templateData
       if (templateDataEndpoint) {
+        console.log('[批量导入] 正在获取模板参考数据:', templateDataEndpoint)
         const response = await fetch(templateDataEndpoint)
         if (!response.ok) {
           throw new Error('获取参考数据失败')
         }
         templateData = await response.json()
+        console.log('[批量导入] 获取到的参考数据:', templateData)
       }
       
       const workbook = await generateTemplate(templateData)

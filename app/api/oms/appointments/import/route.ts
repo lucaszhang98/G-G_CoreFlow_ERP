@@ -1,5 +1,5 @@
 /**
- * 客户批量导入 API
+ * 预约批量导入 API
  * 
  * 职责：
  * 1. 权限检查
@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth } from '@/lib/api/helpers'
-import { customerImportService } from '@/lib/services/customer-import.service'
+import { appointmentImportService } from '@/lib/services/appointment-import.service'
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,9 +19,9 @@ export async function POST(request: NextRequest) {
     if (authResult.error) return authResult.error
 
     const user = authResult.user
-    if (!user || !customerImportService['config'].requiredRoles.includes(user.role || '')) {
+    if (!user || !['admin', 'oms_manager'].includes(user.role || '')) {
       return NextResponse.json(
-        { error: '权限不足，只有管理员和OMS经理可以导入客户' },
+        { error: '权限不足，只有管理员和OMS经理可以导入预约' },
         { status: 403 }
       )
     }
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. 调用Service执行导入
-    const result = await customerImportService.import(file, BigInt(user.id))
+    const result = await appointmentImportService.import(file, BigInt(user.id))
 
     // 4. 返回结果
     if (result.success) {
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
         ...result,
         successCount: result.imported,
         errorCount: 0,
-        message: `成功导入 ${result.imported} 个客户`,
+        message: `成功导入 ${result.imported} 条预约`,
       })
     } else {
       return NextResponse.json({
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       })
     }
   } catch (error: any) {
-    console.error('[客户导入] 错误:', error)
+    console.error('[预约导入] 错误:', error)
     return NextResponse.json(
       {
         success: false,
@@ -77,3 +77,5 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+

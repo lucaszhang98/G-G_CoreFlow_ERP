@@ -47,9 +47,19 @@ export const deliveryAppointmentConfig: EntityConfig = {
     appointment_account: {
       key: 'appointment_account',
       label: '预约账号',
-      type: 'text',
+      type: 'select',
       sortable: true,
       searchable: true,
+      options: [
+        { label: 'AA', value: 'AA' },
+        { label: 'YTAQ', value: 'YTAQ' },
+        { label: 'AYIE', value: 'AYIE' },
+        { label: 'KP', value: 'KP' },
+        { label: 'OLPN', value: 'OLPN' },
+        { label: 'DATONG', value: 'DATONG' },
+        { label: 'GG', value: 'GG' },
+        { label: 'Other', value: 'other' },
+      ],
     },
     appointment_type: {
       key: 'appointment_type',
@@ -161,7 +171,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
     create: ['admin', 'oms_manager'],
     update: ['admin', 'oms_manager'],
-    delete: ['admin'],
+    delete: ['admin', 'oms_manager'], // 预约管理允许OMS经理删除
   },
   
   prisma: {

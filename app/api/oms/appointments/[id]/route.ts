@@ -491,31 +491,13 @@ export async function DELETE(
     
     const resolvedParams = await Promise.resolve(params);
     const id = resolvedParams.id;
+    const appointmentId = BigInt(id);
 
-    await prisma.delivery_appointments.delete({
-      where: {
-        appointment_id: BigInt(id),
-      },
-    });
+    // 使用 AppointmentDeleteService 处理删除（自动回退板数）
+    const { AppointmentDeleteService } = await import('@/lib/services/appointment-delete.service');
+    await AppointmentDeleteService.deleteAppointment(appointmentId);
 
-    // 删除关联的 delivery_management 记录
-    try {
-      const appointmentId = BigInt(id);
-      const existingDelivery = await prisma.delivery_management.findUnique({
-        where: { appointment_id: appointmentId },
-        select: { delivery_id: true },
-      });
-
-      if (existingDelivery) {
-        await prisma.delivery_management.delete({
-          where: { delivery_id: existingDelivery.delivery_id },
-        });
-      }
-    } catch (deliveryError: any) {
-      console.warn('自动删除送仓管理记录失败:', deliveryError);
-    }
-
-    return NextResponse.json({ message: '预约管理记录已删除' });
+    return NextResponse.json({ message: '预约管理记录已删除，剩余板数已回退' });
   } catch (error: any) {
     console.error('删除预约管理记录失败:', error);
     return handleError(error);
