@@ -32,14 +32,14 @@ export function InboundReceiptTable() {
   // 加载用户选项（用于入库人员字段）
   const loadUsersOptions = React.useCallback(async () => {
     try {
-      const response = await fetch('/api/users?limit=1000&sort=full_name&order=asc')
+      const response = await fetch('/api/users?limit=1000&sort=name&order=asc')
       if (!response.ok) {
         throw new Error('获取用户列表失败')
       }
       const result = await response.json()
       const users = result.data || []
       return users.map((user: any) => ({
-        label: user.full_name || user.username || `用户 ${user.id}`,
+        label: user.name || user.username || `用户 ${user.id}`,
         value: String(user.id),
       }))
     } catch (error) {
@@ -51,6 +51,7 @@ export function InboundReceiptTable() {
   // 字段选项加载函数（用于批量编辑和行内编辑中的关系字段）
   const fieldLoadOptions = React.useMemo(() => ({
     received_by: loadUsersOptions,
+    unloaded_by: loadUsersOptions,
   }), [loadUsersOptions])
 
   return (

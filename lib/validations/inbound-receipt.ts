@@ -53,8 +53,9 @@ export const inboundReceiptUpdateSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, '拆柜日期格式必须为 YYYY-MM-DD')
     .optional()
     .nullable(),
-  unloaded_by: z.string()
-    .max(200, '拆柜人员名称长度不能超过 200')
+  unloaded_by: z.number()
+    .int()
+    .positive('拆柜人员ID必须为正整数')
     .optional()
     .nullable(),
   received_by: z.number()

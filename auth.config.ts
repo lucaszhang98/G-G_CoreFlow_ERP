@@ -95,8 +95,7 @@ export const authConfig = {
 
           return {
             id: user.id.toString(),
-            name: user.full_name || user.username,
-            email: user.email,
+            name: user.name || user.username,
             username: user.username,
             role: user.role || undefined,
           }

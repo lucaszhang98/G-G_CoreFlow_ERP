@@ -132,8 +132,10 @@ export async function GET(
         ready_date: orderData?.ready_date || null,
         lfd_date: orderData?.lfd_date || null,
         pickup_date: orderData?.pickup_date || null,
-        received_by: serialized.users_inbound_receipt_received_byTousers?.full_name || null,
+        received_by: serialized.users_inbound_receipt_received_byTousers?.name || null,
         received_by_id: serialized.received_by || null,
+        unloaded_by: serialized.users_inbound_receipt_unloaded_byTousers?.name || null,
+        unloaded_by_id: serialized.unloaded_by || null,
         warehouse_name: serialized.warehouses?.name || null,
         unload_method_name: serialized.unload_methods?.description || null,
         // 计算后的送货进度（按板数加权平均）
@@ -190,7 +192,7 @@ export async function PUT(
 
     if (data.status !== undefined) updateData.status = data.status;
     if (data.notes !== undefined) updateData.notes = data.notes || null;
-    if (data.unloaded_by !== undefined) updateData.unloaded_by = data.unloaded_by || null;
+    if (data.unloaded_by !== undefined) updateData.unloaded_by = data.unloaded_by ? BigInt(data.unloaded_by) : null;
     if (data.received_by !== undefined) updateData.received_by = data.received_by ? BigInt(data.received_by) : null;
     // delivery_progress 是自动生成的，不允许手动修改
     if (data.unload_method_code !== undefined) updateData.unload_method_code = data.unload_method_code || null;
@@ -271,8 +273,10 @@ export async function PUT(
         ready_date: orderData?.ready_date || null,
         lfd_date: orderData?.lfd_date || null,
         pickup_date: orderData?.pickup_date || null,
-        received_by: serialized.users_inbound_receipt_received_byTousers?.full_name || null,
+        received_by: serialized.users_inbound_receipt_received_byTousers?.name || null,
         received_by_id: serialized.received_by || null,
+        unloaded_by: serialized.users_inbound_receipt_unloaded_byTousers?.name || null,
+        unloaded_by_id: serialized.unloaded_by || null,
         warehouse_name: serialized.warehouses?.name || null,
         unload_method_name: serialized.unload_methods?.description || null,
         // 计算后的送货进度（按板数加权平均）

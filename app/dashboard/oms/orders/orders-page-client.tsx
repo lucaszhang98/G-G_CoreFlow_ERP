@@ -68,8 +68,8 @@ export function OrdersPageClient() {
       const users = data.data || []
       return users.map((user: any) => ({
         value: String(user.id),
-        label: user.full_name || user.username || String(user.id),
-        description: user.email || user.username,
+        label: user.name || user.username || String(user.id),
+        description: user.name || user.username,
       }))
     } catch (error) {
       console.error('加载用户选项失败:', error)

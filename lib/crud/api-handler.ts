@@ -506,6 +506,10 @@ export function createListHandler(config: EntityConfig) {
             } else {
               serialized.department = null
             }
+            // 密码字段：不返回密码信息（安全考虑）
+            delete serialized.password_hash
+            // password 字段显示为占位符（表示密码已设置）
+            serialized.password = '******'
           }
           // 处理客户数据：contact_roles -> contact, credit_limit 转换
           if (config.prisma?.model === 'customers') {
@@ -914,8 +918,8 @@ export function createCreateHandler(config: EntityConfig) {
         data: processedData,
       })
 
-      // 对于订单表，如果创建时状态就是"拆柜"（unload），自动创建入库记录
-      if (config.prisma?.model === 'orders' && processedData.status === 'unload') {
+      // 对于订单表，如果创建时操作方式就是"拆柜"（unload），自动创建入库记录
+      if (config.prisma?.model === 'orders' && processedData.operation_mode === 'unload') {
         try {
           // 获取第一个可用的 warehouse_id，如果没有则使用 1000 作为默认值
           const firstWarehouse = await prisma.warehouses.findFirst({
@@ -1025,16 +1029,16 @@ export function createUpdateHandler(config: EntityConfig) {
 
       const prismaModel = getPrismaModel(config)
       
-      // 对于订单表，检查 status 是否变为"拆柜"（unload），如果是则自动创建入库记录
-      if (config.prisma?.model === 'orders' && processedData.status === 'unload') {
-        // 先获取当前订单，检查旧状态和是否已经有入库记录
+      // 对于订单表，检查 operation_mode 是否变为"拆柜"（unload），如果是则自动创建入库记录
+      if (config.prisma?.model === 'orders' && processedData.operation_mode === 'unload') {
+        // 先获取当前订单，检查旧操作方式和是否已经有入库记录
         const currentOrder = await prismaModel.findUnique({
           where: { [idField]: BigInt(resolvedParams.id) },
-          select: { order_id: true, status: true },
+          select: { order_id: true, operation_mode: true },
         })
         
-        if (currentOrder && currentOrder.status !== 'unload') {
-          // 只有当状态从非"拆柜"变为"拆柜"时才创建入库记录
+        if (currentOrder && currentOrder.operation_mode !== 'unload') {
+          // 只有当操作方式从非"拆柜"变为"拆柜"时才创建入库记录
           // 检查是否已存在入库记录
           const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
             where: { order_id: currentOrder.order_id },
@@ -1063,6 +1067,35 @@ export function createUpdateHandler(config: EntityConfig) {
               })
             } catch (inboundError: any) {
               // 如果创建失败（例如已存在），记录错误但不影响订单更新
+              console.warn('自动创建入库记录失败:', inboundError)
+            }
+          }
+        } else if (currentOrder && currentOrder.operation_mode === 'unload') {
+          // 如果订单已经是"拆柜"但还没有入库记录，也创建入库记录
+          const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
+            where: { order_id: currentOrder.order_id },
+            select: { inbound_receipt_id: true },
+          })
+          
+          if (!existingInboundReceipt) {
+            try {
+              const firstWarehouse = await prisma.warehouses.findFirst({
+                select: { warehouse_id: true },
+                orderBy: { warehouse_id: 'asc' },
+              })
+              
+              const warehouseId = firstWarehouse?.warehouse_id || BigInt(1000)
+              
+              await prisma.inbound_receipt.create({
+                data: {
+                  order_id: currentOrder.order_id,
+                  warehouse_id: warehouseId,
+                  status: 'pending',
+                  created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+                  updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+                },
+              })
+            } catch (inboundError: any) {
               console.warn('自动创建入库记录失败:', inboundError)
             }
           }
@@ -1244,6 +1277,16 @@ export function createBatchUpdateHandler(config: EntityConfig) {
 
       // 处理字段映射和类型转换
       const processedUpdates: any = {}
+      
+      // 特殊处理：用户表的密码字段需要哈希
+      if (config.prisma?.model === 'users' && updates.password) {
+        const bcrypt = await import('bcryptjs')
+        const passwordHash = await bcrypt.default.hash(updates.password as string, 10)
+        processedUpdates.password_hash = passwordHash
+        // 从 updates 中移除 password，避免后续处理
+        delete updates.password
+      }
+      
       Object.entries(updates).forEach(([key, value]) => {
         // 查找字段配置
         const fieldConfig = config.fields[key]

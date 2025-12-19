@@ -82,7 +82,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
         users_orders_user_idTousers: {
           select: {
             id: true,
-            full_name: true,
+            name: true,
           },
         },
         order_detail: {

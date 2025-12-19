@@ -46,8 +46,9 @@ export const departmentConfig: EntityConfig = {
       relation: {
         model: 'departments',
         displayField: 'name',
-        valueField: 'parent_id',
+        valueField: 'id', // 关联表中的字段名（departments 表的 id）
       },
+      relationField: 'parent_id', // 当前表中的数据库字段名，用于筛选和更新
     },
     manager: {
       key: 'manager',
@@ -55,9 +56,10 @@ export const departmentConfig: EntityConfig = {
       type: 'relation',
       relation: {
         model: 'users',
-        displayField: 'full_name',
-        valueField: 'manager_id',
+        displayField: 'name',
+        valueField: 'id', // 关联表中的字段名（users 表的 id）
       },
+      relationField: 'manager_id', // 当前表中的数据库字段名，用于筛选和更新
     },
     description: {
       key: 'description',
@@ -70,6 +72,8 @@ export const departmentConfig: EntityConfig = {
       label: '创建时间',
       type: 'date',
       sortable: true,
+      readonly: true, // 数据库自动维护，不允许编辑
+      hidden: false, // 在列表中显示，但不在表单中显示
     },
   },
   
@@ -88,6 +92,7 @@ export const departmentConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
+        fields: ['code', 'name', 'parent_id', 'manager_id', 'description'], // 可批量编辑的字段，与formFields一致，排除created_at
       },
       delete: {
         enabled: true,
@@ -96,6 +101,7 @@ export const departmentConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
+      fields: ['code', 'name', 'parent_id', 'manager_id', 'description'], // 可编辑的字段，与formFields一致，排除created_at
     },
   },
   

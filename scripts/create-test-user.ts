@@ -5,7 +5,7 @@ async function createTestUser() {
   try {
     const username = "admin"
     const password = "admin123"
-    const email = "admin@example.com"
+    const name = "管理员"
     const hashedPassword = await bcrypt.hash(password, 10)
 
     // 检查用户是否已存在
@@ -29,9 +29,8 @@ async function createTestUser() {
       const user = await prisma.users.create({
         data: {
           username,
-          email,
+          name,
           password_hash: hashedPassword,
-          full_name: "管理员",
           role: "admin",
           status: "active",
         },

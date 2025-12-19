@@ -163,22 +163,25 @@ const menuItems: MenuItem[] = [
   {
     title: "仓库管理 (WMS)",
     icon: Warehouse,
-    roles: ["admin", "wms_manager", "tms_manager", "employee", "user"], // 排除 oms_manager
+    roles: ["admin", "wms_manager", "wms_supervisor", "wms_inbound_worker", "wms_outbound_worker", "tms_manager", "employee", "user"], // 排除 oms_manager
     children: [
       {
         title: "入库管理",
         icon: ClipboardList,
         href: "/dashboard/wms/inbound-receipts",
+        roles: ["admin", "wms_manager", "wms_supervisor", "wms_inbound_worker"], // 出库工人看不到
       },
       {
         title: "库存管理",
         icon: Package,
         href: "/dashboard/wms/inventory-lots",
+        roles: ["admin", "wms_manager", "wms_supervisor", "wms_inbound_worker", "wms_outbound_worker"], // 所有人都能看到
       },
       {
         title: "出库管理",
         icon: PackageCheck,
         href: "/dashboard/wms/outbound-shipments",
+        roles: ["admin", "wms_manager", "wms_supervisor", "wms_outbound_worker"], // 入库工人看不到
       },
     ],
   },

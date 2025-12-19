@@ -463,10 +463,30 @@ export function EntityTable<T = any>({
     // 初始化编辑值（只包含可编辑字段）
     const initialValues: Record<string, any> = {}
     editableFields.forEach(fieldKey => {
-      const fieldConfig = config.fields[fieldKey]
+      // 处理字段名映射：parent_id -> parent, manager_id -> manager
+      let actualFieldKey = fieldKey
+      let fieldConfig = config.fields[fieldKey]
+      
+      if (!fieldConfig) {
+        // 尝试映射字段名
+        if (fieldKey === 'parent_id') {
+          fieldConfig = config.fields['parent']
+          actualFieldKey = 'parent'
+        } else if (fieldKey === 'manager_id') {
+          fieldConfig = config.fields['manager']
+          actualFieldKey = 'manager'
+        } else if (fieldKey === 'department_id') {
+          fieldConfig = config.fields['department']
+          actualFieldKey = 'department'
+        }
+      }
+      
       // 对于 relation 字段，优先使用 _id 字段的值
       if (fieldConfig?.type === 'relation') {
-        const idKey = `${fieldKey}_id`
+        // 对于 parent_id、manager_id 和 department_id，直接使用 fieldKey 作为 idKey
+        const idKey = (fieldKey === 'parent_id' || fieldKey === 'manager_id' || fieldKey === 'department_id') 
+          ? fieldKey 
+          : `${fieldKey}_id`
         const idValue = (row as any)[idKey]
         if (idValue !== undefined && idValue !== null) {
           initialValues[fieldKey] = String(idValue)
@@ -522,8 +542,14 @@ export function EntityTable<T = any>({
       // 为每个字段创建一个稳定的闭包函数
       map[fieldKey] = (value: any) => handleEditValueChange(fieldKey, value)
     })
+    // 同时为 editableFields 中的字段创建映射（包括 parent_id 和 manager_id）
+    editableFields.forEach(fieldKey => {
+      if (!map[fieldKey]) {
+        map[fieldKey] = (value: any) => handleEditValueChange(fieldKey, value)
+      }
+    })
     return map
-  }, [config.list.columns, handleEditValueChange])
+  }, [config.list.columns, handleEditValueChange, editableFields])
   
   // 保存编辑
   const handleSaveEdit = React.useCallback(async (row: T) => {
@@ -542,7 +568,18 @@ export function EntityTable<T = any>({
       // 过滤掉未改变的字段，并处理日期字段和关系字段
       const updates: Record<string, any> = {}
       Object.entries(currentEditingValues).forEach(([key, value]) => {
-        const fieldConfig = config.fields[key]
+        // 处理字段名映射：parent_id -> parent, manager_id -> manager, department_id -> department
+        let fieldConfig = config.fields[key]
+        if (!fieldConfig) {
+          // 尝试映射字段名
+          if (key === 'parent_id') {
+            fieldConfig = config.fields['parent']
+          } else if (key === 'manager_id') {
+            fieldConfig = config.fields['manager']
+          } else if (key === 'department_id') {
+            fieldConfig = config.fields['department']
+          }
+        }
         
         // 处理 boolean 字段：false 和 true 都是有效值
         if (fieldConfig?.type === 'boolean') {
@@ -978,15 +1015,31 @@ export function EntityTable<T = any>({
       
       // 处理 relation 字段：确保发送的是数字类型（ID）
       // 处理 boolean 字段：确保 false 值不被过滤掉
+      // 处理字段名映射：parent_id -> parent_id, manager_id -> manager_id（保持原字段名用于API）
       const processedUpdates: Record<string, any> = {}
       Object.entries(batchEditValues).forEach(([key, value]) => {
+        // 处理字段名映射：如果字段被映射了（如 parent_id -> parent），需要映射回数据库字段名
+        // 对于 parent_id 和 manager_id，直接使用原字段名（数据库字段名）
+        let dbFieldKey = key
         const fieldConfig = config.fields[key]
         
+        // 如果找不到字段配置，可能是映射字段，尝试查找映射后的字段配置
+        let actualFieldConfig = fieldConfig
+        if (!fieldConfig) {
+          if (key === 'parent_id') {
+            actualFieldConfig = config.fields['parent']
+          } else if (key === 'manager_id') {
+            actualFieldConfig = config.fields['manager']
+          } else if (key === 'department_id') {
+            actualFieldConfig = config.fields['department']
+          }
+        }
+        
         // 对于 boolean 字段，false 是有效值，不应该被过滤
-        if (fieldConfig?.type === 'boolean') {
+        if (actualFieldConfig?.type === 'boolean') {
           // boolean 字段：false 和 true 都是有效值，只有 undefined 和 null 才过滤
           if (value !== undefined && value !== null) {
-            processedUpdates[key] = Boolean(value)
+            processedUpdates[dbFieldKey] = Boolean(value)
           }
           return
         }
@@ -997,13 +1050,13 @@ export function EntityTable<T = any>({
         }
         
         // 对于 relation 字段，确保值是数字类型
-        if (fieldConfig?.type === 'relation' && value) {
+        if (actualFieldConfig?.type === 'relation' && value) {
           const numValue = Number(value)
           if (!isNaN(numValue)) {
-            processedUpdates[key] = numValue
+            processedUpdates[dbFieldKey] = numValue
           }
         } else {
-          processedUpdates[key] = value
+          processedUpdates[dbFieldKey] = value
         }
       })
       
@@ -1114,7 +1167,7 @@ export function EntityTable<T = any>({
     }
     
     // 名称列：最宽，专业系统通常200-250px
-    if (fieldKey === 'name' || fieldKey === 'full_name' || fieldKey === 'username') {
+    if (fieldKey === 'name' || fieldKey === 'username') {
       return 'min-w-[220px]'
     }
     
@@ -1141,13 +1194,44 @@ export function EntityTable<T = any>({
         const columnId = col.id || ((col as any).accessorKey as string)
         if (!columnId) return col
         
-        // 检查字段是否可编辑
-        const isEditable = inlineEditEnabled && editableFields.includes(columnId)
-        if (!isEditable) return col
-        
         // 获取字段配置
-        const fieldConfig = config.fields[columnId]
+        // 处理字段名映射：parent_id -> parent, manager_id -> manager
+        let actualFieldKey = columnId
+        let fieldConfig = config.fields[columnId]
+        if (!fieldConfig) {
+          // 尝试映射字段名
+          if (columnId === 'parent_id') {
+            fieldConfig = config.fields['parent']
+            actualFieldKey = 'parent'
+          } else if (columnId === 'manager_id') {
+            fieldConfig = config.fields['manager']
+            actualFieldKey = 'manager'
+          } else if (columnId === 'department') {
+            fieldConfig = config.fields['department']
+            actualFieldKey = 'department'
+          } else if (columnId === 'department_id') {
+            fieldConfig = config.fields['department']
+            actualFieldKey = 'department'
+          }
+        }
         if (!fieldConfig) return col
+        
+        // 检查字段是否可编辑（需要检查原始字段名和映射后的字段名）
+        // 对于 parent/manager/department，需要检查 parent_id/manager_id/department_id
+        const editableFieldKey = (columnId === 'parent' && editableFields.includes('parent_id')) 
+          ? 'parent_id' 
+          : (columnId === 'manager' && editableFields.includes('manager_id'))
+            ? 'manager_id'
+            : (columnId === 'department' && editableFields.includes('department_id'))
+              ? 'department_id'
+              : columnId
+        
+        const isEditable = inlineEditEnabled && (
+          editableFields.includes(columnId) || 
+          editableFields.includes(actualFieldKey) ||
+          editableFields.includes(editableFieldKey)
+        )
+        if (!isEditable) return col
         
         // 保存原始的 cell 渲染函数
         const originalCell = col.cell
@@ -1163,18 +1247,36 @@ export function EntityTable<T = any>({
             const currentValue = editingValues[columnId] !== undefined 
               ? editingValues[columnId] 
               : row.getValue(columnId)
+            // 确定实际使用的 fieldKey（用于 onChange 和 fieldLoadOptions）
+            // 如果 columnId 是 parent、manager 或 department，但 editableFields 中有对应的 _id 字段，使用后者
+            const actualFieldKeyForEdit = editableFields.includes(`${columnId}_id`) 
+              ? `${columnId}_id` 
+              : (columnId === 'parent' && editableFields.includes('parent_id'))
+                ? 'parent_id'
+                : (columnId === 'manager' && editableFields.includes('manager_id'))
+                  ? 'manager_id'
+                  : (columnId === 'department' && editableFields.includes('department_id'))
+                    ? 'department_id'
+                    : columnId
+            
             // 获取字段的 loadOptions 和 loadFuzzyOptions 函数（如果提供）
-            const loadOptions = fieldLoadOptions?.[columnId]
-            const loadFuzzyOptions = fieldFuzzyLoadOptions?.[columnId]
+            // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id，但 columnId 可能是映射后的 parent/manager/department
+            const loadOptionsKeyForEdit = columnId === 'parent' ? 'parent_id' 
+              : columnId === 'manager' ? 'manager_id'
+              : columnId === 'department' ? 'department_id'
+              : columnId
+            const loadOptionsForEdit = fieldLoadOptions?.[loadOptionsKeyForEdit] || fieldLoadOptions?.[columnId]
+            const loadFuzzyOptionsForEdit = fieldFuzzyLoadOptions?.[loadOptionsKeyForEdit] || fieldFuzzyLoadOptions?.[columnId]
+            
             return (
               <InlineEditCell
                 key={`${row.original[getIdField()]}-${columnId}-${editingRowId}`}
-                fieldKey={columnId}
+                fieldKey={actualFieldKeyForEdit}
                 fieldConfig={fieldConfig}
                 value={currentValue}
-                onChange={fieldOnChangeMap[columnId]}
-                loadOptions={loadOptions}
-                loadFuzzyOptions={loadFuzzyOptions}
+                onChange={fieldOnChangeMap[actualFieldKeyForEdit] || fieldOnChangeMap[columnId]}
+                loadOptions={loadOptionsForEdit}
+                loadFuzzyOptions={loadFuzzyOptionsForEdit}
               />
             )
           }
@@ -1209,7 +1311,27 @@ export function EntityTable<T = any>({
     const displayColumns = filterAuditFields(config.list.columns, config.idField)
     
     return displayColumns.map((fieldKey) => {
-    const fieldConfig = config.fields[fieldKey]
+    // 处理字段名映射：parent_id -> parent, manager_id -> manager
+    let actualFieldKey = fieldKey
+    let fieldConfig = config.fields[fieldKey]
+    
+    if (!fieldConfig) {
+      // 尝试映射字段名
+      if (fieldKey === 'parent_id') {
+        fieldConfig = config.fields['parent']
+        actualFieldKey = 'parent'
+      } else if (fieldKey === 'manager_id') {
+        fieldConfig = config.fields['manager']
+        actualFieldKey = 'manager'
+      } else if (fieldKey === 'department') {
+        fieldConfig = config.fields['department']
+        actualFieldKey = 'department'
+      } else if (fieldKey === 'department_id') {
+        fieldConfig = config.fields['department']
+        actualFieldKey = 'department'
+      }
+    }
+    
     if (!fieldConfig) return null
 
     const column: ColumnDef<T> = {
@@ -1224,8 +1346,23 @@ export function EntityTable<T = any>({
     }
 
     // 自定义 cell 渲染（根据字段类型和编辑状态）
-    // 检查字段是否可编辑
-    const isEditable = inlineEditEnabled && editableFields.includes(fieldKey)
+    // actualFieldKey 已经在上面定义过了，这里直接使用
+    
+    // 检查字段是否可编辑（需要检查原始字段名和映射后的字段名）
+    // 对于 parent/manager/department，需要检查 parent_id/manager_id/department_id
+    const editableFieldKey = (fieldKey === 'parent' && editableFields.includes('parent_id')) 
+      ? 'parent_id' 
+      : (fieldKey === 'manager' && editableFields.includes('manager_id'))
+        ? 'manager_id'
+        : (fieldKey === 'department' && editableFields.includes('department_id'))
+          ? 'department_id'
+          : fieldKey
+    
+    const isEditable = inlineEditEnabled && (
+      editableFields.includes(fieldKey) || 
+      editableFields.includes(actualFieldKey) ||
+      editableFields.includes(editableFieldKey)
+    )
     
     // 创建 cell 渲染函数
     const createCellRenderer = () => {
@@ -1256,7 +1393,13 @@ export function EntityTable<T = any>({
               initialValue = String(idValue)
             }
           } else if (fieldConfig.type === 'relation') {
-            const idKey = `${fieldKey}_id`
+            // 对于 parent_id、manager_id 和 department_id，直接使用 fieldKey 作为 idKey
+            // 对于 department，使用 department_id
+            const idKey = (fieldKey === 'parent_id' || fieldKey === 'manager_id' || fieldKey === 'department_id') 
+              ? fieldKey 
+              : (fieldKey === 'department')
+                ? 'department_id'
+                : `${fieldKey}_id`
             const idValue = (row.original as any)[idKey]
             // 优先使用 _id 字段的值（这是实际的 ID）
             if (idValue !== undefined && idValue !== null) {
@@ -1285,9 +1428,26 @@ export function EntityTable<T = any>({
             }
           }
           
+          // 确定实际使用的 fieldKey（用于 onChange 和 fieldLoadOptions）
+          // 如果 fieldKey 是 parent、manager 或 department，但 editableFields 中有对应的 _id 字段，使用后者
+          const actualFieldKeyForEdit = editableFields.includes(`${fieldKey}_id`) 
+            ? `${fieldKey}_id` 
+            : (fieldKey === 'parent' && editableFields.includes('parent_id'))
+              ? 'parent_id'
+              : (fieldKey === 'manager' && editableFields.includes('manager_id'))
+                ? 'manager_id'
+                : (fieldKey === 'department' && editableFields.includes('department_id'))
+                  ? 'department_id'
+                  : fieldKey
+          
           // 获取字段的 loadOptions 和 loadFuzzyOptions 函数（如果提供）
-          const loadOptions = fieldLoadOptions?.[fieldKey]
-          const loadFuzzyOptions = fieldFuzzyLoadOptions?.[fieldKey]
+          // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id
+          const loadOptionsKey = actualFieldKeyForEdit === 'parent_id' ? 'parent_id' 
+            : actualFieldKeyForEdit === 'manager_id' ? 'manager_id'
+            : actualFieldKeyForEdit === 'department_id' ? 'department_id'
+            : fieldKey
+          const loadOptions = fieldLoadOptions?.[loadOptionsKey] || fieldLoadOptions?.[fieldKey]
+          const loadFuzzyOptions = fieldFuzzyLoadOptions?.[loadOptionsKey] || fieldFuzzyLoadOptions?.[fieldKey]
           
           // 对于关系字段，如果没有 loadOptions 和 loadFuzzyOptions，尝试使用 select 类型渲染
           const effectiveType = fieldConfig.type === 'relation' && !loadOptions && !loadFuzzyOptions && fieldConfig.options
@@ -1297,10 +1457,10 @@ export function EntityTable<T = any>({
           return (
             <InlineEditCell
               key={`${row.original[getIdField()]}-${fieldKey}-${editingRowId}`}
-              fieldKey={fieldKey}
+              fieldKey={actualFieldKeyForEdit}
               fieldConfig={{ ...fieldConfig, type: effectiveType as any }}
               value={initialValue}
-              onChange={fieldOnChangeMap[fieldKey]}
+              onChange={fieldOnChangeMap[actualFieldKeyForEdit] || fieldOnChangeMap[fieldKey]}
               loadOptions={loadOptions}
               loadFuzzyOptions={loadFuzzyOptions}
             />
@@ -1351,7 +1511,7 @@ export function EntityTable<T = any>({
         
         if (fieldConfig.type === 'relation') {
           const value = row.getValue(fieldKey)
-          // 如果 value 已经是字符串（API 已经转换了，如 full_name），直接显示
+          // 如果 value 已经是字符串（API 已经转换了，如 name），直接显示
           if (typeof value === 'string' && value) {
             return <div>{value}</div>
           }
@@ -1683,7 +1843,7 @@ export function EntityTable<T = any>({
                 variant="default"
                 size="sm"
                 onClick={() => setBatchEditDialogOpen(true)}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 min-w-[100px]"
               >
                 <Edit className="mr-2 h-4 w-4" />
                 批量编辑
@@ -1694,6 +1854,7 @@ export function EntityTable<T = any>({
                 variant="destructive"
                 size="sm"
                 onClick={() => setBatchDeleteDialogOpen(true)}
+                className="min-w-[100px]"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 批量删除
@@ -1703,6 +1864,7 @@ export function EntityTable<T = any>({
               variant="outline"
               size="sm"
               onClick={() => setSelectedRows([])}
+              className="h-9 min-w-[100px]"
             >
               取消选择
             </Button>
@@ -1852,6 +2014,7 @@ export function EntityTable<T = any>({
           <div className="space-y-4 py-4">
             {batchEditableFields.map((fieldKey) => {
               // 处理字段名映射：origin_location_id -> origin_location, location_id -> destination_location
+              // 以及 parent_id -> parent, manager_id -> manager
               let actualFieldKey = fieldKey
               let fieldConfig = config.fields[fieldKey]
               
@@ -1867,6 +2030,18 @@ export function EntityTable<T = any>({
                 const baseKey = fieldKey.replace('_location_id', '_location')
                 fieldConfig = config.fields[baseKey]
                 actualFieldKey = baseKey
+              } else if (fieldKey === 'parent_id' && !fieldConfig) {
+                // parent_id 映射到 parent 字段配置
+                fieldConfig = config.fields['parent']
+                actualFieldKey = 'parent'
+              } else if (fieldKey === 'manager_id' && !fieldConfig) {
+                // manager_id 映射到 manager 字段配置
+                fieldConfig = config.fields['manager']
+                actualFieldKey = 'manager'
+              } else if (fieldKey === 'department_id' && !fieldConfig) {
+                // department_id 映射到 department 字段配置
+                fieldConfig = config.fields['department']
+                actualFieldKey = 'department'
               }
               
               if (!fieldConfig) {
@@ -1952,7 +2127,12 @@ export function EntityTable<T = any>({
                   }
                   
                   // 其他关系字段：优先使用模糊搜索下拉框
-                  const loadFuzzyOptions = fieldFuzzyLoadOptions?.[fieldKey]
+                  // 注意：fieldFuzzyLoadOptions 的 key 可能是 parent_id/manager_id/department_id，但 fieldKey 可能是映射后的 parent/manager/department
+                  const loadFuzzyOptionsKey = actualFieldKey === 'parent' ? 'parent_id' 
+                    : actualFieldKey === 'manager' ? 'manager_id'
+                    : actualFieldKey === 'department' ? 'department_id'
+                    : fieldKey
+                  const loadFuzzyOptions = fieldFuzzyLoadOptions?.[loadFuzzyOptionsKey] || fieldFuzzyLoadOptions?.[fieldKey]
                   if (loadFuzzyOptions) {
                     return (
                       <div key={fieldKey} className="space-y-2">
@@ -1969,6 +2149,11 @@ export function EntityTable<T = any>({
                     )
                   }
                   // 如果没有模糊搜索，使用 RelationFieldBatchEdit 组件
+                  // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id，但 fieldKey 可能是映射后的 parent/manager/department
+                  const loadOptionsKey = actualFieldKey === 'parent' ? 'parent_id' 
+                    : actualFieldKey === 'manager' ? 'manager_id'
+                    : actualFieldKey === 'department' ? 'department_id'
+                    : fieldKey
                   return (
                     <RelationFieldBatchEdit
                       key={fieldKey}
@@ -1976,8 +2161,8 @@ export function EntityTable<T = any>({
                       fieldConfig={fieldConfig}
                       fieldValue={fieldValue}
                       onValueChange={handleBatchEditValueChange}
-                      loadOptions={fieldLoadOptions?.[fieldKey]}
-                      loadFuzzyOptions={fieldFuzzyLoadOptions?.[fieldKey]}
+                      loadOptions={fieldLoadOptions?.[loadOptionsKey] || fieldLoadOptions?.[fieldKey]}
+                      loadFuzzyOptions={fieldFuzzyLoadOptions?.[loadOptionsKey] || fieldFuzzyLoadOptions?.[fieldKey]}
                     />
                   )
                 }

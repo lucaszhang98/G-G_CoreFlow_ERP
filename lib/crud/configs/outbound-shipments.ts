@@ -169,9 +169,9 @@ export const outboundShipmentConfig: EntityConfig = {
   ],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'wms_supervisor', 'wms_outbound_worker', 'employee', 'user'],
     create: [], // WMS 模块不允许手动创建
-    update: ['admin', 'wms_manager'],
+    update: ['admin', 'wms_manager', 'wms_supervisor', 'wms_outbound_worker'],
     delete: [], // WMS 模块不允许删除
   },
   

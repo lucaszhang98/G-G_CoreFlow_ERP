@@ -155,7 +155,14 @@ export async function GET(request: NextRequest) {
         users_inbound_receipt_received_byTousers: {
           select: {
             id: true,
-            full_name: true,
+            name: true,
+            username: true,
+          },
+        },
+        users_inbound_receipt_unloaded_byTousers: {
+          select: {
+            id: true,
+            name: true,
             username: true,
           },
         },
@@ -277,8 +284,10 @@ export async function GET(request: NextRequest) {
           ready_date: order?.ready_date || null,
           lfd_date: order?.lfd_date || null,
           pickup_date: order?.pickup_date || null,
-          received_by: serialized.users_inbound_receipt_received_byTousers?.full_name || null,
+          received_by: serialized.users_inbound_receipt_received_byTousers?.name || null,
           received_by_id: serialized.received_by || null,
+          unloaded_by: serialized.users_inbound_receipt_unloaded_byTousers?.name || null,
+          unloaded_by_id: serialized.unloaded_by || null,
           warehouse_name: serialized.warehouses?.name || null,
           unload_method_name: serialized.unload_methods?.description || null,
           // 计算后的送货进度（按板数加权平均）
@@ -300,6 +309,8 @@ export async function GET(request: NextRequest) {
           pickup_date: null,
           received_by: null,
           received_by_id: null,
+          unloaded_by: null,
+          unloaded_by_id: null,
           warehouse_name: null,
           unload_method_name: null,
         };
@@ -401,7 +412,7 @@ export async function POST(request: NextRequest) {
       warehouse_id: BigInt(data.warehouse_id),
       status: data.status,
       notes: data.notes || null,
-      unloaded_by: data.unloaded_by || null,
+      unloaded_by: data.unloaded_by ? BigInt(data.unloaded_by) : null,
       received_by: data.received_by ? BigInt(data.received_by) : null,
       // delivery_progress 默认值为 0，后续会根据关联的 inventory_lots 按板数加权平均计算
       delivery_progress: data.delivery_progress !== undefined && data.delivery_progress !== null ? data.delivery_progress : 0,
@@ -438,8 +449,10 @@ export async function POST(request: NextRequest) {
           ready_date: orderData?.ready_date || null,
           lfd_date: orderData?.lfd_date || null,
           pickup_date: orderData?.pickup_date || null,
-          received_by: serialized.users_inbound_receipt_received_byTousers?.full_name || null,
+          received_by: serialized.users_inbound_receipt_received_byTousers?.name || null,
           received_by_id: serialized.received_by || null,
+          unloaded_by: serialized.users_inbound_receipt_unloaded_byTousers?.name || null,
+          unloaded_by_id: serialized.unloaded_by || null,
           warehouse_name: serialized.warehouses?.name || null,
           unload_method_name: serialized.unload_methods?.description || null,
         },

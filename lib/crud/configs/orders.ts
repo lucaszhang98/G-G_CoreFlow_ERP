@@ -50,7 +50,7 @@ export const orderConfig: EntityConfig = {
       type: 'relation',
       relation: {
         model: 'users',
-        displayField: 'full_name',
+        displayField: 'name',
         valueField: 'id',
       },
     },
@@ -344,7 +344,7 @@ export const orderConfig: EntityConfig = {
       users_orders_user_idTousers: {
         select: {
           id: true,
-          full_name: true,
+          name: true,
         },
       },
       locations_orders_delivery_location_idTolocations: {

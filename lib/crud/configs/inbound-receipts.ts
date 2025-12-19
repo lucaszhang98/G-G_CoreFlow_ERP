@@ -86,8 +86,12 @@ export const inboundReceiptConfig: EntityConfig = {
     unloaded_by: {
       key: 'unloaded_by',
       label: '拆柜人员',
-      type: 'text',
-      searchable: true,
+      type: 'relation',
+      relation: {
+        model: 'users',
+        displayField: 'name',
+        valueField: 'id',
+      },
     },
     received_by: {
       key: 'received_by',
@@ -95,7 +99,7 @@ export const inboundReceiptConfig: EntityConfig = {
       type: 'relation',
       relation: {
         model: 'users',
-        displayField: 'full_name',
+        displayField: 'name',
         valueField: 'id',
       },
     },
@@ -186,7 +190,18 @@ export const inboundReceiptConfig: EntityConfig = {
         type: 'select',
         relation: {
           model: 'users',
-          displayField: 'full_name',
+          displayField: 'name',
+          valueField: 'id',
+        },
+      },
+      // 拆柜人员筛选
+      {
+        field: 'unloaded_by',
+        label: '拆柜人员',
+        type: 'select',
+        relation: {
+          model: 'users',
+          displayField: 'name',
           valueField: 'id',
         },
       },
@@ -269,9 +284,9 @@ export const inboundReceiptConfig: EntityConfig = {
   ],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'wms_supervisor', 'wms_inbound_worker', 'employee', 'user'],
     create: [], // 禁用创建功能
-    update: ['admin', 'wms_manager'],
+    update: ['admin', 'wms_manager', 'wms_supervisor', 'wms_inbound_worker'],
     delete: [], // 禁用删除功能
   },
   
@@ -299,7 +314,14 @@ export const inboundReceiptConfig: EntityConfig = {
       users_inbound_receipt_received_byTousers: {
         select: {
           id: true,
-          full_name: true,
+          name: true,
+          username: true,
+        },
+      },
+      users_inbound_receipt_unloaded_byTousers: {
+        select: {
+          id: true,
+          name: true,
           username: true,
         },
       },

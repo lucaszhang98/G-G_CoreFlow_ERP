@@ -27,8 +27,7 @@ async function createOMSTestUser() {
           password_hash: passwordHash,
           role: 'oms_manager',
           status: 'active',
-          full_name: 'OMS测试账号',
-          email: 'omstest@coreflow.com',
+          name: 'OMS测试账号',
         },
       })
       
@@ -43,9 +42,8 @@ async function createOMSTestUser() {
       const user = await prisma.users.create({
         data: {
           username: 'omstest',
-          email: 'omstest@coreflow.com',
+          name: 'OMS测试账号',
           password_hash: passwordHash,
-          full_name: 'OMS测试账号',
           role: 'oms_manager',
           status: 'active',
         },

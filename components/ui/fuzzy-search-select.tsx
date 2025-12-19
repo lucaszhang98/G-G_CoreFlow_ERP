@@ -331,9 +331,11 @@ export function FuzzySearchSelect({
               <CommandGroup>
                 {options.map((option, index) => {
                 const isSelected = String(value) === String(option.value)
+                // 使用 index 作为 key 的一部分，确保唯一性
+                const uniqueKey = `${String(option.value)}-${index}`
                 return (
                   <div
-                    key={String(option.value) || `option-${index}`}
+                    key={uniqueKey}
                     role="option"
                     aria-selected={isSelected}
                     className={cn(

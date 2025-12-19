@@ -56,7 +56,7 @@ export const warehouseConfig: EntityConfig = {
       type: 'relation',
       relation: {
         model: 'users',
-        displayField: 'full_name',
+        displayField: 'name',
       },
     },
     notes: {
@@ -122,7 +122,7 @@ export const warehouseConfig: EntityConfig = {
       users_warehouses_contact_user_idTousers: {
         select: {
           id: true,
-          full_name: true,
+          name: true,
         },
       },
     },
