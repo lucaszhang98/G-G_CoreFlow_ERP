@@ -74,7 +74,9 @@ export const userConfig: EntityConfig = {
       relation: {
         model: 'departments',
         displayField: 'name',
+        valueField: 'id',
       },
+      relationField: 'department_id', // 当前表中的数据库字段名，用于筛选和更新
     },
     phone: {
       key: 'phone',
