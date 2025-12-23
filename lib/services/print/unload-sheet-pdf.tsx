@@ -12,49 +12,68 @@ import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/rendere
 import { UnloadSheetData } from './types'
 import { PageSizes, formatDate } from './print-templates'
 import path from 'path'
+import fs from 'fs'
 
 // 注册中文字体
-// 使用 @fontsource/noto-sans-sc 包中的 woff 字体文件（@react-pdf/renderer 支持 woff 格式）
+// 优先使用 public/fonts 目录中的字体文件，如果不存在则尝试 node_modules
 let fontRegistered = false
 let fontError: any = null
-try {
+
+function registerFont() {
   const cwd = process.cwd()
-  const fontPath = path.join(
-    cwd,
-    'node_modules',
-    '@fontsource',
-    'noto-sans-sc',
-    'files',
-    'noto-sans-sc-chinese-simplified-400-normal.woff'
-  )
-  
+  const fontPaths = [
+    // 方案1: 使用 public/fonts 目录（推荐，生产环境更可靠）
+    path.join(cwd, 'public', 'fonts', 'NotoSansSC-Regular.ttf'),
+    path.join(cwd, 'public', 'fonts', 'NotoSansSC-Regular.woff'),
+    // 方案2: 使用 node_modules 中的字体
+    path.join(cwd, 'node_modules', '@fontsource', 'noto-sans-sc', 'files', 'noto-sans-sc-chinese-simplified-400-normal.woff'),
+    path.join(cwd, 'node_modules', '@fontsource', 'noto-sans-sc', 'files', 'noto-sans-sc-chinese-simplified-400-normal.ttf'),
+  ]
+
   console.log('[UnloadSheet PDF] 字体注册开始:', {
     cwd,
-    fontPath,
-    pathExists: require('fs').existsSync(fontPath),
+    fontPaths,
   })
-  
-  // 检查文件是否存在
-  const fs = require('fs')
-  if (fs.existsSync(fontPath)) {
-    Font.register({
-      family: 'NotoSansSC',
-      src: fontPath,
-    })
-    fontRegistered = true
-    console.log('[UnloadSheet PDF] 字体注册成功')
-  } else {
-    const errorMsg = `字体文件不存在: ${fontPath}`
-    console.warn(`[UnloadSheet PDF] ${errorMsg}`)
-    fontError = { message: errorMsg, path: fontPath, cwd }
+
+  for (const fontPath of fontPaths) {
+    try {
+      if (fs.existsSync(fontPath)) {
+        console.log(`[UnloadSheet PDF] 找到字体文件: ${fontPath}`)
+        Font.register({
+          family: 'NotoSansSC',
+          src: fontPath,
+        })
+        fontRegistered = true
+        console.log('[UnloadSheet PDF] 字体注册成功')
+        return
+      } else {
+        console.log(`[UnloadSheet PDF] 字体文件不存在: ${fontPath}`)
+      }
+    } catch (error: any) {
+      console.warn(`[UnloadSheet PDF] 尝试注册字体失败 (${fontPath}):`, {
+        message: error?.message,
+        path: fontPath,
+      })
+      // 继续尝试下一个路径
+    }
   }
+
+  // 所有路径都失败
+  const errorMsg = '所有字体文件路径都不可用，中文可能显示为乱码'
+  console.error(`[UnloadSheet PDF] ${errorMsg}`, {
+    cwd,
+    triedPaths: fontPaths,
+  })
+  fontError = { message: errorMsg, triedPaths: fontPaths, cwd }
+}
+
+try {
+  registerFont()
 } catch (error: any) {
-  const errorMsg = '中文字体注册失败，将使用默认字体（中文可能显示为乱码）'
+  const errorMsg = '字体注册过程发生异常'
   console.error(`[UnloadSheet PDF] ${errorMsg}:`, {
     message: error?.message,
     stack: error?.stack,
-    path: error?.path || 'unknown',
-    cwd: process.cwd(),
   })
   fontError = error
 }
