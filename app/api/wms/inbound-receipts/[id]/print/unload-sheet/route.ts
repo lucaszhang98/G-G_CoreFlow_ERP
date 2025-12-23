@@ -18,6 +18,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   let resolvedParams: { id: string } | null = null
+  let containerNumber: string | null = null
+  let orderDetails: any[] | null = null
+  let orderDetailsJson: string | null = null
+  let unloadedBy: string | null = null
+  let receivedBy: string | null = null
+  let unloadDate: string | null = null
   try {
     // 检查登录
     const authResult = await checkAuth()
@@ -31,11 +37,11 @@ export async function GET(
     
     // 从查询参数获取数据（前端传递）
     const searchParams = request.nextUrl.searchParams
-    const containerNumber = searchParams.get('containerNumber')
-    const unloadedBy = searchParams.get('unloadedBy')
-    const receivedBy = searchParams.get('receivedBy')
-    const unloadDate = searchParams.get('unloadDate')
-    const orderDetailsJson = searchParams.get('orderDetails')
+    containerNumber = searchParams.get('containerNumber')
+    unloadedBy = searchParams.get('unloadedBy')
+    receivedBy = searchParams.get('receivedBy')
+    unloadDate = searchParams.get('unloadDate')
+    orderDetailsJson = searchParams.get('orderDetails')
 
     if (!containerNumber) {
       return NextResponse.json(
@@ -52,7 +58,7 @@ export async function GET(
     }
 
     // 解析订单明细数据
-    const orderDetails = JSON.parse(orderDetailsJson)
+    orderDetails = JSON.parse(orderDetailsJson)
     if (!Array.isArray(orderDetails) || orderDetails.length === 0) {
       return NextResponse.json(
         { error: '订单明细数据不能为空' },
@@ -79,7 +85,9 @@ export async function GET(
     }
 
     // 生成 PDF
+    console.log('[Unload Sheet API] 调用PDF生成服务...')
     const pdfBuffer = await generateUnloadSheetPDF(unloadSheetData)
+    console.log('[Unload Sheet API] PDF生成成功，准备返回响应')
 
     // 返回 PDF（文件名格式：{柜号}-拆柜单据.pdf）
     const filename = `${containerNumber}-拆柜单据.pdf`
@@ -90,12 +98,36 @@ export async function GET(
       },
     })
   } catch (error: any) {
-    console.error('[Unload Sheet Print] 生成失败:', {
-      error,
-      message: error?.message,
+    const errorDetails = {
+      message: error?.message || '未知错误',
+      name: error?.name || error?.constructor?.name || typeof error,
       stack: error?.stack,
+      code: error?.code,
+      errno: error?.errno,
+      syscall: error?.syscall,
+      path: error?.path,
+    }
+    
+    console.error('[Unload Sheet Print] 生成失败:', {
+      error: errorDetails,
       inboundReceiptId: resolvedParams?.id || 'unknown',
+      containerNumber: containerNumber || 'unknown',
+      orderDetailsCount: orderDetails?.length || 0,
+      orderDetailsJsonLength: orderDetailsJson?.length || 0,
+      hasUnloadedBy: !!unloadedBy,
+      hasReceivedBy: !!receivedBy,
+      hasUnloadDate: !!unloadDate,
     })
-    return handleError(error, '生成拆柜单据 PDF 失败')
+    
+    // 返回更详细的错误信息，方便调试
+    return NextResponse.json(
+      { 
+        error: '生成拆柜单据 PDF 失败',
+        details: process.env.NODE_ENV === 'production' 
+          ? { message: errorDetails.message } // 生产环境只返回消息
+          : errorDetails // 开发环境返回详细信息
+      },
+      { status: 500 }
+    )
   }
 }

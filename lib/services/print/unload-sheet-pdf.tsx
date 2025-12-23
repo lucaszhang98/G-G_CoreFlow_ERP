@@ -15,9 +15,12 @@ import path from 'path'
 
 // 注册中文字体
 // 使用 @fontsource/noto-sans-sc 包中的 woff 字体文件（@react-pdf/renderer 支持 woff 格式）
+let fontRegistered = false
+let fontError: any = null
 try {
+  const cwd = process.cwd()
   const fontPath = path.join(
-    process.cwd(),
+    cwd,
     'node_modules',
     '@fontsource',
     'noto-sans-sc',
@@ -25,12 +28,35 @@ try {
     'noto-sans-sc-chinese-simplified-400-normal.woff'
   )
   
-  Font.register({
-    family: 'NotoSansSC',
-    src: fontPath,
+  console.log('[UnloadSheet PDF] 字体注册开始:', {
+    cwd,
+    fontPath,
+    pathExists: require('fs').existsSync(fontPath),
   })
-} catch (error) {
-  console.warn('中文字体注册失败，将使用默认字体（中文可能显示为乱码）:', error)
+  
+  // 检查文件是否存在
+  const fs = require('fs')
+  if (fs.existsSync(fontPath)) {
+    Font.register({
+      family: 'NotoSansSC',
+      src: fontPath,
+    })
+    fontRegistered = true
+    console.log('[UnloadSheet PDF] 字体注册成功')
+  } else {
+    const errorMsg = `字体文件不存在: ${fontPath}`
+    console.warn(`[UnloadSheet PDF] ${errorMsg}`)
+    fontError = { message: errorMsg, path: fontPath, cwd }
+  }
+} catch (error: any) {
+  const errorMsg = '中文字体注册失败，将使用默认字体（中文可能显示为乱码）'
+  console.error(`[UnloadSheet PDF] ${errorMsg}:`, {
+    message: error?.message,
+    stack: error?.stack,
+    path: error?.path || 'unknown',
+    cwd: process.cwd(),
+  })
+  fontError = error
 }
 
 // 页面尺寸（A4 横排：297mm x 210mm）
@@ -95,7 +121,7 @@ function createStyles(rowCount: number) {
       width: PAGE_WIDTH,
       height: PAGE_HEIGHT,
       padding: PADDING,
-      fontFamily: 'NotoSansSC',
+      fontFamily: fontRegistered ? 'NotoSansSC' : 'Helvetica', // 如果字体未注册，使用默认字体
     },
     title: {
       fontSize: titleFontSize,
@@ -182,6 +208,13 @@ function createStyles(rowCount: number) {
 export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
   // 根据数据行数动态创建样式
   const rowCount = data.orderDetails.length
+  console.log('[UnloadSheet PDF Component] 渲染文档:', {
+    rowCount,
+    containerNumber: data.containerNumber,
+    fontRegistered,
+    fontError: fontError ? { message: fontError.message } : null,
+  })
+  
   const styles = createStyles(rowCount)
   
   return (
