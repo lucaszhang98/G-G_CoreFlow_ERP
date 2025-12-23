@@ -21,13 +21,12 @@ let fontError: any = null
 
 function registerFont() {
   const cwd = process.cwd()
+  // 优先使用 node_modules 中的 woff 文件（@react-pdf/renderer 支持 woff 和 ttf，但不支持 woff2）
   const fontPaths = [
-    // 方案1: 使用 public/fonts 目录（推荐，生产环境更可靠）
-    path.join(cwd, 'public', 'fonts', 'NotoSansSC-Regular.ttf'),
-    path.join(cwd, 'public', 'fonts', 'NotoSansSC-Regular.woff'),
-    // 方案2: 使用 node_modules 中的字体
+    // 方案1: 使用 node_modules 中的 woff 字体（最可靠）
     path.join(cwd, 'node_modules', '@fontsource', 'noto-sans-sc', 'files', 'noto-sans-sc-chinese-simplified-400-normal.woff'),
-    path.join(cwd, 'node_modules', '@fontsource', 'noto-sans-sc', 'files', 'noto-sans-sc-chinese-simplified-400-normal.ttf'),
+    // 方案2: 使用 public/fonts 目录中的 woff 文件（如果存在）
+    path.join(cwd, 'public', 'fonts', 'NotoSansSC-Regular.woff'),
   ]
 
   console.log('[UnloadSheet PDF] 字体注册开始:', {
@@ -38,7 +37,15 @@ function registerFont() {
   for (const fontPath of fontPaths) {
     try {
       if (fs.existsSync(fontPath)) {
-        console.log(`[UnloadSheet PDF] 找到字体文件: ${fontPath}`)
+        // 验证文件确实是字体文件（不是 HTML 或其他格式）
+        const stats = fs.statSync(fontPath)
+        if (stats.size < 1000) {
+          // 文件太小，可能是 HTML 错误页面
+          console.warn(`[UnloadSheet PDF] 字体文件太小，跳过: ${fontPath} (${stats.size} bytes)`)
+          continue
+        }
+        
+        console.log(`[UnloadSheet PDF] 找到字体文件: ${fontPath} (${stats.size} bytes)`)
         Font.register({
           family: 'NotoSansSC',
           src: fontPath,
@@ -53,6 +60,7 @@ function registerFont() {
       console.warn(`[UnloadSheet PDF] 尝试注册字体失败 (${fontPath}):`, {
         message: error?.message,
         path: fontPath,
+        errorType: error?.constructor?.name,
       })
       // 继续尝试下一个路径
     }
