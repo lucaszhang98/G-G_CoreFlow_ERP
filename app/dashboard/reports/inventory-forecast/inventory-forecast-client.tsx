@@ -82,7 +82,7 @@ export function InventoryForecastClient() {
       
       // 从服务器获取当前时间（确保本地和正式环境使用相同的逻辑）
       // 本地开发：从本地开发服务器获取时间
-      // 正式环境：从 Netlify 服务器获取时间
+      // 生产环境：从 Vercel 服务器获取时间
       const timeResponse = await fetch("/api/system/current-time")
       if (!timeResponse.ok) {
         throw new Error("获取服务器时间失败")

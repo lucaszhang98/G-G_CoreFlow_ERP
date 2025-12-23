@@ -2,7 +2,9 @@
  * 库存预测计算 API（手动触发）
  * POST /api/reports/inventory-forecast/calculate
  * 
- * 注意：此函数可能需要较长时间执行，已设置最大超时时间为 26 秒（Netlify 免费版最大）
+ * 注意：此函数可能需要较长时间执行
+ * - Vercel 免费版：10 秒
+ * - Vercel Pro：60 秒
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -10,8 +12,10 @@ import { checkAuth } from '@/lib/api/helpers'
 // 使用优化版计算服务
 import { calculateInventoryForecast } from '@/lib/services/inventory-forecast-service'
 
-// 设置函数最大执行时间（Netlify 免费版最大 26 秒）
-export const maxDuration = 26
+// 设置函数最大执行时间
+// Vercel 免费版：10 秒，Pro：60 秒
+// 如果计算时间超过 10 秒，建议升级到 Pro 或优化计算逻辑
+export const maxDuration = 10
 
 export async function POST(request: NextRequest) {
   try {

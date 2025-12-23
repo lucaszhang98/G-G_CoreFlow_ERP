@@ -29,60 +29,29 @@ export function InboundReceiptTable() {
     },
   ], [router])
 
-  // 加载拆柜人员选项（只显示入库工人角色）
-  const loadUnloadedByOptions = React.useCallback(async () => {
+  // 加载用户选项（用于入库人员字段）
+  const loadUsersOptions = React.useCallback(async () => {
     try {
-      // 尝试使用 filter_role 参数，如果不支持则在前端过滤
-      const response = await fetch('/api/users?limit=1000&sort=name&order=asc&filter_role=wms_inbound_worker')
+      const response = await fetch('/api/users?limit=1000&sort=full_name&order=asc')
       if (!response.ok) {
-        throw new Error('获取拆柜人员列表失败')
+        throw new Error('获取用户列表失败')
       }
       const result = await response.json()
       const users = result.data || []
-      // 在前端再次过滤，确保只返回入库工人（以防 API 不支持 filter_role）
-      const filteredUsers = users.filter((user: any) => 
-        user.role === 'wms_inbound_worker' && user.status === 'active'
-      )
-      return filteredUsers.map((user: any) => ({
-        label: user.name || user.username || `用户 ${user.id}`,
+      return users.map((user: any) => ({
+        label: user.full_name || user.username || `用户 ${user.id}`,
         value: String(user.id),
       }))
     } catch (error) {
-      console.error('加载拆柜人员选项失败:', error)
-      return []
-    }
-  }, [])
-
-  // 加载入库人员选项（显示仓库主管和入库工人）
-  const loadReceivedByOptions = React.useCallback(async () => {
-    try {
-      // 获取角色为 wms_supervisor（仓库主管）和 wms_inbound_worker（入库工人）的用户
-      // 由于 API 可能不支持多角色过滤，我们先获取所有用户，然后在前端过滤
-      const response = await fetch('/api/users?limit=1000&sort=name&order=asc')
-      if (!response.ok) {
-        throw new Error('获取入库人员列表失败')
-      }
-      const result = await response.json()
-      const users = result.data || []
-      // 过滤出仓库主管和入库工人，且状态为活跃
-      const filteredUsers = users.filter((user: any) => 
-        (user.role === 'wms_supervisor' || user.role === 'wms_inbound_worker') && user.status === 'active'
-      )
-      return filteredUsers.map((user: any) => ({
-        label: user.name || user.username || `用户 ${user.id}`,
-        value: String(user.id),
-      }))
-    } catch (error) {
-      console.error('加载入库人员选项失败:', error)
+      console.error('加载用户选项失败:', error)
       return []
     }
   }, [])
 
   // 字段选项加载函数（用于批量编辑和行内编辑中的关系字段）
   const fieldLoadOptions = React.useMemo(() => ({
-    unloaded_by: loadUnloadedByOptions, // 拆柜人员：只显示入库工人
-    received_by: loadReceivedByOptions, // 入库人员：显示仓库主管和入库工人
-  }), [loadUnloadedByOptions, loadReceivedByOptions])
+    received_by: loadUsersOptions,
+  }), [loadUsersOptions])
 
   return (
     <EntityTable 

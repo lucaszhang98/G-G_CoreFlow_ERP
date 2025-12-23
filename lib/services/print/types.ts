@@ -185,3 +185,4 @@ export interface LabelData {
   estimatedPallets: number // 预计板数，用于计算生成数量
 }
 
+

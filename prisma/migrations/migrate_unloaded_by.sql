@@ -36,3 +36,4 @@ ALTER TABLE wms.inbound_receipt
 -- WHERE table_schema = 'wms' AND table_name = 'inbound_receipt' AND column_name = 'unloaded_by';
 
 
+

@@ -19,8 +19,10 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 86400, // 图片缓存24小时
   },
   
-  // Netlify 部署配置
-  // Netlify Next.js 插件会自动处理output和文件追踪
+  // 部署配置
+  // Vercel 部署：使用默认配置，自动优化
+  // 如果需要部署到子目录，取消下面的注释并设置 basePath
+  // basePath: '/subdirectory',
 };
 
 export default nextConfig;
