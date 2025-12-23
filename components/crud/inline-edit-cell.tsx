@@ -199,7 +199,7 @@ export function InlineEditCell({
             <SelectTrigger className={cn("h-10 text-sm min-w-[120px] w-full", className)}>
               <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
               {selectOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}

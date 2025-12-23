@@ -781,6 +781,7 @@ export function DetailTable({
                                   <option value="扣货">扣货</option>
                                   <option value="已放行">已放行</option>
                                   <option value="私仓">私仓</option>
+                                  <option value="转仓">转仓</option>
                                 </select>
                               </td>
                             )
@@ -1654,6 +1655,7 @@ function AddDetailDialog({
                   <SelectItem value="扣货">扣货</SelectItem>
                   <SelectItem value="已放行">已放行</SelectItem>
                   <SelectItem value="私仓">私仓</SelectItem>
+                  <SelectItem value="转仓">转仓</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -186,11 +186,11 @@ export async function generateAppointmentImportTemplate(
     dataSheet.getCell(`M${rowNum}`).dataValidation = {
       type: 'list',
       allowBlank: false,
-      formulae: ['"AMZ,扣货,已放行,私仓"'],
+      formulae: ['"AMZ,扣货,已放行,私仓,转仓"'],
       showErrorMessage: true,
       errorTitle: '输入错误',
       errorStyle: 'error',
-      error: '请从下拉列表中选择：AMZ、扣货、已放行、私仓'
+      error: '请从下拉列表中选择：AMZ、扣货、已放行、私仓、转仓'
     }
     
     // N列：预计板数 - 正整数（保持数字格式）
@@ -290,7 +290,7 @@ export async function generateAppointmentImportTemplate(
     ['=== 明细必填字段 ===', '', '', ''],
     ['订单号', '是', '4位大写字母+7位数字', '如：ABCD1234567，必须存在于订单管理中'],
     ['仓点', '是', '下拉选择', '从下拉列表选择位置代码，必须存在于位置管理中'],
-    ['性质', '是', '下拉：AMZ/扣货/已放行/私仓', '从下拉列表选择'],
+    ['性质', '是', '下拉：AMZ/扣货/已放行/私仓/转仓', '从下拉列表选择'],
     ['预计板数', '是', '正整数', '必须大于0'],
     ['', '', '', ''],
     ['重要说明', '', '', ''],
@@ -346,6 +346,7 @@ export async function generateAppointmentImportTemplate(
   // ===== 7. 返回Workbook =====
   return workbook
 }
+
 
 
 

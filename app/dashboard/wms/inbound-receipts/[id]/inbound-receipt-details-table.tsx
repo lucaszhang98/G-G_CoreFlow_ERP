@@ -27,6 +27,8 @@ interface OrderDetail {
   delivery_nature: string | null
   volume_percentage: number | null // 分仓占比（从数据库自动生成）
   delivery_location?: string | null // 添加送仓地点
+  fba?: string | null // FBA字段（从订单明细提取）
+  notes?: string | null // 备注字段（从订单明细提取）
 }
 
 interface InventoryLot {
@@ -318,6 +320,7 @@ export function InboundReceiptDetailsTable({
             <TableHead className="w-12"></TableHead>
             <TableHead>性质</TableHead>
             <TableHead>送仓地点</TableHead>
+            <TableHead>数量</TableHead>
             <TableHead>体积</TableHead>
             <TableHead>预估板数</TableHead>
             <TableHead>分仓占比</TableHead>
@@ -334,7 +337,10 @@ export function InboundReceiptDetailsTable({
           {sortedOrderDetails.map((detail) => {
             const inventoryInfo = getInventoryInfo(detail.id)
             const deliveryLocation = getDeliveryLocation(detail)
-            const percentage = detail.volume_percentage // 使用数据库字段
+            // 处理 volume_percentage（确保正确获取）
+            const percentage = detail.volume_percentage !== undefined && detail.volume_percentage !== null 
+              ? (typeof detail.volume_percentage === 'string' ? parseFloat(detail.volume_percentage) : Number(detail.volume_percentage))
+              : null
             const isExpanded = expandedRows.has(detail.id)
             const appointments = getAppointmentsForDetail(detail.order_id)
 
@@ -363,13 +369,16 @@ export function InboundReceiptDetailsTable({
                     {deliveryLocation || "-"}
                   </TableCell>
                   <TableCell>
+                    {formatInteger(detail.quantity)}
+                  </TableCell>
+                  <TableCell>
                     {formatVolume(detail.container_volume)}
                   </TableCell>
                   <TableCell>
                     {formatInteger(detail.estimated_pallets)}
                   </TableCell>
                   <TableCell>
-                    {percentage !== null ? formatPercentage(percentage) : "-"}
+                    {percentage !== null && percentage !== undefined && !isNaN(percentage) ? formatPercentage(percentage) : "-"}
                   </TableCell>
                   <TableCell>
                     {editingDetailId === detail.id ? (
@@ -410,10 +419,10 @@ export function InboundReceiptDetailsTable({
                     {inventoryInfo.delivery_progress !== null ? formatPercentage(inventoryInfo.delivery_progress) : "-"}
                   </TableCell>
                   <TableCell className="max-w-xs">
-                    {inventoryInfo.unload_transfer_notes || "-"}
+                    {detail.fba || "-"}
                   </TableCell>
                   <TableCell className="max-w-xs">
-                    {inventoryInfo.notes || "-"}
+                    {detail.notes || "-"}
                   </TableCell>
                   <TableCell>
                     {editingDetailId === detail.id ? (
@@ -451,7 +460,7 @@ export function InboundReceiptDetailsTable({
                 {/* 展开行：送仓预约 */}
                 {isExpanded && (
                   <TableRow className="bg-muted/50">
-                    <TableCell colSpan={12} className="p-0">
+                    <TableCell colSpan={13} className="p-0">
                       <div className="p-4">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="text-sm font-semibold">
@@ -479,7 +488,6 @@ export function InboundReceiptDetailsTable({
                                         className="text-blue-600 hover:underline"
                                         onClick={(e) => {
                                           e.preventDefault()
-                                          // TODO: 后续添加链接目标
                                         }}
                                       >
                                         {appt.reference_number}

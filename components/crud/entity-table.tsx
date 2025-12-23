@@ -1,4 +1,4 @@
-/**·
+/**
  * 通用实体列表组件
  */
 
@@ -569,6 +569,7 @@ export function EntityTable<T = any>({
       const updates: Record<string, any> = {}
       Object.entries(currentEditingValues).forEach(([key, value]) => {
         // 处理字段名映射：parent_id -> parent, manager_id -> manager, department_id -> department
+        // 对于 unloaded_by 和 received_by，直接使用原字段名
         let fieldConfig = config.fields[key]
         if (!fieldConfig) {
           // 尝试映射字段名
@@ -578,6 +579,9 @@ export function EntityTable<T = any>({
             fieldConfig = config.fields['manager']
           } else if (key === 'department_id') {
             fieldConfig = config.fields['department']
+          } else if (key === 'unloaded_by' || key === 'received_by') {
+            // unloaded_by 和 received_by 直接使用原字段名
+            fieldConfig = config.fields[key]
           }
         }
         
@@ -648,9 +652,20 @@ export function EntityTable<T = any>({
         // 处理关系字段：关系字段在数据库中存储的是 ID，需要映射到正确的数据库字段名
         if (fieldConfig?.type === 'relation') {
           // 对于关系字段，需要确定数据库字段名
+          // 优先使用 relationField（如果配置了）
           // 如果字段名以 _id 结尾，直接使用（如 user_id）
           // 否则，使用 {fieldKey}_id 作为数据库字段名（如 customer -> customer_id）
-          const dbFieldName = key.endsWith('_id') ? key : `${key}_id`
+          // 特殊处理：unloaded_by 和 received_by 直接使用原字段名
+          let dbFieldName: string
+          if (fieldConfig.relationField) {
+            dbFieldName = fieldConfig.relationField
+          } else if (key === 'unloaded_by' || key === 'received_by') {
+            dbFieldName = key // unloaded_by 和 received_by 直接使用原字段名
+          } else if (key.endsWith('_id')) {
+            dbFieldName = key
+          } else {
+            dbFieldName = `${key}_id`
+          }
           const originalId = (row as any)[dbFieldName] || (row as any)[key]
           
           // 处理空值：空字符串、null、undefined 都转换为 null
@@ -1020,6 +1035,7 @@ export function EntityTable<T = any>({
       Object.entries(batchEditValues).forEach(([key, value]) => {
         // 处理字段名映射：如果字段被映射了（如 parent_id -> parent），需要映射回数据库字段名
         // 对于 parent_id 和 manager_id，直接使用原字段名（数据库字段名）
+        // 对于 unloaded_by 和 received_by，直接使用原字段名（数据库字段名）
         let dbFieldKey = key
         const fieldConfig = config.fields[key]
         
@@ -1032,6 +1048,9 @@ export function EntityTable<T = any>({
             actualFieldConfig = config.fields['manager']
           } else if (key === 'department_id') {
             actualFieldConfig = config.fields['department']
+          } else if (key === 'unloaded_by' || key === 'received_by') {
+            // unloaded_by 和 received_by 直接使用原字段名
+            actualFieldConfig = config.fields[key]
           }
         }
         
@@ -1049,11 +1068,22 @@ export function EntityTable<T = any>({
           return
         }
         
-        // 对于 relation 字段，确保值是数字类型
+        // 对于 relation 字段，确保值是数字类型，并使用正确的数据库字段名
         if (actualFieldConfig?.type === 'relation' && value) {
           const numValue = Number(value)
           if (!isNaN(numValue)) {
-            processedUpdates[dbFieldKey] = numValue
+            // 确定数据库字段名：优先使用 relationField，否则根据字段名规则确定
+            let finalDbFieldKey: string
+            if (actualFieldConfig.relationField) {
+              finalDbFieldKey = actualFieldConfig.relationField
+            } else if (key === 'unloaded_by' || key === 'received_by') {
+              finalDbFieldKey = key // unloaded_by 和 received_by 直接使用原字段名
+            } else if (key.endsWith('_id')) {
+              finalDbFieldKey = key
+            } else {
+              finalDbFieldKey = `${key}_id`
+            }
+            processedUpdates[finalDbFieldKey] = numValue
           }
         } else {
           processedUpdates[dbFieldKey] = value
@@ -1249,21 +1279,26 @@ export function EntityTable<T = any>({
               : row.getValue(columnId)
             // 确定实际使用的 fieldKey（用于 onChange 和 fieldLoadOptions）
             // 如果 columnId 是 parent、manager 或 department，但 editableFields 中有对应的 _id 字段，使用后者
-            const actualFieldKeyForEdit = editableFields.includes(`${columnId}_id`) 
-              ? `${columnId}_id` 
-              : (columnId === 'parent' && editableFields.includes('parent_id'))
-                ? 'parent_id'
-                : (columnId === 'manager' && editableFields.includes('manager_id'))
-                  ? 'manager_id'
-                  : (columnId === 'department' && editableFields.includes('department_id'))
-                    ? 'department_id'
-                    : columnId
+            // 对于 unloaded_by 和 received_by，直接使用原字段名
+            const actualFieldKeyForEdit = (columnId === 'unloaded_by' || columnId === 'received_by')
+              ? columnId
+              : editableFields.includes(`${columnId}_id`) 
+                ? `${columnId}_id` 
+                : (columnId === 'parent' && editableFields.includes('parent_id'))
+                  ? 'parent_id'
+                  : (columnId === 'manager' && editableFields.includes('manager_id'))
+                    ? 'manager_id'
+                    : (columnId === 'department' && editableFields.includes('department_id'))
+                      ? 'department_id'
+                      : columnId
             
             // 获取字段的 loadOptions 和 loadFuzzyOptions 函数（如果提供）
-            // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id，但 columnId 可能是映射后的 parent/manager/department
+            // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id/unloaded_by/received_by，但 columnId 可能是映射后的 parent/manager/department
             const loadOptionsKeyForEdit = columnId === 'parent' ? 'parent_id' 
               : columnId === 'manager' ? 'manager_id'
               : columnId === 'department' ? 'department_id'
+              : columnId === 'unloaded_by' ? 'unloaded_by'
+              : columnId === 'received_by' ? 'received_by'
               : columnId
             const loadOptionsForEdit = fieldLoadOptions?.[loadOptionsKeyForEdit] || fieldLoadOptions?.[columnId]
             const loadFuzzyOptionsForEdit = fieldFuzzyLoadOptions?.[loadOptionsKeyForEdit] || fieldFuzzyLoadOptions?.[columnId]
@@ -1393,13 +1428,23 @@ export function EntityTable<T = any>({
               initialValue = String(idValue)
             }
           } else if (fieldConfig.type === 'relation') {
+            // 对于关系字段，确定数据库字段名
+            // 优先使用 relationField（如果配置了）
             // 对于 parent_id、manager_id 和 department_id，直接使用 fieldKey 作为 idKey
             // 对于 department，使用 department_id
-            const idKey = (fieldKey === 'parent_id' || fieldKey === 'manager_id' || fieldKey === 'department_id') 
-              ? fieldKey 
-              : (fieldKey === 'department')
-                ? 'department_id'
-                : `${fieldKey}_id`
+            // 对于 unloaded_by 和 received_by，直接使用原字段名
+            let idKey: string
+            if (fieldConfig.relationField) {
+              idKey = fieldConfig.relationField
+            } else if (fieldKey === 'unloaded_by' || fieldKey === 'received_by') {
+              idKey = fieldKey // unloaded_by 和 received_by 直接使用原字段名
+            } else if (fieldKey === 'parent_id' || fieldKey === 'manager_id' || fieldKey === 'department_id') {
+              idKey = fieldKey
+            } else if (fieldKey === 'department') {
+              idKey = 'department_id'
+            } else {
+              idKey = `${fieldKey}_id`
+            }
             const idValue = (row.original as any)[idKey]
             // 优先使用 _id 字段的值（这是实际的 ID）
             if (idValue !== undefined && idValue !== null) {
@@ -1430,21 +1475,26 @@ export function EntityTable<T = any>({
           
           // 确定实际使用的 fieldKey（用于 onChange 和 fieldLoadOptions）
           // 如果 fieldKey 是 parent、manager 或 department，但 editableFields 中有对应的 _id 字段，使用后者
-          const actualFieldKeyForEdit = editableFields.includes(`${fieldKey}_id`) 
-            ? `${fieldKey}_id` 
-            : (fieldKey === 'parent' && editableFields.includes('parent_id'))
-              ? 'parent_id'
-              : (fieldKey === 'manager' && editableFields.includes('manager_id'))
-                ? 'manager_id'
-                : (fieldKey === 'department' && editableFields.includes('department_id'))
-                  ? 'department_id'
-                  : fieldKey
+          // 对于 unloaded_by 和 received_by，直接使用原字段名
+          const actualFieldKeyForEdit = (fieldKey === 'unloaded_by' || fieldKey === 'received_by')
+            ? fieldKey
+            : editableFields.includes(`${fieldKey}_id`) 
+              ? `${fieldKey}_id` 
+              : (fieldKey === 'parent' && editableFields.includes('parent_id'))
+                ? 'parent_id'
+                : (fieldKey === 'manager' && editableFields.includes('manager_id'))
+                  ? 'manager_id'
+                  : (fieldKey === 'department' && editableFields.includes('department_id'))
+                    ? 'department_id'
+                    : fieldKey
           
           // 获取字段的 loadOptions 和 loadFuzzyOptions 函数（如果提供）
-          // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id
+          // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id/unloaded_by/received_by
           const loadOptionsKey = actualFieldKeyForEdit === 'parent_id' ? 'parent_id' 
             : actualFieldKeyForEdit === 'manager_id' ? 'manager_id'
             : actualFieldKeyForEdit === 'department_id' ? 'department_id'
+            : actualFieldKeyForEdit === 'unloaded_by' ? 'unloaded_by'
+            : actualFieldKeyForEdit === 'received_by' ? 'received_by'
             : fieldKey
           const loadOptions = fieldLoadOptions?.[loadOptionsKey] || fieldLoadOptions?.[fieldKey]
           const loadFuzzyOptions = fieldFuzzyLoadOptions?.[loadOptionsKey] || fieldFuzzyLoadOptions?.[fieldKey]

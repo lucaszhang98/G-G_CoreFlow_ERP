@@ -88,8 +88,8 @@ export const appointmentImportRowSchema = z.object({
     .min(1, '仓点不能为空'),
   
   // 性质（必填）
-  delivery_nature: z.enum(['AMZ', '扣货', '已放行', '私仓'], {
-    message: '性质必须是：AMZ、扣货、已放行、私仓之一',
+  delivery_nature: z.enum(['AMZ', '扣货', '已放行', '私仓', '转仓'], {
+    message: '性质必须是：AMZ、扣货、已放行、私仓、转仓之一',
   }),
   
   // 预计板数（必填，正整数）
@@ -128,6 +128,7 @@ export interface ImportResult {
   errors: ImportError[]
   message?: string
 }
+
 
 
 

@@ -92,6 +92,7 @@ export const inboundReceiptConfig: EntityConfig = {
         displayField: 'name',
         valueField: 'id',
       },
+      relationField: 'unloaded_by', // 数据库字段名，用于更新
     },
     received_by: {
       key: 'received_by',
@@ -102,6 +103,7 @@ export const inboundReceiptConfig: EntityConfig = {
         displayField: 'name',
         valueField: 'id',
       },
+      relationField: 'received_by', // 数据库字段名，用于更新
     },
     delivery_progress: {
       key: 'delivery_progress',

@@ -13,6 +13,71 @@ export async function GET(request: NextRequest) {
     const permissionResult = await checkPermission(inboundReceiptConfig.permissions.list);
     if (permissionResult.error) return permissionResult.error;
 
+    // 自动补全：检查所有 operation_mode = 'unload' 的订单，如果还没有入库单，自动创建
+    try {
+      // 查询所有操作方式为"拆柜"的订单
+      const unloadOrders = await prisma.orders.findMany({
+        where: {
+          operation_mode: 'unload',
+        },
+        select: {
+          order_id: true,
+        },
+      });
+
+      // 查询所有已存在的入库单的 order_id
+      const existingInboundReceipts = await prisma.inbound_receipt.findMany({
+        select: {
+          order_id: true,
+        },
+      });
+
+      const existingOrderIds = new Set(
+        existingInboundReceipts.map((ir) => String(ir.order_id))
+      );
+
+      // 找出还没有入库单的订单
+      const missingOrderIds = unloadOrders
+        .filter((order) => !existingOrderIds.has(String(order.order_id)))
+        .map((order) => order.order_id);
+
+      // 如果有缺失的入库单，批量创建
+      if (missingOrderIds.length > 0) {
+        // 获取第一个可用的 warehouse_id
+        const firstWarehouse = await prisma.warehouses.findFirst({
+          select: { warehouse_id: true },
+          orderBy: { warehouse_id: 'asc' },
+        });
+        const warehouseId = firstWarehouse?.warehouse_id || BigInt(1000);
+
+        // 批量创建入库单
+        const createPromises = missingOrderIds.map((orderId) =>
+          prisma.inbound_receipt.create({
+            data: {
+              order_id: orderId,
+              warehouse_id: warehouseId,
+              status: 'pending',
+              created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+              updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+            },
+          }).catch((error: any) => {
+            // 如果创建失败（例如已存在），记录错误但不影响其他创建
+            console.warn(`自动创建入库单失败 (order_id: ${orderId}):`, error);
+            return null;
+          })
+        );
+
+        await Promise.all(createPromises);
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`自动补全了 ${missingOrderIds.length} 个缺失的入库单`);
+        }
+      }
+    } catch (autoCreateError: any) {
+      // 如果自动补全失败，记录错误但不影响正常查询
+      console.warn('自动补全入库单失败:', autoCreateError);
+    }
+
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)));

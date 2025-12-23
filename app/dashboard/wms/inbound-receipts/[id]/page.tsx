@@ -28,7 +28,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
   // 获取入库管理详情
   let inboundReceipt
   try {
-    inboundReceipt = await prisma.inbound_receipt.findUnique({
+    inboundReceipt = await (prisma.inbound_receipt.findUnique as any)({
       where: { inbound_receipt_id: BigInt(resolvedParams.id) },
       include: {
         orders: {
@@ -81,8 +81,15 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
             id: true,
             name: true,
             username: true,
-          },
+          } as any,
         },
+        users_inbound_receipt_unloaded_byTousers: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        } as any,
         warehouses: {
           select: {
             warehouse_id: true,
@@ -125,7 +132,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
           },
         },
       },
-    })
+    } as any)
   } catch (error: any) {
     if (error?.code === 'P2025') {
       notFound()
@@ -139,7 +146,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
 
   // 获取所有唯一的 delivery_location 用于查询 location_code
   // delivery_location 可能是 location_id（数字字符串）或 location_code（字符串）
-  const deliveryLocations = inboundReceipt.orders?.order_detail
+  const deliveryLocations = (inboundReceipt as any).orders?.order_detail
     ?.map((detail: any) => detail.delivery_location)
     .filter((id: any) => id !== null && id !== undefined) || []
   
@@ -202,10 +209,53 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
   }
 
   // 计算整柜体积（使用 volume 字段）
-  const totalContainerVolume = inboundReceipt.orders?.order_detail?.reduce((sum: number, detail: any) => {
-    const volume = detail.volume ? Number(detail.volume) : 0;
+  const totalContainerVolume = (inboundReceipt as any).orders?.order_detail?.reduce((sum: number, detail: any) => {
+    // 处理 Prisma Decimal 类型
+    const volume = detail.volume 
+      ? (typeof detail.volume === 'object' && 'toNumber' in detail.volume 
+          ? (detail.volume as any).toNumber() 
+          : Number(detail.volume))
+      : 0;
     return sum + volume;
   }, 0) || 0;
+
+  // 在序列化之前，先处理 Prisma Decimal 类型
+  // 手动转换 order_detail 中的 Decimal 字段
+  if ((inboundReceipt as any).orders?.order_detail) {
+    (inboundReceipt as any).orders.order_detail = (inboundReceipt as any).orders.order_detail.map((detail: any) => {
+      const processed: any = { ...detail }
+      // 处理 volume（Decimal 类型）
+      if (detail.volume && typeof detail.volume === 'object' && 'toNumber' in detail.volume) {
+        processed.volume = (detail.volume as any).toNumber()
+      }
+      // 处理 volume_percentage（Decimal 类型）
+      // 注意：Prisma Decimal 类型即使值为 null，也可能返回一个对象
+      // 需要尝试调用 toNumber() 来判断实际值
+      if (detail.volume_percentage !== null && detail.volume_percentage !== undefined) {
+        if (typeof detail.volume_percentage === 'object' && 'toNumber' in detail.volume_percentage) {
+          try {
+            const numValue = (detail.volume_percentage as any).toNumber()
+            // 如果 toNumber() 返回 null、undefined 或 NaN，则保持 null
+            processed.volume_percentage = (numValue !== null && numValue !== undefined && !isNaN(numValue)) ? numValue : null
+          } catch (e) {
+            // 如果 toNumber() 失败，尝试其他方式
+            processed.volume_percentage = null
+          }
+        } else if (typeof detail.volume_percentage === 'number') {
+          processed.volume_percentage = isNaN(detail.volume_percentage) ? null : detail.volume_percentage
+        } else if (typeof detail.volume_percentage === 'string') {
+          const numValue = parseFloat(detail.volume_percentage)
+          processed.volume_percentage = isNaN(numValue) ? null : numValue
+        } else {
+          processed.volume_percentage = null
+        }
+      } else {
+        // 保持 null 或 undefined
+        processed.volume_percentage = null
+      }
+      return processed
+    })
+  }
 
   // 序列化数据
   const serialized = JSON.parse(JSON.stringify(inboundReceipt, (key, value) => {
@@ -214,6 +264,10 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
     }
     if (value instanceof Date) {
       return value.toISOString()
+    }
+    // 处理 Prisma Decimal 类型（作为备用，如果上面没有处理到）
+    if (value && typeof value === 'object' && 'toNumber' in value && typeof (value as any).toNumber === 'function') {
+      return (value as any).toNumber()
     }
     return value
   }))
@@ -233,7 +287,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 </Link>
                 <div>
                   <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                    {inboundReceipt.orders?.order_number || '入库管理详情'}
+                    {(inboundReceipt as any).orders?.order_number || '入库管理详情'}
                   </h1>
                   <p className="text-muted-foreground mt-2">
                     入库管理ID: {inboundReceipt.inbound_receipt_id.toString()}
@@ -246,14 +300,15 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
             <InboundReceiptDetailPageClient
               inboundReceipt={{
                 ...serialized,
-                customer_name: inboundReceipt.orders?.customers?.name || null,
-                container_number: inboundReceipt.orders?.order_number || null,
-                unloaded_by: serialized.unloaded_by || null,
+                customer_name: (inboundReceipt as any).orders?.customers?.name || null,
+                container_number: (inboundReceipt as any).orders?.order_number || null,
+                unloaded_by: serialized.users_inbound_receipt_unloaded_byTousers?.name || null,
                 received_by: serialized.users_inbound_receipt_received_byTousers?.name || null,
                 planned_unload_at: serialized.planned_unload_at || null,
                 total_container_volume: totalContainerVolume,
               }}
-              orderDetails={serialized.orders?.order_detail?.map((detail: any) => {
+              customerCode={(inboundReceipt as any).orders?.customers?.code || null}
+              orderDetails={(serialized.orders as any)?.order_detail?.map((detail: any) => {
                 // 获取 location_code
                 // delivery_location 可能是 location_id（数字字符串）或 location_code（字符串）
                 let deliveryLocationCode: string | null = null
@@ -274,14 +329,39 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 // 计算该明细的体积（从 order_detail.volume 获取）
                 const detailVolume = detail.volume ? Number(detail.volume) : null
                 
+                // 处理 volume_percentage（序列化后可能是字符串或数字）
+                // 注意：Prisma Decimal 类型在序列化后可能变成字符串
+                let volumePercentage: number | null = null
+                if (detail.volume_percentage !== undefined && detail.volume_percentage !== null) {
+                  // 处理各种可能的情况：字符串、数字、Decimal 对象
+                  let percentageValue: number
+                  if (typeof detail.volume_percentage === 'string') {
+                    percentageValue = parseFloat(detail.volume_percentage)
+                  } else if (typeof detail.volume_percentage === 'number') {
+                    percentageValue = detail.volume_percentage
+                  } else if (detail.volume_percentage && typeof detail.volume_percentage === 'object' && 'toNumber' in detail.volume_percentage) {
+                    percentageValue = (detail.volume_percentage as any).toNumber()
+                  } else {
+                    percentageValue = Number(detail.volume_percentage)
+                  }
+                  volumePercentage = isNaN(percentageValue) ? null : percentageValue
+                }
+                
+                // 如果 volume_percentage 为 null，但 detailVolume 和 totalContainerVolume 都有值，则动态计算
+                if (volumePercentage === null && detailVolume !== null && detailVolume > 0 && totalContainerVolume > 0) {
+                  volumePercentage = (detailVolume / totalContainerVolume) * 100
+                }
+                
                 return {
                   ...detail,
                   id: detail.id.toString(),
                   order_id: detail.order_id?.toString() || null,
+                  quantity: detail.quantity !== undefined && detail.quantity !== null ? Number(detail.quantity) : 0,
                   volume: detailVolume,
                   container_volume: detailVolume, // 明细的体积就是 container_volume（用于显示）
-                  volume_percentage: detail.volume_percentage ? Number(detail.volume_percentage) : null,
+                  volume_percentage: volumePercentage,
                   delivery_location: deliveryLocationCode, // 显示 location_code
+                  delivery_nature: detail.delivery_nature || null, // 性质字段
                   fba: detail.fba || null,
                   notes: detail.notes || null,
                 }
@@ -305,7 +385,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 } : null,
                 delivery_location: lot.orders?.delivery_location || null,
               })) || []}
-              deliveryAppointments={serialized.orders?.delivery_appointments?.map((appt: any) => ({
+              deliveryAppointments={(serialized.orders as any)?.delivery_appointments?.map((appt: any) => ({
                 ...appt,
                 appointment_id: appt.appointment_id.toString(),
                 order_id: serialized.orders?.order_id?.toString() || null,
