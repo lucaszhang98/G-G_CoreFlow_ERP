@@ -3,11 +3,18 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 export async function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl
+  
+  // 对于 /api/auth 路由，直接放行，不进行任何处理
+  // 这些路由由 NextAuth 自己处理
+  if (pathname.startsWith("/api/auth")) {
+    return NextResponse.next()
+  }
+  
   try {
     // NextAuth 5.0: auth() 在 proxy 中可以直接调用，会自动从请求上下文获取
     const session = await auth()
-    const { pathname } = req.nextUrl
-
+    
     // 处理根路径
     if (pathname === "/") {
       if (session?.user) {
@@ -20,7 +27,7 @@ export async function proxy(req: NextRequest) {
     }
 
     // 公开路由（不需要登录）
-    const publicPaths = ["/login", "/api/auth"]
+    const publicPaths = ["/login"]
     const isPublicPath = publicPaths.some((path) => pathname.startsWith(path))
 
     // 如果是公开路由，允许访问
@@ -45,7 +52,6 @@ export async function proxy(req: NextRequest) {
     // 如果认证检查失败，记录错误但允许继续（避免阻止所有请求）
     console.error('[Proxy] Auth error:', error)
     // 对于公开路由，即使认证失败也允许访问
-    const { pathname } = req.nextUrl
     const publicPaths = ["/login", "/api/auth"]
     const isPublicPath = publicPaths.some((path) => pathname.startsWith(path))
     
