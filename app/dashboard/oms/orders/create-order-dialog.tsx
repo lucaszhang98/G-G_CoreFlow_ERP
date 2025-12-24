@@ -419,6 +419,11 @@ export function CreateOrderDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="40HQ">40HQ</SelectItem>
+                    <SelectItem value="40GP">40GP</SelectItem>
+                    <SelectItem value="20GP">20GP</SelectItem>
+                    <SelectItem value="20HQ">20HQ</SelectItem>
+                    <SelectItem value="45HQ">45HQ</SelectItem>
+                    <SelectItem value="other">其他</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
