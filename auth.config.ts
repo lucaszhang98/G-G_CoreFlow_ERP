@@ -106,5 +106,7 @@ export const authConfig = {
     }),
   ],
   trustHost: true,
+  // 确保在生产环境中使用正确的 URL
+  secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
 } satisfies NextAuthConfig
 
