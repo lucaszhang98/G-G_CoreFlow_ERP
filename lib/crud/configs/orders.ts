@@ -320,7 +320,7 @@ export const orderConfig: EntityConfig = {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
     create: ['admin', 'oms_manager'],
     update: ['admin', 'oms_manager'],
-    delete: ['admin'],
+    delete: [], // 订单管理不允许删除
   },
   
   prisma: {

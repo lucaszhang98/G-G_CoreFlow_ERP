@@ -200,3 +200,4 @@ export function LabelsDocument({ labels, barcodeImages }: { labels: LabelData[],
   )
 }
 
+
