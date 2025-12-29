@@ -459,72 +459,93 @@ export function EntityTable<T = any>({
   const handleStartEdit = React.useCallback((row: T) => {
     const idField = getIdField()
     const rowId = (row as any)[idField]
-    setEditingRowId(rowId)
-    // 初始化编辑值（只包含可编辑字段）
-    const initialValues: Record<string, any> = {}
-    editableFields.forEach(fieldKey => {
-      // 处理字段名映射：parent_id -> parent, manager_id -> manager
-      let actualFieldKey = fieldKey
-      let fieldConfig = config.fields[fieldKey]
+    
+    // 检查是否有选中的行（使用函数式更新来获取最新值）
+    setSelectedRows((prevSelectedRows) => {
+      const hasSelectedRows = prevSelectedRows.length > 0
       
-      if (!fieldConfig) {
-        // 尝试映射字段名
-        if (fieldKey === 'parent_id') {
-          fieldConfig = config.fields['parent']
-          actualFieldKey = 'parent'
-        } else if (fieldKey === 'manager_id') {
-          fieldConfig = config.fields['manager']
-          actualFieldKey = 'manager'
-        } else if (fieldKey === 'department_id') {
-          fieldConfig = config.fields['department']
-          actualFieldKey = 'department'
+      // 初始化编辑值（只包含可编辑字段）
+      const initialValues: Record<string, any> = {}
+      editableFields.forEach(fieldKey => {
+        // 处理字段名映射：parent_id -> parent, manager_id -> manager
+        let actualFieldKey = fieldKey
+        let fieldConfig = config.fields[fieldKey]
+        
+        if (!fieldConfig) {
+          // 尝试映射字段名
+          if (fieldKey === 'parent_id') {
+            fieldConfig = config.fields['parent']
+            actualFieldKey = 'parent'
+          } else if (fieldKey === 'manager_id') {
+            fieldConfig = config.fields['manager']
+            actualFieldKey = 'manager'
+          } else if (fieldKey === 'department_id') {
+            fieldConfig = config.fields['department']
+            actualFieldKey = 'department'
+          }
         }
-      }
-      
-      // 对于 relation 字段，优先使用 _id 字段的值
-      if (fieldConfig?.type === 'relation') {
-        // 对于 parent_id、manager_id 和 department_id，直接使用 fieldKey 作为 idKey
-        const idKey = (fieldKey === 'parent_id' || fieldKey === 'manager_id' || fieldKey === 'department_id') 
-          ? fieldKey 
-          : `${fieldKey}_id`
-        const idValue = (row as any)[idKey]
-        if (idValue !== undefined && idValue !== null) {
-          initialValues[fieldKey] = String(idValue)
+        
+        // 对于 relation 字段，优先使用 _id 字段的值
+        if (fieldConfig?.type === 'relation') {
+          // 对于 parent_id、manager_id 和 department_id，直接使用 fieldKey 作为 idKey
+          const idKey = (fieldKey === 'parent_id' || fieldKey === 'manager_id' || fieldKey === 'department_id') 
+            ? fieldKey 
+            : `${fieldKey}_id`
+          const idValue = (row as any)[idKey]
+          if (idValue !== undefined && idValue !== null) {
+            initialValues[fieldKey] = String(idValue)
+          } else {
+            // 如果没有 _id 字段，使用原字段的值（可能是 ID 或显示值）
+            initialValues[fieldKey] = (row as any)[fieldKey]
+          }
+        } else if (fieldConfig?.type === 'date') {
+          // 对于日期字段，格式化为 YYYY-MM-DD 格式
+          const dateValue = (row as any)[fieldKey]
+          if (dateValue === null || dateValue === undefined) {
+            initialValues[fieldKey] = null
+          } else if (dateValue instanceof Date) {
+            initialValues[fieldKey] = dateValue.toISOString().split('T')[0]
+          } else if (typeof dateValue === 'string') {
+            // 可能是 ISO 字符串或 YYYY-MM-DD 格式
+            initialValues[fieldKey] = dateValue.split('T')[0]
+          } else {
+            initialValues[fieldKey] = dateValue
+          }
+        } else if (fieldConfig?.type === 'datetime') {
+          // 对于日期时间字段，格式化为 ISO 字符串
+          const dateValue = (row as any)[fieldKey]
+          if (dateValue === null || dateValue === undefined) {
+            initialValues[fieldKey] = null
+          } else if (dateValue instanceof Date) {
+            initialValues[fieldKey] = dateValue.toISOString()
+          } else {
+            initialValues[fieldKey] = dateValue
+          }
         } else {
-          // 如果没有 _id 字段，使用原字段的值（可能是 ID 或显示值）
           initialValues[fieldKey] = (row as any)[fieldKey]
         }
-      } else if (fieldConfig?.type === 'date') {
-        // 对于日期字段，格式化为 YYYY-MM-DD 格式
-        const dateValue = (row as any)[fieldKey]
-        if (dateValue === null || dateValue === undefined) {
-          initialValues[fieldKey] = null
-        } else if (dateValue instanceof Date) {
-          initialValues[fieldKey] = dateValue.toISOString().split('T')[0]
-        } else if (typeof dateValue === 'string') {
-          // 可能是 ISO 字符串或 YYYY-MM-DD 格式
-          initialValues[fieldKey] = dateValue.split('T')[0]
-        } else {
-          initialValues[fieldKey] = dateValue
-        }
-      } else if (fieldConfig?.type === 'datetime') {
-        // 对于日期时间字段，格式化为 ISO 字符串
-        const dateValue = (row as any)[fieldKey]
-        if (dateValue === null || dateValue === undefined) {
-          initialValues[fieldKey] = null
-        } else if (dateValue instanceof Date) {
-          initialValues[fieldKey] = dateValue.toISOString()
-        } else {
-          initialValues[fieldKey] = dateValue
-        }
+      })
+      
+      // 如果有选中的行，延迟执行编辑相关的状态更新，确保清空选中行的操作先完成
+      if (hasSelectedRows) {
+        setTimeout(() => {
+          setEditingRowId(rowId)
+          setEditingValues(initialValues)
+          // 同时初始化 ref
+          editingValuesRef.current = { ...initialValues }
+        }, 10)
       } else {
-        initialValues[fieldKey] = (row as any)[fieldKey]
+        // 没有选中的行，直接执行编辑相关的状态更新
+        setEditingRowId(rowId)
+        setEditingValues(initialValues)
+        // 同时初始化 ref
+        editingValuesRef.current = { ...initialValues }
       }
+      
+      // 返回空数组，清空所有选中的行（专业系统的做法）
+      return []
     })
-    setEditingValues(initialValues)
-    // 同时初始化 ref
-    editingValuesRef.current = { ...initialValues }
-  }, [editingRowId, editableFields, config.idField, config.fields])
+  }, [editableFields, config.idField, config.fields])
   
   const handleEditValueChange = React.useCallback((fieldKey: string, value: any) => {
     // 只更新 ref，不更新 state，避免触发重新渲染
@@ -656,11 +677,14 @@ export function EntityTable<T = any>({
           // 如果字段名以 _id 结尾，直接使用（如 user_id）
           // 否则，使用 {fieldKey}_id 作为数据库字段名（如 customer -> customer_id）
           // 特殊处理：unloaded_by 和 received_by 直接使用原字段名
+          // 特殊处理：carrier 使用 carrier_id
           let dbFieldName: string
           if (fieldConfig.relationField) {
             dbFieldName = fieldConfig.relationField
           } else if (key === 'unloaded_by' || key === 'received_by') {
             dbFieldName = key // unloaded_by 和 received_by 直接使用原字段名
+          } else if (key === 'carrier') {
+            dbFieldName = 'carrier_id' // carrier 字段映射到 carrier_id
           } else if (key.endsWith('_id')) {
             dbFieldName = key
           } else {
@@ -681,7 +705,7 @@ export function EntityTable<T = any>({
           // 比较处理后的值是否改变
           const originalNum = originalId ? Number(originalId) : null
           if (processedValue !== originalNum) {
-            // 使用数据库字段名（如 customer_id）而不是配置字段名（如 customer）
+            // 使用数据库字段名（如 carrier_id）而不是配置字段名（如 carrier）
             updates[dbFieldName] = processedValue
           }
           return // 跳过后续处理
@@ -689,6 +713,7 @@ export function EntityTable<T = any>({
         
         // 处理日期字段：保持为 YYYY-MM-DD 字符串格式（API 会处理转换）
         let processedValue = value
+        let dbFieldName = key // 默认使用原字段名
         if (fieldConfig?.type === 'date') {
           // 日期字符串格式：YYYY-MM-DD，保持字符串格式发送给 API
           // 空字符串转换为 null
@@ -742,6 +767,12 @@ export function EntityTable<T = any>({
           }
           
           newStr = processedValue === null || processedValue === undefined ? '' : String(processedValue)
+          
+          // 如果值改变了，使用正确的数据库字段名保存
+          if (originalStr !== newStr) {
+            updates[dbFieldName] = processedValue
+          }
+          return // 跳过后续处理
         } else if (fieldConfig?.type === 'datetime') {
           // 日期时间字段：保持原始格式
           if (originalValue === null || originalValue === undefined) {
@@ -872,6 +903,7 @@ export function EntityTable<T = any>({
   const handleCancelEdit = React.useCallback(() => {
     setEditingRowId(null)
     setEditingValues({})
+    editingValuesRef.current = {}
   }, [])
 
   // 处理查看详情
@@ -1048,6 +1080,8 @@ export function EntityTable<T = any>({
             actualFieldConfig = config.fields['manager']
           } else if (key === 'department_id') {
             actualFieldConfig = config.fields['department']
+          } else if (key === 'carrier') {
+            actualFieldConfig = config.fields['carrier']
           } else if (key === 'unloaded_by' || key === 'received_by') {
             // unloaded_by 和 received_by 直接使用原字段名
             actualFieldConfig = config.fields[key]
@@ -1078,6 +1112,8 @@ export function EntityTable<T = any>({
               finalDbFieldKey = actualFieldConfig.relationField
             } else if (key === 'unloaded_by' || key === 'received_by') {
               finalDbFieldKey = key // unloaded_by 和 received_by 直接使用原字段名
+            } else if (key === 'carrier') {
+              finalDbFieldKey = 'carrier_id' // carrier 字段映射到 carrier_id
             } else if (key.endsWith('_id')) {
               finalDbFieldKey = key
             } else {
@@ -1085,6 +1121,11 @@ export function EntityTable<T = any>({
             }
             processedUpdates[finalDbFieldKey] = numValue
           }
+        } else if (actualFieldConfig?.type === 'date' && value) {
+          // 日期字段：处理日期格式
+          // 确保是 YYYY-MM-DD 格式
+          const dateValue = typeof value === 'string' ? value.split('T')[0] : value
+          processedUpdates[dbFieldKey] = dateValue
         } else {
           processedUpdates[dbFieldKey] = value
         }
@@ -1325,6 +1366,7 @@ export function EntityTable<T = any>({
           
           // 默认显示：根据字段类型格式化
           const value = row.getValue(columnId)
+          
           if (fieldConfig.type === 'date') {
             return <div>{formatDateDisplay(value)}</div>
           }
@@ -1379,6 +1421,7 @@ export function EntityTable<T = any>({
         alignRight: fieldConfig.type === 'number' || fieldConfig.type === 'currency',
       },
     }
+    
 
     // 自定义 cell 渲染（根据字段类型和编辑状态）
     // actualFieldKey 已经在上面定义过了，这里直接使用
@@ -1438,10 +1481,12 @@ export function EntityTable<T = any>({
               idKey = fieldConfig.relationField
             } else if (fieldKey === 'unloaded_by' || fieldKey === 'received_by') {
               idKey = fieldKey // unloaded_by 和 received_by 直接使用原字段名
-            } else if (fieldKey === 'parent_id' || fieldKey === 'manager_id' || fieldKey === 'department_id') {
+            } else if (fieldKey === 'parent_id' || fieldKey === 'manager_id' || fieldKey === 'department_id' || fieldKey === 'carrier_id') {
               idKey = fieldKey
             } else if (fieldKey === 'department') {
               idKey = 'department_id'
+            } else if (fieldKey === 'carrier') {
+              idKey = 'carrier_id'
             } else {
               idKey = `${fieldKey}_id`
             }
@@ -1474,7 +1519,7 @@ export function EntityTable<T = any>({
           }
           
           // 确定实际使用的 fieldKey（用于 onChange 和 fieldLoadOptions）
-          // 如果 fieldKey 是 parent、manager 或 department，但 editableFields 中有对应的 _id 字段，使用后者
+          // 如果 fieldKey 是 parent、manager、department 或 carrier，但 editableFields 中有对应的 _id 字段，使用后者
           // 对于 unloaded_by 和 received_by，直接使用原字段名
           const actualFieldKeyForEdit = (fieldKey === 'unloaded_by' || fieldKey === 'received_by')
             ? fieldKey
@@ -1486,15 +1531,19 @@ export function EntityTable<T = any>({
                   ? 'manager_id'
                   : (fieldKey === 'department' && editableFields.includes('department_id'))
                     ? 'department_id'
-                    : fieldKey
+                    : (fieldKey === 'carrier' && editableFields.includes('carrier'))
+                      ? 'carrier' // carrier 字段在 editableFields 中就是 'carrier'，但实际保存时使用 carrier_id
+                      : fieldKey
           
           // 获取字段的 loadOptions 和 loadFuzzyOptions 函数（如果提供）
-          // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id/unloaded_by/received_by
+          // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id/unloaded_by/received_by/carrier_id
           const loadOptionsKey = actualFieldKeyForEdit === 'parent_id' ? 'parent_id' 
             : actualFieldKeyForEdit === 'manager_id' ? 'manager_id'
             : actualFieldKeyForEdit === 'department_id' ? 'department_id'
             : actualFieldKeyForEdit === 'unloaded_by' ? 'unloaded_by'
             : actualFieldKeyForEdit === 'received_by' ? 'received_by'
+            : actualFieldKeyForEdit === 'carrier_id' ? 'carrier_id'
+            : fieldKey === 'carrier' ? 'carrier' // carrier 字段也支持
             : fieldKey
           const loadOptions = fieldLoadOptions?.[loadOptionsKey] || fieldLoadOptions?.[fieldKey]
           const loadFuzzyOptions = fieldFuzzyLoadOptions?.[loadOptionsKey] || fieldFuzzyLoadOptions?.[fieldKey]
@@ -1948,6 +1997,7 @@ export function EntityTable<T = any>({
         selectedRows={selectedRows}
         getIdValue={getIdValue}
         isRowEditing={inlineEditEnabled ? isRowEditing : undefined}
+        onCancelEdit={inlineEditEnabled && editingRowId !== null ? handleCancelEdit : undefined}
         expandableRows={expandableRows}
         enableViewManager={true}
         viewManagerTableName={config.name}
@@ -2171,18 +2221,21 @@ export function EntityTable<T = any>({
                           value={fieldValue || null}
                           onChange={(val) => handleBatchEditValueChange(fieldKey, val)}
                           placeholder="（留空则不修改）"
+                          locationType={fieldConfig.locationType} // 支持直接指定位置类型
                         />
                       </div>
                     )
                   }
                   
                   // 其他关系字段：优先使用模糊搜索下拉框
-                  // 注意：fieldFuzzyLoadOptions 的 key 可能是 parent_id/manager_id/department_id，但 fieldKey 可能是映射后的 parent/manager/department
+                  // 注意：fieldFuzzyLoadOptions 的 key 可能是 parent_id/manager_id/department_id/carrier_id，但 fieldKey 可能是映射后的 parent/manager/department/carrier
                   const loadFuzzyOptionsKey = actualFieldKey === 'parent' ? 'parent_id' 
                     : actualFieldKey === 'manager' ? 'manager_id'
                     : actualFieldKey === 'department' ? 'department_id'
+                    : actualFieldKey === 'carrier' ? 'carrier' // carrier 字段在 fieldFuzzyLoadOptions 中使用 'carrier' 作为 key
+                    : fieldKey === 'carrier' ? 'carrier' // 也支持直接使用 'carrier'
                     : fieldKey
-                  const loadFuzzyOptions = fieldFuzzyLoadOptions?.[loadFuzzyOptionsKey] || fieldFuzzyLoadOptions?.[fieldKey]
+                  const loadFuzzyOptions = fieldFuzzyLoadOptions?.[loadFuzzyOptionsKey] || fieldFuzzyLoadOptions?.[fieldKey] || fieldFuzzyLoadOptions?.['carrier_id']
                   if (loadFuzzyOptions) {
                     return (
                       <div key={fieldKey} className="space-y-2">
@@ -2199,10 +2252,12 @@ export function EntityTable<T = any>({
                     )
                   }
                   // 如果没有模糊搜索，使用 RelationFieldBatchEdit 组件
-                  // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id，但 fieldKey 可能是映射后的 parent/manager/department
+                  // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id/carrier_id，但 fieldKey 可能是映射后的 parent/manager/department/carrier
                   const loadOptionsKey = actualFieldKey === 'parent' ? 'parent_id' 
                     : actualFieldKey === 'manager' ? 'manager_id'
                     : actualFieldKey === 'department' ? 'department_id'
+                    : actualFieldKey === 'carrier' ? 'carrier' // carrier 字段在 fieldFuzzyLoadOptions 中使用 'carrier' 作为 key
+                    : fieldKey === 'carrier' ? 'carrier' // 也支持直接使用 'carrier'
                     : fieldKey
                   return (
                     <RelationFieldBatchEdit
@@ -2211,8 +2266,8 @@ export function EntityTable<T = any>({
                       fieldConfig={fieldConfig}
                       fieldValue={fieldValue}
                       onValueChange={handleBatchEditValueChange}
-                      loadOptions={fieldLoadOptions?.[loadOptionsKey] || fieldLoadOptions?.[fieldKey]}
-                      loadFuzzyOptions={fieldFuzzyLoadOptions?.[loadOptionsKey] || fieldFuzzyLoadOptions?.[fieldKey]}
+                      loadOptions={fieldLoadOptions?.[loadOptionsKey] || fieldLoadOptions?.[fieldKey] || fieldLoadOptions?.['carrier_id']}
+                      loadFuzzyOptions={fieldFuzzyLoadOptions?.[loadOptionsKey] || fieldFuzzyLoadOptions?.[fieldKey] || fieldFuzzyLoadOptions?.['carrier_id']}
                     />
                   )
                 }
@@ -2287,7 +2342,7 @@ export function EntityTable<T = any>({
                   )
 
                 case 'location':
-                  // 位置选择字段：使用 LocationSelect 组件
+                  // 位置选择字段：使用 LocationSelect 组件（支持 locationType 过滤）
                   return (
                     <div key={fieldKey} className="space-y-2">
                       <label className="text-sm font-medium">
@@ -2297,6 +2352,7 @@ export function EntityTable<T = any>({
                         value={fieldValue || null}
                         onChange={(val) => handleBatchEditValueChange(fieldKey, val)}
                         placeholder={`选择新的${fieldConfig.label}（留空则不修改）`}
+                        locationType={fieldConfig.locationType} // 支持直接指定位置类型
                       />
                     </div>
                   )

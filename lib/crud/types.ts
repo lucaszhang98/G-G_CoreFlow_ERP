@@ -85,6 +85,8 @@ export interface FieldConfig {
   hidden?: boolean // 标记为隐藏字段（如审计字段），不在前端显示
   readonly?: boolean // 标记为只读字段，用户不能编辑
   computed?: boolean // 标记为计算字段，由系统自动计算
+  // 位置字段配置
+  locationType?: string // 指定位置类型（如 'port'），只显示该类型的位置
 }
 
 /**

@@ -953,6 +953,32 @@ export function createCreateHandler(config: EntityConfig) {
         }
       }
 
+      // 对于订单表，自动创建提柜管理记录
+      if (config.prisma?.model === 'orders') {
+        try {
+          // 检查是否已存在提柜管理记录（理论上不应该存在，因为刚创建）
+          const existingPickup = await prisma.pickup_management.findUnique({
+            where: { order_id: item.order_id },
+            select: { pickup_id: true },
+          })
+          
+          // 如果不存在，则创建提柜管理记录
+          if (!existingPickup) {
+            await prisma.pickup_management.create({
+              data: {
+                order_id: item.order_id,
+                status: 'planned', // 默认状态：计划中
+                created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+                updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+              },
+            })
+          }
+        } catch (pickupError: any) {
+          // 如果创建失败（例如已存在），记录错误但不影响订单创建
+          console.warn('自动创建提柜管理记录失败:', pickupError)
+        }
+      }
+
       return NextResponse.json(
         { data: serializeBigInt(item) },
         { status: 201 }
@@ -1106,6 +1132,31 @@ export function createUpdateHandler(config: EntityConfig) {
         where: { [idField]: BigInt(resolvedParams.id) },
         data: processedData,
       })
+
+      // 对于订单表，确保提柜管理记录存在（如果不存在则创建）
+      if (config.prisma?.model === 'orders') {
+        try {
+          const existingPickup = await prisma.pickup_management.findUnique({
+            where: { order_id: item.order_id },
+            select: { pickup_id: true },
+          })
+          
+          // 如果不存在，则创建提柜管理记录
+          if (!existingPickup) {
+            await prisma.pickup_management.create({
+              data: {
+                order_id: item.order_id,
+                status: 'planned', // 默认状态：计划中
+                created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+                updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+              },
+            })
+          }
+        } catch (pickupError: any) {
+          // 如果创建失败（例如已存在），记录错误但不影响订单更新
+          console.warn('自动创建/同步提柜管理记录失败:', pickupError)
+        }
+      }
 
       return NextResponse.json({ data: serializeBigInt(item) })
     } catch (error: any) {

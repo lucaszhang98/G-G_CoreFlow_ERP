@@ -185,7 +185,7 @@ export async function GET(request: NextRequest) {
         lfd_date: order?.lfd_date || null,
         pickup_date: order?.pickup_date || null,
         ready_date: order?.ready_date || null,
-        return_date: order?.return_deadline || null,
+        return_deadline: order?.return_deadline || null,
         warehouse_account: order?.warehouse_account || null,
         port_location: order?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）
         port_location_id: order?.port_location_id ? String(order.port_location_id) : null,
