@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils"
 import { LocationSelect } from "@/components/ui/location-select"
 import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
 import { ChevronDown, Check } from "lucide-react"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 interface InlineEditCellProps {
   fieldKey: string
@@ -206,24 +208,10 @@ export function InlineEditCell({
         // 如果没有 options，回退到默认处理
         break
       }
-      // 对于 current_location 字段，使用带下拉选项的输入框，支持自定义输入
+      // 对于 current_location 字段，使用 combobox 组件，支持自定义输入和下拉选择
       if (fieldKey === 'current_location') {
-        const [isOpen, setIsOpen] = React.useState(false)
-        const inputRef = React.useRef<HTMLInputElement>(null)
-        const containerRef = React.useRef<HTMLDivElement>(null)
-        
-        // 点击外部关闭下拉框
-        React.useEffect(() => {
-          const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-              setIsOpen(false)
-            }
-          }
-          if (isOpen) {
-            document.addEventListener('mousedown', handleClickOutside)
-            return () => document.removeEventListener('mousedown', handleClickOutside)
-          }
-        }, [isOpen])
+        const [open, setOpen] = React.useState(false)
+        const [searchValue, setSearchValue] = React.useState("")
         
         // 确保选项已加载
         React.useEffect(() => {
@@ -232,63 +220,90 @@ export function InlineEditCell({
           }
         }, [fieldConfig.options, selectOptions.length])
         
+        // 当输入框值改变时，同步到 searchValue
+        React.useEffect(() => {
+          setSearchValue(internalValue || "")
+        }, [internalValue])
+        
+        // 过滤选项（支持搜索）
+        const filteredOptions = React.useMemo(() => {
+          if (!searchValue) {
+            return selectOptions
+          }
+          const searchLower = searchValue.toLowerCase()
+          return selectOptions.filter(option => 
+            option.label.toLowerCase().includes(searchLower) ||
+            option.value.toLowerCase().includes(searchLower)
+          )
+        }, [selectOptions, searchValue])
+        
         return (
-          <div ref={containerRef} onClick={(e) => e.stopPropagation()} className="inline-edit-cell relative">
-            <div className="relative">
-              <Input
-                ref={inputRef}
-                type="text"
-                value={internalValue || ''}
-                onChange={(e) => handleInternalChange(e.target.value || null)}
-                onBlur={(e) => {
-                  // 延迟关闭下拉框，允许点击选项
-                  setTimeout(() => {
-                    setIsOpen(false)
-                    handleBlur()
-                  }, 200)
-                }}
-                onFocus={() => setIsOpen(true)}
-                className={cn("h-9 text-sm min-w-[160px] w-full pr-8 bg-white", className)}
-                placeholder="选择或输入位置"
-              />
-              <ChevronDown className={cn(
-                "absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none transition-transform",
-                isOpen && "rotate-180"
-              )} />
-            </div>
-            {isOpen && (
-              <div className="absolute z-50 mt-1 w-full min-w-[160px] max-h-[200px] overflow-auto rounded-md border border-input bg-white shadow-md">
-                <div className="p-1">
-                  {selectOptions.length > 0 ? (
-                    selectOptions.map((option) => (
-                      <div
-                        key={option.value}
-                        className={cn(
-                          "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors",
-                          "hover:bg-accent hover:text-accent-foreground",
-                          internalValue === option.value && "bg-accent text-accent-foreground"
-                        )}
-                        onMouseDown={(e) => {
-                          e.preventDefault()
-                          handleInternalChange(option.value)
-                          setIsOpen(false)
-                          inputRef.current?.blur()
-                        }}
-                      >
-                        {internalValue === option.value && (
-                          <Check className="mr-2 h-4 w-4" />
-                        )}
-                        <span className={cn(internalValue === option.value && "ml-6")}>
-                          {option.label}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-2 py-1.5 text-sm text-muted-foreground">加载中...</div>
+          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  role="combobox"
+                  aria-expanded={open}
+                  className={cn(
+                    "flex h-9 w-full items-center justify-between rounded-md border border-input bg-white px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none",
+                    "hover:bg-accent hover:text-accent-foreground",
+                    "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+                    "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+                    className
                   )}
-                </div>
-              </div>
-            )}
+                  onBlur={handleBlur}
+                >
+                  <span className={cn("truncate", !internalValue && "text-muted-foreground")}>
+                    {internalValue || "选择或输入位置"}
+                  </span>
+                  <ChevronDown className={cn(
+                    "ml-2 h-4 w-4 shrink-0 opacity-50 transition-transform",
+                    open && "rotate-180"
+                  )} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput 
+                    placeholder="搜索位置..." 
+                    value={searchValue}
+                    onValueChange={(value) => {
+                      setSearchValue(value)
+                      handleInternalChange(value || null)
+                    }}
+                  />
+                  <CommandList>
+                    {filteredOptions.length === 0 ? (
+                      <CommandEmpty>未找到位置，可以输入自定义值</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {filteredOptions.map((option) => (
+                          <CommandItem
+                            key={option.value}
+                            value={option.value}
+                            onSelect={(selectedValue) => {
+                              handleInternalChange(selectedValue === internalValue ? null : selectedValue)
+                              setSearchValue(selectedValue === internalValue ? "" : selectedValue)
+                              setOpen(false)
+                              handleBlur()
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                internalValue === option.value ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {option.label}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         )
       }
