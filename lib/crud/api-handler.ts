@@ -467,18 +467,16 @@ export function createListHandler(config: EntityConfig) {
           hasSelect: !!queryOptions.select,
         })
         
-        // 如果是 "cached plan must not change result type" 错误，尝试重新连接
+        // 如果是 "cached plan must not change result type" 错误，尝试清除查询计划缓存并重试
         if (queryError?.message?.includes('cached plan must not change result type')) {
-          console.warn('[createListHandler] 检测到 PostgreSQL 缓存计划错误，尝试断开连接并重试...')
+          console.warn('[createListHandler] 检测到 PostgreSQL 缓存计划错误，尝试清除查询计划缓存并重试...')
           try {
-            // 断开 Prisma 连接
-            await prisma.$disconnect()
-            // 等待一小段时间
-            await new Promise(resolve => setTimeout(resolve, 100))
-            // 重新连接
-            await prisma.$connect()
+            // 执行 DEALLOCATE ALL 来清除所有缓存的查询计划
+            await prisma.$executeRawUnsafe('DEALLOCATE ALL')
+            console.log('[createListHandler] 已清除查询计划缓存，重试查询...')
+            // 等待一小段时间确保清除生效
+            await new Promise(resolve => setTimeout(resolve, 200))
             // 重试查询
-            console.log('[createListHandler] 重新连接成功，重试查询...')
             const retryResult = await Promise.all([
               prismaModel.findMany(queryOptions),
               prismaModel.count({ where }),
@@ -486,11 +484,29 @@ export function createListHandler(config: EntityConfig) {
             items = retryResult[0]
             total = retryResult[1]
             querySucceeded = true
+            console.log('[createListHandler] 重试成功')
             // 如果重试成功，继续执行后续逻辑
           } catch (retryError: any) {
             console.error('[createListHandler] 重试失败:', retryError)
-            // 如果重试也失败，继续原有的错误处理逻辑
-            querySucceeded = false
+            // 如果重试也失败，尝试断开并重新连接
+            try {
+              console.warn('[createListHandler] 尝试断开并重新连接...')
+              await prisma.$disconnect()
+              await new Promise(resolve => setTimeout(resolve, 500))
+              await prisma.$connect()
+              // 再次重试
+              const retryResult2 = await Promise.all([
+                prismaModel.findMany(queryOptions),
+                prismaModel.count({ where }),
+              ])
+              items = retryResult2[0]
+              total = retryResult2[1]
+              querySucceeded = true
+              console.log('[createListHandler] 重新连接后重试成功')
+            } catch (retryError2: any) {
+              console.error('[createListHandler] 重新连接后重试也失败:', retryError2)
+              querySucceeded = false
+            }
           }
         }
         
