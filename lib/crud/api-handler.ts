@@ -330,6 +330,19 @@ export function createListHandler(config: EntityConfig) {
       let total = 0
       
       try {
+        // 开发环境：记录查询选项
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[createListHandler] 执行查询:', {
+            model: enhancedConfig.prisma?.model || enhancedConfig.name,
+            whereKeys: Object.keys(where),
+            orderBy: queryOptions.orderBy,
+            hasInclude: !!queryOptions.include,
+            hasSelect: !!queryOptions.select,
+            skip: queryOptions.skip,
+            take: queryOptions.take,
+          })
+        }
+        
         [items, total] = await Promise.all([
           prismaModel.findMany(queryOptions),
           prismaModel.count({ where }),
