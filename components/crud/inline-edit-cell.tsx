@@ -265,14 +265,19 @@ export function InlineEditCell({
               </PopoverTrigger>
               <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                 <Command shouldFilter={false}>
-                  <CommandInput 
-                    placeholder="搜索位置..." 
-                    value={searchValue}
-                    onValueChange={(value) => {
-                      setSearchValue(value)
-                      handleInternalChange(value || null)
-                    }}
-                  />
+                  <div className="flex items-center border-b px-3">
+                    <input
+                      type="text"
+                      placeholder="搜索或输入位置..." 
+                      value={searchValue}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setSearchValue(value)
+                        handleInternalChange(value || null)
+                      }}
+                      className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                  </div>
                   <CommandList>
                     {filteredOptions.length === 0 ? (
                       <CommandEmpty>未找到位置，可以输入自定义值</CommandEmpty>
@@ -282,9 +287,9 @@ export function InlineEditCell({
                           <CommandItem
                             key={option.value}
                             value={option.value}
-                            onSelect={(selectedValue) => {
-                              handleInternalChange(selectedValue === internalValue ? null : selectedValue)
-                              setSearchValue(selectedValue === internalValue ? "" : selectedValue)
+                            onSelect={() => {
+                              handleInternalChange(option.value)
+                              setSearchValue(option.value)
                               setOpen(false)
                               handleBlur()
                             }}
