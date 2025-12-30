@@ -630,7 +630,14 @@ export function createListHandler(config: EntityConfig) {
         stack: error?.stack,
         name: error?.name,
         code: error?.code,
+        model: config.prisma?.model || config.name,
+        configName: config.name,
       })
+      // 如果是 Prisma 错误，提供更详细的错误信息
+      if (error?.code) {
+        console.error('Prisma 错误代码:', error.code)
+        console.error('Prisma 错误元数据:', error.meta)
+      }
       return handleError(error, `获取${config.displayName}列表失败`)
     }
   }
