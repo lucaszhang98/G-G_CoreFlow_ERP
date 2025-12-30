@@ -289,11 +289,21 @@ export function createListHandler(config: EntityConfig) {
         order = defaultOrder
       }
 
+      // 如果使用 include，需要确保排序字段是主表的字段，不是关系字段
+      // 如果排序字段是关系字段，需要调整排序逻辑
+      let orderByField = sort
+      if (enhancedConfig.prisma?.include && sortFieldConfig?.type === 'relation') {
+        // 如果排序字段是关系字段，且使用了 include，不能直接排序
+        // 使用默认排序字段
+        console.warn(`[createListHandler] 关系字段不能用于排序（使用 include 时），使用默认排序: ${enhancedConfig.list.defaultSort}`)
+        orderByField = enhancedConfig.list.defaultSort || 'id'
+      }
+
       const queryOptions: any = {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { [sort]: order },
+        orderBy: { [orderByField]: order },
       }
 
       // 添加 include 或 select
