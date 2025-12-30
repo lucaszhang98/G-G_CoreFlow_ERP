@@ -130,6 +130,7 @@ export const orderConfig: EntityConfig = {
       key: 'pickup_date',
       label: '提柜日期',
       type: 'date',
+      readonly: true, // 订单管理中只能看不能改
     },
     ready_date: {
       key: 'ready_date',
@@ -146,12 +147,12 @@ export const orderConfig: EntityConfig = {
       label: '货柜类型',
       type: 'select',
       options: [
-        { label: '40HQ', value: '40HQ' },
-        { label: '40GP', value: '40GP' },
+        { label: '40DH', value: '40DH' },
+        { label: '45DH', value: '45DH' },
+        { label: '40RH', value: '40RH' },
+        { label: '45RH', value: '45RH' },
         { label: '20GP', value: '20GP' },
-        { label: '20HQ', value: '20HQ' },
-        { label: '45HQ', value: '45HQ' },
-        { label: '其他', value: 'other' },
+        { label: '其他', value: '其他' },
       ],
     },
     container_volume: {

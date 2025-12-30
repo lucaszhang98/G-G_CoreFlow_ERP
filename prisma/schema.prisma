@@ -670,6 +670,7 @@ model pickup_management {
   order_id                                  BigInt    @unique
   earliest_appointment_time                 DateTime? @db.Timestamptz(6)
   status                                    String?   @default("planned") @db.VarChar(50)
+  current_location                          String?   @db.VarChar(100)
   notes                                     String?
   created_at                                DateTime? @default(now()) @db.Timestamptz(6)
   updated_at                                DateTime? @default(now()) @db.Timestamptz(6)
@@ -683,6 +684,7 @@ model pickup_management {
   @@index([status])
   @@index([created_at])
   @@index([earliest_appointment_time])
+  @@index([current_location])
   @@schema("tms")
 }
 

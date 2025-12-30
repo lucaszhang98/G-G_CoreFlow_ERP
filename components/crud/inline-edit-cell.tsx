@@ -185,6 +185,30 @@ export function InlineEditCell({
         // 如果没有 options，回退到默认处理
         break
       }
+      // 对于 current_location 字段，使用 datalist 支持自定义输入
+      if (fieldKey === 'current_location') {
+        const listId = `current_location_list_${fieldKey}`
+        return (
+          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+            <Input
+              type="text"
+              list={listId}
+              value={internalValue || ''}
+              onChange={(e) => handleInternalChange(e.target.value || null)}
+              onBlur={handleBlur}
+              className={cn("h-10 text-sm min-w-[120px] w-full", className)}
+              placeholder="选择或输入位置"
+            />
+            <datalist id={listId}>
+              {selectOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </datalist>
+          </div>
+        )
+      }
       return (
         <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
           <Select

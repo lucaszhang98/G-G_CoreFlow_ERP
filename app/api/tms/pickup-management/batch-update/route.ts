@@ -35,6 +35,9 @@ export async function POST(request: NextRequest) {
     if (updates.status !== undefined) {
       pickupUpdateData.status = updates.status
     }
+    if (updates.current_location !== undefined) {
+      pickupUpdateData.current_location = updates.current_location || null
+    }
     if (updates.notes !== undefined) {
       pickupUpdateData.notes = updates.notes
     }

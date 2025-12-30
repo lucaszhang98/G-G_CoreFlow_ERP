@@ -105,6 +105,7 @@ export async function GET(
       carrier_id: order?.carrier_id ? String(order.carrier_id) : null,
       // 提柜管理自有字段
       earliest_appointment_time: serialized.earliest_appointment_time || null,
+      current_location: serialized.current_location || null,
       status: serialized.status || null,
       notes: serialized.notes || null,
       // 额外信息
@@ -152,6 +153,9 @@ async function updatePickupManagement(
     // 提柜管理自有字段
     if (body.status !== undefined) {
       pickupUpdateData.status = body.status
+    }
+    if (body.current_location !== undefined) {
+      pickupUpdateData.current_location = body.current_location || null
     }
     if (body.notes !== undefined) {
       pickupUpdateData.notes = body.notes
@@ -249,6 +253,7 @@ async function updatePickupManagement(
       success: true,
       data: {
         pickup_id: String(serializedUpdated.pickup_id || ''),
+        current_location: serializedUpdated.current_location || null,
         status: serializedUpdated.status || null,
         notes: serializedUpdated.notes || null,
         port_location: updatedOrder?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）

@@ -57,6 +57,7 @@ export function isDateTimeField(fieldKey: string, value: any): boolean {
     /scheduled_load_time/i,
     /actual_load_time/i,
     /load_time/i,
+    /pickup_date/i, // 提柜日期需要显示时间
   ]
   
   const isDateTimeFieldName = dateTimeFieldPatterns.some(pattern => pattern.test(fieldKey))

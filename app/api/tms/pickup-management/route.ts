@@ -34,9 +34,9 @@ export async function GET(request: NextRequest) {
     filterConditions.forEach((condition) => {
       Object.keys(condition).forEach((fieldName) => {
         // 判断字段是否来自 orders 表
-        // 主表字段：pickup_id, order_id, status, notes, earliest_appointment_time
+        // 主表字段：pickup_id, order_id, status, notes, earliest_appointment_time, current_location
         // 其他字段都来自 orders 表
-        const mainTableFields = ['pickup_id', 'order_id', 'status', 'notes', 'earliest_appointment_time']
+        const mainTableFields = ['pickup_id', 'order_id', 'status', 'notes', 'earliest_appointment_time', 'current_location']
         if (mainTableFields.includes(fieldName)) {
           mainTableConditions.push(condition)
         } else {
@@ -193,6 +193,7 @@ export async function GET(request: NextRequest) {
         carrier_id: order?.carrier_id ? String(order.carrier_id) : null,
         // ========== 提柜管理自有字段（TMS 独有）==========
         earliest_appointment_time: serialized.earliest_appointment_time || null,
+        current_location: serialized.current_location || null,
         status: serialized.status || null, // 使用 pickup_management 的 status，不是 orders 的
         notes: serialized.notes || null, // 使用 pickup_management 的 notes，不是 orders 的
         // ========== 额外信息 ==========
