@@ -281,25 +281,39 @@ export function InlineEditCell({
                     />
                   </div>
                   <CommandList>
-                    {filteredOptions.length === 0 ? (
-                      <CommandEmpty>未找到位置，可以输入自定义值</CommandEmpty>
-                    ) : (
+                    {filteredOptions.length > 0 && (
                       <CommandGroup>
                         {filteredOptions.map((option) => (
                           <CommandItem
                             key={option.value}
                             value={option.value}
-                            onSelect={(selectedValue) => {
-                              // CommandItem 的 onSelect 会传递 value，但我们需要使用 option.value
-                              handleInternalChange(option.value)
-                              setSearchValue(option.value)
+                            onSelect={() => {
+                              // 直接使用 option.value，不依赖 CommandItem 传递的值
+                              const selectedValue = option.value
+                              handleInternalChange(selectedValue)
+                              setSearchValue(selectedValue)
                               // 立即同步到外部，确保值被保存
-                              onChange(option.value)
+                              onChange(selectedValue)
                               setOpen(false)
                               // 延迟触发 blur，确保值已更新
                               setTimeout(() => handleBlur(), 100)
                             }}
                             className="cursor-pointer"
+                            onMouseDown={(e) => {
+                              // 阻止默认行为，确保点击事件能正常触发
+                              e.preventDefault()
+                            }}
+                            onClick={(e) => {
+                              // 确保点击事件能正常触发
+                              e.preventDefault()
+                              e.stopPropagation()
+                              const selectedValue = option.value
+                              handleInternalChange(selectedValue)
+                              setSearchValue(selectedValue)
+                              onChange(selectedValue)
+                              setOpen(false)
+                              setTimeout(() => handleBlur(), 100)
+                            }}
                           >
                             <Check
                               className={cn(
