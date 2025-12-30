@@ -61,16 +61,23 @@ export function createListHandler(config: EntityConfig) {
       
       // 简单搜索条件（模糊搜索）
       if (search && enhancedConfig.list.searchFields) {
-        where.OR = enhancedConfig.list.searchFields.map(field => {
-          const fieldConfig = enhancedConfig.fields[field]
-          if (fieldConfig?.relation) {
-            // 关系字段搜索需要特殊处理
-            return {}
-          }
-          return {
-            [field]: { contains: search, mode: 'insensitive' as const }
-          }
-        }).filter(Boolean)
+        const searchConditions = enhancedConfig.list.searchFields
+          .map(field => {
+            const fieldConfig = enhancedConfig.fields[field]
+            if (fieldConfig?.relation) {
+              // 关系字段搜索需要特殊处理
+              return null
+            }
+            return {
+              [field]: { contains: search, mode: 'insensitive' as const }
+            }
+          })
+          .filter((condition): condition is any => condition !== null)
+        
+        // 只有当有有效的搜索条件时才设置 where.OR
+        if (searchConditions.length > 0) {
+          where.OR = searchConditions
+        }
       }
 
       // 筛选条件（快速筛选）

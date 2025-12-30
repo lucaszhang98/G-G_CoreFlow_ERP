@@ -142,7 +142,21 @@ export const userConfig: EntityConfig = {
   
   prisma: {
     model: 'users',
-    include: {
+    // 使用 select 而不是 include，避免与排序和查询条件的冲突
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      full_name: true,
+      role: true,
+      status: true,
+      phone: true,
+      avatar_url: true,
+      created_at: true,
+      updated_at: true,
+      created_by: true,
+      updated_by: true,
+      department_id: true,
       departments_users_department_idTodepartments: {
         select: {
           id: true,
