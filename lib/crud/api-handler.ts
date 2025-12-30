@@ -510,7 +510,9 @@ export function createListHandler(config: EntityConfig) {
               serialized.department = null
             }
             // 密码字段：不返回密码信息（安全考虑）
-            delete serialized.password_hash
+            if ('password_hash' in serialized) {
+              delete serialized.password_hash
+            }
             // password 字段显示为占位符（表示密码已设置）
             serialized.password = '******'
           }
