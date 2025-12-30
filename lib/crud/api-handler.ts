@@ -306,6 +306,21 @@ export function createListHandler(config: EntityConfig) {
         orderByField = enhancedConfig.list.defaultSort || 'id'
       }
 
+      // 如果使用 select，需要确保排序字段在 select 中
+      if (enhancedConfig.prisma?.select) {
+        const selectFields = Object.keys(enhancedConfig.prisma.select).filter(key => key !== 'departments_users_department_idTodepartments')
+        if (!selectFields.includes(orderByField)) {
+          // 如果排序字段不在 select 中，使用默认排序字段
+          console.warn(`[createListHandler] 排序字段 ${orderByField} 不在 select 中，使用默认排序: ${enhancedConfig.list.defaultSort}`)
+          orderByField = enhancedConfig.list.defaultSort || 'id'
+          // 确保默认排序字段在 select 中
+          if (!selectFields.includes(orderByField) && orderByField !== 'id') {
+            // 如果默认排序字段也不在 select 中，使用 id
+            orderByField = 'id'
+          }
+        }
+      }
+
       const queryOptions: any = {
         where,
         skip: (page - 1) * limit,
