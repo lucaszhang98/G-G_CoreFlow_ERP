@@ -23,11 +23,22 @@ export async function loadRelationOptions(
     
     const response = await fetch(apiPath)
     if (!response.ok) {
-      throw new Error(`加载${field.label}选项失败`)
+      const errorText = await response.text()
+      console.error(`[loadRelationOptions] API 请求失败: ${apiPath}`, {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      })
+      throw new Error(`加载${field.label}选项失败: ${response.status} ${response.statusText}`)
     }
 
     const data = await response.json()
     const items = data.data || data || []
+    
+    if (!Array.isArray(items)) {
+      console.error(`[loadRelationOptions] API 返回的数据格式不正确: ${apiPath}`, data)
+      return []
+    }
 
     // 提取选项
     const displayField = field.relation.displayField
