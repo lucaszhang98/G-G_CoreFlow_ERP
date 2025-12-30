@@ -35,9 +35,6 @@ export async function POST(request: NextRequest) {
     if (updates.status !== undefined) {
       pickupUpdateData.status = updates.status
     }
-    if (updates.current_location !== undefined) {
-      pickupUpdateData.current_location = updates.current_location || null
-    }
     if (updates.notes !== undefined) {
       pickupUpdateData.notes = updates.notes
     }
@@ -53,9 +50,6 @@ export async function POST(request: NextRequest) {
         ? BigInt(updates.carrier_id) 
         : null
     }
-    if (updates.container_type !== undefined) {
-      orderUpdateData.container_type = updates.container_type || null
-    }
     // 日期字段
     if (updates.lfd_date !== undefined) {
       orderUpdateData.lfd_date = updates.lfd_date 
@@ -63,20 +57,9 @@ export async function POST(request: NextRequest) {
         : null
     }
     if (updates.pickup_date !== undefined) {
-      // 不做时区转换，直接使用输入的日期时间
-      if (updates.pickup_date) {
-        const dateTimeStr = updates.pickup_date
-        if (dateTimeStr.includes('T')) {
-          const [datePart, timePart] = dateTimeStr.split('T')
-          const [year, month, day] = datePart.split('-').map(Number)
-          const [hours, minutes] = (timePart || '00:00').split(':').map(Number)
-          orderUpdateData.pickup_date = new Date(Date.UTC(year, month - 1, day, hours, minutes))
-        } else {
-          orderUpdateData.pickup_date = new Date(updates.pickup_date)
-        }
-      } else {
-        orderUpdateData.pickup_date = null
-      }
+      orderUpdateData.pickup_date = updates.pickup_date 
+        ? new Date(updates.pickup_date) 
+        : null
     }
     if (updates.ready_date !== undefined) {
       orderUpdateData.ready_date = updates.ready_date 

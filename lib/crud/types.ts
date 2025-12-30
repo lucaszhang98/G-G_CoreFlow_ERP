@@ -40,6 +40,8 @@ export interface FilterFieldConfig {
   dateFields?: string[]
   // numberRange 类型：指定要筛选的数值字段
   numberFields?: string[]
+  // location 类型字段的特殊配置
+  locationType?: string // 位置类型（如 'port', 'warehouse'），用于过滤位置选项
 }
 
 /**

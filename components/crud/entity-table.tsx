@@ -1143,8 +1143,22 @@ export function EntityTable<T = any>({
           return
         }
         
+        // 对于 location 字段，确保值是数字类型，并使用正确的数据库字段名
+        if (actualFieldConfig?.type === 'location' && value) {
+          const numValue = Number(value)
+          if (!isNaN(numValue)) {
+            // location 类型字段的数据库字段名通常是 {fieldKey}_id
+            let finalDbFieldKey: string
+            if (key === 'destination_location') {
+              finalDbFieldKey = 'location_id'
+            } else {
+              finalDbFieldKey = `${key}_id`
+            }
+            processedUpdates[finalDbFieldKey] = numValue
+          }
+        }
         // 对于 relation 字段，确保值是数字类型，并使用正确的数据库字段名
-        if (actualFieldConfig?.type === 'relation' && value) {
+        else if (actualFieldConfig?.type === 'relation' && value) {
           const numValue = Number(value)
           if (!isNaN(numValue)) {
             // 确定数据库字段名：优先使用 relationField，否则根据字段名规则确定

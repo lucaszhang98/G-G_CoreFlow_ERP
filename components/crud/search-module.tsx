@@ -337,6 +337,8 @@ export function SearchModule({
                 {filterFields.map((filter) => {
                   // 如果是 location 类型的筛选字段（relation.model === 'locations'），使用 LocationSelect（分步选择）
                   if (filter.type === 'select' && filter.relation && filter.relation.model === 'locations') {
+                    // 从 filter.locationType 获取位置类型，用于过滤选项
+                    const locationType = filter.locationType
                     const currentValue = filterValues[filter.field]
                     const isActive = currentValue && currentValue !== '__all__' && currentValue !== null && currentValue !== ''
                     
@@ -399,6 +401,7 @@ export function SearchModule({
                           value={currentValue || null}
                           onChange={handleLocationFilterChange}
                           placeholder={filter.label}
+                          locationType={locationType} // 传递 locationType 以过滤位置选项
                           className={`
                             h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
                             ${isActive

@@ -63,6 +63,8 @@ export function generateFilterFields(config: EntityConfig): FilterFieldConfig[] 
           displayField: 'name',
           valueField: 'location_id',
         },
+        // 传递 locationType 到 filterField，用于过滤位置选项
+        locationType: fieldConfig.locationType,
       })
     }
     
