@@ -33,9 +33,16 @@ export async function loadRelationOptions(
     }
 
     const data = await response.json()
-    const items = data.data || data || []
     
-    if (!Array.isArray(items)) {
+    // 处理不同的响应格式
+    let items: any[] = []
+    if (Array.isArray(data)) {
+      items = data
+    } else if (data.data && Array.isArray(data.data)) {
+      items = data.data
+    } else if (data.items && Array.isArray(data.items)) {
+      items = data.items
+    } else {
       console.error(`[loadRelationOptions] API 返回的数据格式不正确: ${apiPath}`, data)
       return []
     }
