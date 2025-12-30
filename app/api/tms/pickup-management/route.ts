@@ -179,7 +179,7 @@ export async function GET(request: NextRequest) {
         order_date: order?.order_date || null,
         eta_date: order?.eta_date || null,
         operation_mode: order?.operation_mode || null,
-        operation_mode_display: order?.operation_mode === 'unload' ? '拆柜' : order?.operation_mode || null,
+        operation_mode_display: order?.operation_mode === 'unload' ? '拆柜' : order?.operation_mode === 'direct_delivery' ? '直送' : order?.operation_mode || null,
         delivery_location: order?.locations_orders_delivery_location_idTolocations?.location_code || order?.delivery_location || null,
         delivery_location_id: order?.delivery_location_id ? String(order.delivery_location_id) : null,
         lfd_date: order?.lfd_date || null,

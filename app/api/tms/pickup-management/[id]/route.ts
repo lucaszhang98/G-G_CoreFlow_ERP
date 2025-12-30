@@ -91,7 +91,7 @@ export async function GET(
       order_date: order?.order_date || null,
       eta_date: order?.eta_date || null,
       operation_mode: order?.operation_mode || null,
-      operation_mode_display: order?.operation_mode === 'unload' ? '拆柜' : order?.operation_mode || null,
+      operation_mode_display: order?.operation_mode === 'unload' ? '拆柜' : order?.operation_mode === 'direct_delivery' ? '直送' : order?.operation_mode || null,
       delivery_location: order?.locations_orders_delivery_location_idTolocations?.location_code || order?.delivery_location || null,
       delivery_location_id: order?.delivery_location_id ? String(order.delivery_location_id) : null,
       lfd_date: order?.lfd_date || null,
@@ -179,9 +179,25 @@ async function updatePickupManagement(
         : null
     }
     if (body.pickup_date !== undefined) {
-      orderUpdateData.pickup_date = body.pickup_date 
-        ? new Date(body.pickup_date) 
-        : null
+      // 不做时区转换，直接使用输入的日期时间
+      // datetime-local 输入格式为 YYYY-MM-DDTHH:mm，需要转换为 UTC 时间戳
+      if (body.pickup_date) {
+        // 解析输入的日期时间字符串（格式：YYYY-MM-DDTHH:mm）
+        const dateTimeStr = body.pickup_date
+        // 如果已经是 ISO 格式，直接使用；否则解析为本地时间然后转换为 UTC
+        if (dateTimeStr.includes('T')) {
+          // 解析为本地时间（不转换时区），然后转换为 UTC 格式
+          const [datePart, timePart] = dateTimeStr.split('T')
+          const [year, month, day] = datePart.split('-').map(Number)
+          const [hours, minutes] = (timePart || '00:00').split(':').map(Number)
+          // 创建 UTC 日期对象（直接使用输入的时分，不转换时区）
+          orderUpdateData.pickup_date = new Date(Date.UTC(year, month - 1, day, hours, minutes))
+        } else {
+          orderUpdateData.pickup_date = new Date(body.pickup_date)
+        }
+      } else {
+        orderUpdateData.pickup_date = null
+      }
     }
     if (body.ready_date !== undefined) {
       orderUpdateData.ready_date = body.ready_date 

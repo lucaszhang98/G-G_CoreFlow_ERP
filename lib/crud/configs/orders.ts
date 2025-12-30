@@ -277,7 +277,6 @@ export const orderConfig: EntityConfig = {
         'container_type',
         'eta_date',
         'lfd_date',
-        'pickup_date',
         'ready_date',
         'return_deadline',
         'mbl_number',
@@ -301,7 +300,6 @@ export const orderConfig: EntityConfig = {
           'container_type',
           'eta_date',
           'lfd_date',
-          'pickup_date',
           'ready_date',
           'return_deadline',
           'mbl_number',
@@ -321,7 +319,7 @@ export const orderConfig: EntityConfig = {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
     create: ['admin', 'oms_manager'],
     update: ['admin', 'oms_manager'],
-    delete: ['admin'],
+    delete: [], // 订单管理不允许删除
   },
   
   prisma: {

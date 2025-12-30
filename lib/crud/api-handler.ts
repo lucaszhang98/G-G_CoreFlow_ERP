@@ -455,8 +455,11 @@ export function createListHandler(config: EntityConfig) {
             if (serialized.users_orders_user_idTousers) {
               serialized.user_id = serialized.users_orders_user_idTousers
               delete serialized.users_orders_user_idTousers
+            } else if (serialized.user_id) {
+              // 如果关联不存在但user_id存在，保留user_id值，但设置为null对象（前端会显示 '-'）
+              serialized.user_id = null
             } else {
-              // 如果关联不存在，设置为 null（前端会显示 '-'）
+              // 如果user_id也不存在，设置为null
               serialized.user_id = null
             }
             // 处理 locations_orders_delivery_location_idTolocations 关联：-> delivery_location

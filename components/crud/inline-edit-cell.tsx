@@ -7,6 +7,7 @@
 
 import * as React from "react"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -96,6 +97,21 @@ export function InlineEditCell({
     case 'text':
     case 'email':
     case 'phone':
+      // 对于备注字段，使用 textarea
+      if (fieldKey === 'notes') {
+        return (
+          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+            <Textarea
+              value={internalValue || ''}
+              onChange={(e) => handleInternalChange(e.target.value)}
+              onBlur={handleBlur}
+              placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
+              className={cn("min-h-[80px] text-sm min-w-[200px] w-full resize-none", className)}
+              rows={3}
+            />
+          </div>
+        )
+      }
       return (
         <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
           <Input
@@ -104,7 +120,7 @@ export function InlineEditCell({
             onChange={(e) => handleInternalChange(e.target.value)}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-            className={cn("h-10 text-sm min-w-[120px] w-full", className)}
+            className={cn("h-9 text-sm min-w-[120px] w-full", className)}
           />
         </div>
       )
@@ -141,7 +157,7 @@ export function InlineEditCell({
             value={dateValue}
             onChange={(e) => handleInternalChange(e.target.value || null)}
             onBlur={handleBlur}
-            className={cn("h-10 text-sm min-w-[140px] w-full", className)}
+            className={cn("h-9 text-sm min-w-[140px] w-full", className)}
           />
         </div>
       )
@@ -172,7 +188,7 @@ export function InlineEditCell({
             value={datetimeValue}
             onChange={(e) => handleInternalChange(e.target.value || null)}
             onBlur={handleBlur}
-            className={cn("h-10 text-sm min-w-[140px] w-full", className)}
+            className={cn("h-9 text-sm min-w-[160px] w-full", className)}
           />
         </div>
       )
@@ -196,7 +212,7 @@ export function InlineEditCell({
               value={internalValue || ''}
               onChange={(e) => handleInternalChange(e.target.value || null)}
               onBlur={handleBlur}
-              className={cn("h-10 text-sm min-w-[120px] w-full", className)}
+              className={cn("h-9 text-sm min-w-[140px] w-full", className)}
               placeholder="选择或输入位置"
             />
             <datalist id={listId}>
