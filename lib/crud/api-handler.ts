@@ -464,20 +464,49 @@ export function createListHandler(config: EntityConfig) {
           hasInclude: !!queryOptions.include,
           hasSelect: !!queryOptions.select,
         })
-        // 如果是 Prisma 错误，返回更详细的错误信息
-        if (queryError?.code) {
-          return NextResponse.json(
-            {
-              error: `数据库查询失败: ${queryError.message || '未知错误'}`,
-              details: process.env.NODE_ENV === 'development' ? {
-                code: queryError.code,
-                meta: queryError.meta,
-              } : undefined,
-            },
-            { status: 500 }
-          )
+        
+        // 如果是 "cached plan must not change result type" 错误，尝试重新连接
+        if (queryError?.message?.includes('cached plan must not change result type')) {
+          console.warn('[createListHandler] 检测到 PostgreSQL 缓存计划错误，尝试断开连接并重试...')
+          try {
+            // 断开 Prisma 连接
+            await prisma.$disconnect()
+            // 等待一小段时间
+            await new Promise(resolve => setTimeout(resolve, 100))
+            // 重新连接
+            await prisma.$connect()
+            // 重试查询
+            console.log('[createListHandler] 重新连接成功，重试查询...')
+            [items, total] = await Promise.all([
+              prismaModel.findMany(queryOptions),
+              prismaModel.count({ where }),
+            ])
+            // 如果重试成功，继续执行后续逻辑
+          } catch (retryError: any) {
+            console.error('[createListHandler] 重试失败:', retryError)
+            // 如果重试也失败，继续原有的错误处理逻辑
+          }
         }
-        throw queryError
+        
+        // 如果重试成功，跳过错误处理
+        if (items && total !== undefined) {
+          // 继续执行后续逻辑，不返回错误
+        } else {
+          // 如果是 Prisma 错误，返回更详细的错误信息
+          if (queryError?.code) {
+            return NextResponse.json(
+              {
+                error: `数据库查询失败: ${queryError.message || '未知错误'}`,
+                details: process.env.NODE_ENV === 'development' ? {
+                  code: queryError.code,
+                  meta: queryError.meta,
+                } : undefined,
+              },
+              { status: 500 }
+            )
+          }
+          throw queryError
+        }
       }
 
       // 数据转换（根据配置的 prisma 模型处理）
