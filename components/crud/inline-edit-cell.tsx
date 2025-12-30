@@ -274,6 +274,8 @@ export function InlineEditCell({
                         const value = e.target.value
                         setSearchValue(value)
                         handleInternalChange(value || null)
+                        // 立即同步到外部，确保自定义输入的值能被保存
+                        onChange(value || null)
                       }}
                       className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
                     />
@@ -287,12 +289,17 @@ export function InlineEditCell({
                           <CommandItem
                             key={option.value}
                             value={option.value}
-                            onSelect={() => {
+                            onSelect={(selectedValue) => {
+                              // CommandItem 的 onSelect 会传递 value，但我们需要使用 option.value
                               handleInternalChange(option.value)
                               setSearchValue(option.value)
+                              // 立即同步到外部，确保值被保存
+                              onChange(option.value)
                               setOpen(false)
-                              handleBlur()
+                              // 延迟触发 blur，确保值已更新
+                              setTimeout(() => handleBlur(), 100)
                             }}
+                            className="cursor-pointer"
                           >
                             <Check
                               className={cn(
