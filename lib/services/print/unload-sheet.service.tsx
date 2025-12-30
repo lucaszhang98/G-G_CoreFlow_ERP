@@ -6,6 +6,7 @@
  * 2. 生成 PDF（A4 竖排）
  */
 
+import React from 'react'
 import { UnloadSheetData } from './types'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { UnloadSheetDocument } from './unload-sheet-pdf'

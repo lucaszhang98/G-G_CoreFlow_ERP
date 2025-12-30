@@ -7,6 +7,7 @@
  * 3. 支持批量生成（一个明细生成 预计板数*4 个相同的 Label）
  */
 
+import React from 'react'
 import prisma from '@/lib/prisma'
 import { LabelData } from './types'
 import { formatDate } from './print-templates'
