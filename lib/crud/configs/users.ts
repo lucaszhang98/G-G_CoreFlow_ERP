@@ -134,7 +134,7 @@ export const userConfig: EntityConfig = {
   formFields: ['username', 'email', 'password', 'full_name', 'role', 'status', 'department_id', 'phone'],
   
   permissions: {
-    list: ['admin'],
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'], // 允许所有登录用户查看用户列表（用于关系字段）
     create: ['admin'],
     update: ['admin'],
     delete: ['admin'],
