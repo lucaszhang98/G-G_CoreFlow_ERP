@@ -467,34 +467,51 @@ export function createListHandler(config: EntityConfig) {
           hasSelect: !!queryOptions.select,
         })
         
-        // 如果是 "cached plan must not change result type" 错误，尝试清除查询计划缓存并重试
+        // 如果是 "cached plan must not change result type" 错误，尝试强制重新规划查询
         if (queryError?.message?.includes('cached plan must not change result type')) {
-          console.warn('[createListHandler] 检测到 PostgreSQL 缓存计划错误，尝试清除查询计划缓存并重试...')
+          console.warn('[createListHandler] 检测到 PostgreSQL 缓存计划错误，尝试强制重新规划查询...')
           try {
-            // 执行 DEALLOCATE ALL 来清除所有缓存的查询计划
-            await prisma.$executeRawUnsafe('DEALLOCATE ALL')
-            console.log('[createListHandler] 已清除查询计划缓存，重试查询...')
-            // 等待一小段时间确保清除生效
-            await new Promise(resolve => setTimeout(resolve, 200))
-            // 重试查询
+            // 方法1: 在查询中添加一个时间戳参数来强制重新规划
+            // 通过修改 where 条件添加一个不影响结果的参数
+            const modifiedWhere = { ...where }
+            // 添加一个始终为 true 的条件来强制重新规划
+            if (!modifiedWhere.AND) {
+              modifiedWhere.AND = []
+            }
+            // 使用一个不影响结果的 id 条件（id >= 0，所有记录都满足）
+            const idField = enhancedConfig.idField || 'id'
+            modifiedWhere.AND.push({
+              [idField]: { gte: 0 }
+            })
+            
+            const modifiedQueryOptions = {
+              ...queryOptions,
+              where: modifiedWhere
+            }
+            
+            // 等待一小段时间
+            await new Promise(resolve => setTimeout(resolve, 300))
+            
+            // 重试查询（使用修改后的查询选项）
             const retryResult = await Promise.all([
-              prismaModel.findMany(queryOptions),
-              prismaModel.count({ where }),
+              prismaModel.findMany(modifiedQueryOptions),
+              prismaModel.count({ where: modifiedWhere }),
             ])
             items = retryResult[0]
             total = retryResult[1]
             querySucceeded = true
-            console.log('[createListHandler] 重试成功')
+            console.log('[createListHandler] 强制重新规划后重试成功')
             // 如果重试成功，继续执行后续逻辑
           } catch (retryError: any) {
-            console.error('[createListHandler] 重试失败:', retryError)
-            // 如果重试也失败，尝试断开并重新连接
+            console.error('[createListHandler] 强制重新规划失败:', retryError)
+            // 如果仍然失败，尝试断开并重新连接
             try {
               console.warn('[createListHandler] 尝试断开并重新连接...')
               await prisma.$disconnect()
-              await new Promise(resolve => setTimeout(resolve, 500))
+              await new Promise(resolve => setTimeout(resolve, 1000))
               await prisma.$connect()
-              // 再次重试
+              // 再次重试（使用原始查询选项）
+              await new Promise(resolve => setTimeout(resolve, 500))
               const retryResult2 = await Promise.all([
                 prismaModel.findMany(queryOptions),
                 prismaModel.count({ where }),
@@ -505,6 +522,9 @@ export function createListHandler(config: EntityConfig) {
               console.log('[createListHandler] 重新连接后重试成功')
             } catch (retryError2: any) {
               console.error('[createListHandler] 重新连接后重试也失败:', retryError2)
+              // 如果所有重试都失败，返回一个友好的错误消息
+              console.warn('[createListHandler] 所有重试方法都失败，这可能是数据库服务器端的查询计划缓存问题。')
+              console.warn('[createListHandler] 建议：等待几分钟让数据库连接池过期，或重启数据库服务。')
               querySucceeded = false
             }
           }
