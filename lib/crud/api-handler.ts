@@ -425,16 +425,17 @@ export function createListHandler(config: EntityConfig) {
       }
 
       // 数据转换（根据配置的 prisma 模型处理）
-      const transformedItems = items.map((item: any) => {
+      const transformedItems = items.map((item: any, index: number) => {
         try {
           const serialized = serializeBigInt(item)
           
           // 开发环境：记录第一条数据的结构
-          if (process.env.NODE_ENV === 'development' && items.indexOf(item) === 0) {
+          if (process.env.NODE_ENV === 'development' && index === 0) {
             console.log('[createListHandler] 第一条数据（转换前）:', {
               hasCustomers: !!serialized.customers,
               hasUsersOrdersUserIdTousers: !!serialized.users_orders_user_idTousers,
               hasCarriers: !!serialized.carriers,
+              hasDepartmentsUsersDepartmentIdTodepartments: !!serialized.departments_users_department_idTodepartments,
               keys: Object.keys(serialized),
             })
           }
