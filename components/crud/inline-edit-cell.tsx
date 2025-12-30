@@ -262,8 +262,16 @@ export function InlineEditCell({
                   )} />
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                <div className="border-b px-3 py-2">
+              <PopoverContent 
+                className="p-0" 
+                align="start"
+                style={{ 
+                  width: 'max-content',
+                  minWidth: 'var(--radix-popover-trigger-width)',
+                  maxWidth: '400px'
+                }}
+              >
+                <div className="border-b px-3 py-2 min-w-[200px]">
                   <input
                     type="text"
                     placeholder="搜索或输入位置..." 
@@ -280,12 +288,12 @@ export function InlineEditCell({
                   />
                 </div>
                 {filteredOptions.length > 0 && (
-                  <div className="max-h-[200px] overflow-auto p-1">
+                  <div className="max-h-[200px] overflow-auto p-1 min-w-[200px]">
                     {filteredOptions.map((option) => (
                       <div
                         key={option.value}
                         className={cn(
-                          "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors",
+                          "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors whitespace-nowrap",
                           "hover:bg-accent hover:text-accent-foreground",
                           internalValue === option.value && "bg-accent text-accent-foreground"
                         )}
@@ -306,11 +314,11 @@ export function InlineEditCell({
                       >
                         <Check
                           className={cn(
-                            "mr-2 h-4 w-4",
+                            "mr-2 h-4 w-4 shrink-0",
                             internalValue === option.value ? "opacity-100" : "opacity-0"
                           )}
                         />
-                        {option.label}
+                        <span className="truncate">{option.label}</span>
                       </div>
                     ))}
                   </div>
