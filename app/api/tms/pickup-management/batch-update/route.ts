@@ -53,6 +53,9 @@ export async function POST(request: NextRequest) {
         ? BigInt(updates.carrier_id) 
         : null
     }
+    if (updates.container_type !== undefined) {
+      orderUpdateData.container_type = updates.container_type || null
+    }
     // 日期字段
     if (updates.lfd_date !== undefined) {
       orderUpdateData.lfd_date = updates.lfd_date 

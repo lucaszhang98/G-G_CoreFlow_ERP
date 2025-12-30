@@ -20,6 +20,7 @@ import { formatDateDisplay, formatDateTimeDisplay } from "@/lib/utils/date-forma
 import { cn } from "@/lib/utils"
 import { LocationSelect } from "@/components/ui/location-select"
 import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
+import { ChevronDown, Check } from "lucide-react"
 
 interface InlineEditCellProps {
   fieldKey: string
@@ -201,27 +202,64 @@ export function InlineEditCell({
         // 如果没有 options，回退到默认处理
         break
       }
-      // 对于 current_location 字段，使用 datalist 支持自定义输入
+      // 对于 current_location 字段，使用带下拉选项的输入框，支持自定义输入
       if (fieldKey === 'current_location') {
-        const listId = `current_location_list_${fieldKey}`
+        const [isOpen, setIsOpen] = React.useState(false)
+        const inputRef = React.useRef<HTMLInputElement>(null)
+        
         return (
-          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
-            <Input
-              type="text"
-              list={listId}
-              value={internalValue || ''}
-              onChange={(e) => handleInternalChange(e.target.value || null)}
-              onBlur={handleBlur}
-              className={cn("h-9 text-sm min-w-[140px] w-full", className)}
-              placeholder="选择或输入位置"
-            />
-            <datalist id={listId}>
-              {selectOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </datalist>
+          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell relative">
+            <div className="relative">
+              <Input
+                ref={inputRef}
+                type="text"
+                value={internalValue || ''}
+                onChange={(e) => handleInternalChange(e.target.value || null)}
+                onBlur={(e) => {
+                  // 延迟关闭下拉框，允许点击选项
+                  setTimeout(() => {
+                    setIsOpen(false)
+                    handleBlur()
+                  }, 200)
+                }}
+                onFocus={() => setIsOpen(true)}
+                className={cn("h-9 text-sm min-w-[160px] w-full pr-8", className)}
+                placeholder="选择或输入位置"
+              />
+              <ChevronDown className={cn(
+                "absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none transition-transform",
+                isOpen && "rotate-180"
+              )} />
+            </div>
+            {isOpen && selectOptions.length > 0 && (
+              <div className="absolute z-50 mt-1 w-full min-w-[160px] max-h-[200px] overflow-auto rounded-md border bg-popover shadow-md">
+                <div className="p-1">
+                  {selectOptions.map((option) => (
+                    <div
+                      key={option.value}
+                      className={cn(
+                        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors",
+                        "hover:bg-accent hover:text-accent-foreground",
+                        internalValue === option.value && "bg-accent text-accent-foreground"
+                      )}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        handleInternalChange(option.value)
+                        setIsOpen(false)
+                        inputRef.current?.blur()
+                      }}
+                    >
+                      {internalValue === option.value && (
+                        <Check className="mr-2 h-4 w-4" />
+                      )}
+                      <span className={cn(internalValue === option.value && "ml-6")}>
+                        {option.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )
       }

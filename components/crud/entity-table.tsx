@@ -866,11 +866,42 @@ export function EntityTable<T = any>({
         throw new Error(errorMessage)
       }
       
-      // 响应成功，尝试解析响应数据（可选，不影响成功状态）
+      // 响应成功，尝试解析响应数据并更新本地数据（如果API返回了更新后的数据）
       if (responseText) {
         try {
           const responseData = JSON.parse(responseText)
           console.log(`[EntityTable] 更新成功，响应数据:`, responseData)
+          
+          // 如果API返回了更新后的数据，直接更新本地数据，避免刷新整个列表
+          if (responseData.success && responseData.data && editingRowId) {
+            const idField = config.idField || 'id'
+            const rowId = String((row as any)[idField])
+            if (rowId === String(editingRowId)) {
+              // 更新当前行的数据
+              setData((prevData) => {
+                return prevData.map((item: any) => {
+                  const itemId = String(item[idField])
+                  if (itemId === rowId) {
+                    // 合并更新后的数据，保留原有数据，只更新返回的字段
+                    const updatedItem = { ...item }
+                    Object.keys(responseData.data).forEach(key => {
+                      if (responseData.data[key] !== undefined) {
+                        updatedItem[key] = responseData.data[key]
+                      }
+                    })
+                    return updatedItem
+                  }
+                  return item
+                })
+              })
+              // 清除编辑状态
+              setEditingRowId(null)
+              setEditingValues({})
+              editingValuesRef.current = {}
+              toast.success(`更新${config.displayName}成功`)
+              return // 直接返回，不刷新整个列表
+            }
+          }
         } catch (e) {
           // 如果响应体不是有效的 JSON，忽略错误（更新可能仍然成功）
           console.warn(`[EntityTable] 响应解析警告（响应可能为空）:`, e, '响应文本:', responseText)

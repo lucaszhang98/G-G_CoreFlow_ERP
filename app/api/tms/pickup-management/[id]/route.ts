@@ -172,6 +172,9 @@ async function updatePickupManagement(
         ? BigInt(body.carrier_id) 
         : null
     }
+    if (body.container_type !== undefined) {
+      orderUpdateData.container_type = body.container_type || null
+    }
     // 日期字段
     if (body.lfd_date !== undefined) {
       orderUpdateData.lfd_date = body.lfd_date 
@@ -236,6 +239,7 @@ async function updatePickupManagement(
         orders: {
           select: {
             order_id: true,
+            container_type: true,
             port_location_id: true,
             carrier_id: true,
             lfd_date: true,
@@ -272,6 +276,7 @@ async function updatePickupManagement(
         current_location: serializedUpdated.current_location || null,
         status: serializedUpdated.status || null,
         notes: serializedUpdated.notes || null,
+        container_type: updatedOrder?.container_type || null,
         port_location: updatedOrder?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）
         port_location_id: updatedOrder?.port_location_id ? String(updatedOrder.port_location_id) : null,
         carrier: updatedOrder?.carriers || null,

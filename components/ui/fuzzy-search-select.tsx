@@ -117,15 +117,10 @@ export function FuzzySearchSelect({
   
   React.useEffect(() => {
     if (!open) {
-      // 关闭时清空搜索词，但保留已选中的选项（如果存在）
+      // 关闭时清空搜索词和选项列表
       setSearchQuery("")
       lastSearchQueryRef.current = ""
-      // 只保留已选中的选项，清空其他选项
-      if (value && selectedOptionCache) {
-        setOptions([selectedOptionCache])
-      } else {
-        setOptions([])
-      }
+      setOptions([])
       setLoading(false)
       isLoadingRef.current = false
       if (searchTimeoutRef.current) {
@@ -133,6 +128,25 @@ export function FuzzySearchSelect({
         searchTimeoutRef.current = null
       }
       return
+    }
+    
+    // 打开时，如果有值但没有选项，立即加载所有选项
+    if (value && options.length === 0 && !searchQuery && !isLoadingRef.current) {
+      setLoading(true)
+      isLoadingRef.current = true
+      loadOptions('')
+        .then(results => {
+          setOptions(results)
+          lastSearchQueryRef.current = ""
+        })
+        .catch(error => {
+          console.error('加载选项失败:', error)
+          setOptions([])
+        })
+        .finally(() => {
+          setLoading(false)
+          isLoadingRef.current = false
+        })
     }
 
     // 如果搜索词没变，不重新加载
@@ -207,6 +221,14 @@ export function FuzzySearchSelect({
   }, [open, loadOptions, options.length, searchQuery])
 
   const handleSelect = React.useCallback((optionValue: string | number) => {
+    // 如果点击的是已选中的选项，则取消选择
+    if (String(value) === String(optionValue)) {
+      onChange?.(null)
+      setSelectedOptionCache(null)
+      setOpen(false)
+      setSearchQuery("")
+      return
+    }
     // 找到选中的选项并缓存
     const selected = options.find(opt => String(opt.value) === String(optionValue))
     if (selected) {
@@ -215,7 +237,7 @@ export function FuzzySearchSelect({
     onChange?.(optionValue)
     setOpen(false)
     setSearchQuery("")
-  }, [onChange, options])
+  }, [onChange, options, value])
 
   // 显示值（优先使用 selectedOption，如果不存在则使用缓存）
   const displayOption = selectedOption || selectedOptionCache

@@ -115,6 +115,9 @@ export function PickupManagementClient() {
           carrier: loadCarrierOptions,
           carrier_id: loadCarrierOptions, // 也支持 carrier_id 作为 key
         }}
+        customActions={{
+          onView: null, // 禁用查看详情功能
+        }}
       />
     )
   }
