@@ -498,6 +498,16 @@ export function EntityTable<T = any>({
             // 如果没有 _id 字段，使用原字段的值（可能是 ID 或显示值）
             initialValues[fieldKey] = (row as any)[fieldKey]
           }
+        } else if (fieldConfig?.type === 'location') {
+          // 对于location字段，使用对应的_id字段的值
+          const idKey = `${fieldKey}_id`
+          const idValue = (row as any)[idKey]
+          if (idValue !== undefined && idValue !== null) {
+            initialValues[fieldKey] = String(idValue)
+          } else {
+            // 如果没有_id字段，尝试使用原字段的值（可能是location_code字符串）
+            initialValues[fieldKey] = (row as any)[fieldKey] || null
+          }
         } else if (fieldConfig?.type === 'date') {
           // 对于日期字段，格式化为 YYYY-MM-DD 格式
           const dateValue = (row as any)[fieldKey]

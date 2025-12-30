@@ -130,8 +130,8 @@ export function FuzzySearchSelect({
       return
     }
     
-    // 打开时，如果有值但没有选项，立即加载所有选项
-    if (value && options.length === 0 && !searchQuery && !isLoadingRef.current) {
+    // 打开时，无论是否有值，都立即加载所有选项
+    if (options.length === 0 && !searchQuery && !isLoadingRef.current) {
       setLoading(true)
       isLoadingRef.current = true
       loadOptions('')
@@ -194,10 +194,10 @@ export function FuzzySearchSelect({
     }
   }, [searchQuery, open, loadOptions])
   
-  // 打开时加载初始数据（只在打开且没有选项时加载一次）
+  // 打开时加载初始数据（无论是否有值，都加载所有选项）
   const initialLoadDoneRef = React.useRef(false)
   React.useEffect(() => {
-    if (open && !initialLoadDoneRef.current && options.length === 0 && !searchQuery) {
+    if (open && !initialLoadDoneRef.current && !searchQuery) {
       initialLoadDoneRef.current = true
       setLoading(true)
       isLoadingRef.current = true
@@ -218,7 +218,7 @@ export function FuzzySearchSelect({
       // 关闭时重置初始加载标志
       initialLoadDoneRef.current = false
     }
-  }, [open, loadOptions, options.length, searchQuery])
+  }, [open, loadOptions, searchQuery])
 
   const handleSelect = React.useCallback((optionValue: string | number) => {
     // 如果点击的是已选中的选项，则取消选择

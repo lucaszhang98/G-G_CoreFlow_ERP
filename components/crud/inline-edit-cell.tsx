@@ -77,8 +77,12 @@ export function InlineEditCell({
   }, [internalValue, value, onChange])
 
   // 异步加载选项（支持 select 和 relation 类型）
+  // 对于 current_location 字段，始终加载选项（从 fieldConfig.options）
   React.useEffect(() => {
-    if ((fieldConfig.type === 'select' || fieldConfig.type === 'relation') && loadOptions && selectOptions.length === 0 && !loadingOptions) {
+    if (fieldKey === 'current_location' && fieldConfig.options) {
+      // current_location 使用静态选项，直接设置
+      setSelectOptions(fieldConfig.options)
+    } else if ((fieldConfig.type === 'select' || fieldConfig.type === 'relation') && loadOptions && selectOptions.length === 0 && !loadingOptions) {
       setLoadingOptions(true)
       loadOptions()
         .then((loadedOptions) => {
@@ -91,7 +95,7 @@ export function InlineEditCell({
           setLoadingOptions(false)
         })
     }
-  }, [fieldConfig.type, loadOptions, fieldKey, selectOptions.length, loadingOptions])
+  }, [fieldConfig.type, loadOptions, fieldKey, selectOptions.length, loadingOptions, fieldConfig.options])
 
   // 根据字段类型渲染不同的输入控件
   switch (fieldConfig.type) {
@@ -158,7 +162,7 @@ export function InlineEditCell({
             value={dateValue}
             onChange={(e) => handleInternalChange(e.target.value || null)}
             onBlur={handleBlur}
-            className={cn("h-9 text-sm min-w-[140px] w-full", className)}
+            className={cn("h-9 text-sm min-w-[140px] w-full bg-white", className)}
           />
         </div>
       )
@@ -189,7 +193,7 @@ export function InlineEditCell({
             value={datetimeValue}
             onChange={(e) => handleInternalChange(e.target.value || null)}
             onBlur={handleBlur}
-            className={cn("h-9 text-sm min-w-[160px] w-full", className)}
+            className={cn("h-9 text-sm min-w-[160px] w-full bg-white", className)}
           />
         </div>
       )
@@ -206,9 +210,23 @@ export function InlineEditCell({
       if (fieldKey === 'current_location') {
         const [isOpen, setIsOpen] = React.useState(false)
         const inputRef = React.useRef<HTMLInputElement>(null)
+        const containerRef = React.useRef<HTMLDivElement>(null)
+        
+        // 点击外部关闭下拉框
+        React.useEffect(() => {
+          const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+              setIsOpen(false)
+            }
+          }
+          if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside)
+            return () => document.removeEventListener('mousedown', handleClickOutside)
+          }
+        }, [isOpen])
         
         return (
-          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell relative">
+          <div ref={containerRef} onClick={(e) => e.stopPropagation()} className="inline-edit-cell relative">
             <div className="relative">
               <Input
                 ref={inputRef}
@@ -223,7 +241,7 @@ export function InlineEditCell({
                   }, 200)
                 }}
                 onFocus={() => setIsOpen(true)}
-                className={cn("h-9 text-sm min-w-[160px] w-full pr-8", className)}
+                className={cn("h-9 text-sm min-w-[160px] w-full pr-8 bg-white", className)}
                 placeholder="选择或输入位置"
               />
               <ChevronDown className={cn(
@@ -231,32 +249,36 @@ export function InlineEditCell({
                 isOpen && "rotate-180"
               )} />
             </div>
-            {isOpen && selectOptions.length > 0 && (
-              <div className="absolute z-50 mt-1 w-full min-w-[160px] max-h-[200px] overflow-auto rounded-md border bg-popover shadow-md">
+            {isOpen && (
+              <div className="absolute z-50 mt-1 w-full min-w-[160px] max-h-[200px] overflow-auto rounded-md border border-input bg-white shadow-md">
                 <div className="p-1">
-                  {selectOptions.map((option) => (
-                    <div
-                      key={option.value}
-                      className={cn(
-                        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors",
-                        "hover:bg-accent hover:text-accent-foreground",
-                        internalValue === option.value && "bg-accent text-accent-foreground"
-                      )}
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                        handleInternalChange(option.value)
-                        setIsOpen(false)
-                        inputRef.current?.blur()
-                      }}
-                    >
-                      {internalValue === option.value && (
-                        <Check className="mr-2 h-4 w-4" />
-                      )}
-                      <span className={cn(internalValue === option.value && "ml-6")}>
-                        {option.label}
-                      </span>
-                    </div>
-                  ))}
+                  {selectOptions.length > 0 ? (
+                    selectOptions.map((option) => (
+                      <div
+                        key={option.value}
+                        className={cn(
+                          "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors",
+                          "hover:bg-accent hover:text-accent-foreground",
+                          internalValue === option.value && "bg-accent text-accent-foreground"
+                        )}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          handleInternalChange(option.value)
+                          setIsOpen(false)
+                          inputRef.current?.blur()
+                        }}
+                      >
+                        {internalValue === option.value && (
+                          <Check className="mr-2 h-4 w-4" />
+                        )}
+                        <span className={cn(internalValue === option.value && "ml-6")}>
+                          {option.label}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">加载中...</div>
+                  )}
                 </div>
               </div>
             )}
