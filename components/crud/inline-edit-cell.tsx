@@ -21,7 +21,6 @@ import { cn } from "@/lib/utils"
 import { LocationSelect } from "@/components/ui/location-select"
 import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
 import { ChevronDown, Check } from "lucide-react"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 interface InlineEditCellProps {
@@ -264,70 +263,58 @@ export function InlineEditCell({
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                <Command shouldFilter={false}>
-                  <div className="flex items-center border-b px-3">
-                    <input
-                      type="text"
-                      placeholder="搜索或输入位置..." 
-                      value={searchValue}
-                      onChange={(e) => {
-                        const value = e.target.value
-                        setSearchValue(value)
-                        handleInternalChange(value || null)
-                        // 立即同步到外部，确保自定义输入的值能被保存
-                        onChange(value || null)
-                      }}
-                      className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                    />
+                <div className="border-b px-3 py-2">
+                  <input
+                    type="text"
+                    placeholder="搜索或输入位置..." 
+                    value={searchValue}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setSearchValue(value)
+                      handleInternalChange(value || null)
+                      // 立即同步到外部，确保自定义输入的值能被保存
+                      onChange(value || null)
+                    }}
+                    className="flex h-9 w-full rounded-md bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    autoFocus
+                  />
+                </div>
+                {filteredOptions.length > 0 && (
+                  <div className="max-h-[200px] overflow-auto p-1">
+                    {filteredOptions.map((option) => (
+                      <div
+                        key={option.value}
+                        className={cn(
+                          "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors",
+                          "hover:bg-accent hover:text-accent-foreground",
+                          internalValue === option.value && "bg-accent text-accent-foreground"
+                        )}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          const selectedValue = option.value
+                          handleInternalChange(selectedValue)
+                          setSearchValue(selectedValue)
+                          onChange(selectedValue)
+                          setOpen(false)
+                          setTimeout(() => handleBlur(), 100)
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            internalValue === option.value ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {option.label}
+                      </div>
+                    ))}
                   </div>
-                  <CommandList>
-                    {filteredOptions.length > 0 && (
-                      <CommandGroup>
-                        {filteredOptions.map((option) => (
-                          <CommandItem
-                            key={option.value}
-                            value={option.value}
-                            onSelect={() => {
-                              // 直接使用 option.value，不依赖 CommandItem 传递的值
-                              const selectedValue = option.value
-                              handleInternalChange(selectedValue)
-                              setSearchValue(selectedValue)
-                              // 立即同步到外部，确保值被保存
-                              onChange(selectedValue)
-                              setOpen(false)
-                              // 延迟触发 blur，确保值已更新
-                              setTimeout(() => handleBlur(), 100)
-                            }}
-                            className="cursor-pointer"
-                            onMouseDown={(e) => {
-                              // 阻止默认行为，确保点击事件能正常触发
-                              e.preventDefault()
-                            }}
-                            onClick={(e) => {
-                              // 确保点击事件能正常触发
-                              e.preventDefault()
-                              e.stopPropagation()
-                              const selectedValue = option.value
-                              handleInternalChange(selectedValue)
-                              setSearchValue(selectedValue)
-                              onChange(selectedValue)
-                              setOpen(false)
-                              setTimeout(() => handleBlur(), 100)
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                internalValue === option.value ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {option.label}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                </Command>
+                )}
               </PopoverContent>
             </Popover>
           </div>
