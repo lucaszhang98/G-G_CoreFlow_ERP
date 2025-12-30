@@ -72,7 +72,6 @@ export const orderDetailConfig: EntityConfig = {
         { label: '扣货', value: '扣货' },
         { label: '已放行', value: '已放行' },
         { label: '私仓', value: '私仓' },
-        { label: '转仓', value: '转仓' },
       ],
     },
     estimated_pallets: {
@@ -149,7 +148,6 @@ export const orderDetailConfig: EntityConfig = {
           { label: '扣货', value: '扣货' },
           { label: '已放行', value: '已放行' },
           { label: '私仓', value: '私仓' },
-          { label: '转仓', value: '转仓' },
         ],
       },
       {

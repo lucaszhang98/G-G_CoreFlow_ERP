@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     if (data.status !== undefined) updateData.status = data.status;
     if (data.notes !== undefined) updateData.notes = data.notes || null;
-    if (data.unloaded_by !== undefined) updateData.unloaded_by = data.unloaded_by ? BigInt(data.unloaded_by) : null;
+    if (data.unloaded_by !== undefined) updateData.unloaded_by = data.unloaded_by || null;
     if (data.received_by !== undefined) updateData.received_by = data.received_by ? BigInt(data.received_by) : null;
     // delivery_progress 是自动生成的，不允许手动修改
     if (data.unload_method_code !== undefined) updateData.unload_method_code = data.unload_method_code || null;

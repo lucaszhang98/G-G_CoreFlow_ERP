@@ -97,7 +97,7 @@ export async function GET(
       lfd_date: order?.lfd_date || null,
       pickup_date: order?.pickup_date || null,
       ready_date: order?.ready_date || null,
-      return_deadline: order?.return_deadline || null,
+      return_date: order?.return_deadline || null,
       warehouse_account: order?.warehouse_account || null,
       port_location: order?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）
       port_location_id: order?.port_location_id ? String(order.port_location_id) : null,
@@ -168,27 +168,6 @@ async function updatePickupManagement(
         ? BigInt(body.carrier_id) 
         : null
     }
-    // 日期字段
-    if (body.lfd_date !== undefined) {
-      orderUpdateData.lfd_date = body.lfd_date 
-        ? new Date(body.lfd_date) 
-        : null
-    }
-    if (body.pickup_date !== undefined) {
-      orderUpdateData.pickup_date = body.pickup_date 
-        ? new Date(body.pickup_date) 
-        : null
-    }
-    if (body.ready_date !== undefined) {
-      orderUpdateData.ready_date = body.ready_date 
-        ? new Date(body.ready_date) 
-        : null
-    }
-    if (body.return_deadline !== undefined) {
-      orderUpdateData.return_deadline = body.return_deadline 
-        ? new Date(body.return_deadline) 
-        : null
-    }
 
     // 应用系统字段到 pickup_management
     const user = authResult.user || null
@@ -218,10 +197,6 @@ async function updatePickupManagement(
             order_id: true,
             port_location_id: true,
             carrier_id: true,
-            lfd_date: true,
-            pickup_date: true,
-            ready_date: true,
-            return_deadline: true,
             locations_orders_port_location_idTolocations: {
               select: {
                 location_id: true,
@@ -255,10 +230,6 @@ async function updatePickupManagement(
         port_location_id: updatedOrder?.port_location_id ? String(updatedOrder.port_location_id) : null,
         carrier: updatedOrder?.carriers || null,
         carrier_id: updatedOrder?.carrier_id ? String(updatedOrder.carrier_id) : null,
-        lfd_date: updatedOrder?.lfd_date || null,
-        pickup_date: updatedOrder?.pickup_date || null,
-        ready_date: updatedOrder?.ready_date || null,
-        return_deadline: updatedOrder?.return_deadline || null,
       },
     })
   } catch (error: any) {

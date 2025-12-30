@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
                 users_outbound_shipments_loaded_byTousers: {
                   select: {
                     id: true,
-                    name: true,
+                    full_name: true,
                   },
                 },
               },
@@ -223,7 +223,7 @@ export async function GET(request: NextRequest) {
         trailer_id: shipment?.trailer_id ? shipment.trailer_id.toString() : null,
         trailer_code: shipment?.trailers?.trailer_code || null,
         loaded_by: shipment?.loaded_by ? shipment.loaded_by.toString() : null,
-        loaded_by_name: shipment?.users_outbound_shipments_loaded_byTousers?.name || null,
+        loaded_by_name: shipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
         notes: shipment?.notes || null,
         
         // 审计字段

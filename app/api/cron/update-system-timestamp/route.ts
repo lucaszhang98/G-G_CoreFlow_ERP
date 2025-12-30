@@ -5,11 +5,8 @@
  * 用途：定时任务定期调用此 API，在原有时间基础上增加时间间隔
  * 更新频率：每 30 分钟
  * 
- * 部署平台：Vercel
- * 配置方式：
- * 1. 在 Vercel Dashboard → Project Settings → Cron Jobs 配置
- * 2. 或使用 vercel.json 配置 cron 任务
- * 3. 格式：每 30 分钟执行一次
+ * 部署平台：Netlify
+ * 配置方式：在 Netlify 控制台配置 Scheduled Functions，指向此 API 端点
  * 
  * 安全：需要验证 CRON_SECRET（可选）
  * 环境控制：只有指定的环境才会执行（通过 ENABLE_CRON_ENV 环境变量控制）
@@ -23,8 +20,8 @@ export async function GET(request: NextRequest) {
     // 环境检查：只有指定的环境才执行定时任务
     // 如果设置了 ENABLE_CRON_ENV，只有匹配的环境才执行
     const enableCronEnv = process.env.ENABLE_CRON_ENV
-    // Vercel 使用 VERCEL_ENV 环境变量：production, preview, development
-    const currentEnv = process.env.VERCEL_ENV || process.env.NODE_ENV || 'development'
+    // Netlify 使用 CONTEXT 环境变量：production, deploy-preview, branch-deploy
+    const currentEnv = process.env.CONTEXT || process.env.NODE_ENV || 'development'
     
     if (enableCronEnv && currentEnv !== enableCronEnv) {
       return NextResponse.json({

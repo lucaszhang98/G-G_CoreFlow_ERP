@@ -37,14 +37,22 @@ export async function POST(request: NextRequest) {
 
     const data = validationResult.data;
 
-    // 检查用户名是否已存在
-    const existingUsername = await prisma.users.findUnique({ 
-      where: { username: data.username } 
-    });
+    // 检查用户名和邮箱是否已存在
+    const [existingUsername, existingEmail] = await Promise.all([
+      prisma.users.findUnique({ where: { username: data.username } }),
+      prisma.users.findUnique({ where: { email: data.email } }),
+    ]);
 
     if (existingUsername) {
       return NextResponse.json(
         { error: '用户名已存在' },
+        { status: 409 }
+      );
+    }
+
+    if (existingEmail) {
+      return NextResponse.json(
+        { error: '邮箱已存在' },
         { status: 409 }
       );
     }
@@ -56,8 +64,9 @@ export async function POST(request: NextRequest) {
     const user = await prisma.users.create({
       data: {
         username: data.username,
-        name: data.name,
+        email: data.email,
         password_hash: passwordHash,
+        full_name: data.full_name,
         department_id: data.department_id ? BigInt(data.department_id) : null,
         role: data.role,
         status: data.status,
@@ -81,8 +90,6 @@ export async function POST(request: NextRequest) {
       serialized.department = serialized.departments_users_department_idTodepartments;
       delete serialized.departments_users_department_idTodepartments;
     }
-    // 密码字段：不返回密码信息（安全考虑）
-    delete serialized.password_hash
     
     return NextResponse.json(
       {
@@ -95,7 +102,7 @@ export async function POST(request: NextRequest) {
     if (error.code === 'P2002') {
       const field = error.meta?.target?.[0];
       return NextResponse.json(
-        { error: `${field === 'username' ? '用户名' : '姓名'}已存在` },
+        { error: `${field === 'username' ? '用户名' : '邮箱'}已存在` },
         { status: 409 }
       );
     }

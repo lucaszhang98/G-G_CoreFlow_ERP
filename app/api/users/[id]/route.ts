@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth, checkPermission, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers';
 import { userUpdateSchema } from '@/lib/validations/user';
 import prisma from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
 
 /**
  * GET /api/users/:id
@@ -44,8 +43,6 @@ export async function GET(
       serialized.department = serialized.departments_users_department_idTodepartments;
       delete serialized.departments_users_department_idTodepartments;
     }
-    // 密码字段：不返回密码信息（安全考虑）
-    delete serialized.password_hash
     
     return NextResponse.json({
       data: serialized,
@@ -91,14 +88,14 @@ export async function PUT(
 
     const data = validationResult.data;
 
-    // 如果修改了用户名，检查是否冲突
-    if (data.username !== undefined && data.username !== existing.username) {
-      const usernameExists = await prisma.users.findUnique({
-        where: { username: data.username },
+    // 如果修改了邮箱，检查是否冲突
+    if (data.email && data.email !== existing.email) {
+      const emailExists = await prisma.users.findUnique({
+        where: { email: data.email },
       });
-      if (usernameExists) {
+      if (emailExists) {
         return NextResponse.json(
-          { error: '用户名已存在' },
+          { error: '邮箱已存在' },
           { status: 409 }
         );
       }
@@ -107,17 +104,8 @@ export async function PUT(
     // 更新用户
     const updateData: any = {};
 
-    if (data.username !== undefined) {
-      updateData.username = data.username;
-    }
-    if (data.password !== undefined && data.password !== '') {
-      // 如果提供了密码，进行哈希处理
-      const passwordHash = await bcrypt.hash(data.password, 10);
-      updateData.password_hash = passwordHash;
-    }
-    if (data.name !== undefined) {
-      updateData.name = data.name;
-    }
+    if (data.email) updateData.email = data.email;
+    if (data.full_name !== undefined) updateData.full_name = data.full_name;
     if (data.department_id !== undefined) {
       updateData.department_id = data.department_id ? BigInt(data.department_id) : null;
     }
@@ -132,7 +120,8 @@ export async function PUT(
       select: {
         id: true,
         username: true,
-        name: true,
+        email: true,
+        full_name: true,
         department_id: true,
         role: true,
         status: true,
@@ -142,16 +131,14 @@ export async function PUT(
       },
     });
 
-    const serialized = serializeBigInt(user);
-
     return NextResponse.json({
-      data: serialized,
+      data: serializeBigInt(user),
       message: '用户更新成功',
     });
   } catch (error: any) {
     if (error.code === 'P2002') {
       return NextResponse.json(
-        { error: '姓名已存在' },
+        { error: '邮箱已存在' },
         { status: 409 }
       );
     }

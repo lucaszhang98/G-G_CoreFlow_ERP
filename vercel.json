@@ -1,9 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/update-system-timestamp",
-      "schedule": "*/30 * * * *"
-    }
-  ]
-}
-

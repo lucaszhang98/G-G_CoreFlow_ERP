@@ -95,7 +95,8 @@ export const authConfig = {
 
           return {
             id: user.id.toString(),
-            name: user.name || user.username,
+            name: user.full_name || user.username,
+            email: user.email,
             username: user.username,
             role: user.role || undefined,
           }
@@ -106,7 +107,5 @@ export const authConfig = {
     }),
   ],
   trustHost: true,
-  // 确保在生产环境中使用正确的 URL
-  secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
 } satisfies NextAuthConfig
 

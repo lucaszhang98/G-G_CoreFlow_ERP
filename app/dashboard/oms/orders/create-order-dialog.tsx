@@ -68,7 +68,6 @@ export function CreateOrderDialog({
     mbl_number: '',
     status: 'pending' as 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'archived',
     operation_mode: null as 'unload' | 'direct_delivery' | null,
-    delivery_location_id: null as string | number | null,
   })
   
   // 第二步：仓点明细
@@ -90,7 +89,6 @@ export function CreateOrderDialog({
       mbl_number: '',
       status: 'pending',
       operation_mode: null,
-      delivery_location_id: null,
     })
     setOrderDetails([])
     setEditingRowId(null)
@@ -227,7 +225,6 @@ export function CreateOrderDialog({
           mbl_number: orderData.mbl_number || null,
           status: orderData.status || 'pending',
           operation_mode: orderData.operation_mode || null,
-          delivery_location_id: orderData.delivery_location_id ? Number(orderData.delivery_location_id) : null,
           total_amount: 0, // 默认值
           discount_amount: 0,
           tax_amount: 0,
@@ -337,7 +334,7 @@ export function CreateOrderDialog({
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="customer">客户代码 *</Label>
+                <Label htmlFor="customer">客户名称 *</Label>
                 <FuzzySearchSelect
                   value={orderData.customer_id}
                   onChange={(value) => setOrderData({ ...orderData, customer_id: value ? String(value) : null })}
@@ -366,7 +363,7 @@ export function CreateOrderDialog({
                       // API返回格式: { data: [...], pagination: {...} }
                       if (data && Array.isArray(data.data)) {
                         return data.data.map((customer: any) => ({
-                          label: customer.code || customer.name || customer.company_name || '',
+                          label: customer.name || customer.company_name || customer.code || '',
                           value: customer.id?.toString() || '',
                         }))
                       }
@@ -422,11 +419,6 @@ export function CreateOrderDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="40HQ">40HQ</SelectItem>
-                    <SelectItem value="40GP">40GP</SelectItem>
-                    <SelectItem value="20GP">20GP</SelectItem>
-                    <SelectItem value="20HQ">20HQ</SelectItem>
-                    <SelectItem value="45HQ">45HQ</SelectItem>
-                    <SelectItem value="other">其他</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -479,17 +471,6 @@ export function CreateOrderDialog({
                     <SelectItem value="direct_delivery">直送</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="delivery_location">目的地</Label>
-                <LocationSelect
-                  value={orderData.delivery_location_id}
-                  onChange={(value: string | number | null) => {
-                    setOrderData({ ...orderData, delivery_location_id: value })
-                  }}
-                  placeholder="选择目的地"
-                />
               </div>
             </div>
           </div>
@@ -547,7 +528,6 @@ export function CreateOrderDialog({
                                     <SelectItem value="扣货">扣货</SelectItem>
                                     <SelectItem value="已放行">已放行</SelectItem>
                                     <SelectItem value="私仓">私仓</SelectItem>
-                                    <SelectItem value="转仓">转仓</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </TableCell>

@@ -40,7 +40,6 @@ export const pickupManagementConfig: EntityConfig = {
       key: 'port_location',
       label: '码头/查验站',
       type: 'location',
-      locationType: 'port', // 只显示码头类型的位置
     },
     port_location_id: {
       key: 'port_location_id',
@@ -74,7 +73,6 @@ export const pickupManagementConfig: EntityConfig = {
         displayField: 'name',
         valueField: 'carrier_id',
       },
-      relationField: 'carrier_id', // 指定数据库字段名
       sortable: true,
     },
     carrier_id: {
@@ -128,8 +126,8 @@ export const pickupManagementConfig: EntityConfig = {
       type: 'date',
       sortable: true,
     },
-    return_deadline: {
-      key: 'return_deadline',
+    return_date: {
+      key: 'return_date',
       label: '还柜日期',
       type: 'date',
       sortable: true,
@@ -181,8 +179,8 @@ export const pickupManagementConfig: EntityConfig = {
       'delivery_location',
       'lfd_date',
       'pickup_date',
-        'ready_date',
-        'return_deadline',
+      'ready_date',
+      'return_date',
       'warehouse_account',
       'earliest_appointment_time',
       'status',
@@ -195,10 +193,6 @@ export const pickupManagementConfig: EntityConfig = {
       fields: [
         'port_location',
         'carrier',
-        'lfd_date',
-        'pickup_date',
-        'ready_date',
-        'return_deadline',
         'status',
         'notes',
       ],
@@ -210,16 +204,9 @@ export const pickupManagementConfig: EntityConfig = {
         fields: [
           'port_location',
           'carrier',
-          'lfd_date',
-          'pickup_date',
-          'ready_date',
-          'return_deadline',
           'status',
           'notes',
         ],
-      },
-      delete: {
-        enabled: false, // 禁用批量删除
       },
     },
     // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段

@@ -5,7 +5,8 @@
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { DepartmentsTable } from "./departments-table"
+import { EntityTable } from "@/components/crud/entity-table"
+import { departmentConfig } from "@/lib/crud/configs/departments"
 
 export default async function DepartmentsPage() {
   const session = await auth()
@@ -16,7 +17,7 @@ export default async function DepartmentsPage() {
 
   return (
     <DashboardLayout user={session.user || {}}>
-      <DepartmentsTable />
+      <EntityTable config={departmentConfig} />
     </DashboardLayout>
   )
 }

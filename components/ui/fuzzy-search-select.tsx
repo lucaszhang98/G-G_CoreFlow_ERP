@@ -281,11 +281,8 @@ export function FuzzySearchSelect({
       <PopoverContent 
         className="w-[420px] p-0" 
         align="start"
-        side="bottom"
         sideOffset={4}
-        alignOffset={0}
         onOpenAutoFocus={(e) => e.preventDefault()}
-        sticky="always"
       >
         <Command shouldFilter={false}>
           <div className="border-b bg-gradient-to-br from-blue-50 via-indigo-50/80 to-purple-50/50 dark:from-blue-950/30 dark:via-indigo-950/20 dark:to-purple-950/20 p-4 shadow-sm">
@@ -313,7 +310,7 @@ export function FuzzySearchSelect({
             </div>
           </div>
           
-          <CommandList className="max-h-[280px] min-h-[200px] overflow-y-auto overflow-x-hidden overscroll-contain">
+          <CommandList className="max-h-[280px] overflow-y-auto overflow-x-hidden">
             {loading && options.length === 0 ? (
               <div className="py-8 text-center">
                 <div className="inline-flex items-center gap-2.5 text-sm text-muted-foreground">
@@ -334,11 +331,9 @@ export function FuzzySearchSelect({
               <CommandGroup>
                 {options.map((option, index) => {
                 const isSelected = String(value) === String(option.value)
-                // 使用 index 作为 key 的一部分，确保唯一性
-                const uniqueKey = `${String(option.value)}-${index}`
                 return (
                   <div
-                    key={uniqueKey}
+                    key={String(option.value) || `option-${index}`}
                     role="option"
                     aria-selected={isSelected}
                     className={cn(

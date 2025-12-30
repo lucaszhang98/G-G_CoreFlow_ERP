@@ -50,7 +50,7 @@ export const orderConfig: EntityConfig = {
       type: 'relation',
       relation: {
         model: 'users',
-        displayField: 'name',
+        displayField: 'full_name',
         valueField: 'id',
       },
     },
@@ -320,7 +320,7 @@ export const orderConfig: EntityConfig = {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
     create: ['admin', 'oms_manager'],
     update: ['admin', 'oms_manager'],
-    delete: [], // 订单管理不允许删除
+    delete: ['admin'],
   },
   
   prisma: {
@@ -344,7 +344,7 @@ export const orderConfig: EntityConfig = {
       users_orders_user_idTousers: {
         select: {
           id: true,
-          name: true,
+          full_name: true,
         },
       },
       locations_orders_delivery_location_idTolocations: {

@@ -30,15 +30,22 @@ export const userConfig: EntityConfig = {
       required: true,
       sortable: true,
       searchable: true,
-      placeholder: '请输入用户名（字母、数字、下划线，3-50字符）',
+      placeholder: '请输入用户名',
     },
-    name: {
-      key: 'name',
-      label: '姓名',
-      type: 'text',
+    email: {
+      key: 'email',
+      label: '邮箱',
+      type: 'email',
       required: true,
       searchable: true,
-      placeholder: '请输入姓名（中英文，允许空格，不允许特殊字符）',
+      placeholder: '请输入邮箱',
+    },
+    full_name: {
+      key: 'full_name',
+      label: '姓名',
+      type: 'text',
+      searchable: true,
+      placeholder: '请输入姓名',
     },
     role: {
       key: 'role',
@@ -50,9 +57,6 @@ export const userConfig: EntityConfig = {
         { label: 'OMS经理', value: 'oms_manager' },
         { label: 'TMS经理', value: 'tms_manager' },
         { label: 'WMS经理', value: 'wms_manager' },
-        { label: '仓库主管', value: 'wms_supervisor' },
-        { label: '入库工人', value: 'wms_inbound_worker' },
-        { label: '出库工人', value: 'wms_outbound_worker' },
         { label: '员工', value: 'employee' },
         { label: '用户', value: 'user' },
       ],
@@ -74,9 +78,7 @@ export const userConfig: EntityConfig = {
       relation: {
         model: 'departments',
         displayField: 'name',
-        valueField: 'id',
       },
-      relationField: 'department_id', // 当前表中的数据库字段名，用于筛选和更新
     },
     phone: {
       key: 'phone',
@@ -88,10 +90,8 @@ export const userConfig: EntityConfig = {
       key: 'password',
       label: '密码',
       type: 'text',
-      required: true, // 创建时必填
-      sortable: false,
-      searchable: false,
-      placeholder: '请输入密码（至少6个字符）',
+      required: false, // 更新时可选
+      placeholder: '请输入密码（留空则不修改）',
     },
     // created_at 是审计字段，由系统自动维护，不在前端显示
     created_at: {
@@ -106,7 +106,7 @@ export const userConfig: EntityConfig = {
   list: {
     defaultSort: 'username',
     defaultOrder: 'asc',
-    columns: ['username', 'name', 'role', 'status', 'department'],
+    columns: ['username', 'email', 'full_name', 'role', 'status', 'department'],
     searchFields: ['username'], // 只搜索用户名（最重要的字段）
     pageSize: 10,
     // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
@@ -118,7 +118,7 @@ export const userConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['username', 'name', 'role', 'status', 'department_id'],
+        fields: ['role', 'status'],
       },
       delete: {
         enabled: true,
@@ -127,11 +127,11 @@ export const userConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['username', 'name', 'role', 'status', 'department_id'],
+      fields: ['role', 'status', 'full_name'],
     },
   },
   
-  formFields: ['username', 'name', 'password', 'role', 'status', 'department_id', 'phone'],
+  formFields: ['username', 'email', 'password', 'full_name', 'role', 'status', 'department_id', 'phone'],
   
   permissions: {
     list: ['admin'],

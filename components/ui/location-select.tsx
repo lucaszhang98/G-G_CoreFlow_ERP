@@ -37,7 +37,6 @@ interface LocationSelectProps {
   placeholder?: string
   className?: string
   disabled?: boolean
-  locationType?: string // 直接指定位置类型，如果提供则只显示该类型的位置，不显示类型选择器
 }
 
 const LOCATION_TYPES = [
@@ -53,20 +52,12 @@ export function LocationSelect({
   placeholder = "选择位置...",
   className,
   disabled = false,
-  locationType, // 直接指定位置类型
 }: LocationSelectProps) {
   const [open, setOpen] = React.useState(false)
-  const [selectedType, setSelectedType] = React.useState<string | null>(locationType || null)
+  const [selectedType, setSelectedType] = React.useState<string | null>(null)
   const [locations, setLocations] = React.useState<Location[]>([])
   const [loading, setLoading] = React.useState(false)
   const [searchQuery, setSearchQuery] = React.useState("")
-  
-  // 如果指定了 locationType，自动设置为选中类型
-  React.useEffect(() => {
-    if (locationType && !selectedType) {
-      setSelectedType(locationType)
-    }
-  }, [locationType, selectedType])
 
   // 获取选中的位置信息
   // 支持通过location_id或location_code查找
@@ -115,31 +106,16 @@ export function LocationSelect({
 
   // 当选择类型改变或搜索词改变时，加载对应的位置列表
   React.useEffect(() => {
-    const typeToUse = locationType || selectedType
-    if (typeToUse) {
-      loadLocations(typeToUse, searchQuery)
+    if (selectedType) {
+      loadLocations(selectedType, searchQuery)
     } else {
       setLocations([])
     }
-  }, [locationType, selectedType, searchQuery, loadLocations])
+  }, [selectedType, searchQuery, loadLocations])
 
   // 初始化：如果有值，先加载对应的位置信息来确定类型
-  // 如果指定了 locationType，直接加载该类型的位置
   React.useEffect(() => {
-    if (locationType && selectedType !== locationType) {
-      setSelectedType(locationType)
-    }
-  }, [locationType, selectedType])
-  
-  // 当指定了 locationType 且有 value 时，确保加载位置列表以便查找
-  React.useEffect(() => {
-    if (locationType && value && locations.length === 0 && !loading) {
-      loadLocations(locationType)
-    }
-  }, [locationType, value, locations.length, loading, loadLocations])
-  
-  React.useEffect(() => {
-    if (value && !selectedLocation && !selectedType && !locationType) {
+    if (value && !selectedLocation && !selectedType) {
       // 先加载所有类型的位置来查找当前值
       const loadCurrentLocation = async () => {
         try {
@@ -176,7 +152,7 @@ export function LocationSelect({
       }
       loadCurrentLocation()
     }
-  }, [value, selectedLocation, selectedType, locationType, loadLocations])
+  }, [value, selectedLocation, selectedType, loadLocations])
   
   // 当locations加载完成后，再次检查selectedLocation
   React.useEffect(() => {
@@ -262,29 +238,27 @@ export function LocationSelect({
                 选择位置类型
               </span>
             </div>
-            {!locationType && (
-              <div className="flex gap-2.5">
-                {LOCATION_TYPES.map((type) => (
-                  <Button
-                    key={type.value}
-                    variant={selectedType === type.value ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setSelectedType(selectedType === type.value ? null : type.value)
-                      setSearchQuery("")
-                    }}
-                    className={cn(
-                      "text-xs font-semibold transition-all duration-200",
-                      selectedType === type.value 
-                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 border-0" 
-                        : "border-border/50 hover:border-blue-400/50 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 hover:text-blue-700 dark:hover:text-blue-300"
-                    )}
-                  >
-                    {type.label}
-                  </Button>
-                ))}
-              </div>
-            )}
+            <div className="flex gap-2.5">
+              {LOCATION_TYPES.map((type) => (
+                <Button
+                  key={type.value}
+                  variant={selectedType === type.value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setSelectedType(selectedType === type.value ? null : type.value)
+                    setSearchQuery("")
+                  }}
+                  className={cn(
+                    "text-xs font-semibold transition-all duration-200",
+                    selectedType === type.value 
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 border-0" 
+                      : "border-border/50 hover:border-blue-400/50 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 hover:text-blue-700 dark:hover:text-blue-300"
+                  )}
+                >
+                  {type.label}
+                </Button>
+              ))}
+            </div>
           </div>
           
           {selectedType && (
@@ -384,7 +358,7 @@ export function LocationSelect({
             </>
           )}
           
-          {!selectedType && !locationType && (
+          {!selectedType && (
             <div className="p-10 text-center">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-950/40 dark:to-indigo-950/40 mb-4 shadow-sm">
                 <MapPin className="h-7 w-7 text-blue-600 dark:text-blue-400" />

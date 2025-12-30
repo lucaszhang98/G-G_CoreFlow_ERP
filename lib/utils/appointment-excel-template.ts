@@ -347,8 +347,3 @@ export async function generateAppointmentImportTemplate(
   return workbook
 }
 
-
-
-
-
-

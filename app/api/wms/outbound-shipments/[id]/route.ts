@@ -65,7 +65,7 @@ export async function GET(
             users_outbound_shipments_loaded_byTousers: {
               select: {
                 id: true,
-                name: true,
+                full_name: true,
               },
             },
           },
@@ -117,7 +117,7 @@ export async function GET(
       trailer_id: outboundShipment?.trailer_id ? outboundShipment.trailer_id.toString() : null,
       trailer_code: outboundShipment?.trailers?.trailer_code || null,
       loaded_by: outboundShipment?.loaded_by ? outboundShipment.loaded_by.toString() : null,
-      loaded_by_name: outboundShipment?.users_outbound_shipments_loaded_byTousers?.name || null,
+      loaded_by_name: outboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
       notes: outboundShipment?.notes || null,
     });
   } catch (error: any) {

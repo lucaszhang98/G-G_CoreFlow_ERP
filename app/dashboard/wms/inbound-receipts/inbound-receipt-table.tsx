@@ -29,153 +29,36 @@ export function InboundReceiptTable() {
     },
   ], [router])
 
-  // 获取入库组部门ID（缓存，只获取一次）
-  const departmentIdCacheRef = React.useRef<string | null | undefined>(undefined)
-  const getInboundGroupDepartmentId = React.useCallback(async (): Promise<string | null> => {
-    // 如果已经缓存，直接返回
-    if (departmentIdCacheRef.current !== undefined) {
-      return departmentIdCacheRef.current
-    }
-    
+  // 加载用户选项（用于入库人员字段）
+  const loadUsersOptions = React.useCallback(async () => {
     try {
-      // 先尝试通过名称查找
-      const response = await fetch('/api/departments?search=入库组&limit=100')
+      const response = await fetch('/api/users?limit=1000&sort=full_name&order=asc')
       if (!response.ok) {
-        departmentIdCacheRef.current = null
-        return null
+        throw new Error('获取用户列表失败')
       }
       const result = await response.json()
-      const departments = result.data || []
-      const inboundGroup = departments.find((dept: any) => 
-        dept.name === '入库组' || dept.code === '入库组' || dept.name?.includes('入库组')
-      )
-      const departmentId = inboundGroup ? String(inboundGroup.id) : null
-      departmentIdCacheRef.current = departmentId
-      return departmentId
+      const users = result.data || []
+      return users.map((user: any) => ({
+        label: user.full_name || user.username || `用户 ${user.id}`,
+        value: String(user.id),
+      }))
     } catch (error) {
-      console.error('获取入库组部门ID失败:', error)
-      departmentIdCacheRef.current = null
-      return null
+      console.error('加载用户选项失败:', error)
+      return []
     }
   }, [])
 
-  // 拆柜人员选项缓存（按搜索词缓存）
-  const unloadedByOptionsCacheRef = React.useRef<Map<string, Array<{ label: string; value: string }>>>(new Map())
-  
-  // 加载拆柜人员选项（部门为入库组且角色为入库工人的用户）
-  const loadUnloadedByOptions = React.useCallback(async (search: string = '') => {
-    const cacheKey = search.trim()
-    
-    // 检查缓存
-    if (unloadedByOptionsCacheRef.current.has(cacheKey)) {
-      return unloadedByOptionsCacheRef.current.get(cacheKey)!
-    }
-    
-    try {
-      // 先获取入库组部门ID
-      const departmentId = await getInboundGroupDepartmentId()
-      if (!departmentId) {
-        console.warn('未找到入库组部门，无法加载拆柜人员')
-        return []
-      }
-
-      const params = new URLSearchParams({
-        limit: '1000',
-        sort: 'name',
-        order: 'asc',
-      })
-      // 添加部门和角色过滤：只获取入库组且角色为入库工人的用户
-      params.append('filter_department', departmentId)
-      params.append('filter_role', 'wms_inbound_worker')
-      if (search && search.trim()) {
-        params.append('search', search.trim())
-        params.append('unlimited', 'true')
-      }
-      
-      const response = await fetch(`/api/users?${params.toString()}`)
-      if (!response.ok) {
-        throw new Error('获取拆柜人员列表失败')
-      }
-      const result = await response.json()
-      const users = result.data || []
-      const options = users.map((user: any) => ({
-        label: user.name || user.username || `用户 ${user.id}`,
-        value: String(user.id),
-      }))
-      
-      // 缓存结果
-      unloadedByOptionsCacheRef.current.set(cacheKey, options)
-      return options
-    } catch (error) {
-      console.error('加载拆柜人员选项失败:', error)
-      return []
-    }
-  }, [getInboundGroupDepartmentId])
-
-  // 入库人员选项缓存（按搜索词缓存）
-  const receivedByOptionsCacheRef = React.useRef<Map<string, Array<{ label: string; value: string }>>>(new Map())
-
-  // 加载入库人员选项（部门为入库组且角色为出库工人的用户）
-  const loadReceivedByOptions = React.useCallback(async (search: string = '') => {
-    const cacheKey = search.trim()
-    
-    // 检查缓存
-    if (receivedByOptionsCacheRef.current.has(cacheKey)) {
-      return receivedByOptionsCacheRef.current.get(cacheKey)!
-    }
-    
-    try {
-      // 先获取入库组部门ID
-      const departmentId = await getInboundGroupDepartmentId()
-      if (!departmentId) {
-        console.warn('未找到入库组部门，无法加载入库人员')
-        return []
-      }
-
-      const params = new URLSearchParams({
-        limit: '1000',
-        sort: 'name',
-        order: 'asc',
-      })
-      // 添加部门和角色过滤：只获取入库组且角色为出库工人的用户
-      params.append('filter_department', departmentId)
-      params.append('filter_role', 'wms_outbound_worker')
-      if (search && search.trim()) {
-        params.append('search', search.trim())
-        params.append('unlimited', 'true')
-      }
-      
-      const response = await fetch(`/api/users?${params.toString()}`)
-      if (!response.ok) {
-        throw new Error('获取入库人员列表失败')
-      }
-      const result = await response.json()
-      const users = result.data || []
-      const options = users.map((user: any) => ({
-        label: user.name || user.username || `用户 ${user.id}`,
-        value: String(user.id),
-      }))
-      
-      // 缓存结果
-      receivedByOptionsCacheRef.current.set(cacheKey, options)
-      return options
-    } catch (error) {
-      console.error('加载入库人员选项失败:', error)
-      return []
-    }
-  }, [getInboundGroupDepartmentId])
-
-  // 字段模糊搜索加载函数（用于批量编辑和行内编辑中的关系字段）
-  const fieldFuzzyLoadOptions = React.useMemo(() => ({
-    unloaded_by: loadUnloadedByOptions,
-    received_by: loadReceivedByOptions,
-  }), [loadUnloadedByOptions, loadReceivedByOptions])
+  // 字段选项加载函数（用于批量编辑和行内编辑中的关系字段）
+  const fieldLoadOptions = React.useMemo(() => ({
+    received_by: loadUsersOptions,
+  }), [loadUsersOptions])
 
   return (
     <EntityTable 
       config={inboundReceiptConfig}
       customClickableColumns={customClickableColumns}
-      fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}
+      fieldLoadOptions={fieldLoadOptions}
     />
   )
 }
+

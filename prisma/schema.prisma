@@ -115,8 +115,8 @@ model calendar_dim {
 }
 
 model system_config {
-  config_key   String    @id @db.VarChar(100)
-  config_value String    @db.VarChar(500)
+  config_key   String   @id @db.VarChar(100)
+  config_value String   @db.VarChar(500)
   description  String?
   updated_at   DateTime? @default(now()) @db.Timestamptz(6)
   updated_by   BigInt?
@@ -522,8 +522,9 @@ model unload_methods {
 model users {
   id                                                                  BigInt                     @id @default(autoincrement())
   username                                                            String                     @unique @db.VarChar(50)
-  name                                                                String                     @db.VarChar(100)
+  email                                                               String                     @unique @db.VarChar(100)
   password_hash                                                       String                     @db.VarChar(255)
+  full_name                                                           String?                    @db.VarChar(100)
   department_id                                                       BigInt?
   role                                                                String?                    @default("employee") @db.VarChar(50)
   status                                                              String?                    @default("active") @db.VarChar(20)
@@ -589,7 +590,6 @@ model users {
   freight_bills_freight_bills_updated_byTousers                       freight_bills[]            @relation("freight_bills_updated_byTousers")
   inbound_receipt_inbound_receipt_created_byTousers                   inbound_receipt[]          @relation("inbound_receipt_created_byTousers")
   inbound_receipt_inbound_receipt_received_byTousers                  inbound_receipt[]          @relation("inbound_receipt_received_byTousers")
-  inbound_receipt_inbound_receipt_unloaded_byTousers                  inbound_receipt[]          @relation("inbound_receipt_unloaded_byTousers")
   inbound_receipt_inbound_receipt_updated_byTousers                   inbound_receipt[]          @relation("inbound_receipt_updated_byTousers")
   inventory_lots_inventory_lots_created_byTousers                     inventory_lots[]           @relation("inventory_lots_created_byTousers")
   inventory_lots_inventory_lots_updated_byTousers                     inventory_lots[]           @relation("inventory_lots_updated_byTousers")
@@ -605,7 +605,7 @@ model users {
   wms_labor_logs_wms_labor_logs_user_idTousers                        wms_labor_logs[]           @relation("wms_labor_logs_user_idTousers")
 
   @@index([department_id], map: "idx_users_department")
-  @@index([name], map: "idx_users_name")
+  @@index([email], map: "idx_users_email")
   @@schema("public")
 }
 
@@ -737,7 +737,7 @@ model inbound_receipt {
   inbound_receipt_id                       BigInt           @id @default(autoincrement())
   notes                                    String?
   order_id                                 BigInt           @unique
-  unloaded_by                              BigInt?
+  unloaded_by                              String?          @db.VarChar
   received_by                              BigInt?
   warehouse_id                             BigInt
   status                                   String           @default("pending") @db.VarChar(50)
@@ -751,7 +751,6 @@ model inbound_receipt {
   users_inbound_receipt_created_byTousers  users?           @relation("inbound_receipt_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   orders                                   orders           @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)
   users_inbound_receipt_received_byTousers users?           @relation("inbound_receipt_received_byTousers", fields: [received_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_inbound_receipt_unloaded_byTousers users?           @relation("inbound_receipt_unloaded_byTousers", fields: [unloaded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   unload_methods                           unload_methods?  @relation(fields: [unload_method_code], references: [method_code], onDelete: NoAction, onUpdate: NoAction)
   users_inbound_receipt_updated_byTousers  users?           @relation("inbound_receipt_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   warehouses                               warehouses       @relation(fields: [warehouse_id], references: [warehouse_id], onDelete: NoAction, onUpdate: NoAction)
@@ -905,17 +904,17 @@ model inventory_forecast_daily {
 }
 
 model inventory_forecast_weekly {
-  forecast_id         BigInt    @id @default(autoincrement())
-  location_id         BigInt?
-  location_group      String    @db.VarChar(50)
-  location_name       String    @db.VarChar(200)
-  week_start_date     DateTime  @db.Date
-  week_number         Int // 第几周（1-8）
-  planned_inbound     Int       @default(0) // 本周入库板数（周汇总）
-  planned_outbound    Int       @default(0) // 本周出库板数（周汇总）
-  remaining_pallets   Int       @default(0) // 未出板数（入库 - 出库）
-  calculated_at       DateTime? @default(now()) @db.Timestamptz(6)
-  calculation_version Int       @default(1)
+  forecast_id          BigInt    @id @default(autoincrement())
+  location_id          BigInt?
+  location_group       String    @db.VarChar(50)
+  location_name        String    @db.VarChar(200)
+  week_start_date      DateTime  @db.Date
+  week_number          Int       // 第几周（1-8）
+  planned_inbound      Int       @default(0) // 本周入库板数（周汇总）
+  planned_outbound      Int       @default(0) // 本周出库板数（周汇总）
+  remaining_pallets    Int       @default(0) // 未出板数（入库 - 出库）
+  calculated_at        DateTime? @default(now()) @db.Timestamptz(6)
+  calculation_version  Int       @default(1)
 
   @@unique([location_id, location_group, week_start_date], map: "unique_location_week")
   @@index([location_id, location_group, week_start_date], map: "idx_forecast_weekly_location_week")

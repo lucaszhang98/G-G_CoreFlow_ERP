@@ -290,8 +290,8 @@ export const orderImportRowSchema = z.object({
     .string()
     .min(1, '送仓性质不能为空')
     .refine(
-      val => ['AMZ', '扣货', '已放行', '私仓', '转仓'].includes(val),
-      '送仓性质必须是AMZ/扣货/已放行/私仓/转仓之一'
+      val => ['AMZ', '扣货', '已放行', '私仓'].includes(val),
+      '送仓性质必须是AMZ/扣货/已放行/私仓之一'
     ),
   
   quantity: z

@@ -13,8 +13,8 @@ export function generateFilterFields(config: EntityConfig): FilterFieldConfig[] 
   const filterFields: FilterFieldConfig[] = []
   
   Object.entries(config.fields).forEach(([fieldKey, fieldConfig]) => {
-    // 排除隐藏字段和只读字段（如 created_at）
-    if (fieldConfig.hidden || fieldConfig.readonly) {
+    // 排除隐藏字段
+    if (fieldConfig.hidden) {
       return
     }
     
