@@ -348,6 +348,15 @@ export function createListHandler(config: EntityConfig) {
         })
       }
 
+      // 清理 where 条件：移除空的 OR 数组
+      if (where.OR && Array.isArray(where.OR) && where.OR.length === 0) {
+        delete where.OR
+      }
+      // 清理 where 条件：移除空的 AND 数组
+      if (where.AND && Array.isArray(where.AND) && where.AND.length === 0) {
+        delete where.AND
+      }
+
       let items: any[] = []
       let total = 0
       
@@ -357,6 +366,8 @@ export function createListHandler(config: EntityConfig) {
           console.log('[createListHandler] 执行查询:', {
             model: enhancedConfig.prisma?.model || enhancedConfig.name,
             whereKeys: Object.keys(where),
+            whereOR: where.OR,
+            whereAND: where.AND,
             orderBy: queryOptions.orderBy,
             hasInclude: !!queryOptions.include,
             hasSelect: !!queryOptions.select,
