@@ -50,6 +50,27 @@ export async function POST(request: NextRequest) {
         ? BigInt(updates.carrier_id) 
         : null
     }
+    // 日期字段
+    if (updates.lfd_date !== undefined) {
+      orderUpdateData.lfd_date = updates.lfd_date 
+        ? new Date(updates.lfd_date) 
+        : null
+    }
+    if (updates.pickup_date !== undefined) {
+      orderUpdateData.pickup_date = updates.pickup_date 
+        ? new Date(updates.pickup_date) 
+        : null
+    }
+    if (updates.ready_date !== undefined) {
+      orderUpdateData.ready_date = updates.ready_date 
+        ? new Date(updates.ready_date) 
+        : null
+    }
+    if (updates.return_deadline !== undefined) {
+      orderUpdateData.return_deadline = updates.return_deadline 
+        ? new Date(updates.return_deadline) 
+        : null
+    }
 
     // 转换为 BigInt
     const bigIntIds = ids.map((id: string | number) => BigInt(id))

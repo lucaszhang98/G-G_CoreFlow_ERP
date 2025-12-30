@@ -199,7 +199,7 @@ export function InlineEditCell({
             <SelectTrigger className={cn("h-10 text-sm min-w-[120px] w-full", className)}>
               <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
               {selectOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
@@ -251,6 +251,7 @@ export function InlineEditCell({
     case 'location':
       // 位置选择字段（使用 LocationSelect 组件 - 框架级复用组件）
       // 注意：不传递className来改变核心样式，保持统一的白色样式
+      // 如果字段配置中指定了 locationType，则只显示该类型的位置
       return (
         <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
           <LocationSelect
@@ -262,6 +263,7 @@ export function InlineEditCell({
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
             className={className} // 只传递外部className，不覆盖核心样式
+            locationType={fieldConfig.locationType} // 支持直接指定位置类型
           />
         </div>
       )
@@ -281,6 +283,7 @@ export function InlineEditCell({
               onBlur={handleBlur}
               placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
               className={className} // 只传递外部className，不覆盖核心样式
+              locationType={fieldConfig.locationType} // 支持直接指定位置类型
             />
           </div>
         )

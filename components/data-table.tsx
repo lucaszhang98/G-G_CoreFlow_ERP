@@ -76,6 +76,7 @@ interface DataTableProps<TData, TValue> {
   selectedRows?: TData[] // 外部控制的行选择（受控模式）
   // 行内编辑相关
   isRowEditing?: (row: TData) => boolean // 检查行是否正在编辑
+  onCancelEdit?: () => void // 取消编辑回调（当点击其他行时调用）
   // 可展开行相关
   expandableRows?: {
     enabled: boolean
@@ -110,6 +111,7 @@ export function DataTable<TData, TValue>({
   getIdValue,
   selectedRows: externalSelectedRows,
   isRowEditing,
+  onCancelEdit,
   expandableRows,
 }: DataTableProps<TData, TValue>) {
   // 防止 hydration 错误：只在客户端渲染 DropdownMenu
@@ -202,21 +204,55 @@ export function DataTable<TData, TValue>({
           <div className="flex items-center justify-center h-full">
             <Checkbox
               checked={checkedState}
-              onCheckedChange={(value: boolean) => table.toggleAllPageRowsSelected(!!value)}
+              onCheckedChange={(value: boolean) => {
+                // 如果有行正在编辑，先取消编辑（专业系统的做法）
+                if (isRowEditing && onCancelEdit) {
+                  const hasAnyRowEditing = table.getRowModel().rows.some(r => isRowEditing(r.original))
+                  if (hasAnyRowEditing) {
+                    onCancelEdit()
+                    // 使用 setTimeout 确保取消编辑的状态更新完成后再执行全选
+                    setTimeout(() => {
+                      table.toggleAllPageRowsSelected(!!value)
+                    }, 10)
+                    return
+                  }
+                }
+                table.toggleAllPageRowsSelected(!!value)
+              }}
               aria-label="选择全部"
             />
           </div>
         )
       },
-      cell: ({ row }) => (
-        <div className="flex items-center justify-center h-full">
-          <Checkbox
-            checked={row.getIsSelected()}
-            onCheckedChange={(value: boolean) => row.toggleSelected(!!value)}
-            aria-label="选择行"
-          />
-        </div>
-      ),
+      cell: ({ row, table }) => {
+        return (
+          <div className="flex items-center justify-center h-full">
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(value: boolean) => {
+                // 检查是否有任何行正在编辑（包括当前行）
+                let hasAnyRowEditing = false
+                if (isRowEditing) {
+                  hasAnyRowEditing = table.getRowModel().rows.some(r => isRowEditing(r.original))
+                }
+                
+                // 如果有行正在编辑，先取消编辑，然后延迟执行选择（避免状态冲突）
+                if (hasAnyRowEditing && onCancelEdit) {
+                  onCancelEdit()
+                  // 使用 setTimeout 确保取消编辑的状态更新完成后再执行选择
+                  setTimeout(() => {
+                    row.toggleSelected(!!value)
+                  }, 10)
+                } else {
+                  // 没有行在编辑，直接执行选择
+                  row.toggleSelected(!!value)
+                }
+              }}
+              aria-label="选择行"
+            />
+          </div>
+        )
+      },
       enableSorting: false,
       enableHiding: false,
       meta: {
@@ -226,7 +262,7 @@ export function DataTable<TData, TValue>({
     }
 
     return [selectColumn, ...columns]
-  }, [enableRowSelection, columns])
+  }, [enableRowSelection, columns, isRowEditing, getIdValue, onCancelEdit])
 
   // 行选择变化处理
   const handleRowSelectionChange = React.useCallback((updater: any) => {
