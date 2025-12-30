@@ -359,6 +359,7 @@ export function createListHandler(config: EntityConfig) {
 
       let items: any[] = []
       let total = 0
+      let querySucceeded = false
       
       try {
         // 开发环境：记录查询选项
@@ -380,6 +381,7 @@ export function createListHandler(config: EntityConfig) {
           prismaModel.findMany(queryOptions),
           prismaModel.count({ where }),
         ])
+        querySucceeded = true
         
         // 如果是 orders 模型，需要处理 location 字段（delivery_location 和 port_location）
         // 如果这些字段存储的是 location_id（数字字符串），需要查询 locations 表获取 location_code
@@ -477,21 +479,23 @@ export function createListHandler(config: EntityConfig) {
             await prisma.$connect()
             // 重试查询
             console.log('[createListHandler] 重新连接成功，重试查询...')
-            [items, total] = await Promise.all([
+            const retryResult = await Promise.all([
               prismaModel.findMany(queryOptions),
               prismaModel.count({ where }),
             ])
+            items = retryResult[0]
+            total = retryResult[1]
+            querySucceeded = true
             // 如果重试成功，继续执行后续逻辑
           } catch (retryError: any) {
             console.error('[createListHandler] 重试失败:', retryError)
             // 如果重试也失败，继续原有的错误处理逻辑
+            querySucceeded = false
           }
         }
         
         // 如果重试成功，跳过错误处理
-        if (items && total !== undefined) {
-          // 继续执行后续逻辑，不返回错误
-        } else {
+        if (!querySucceeded) {
           // 如果是 Prisma 错误，返回更详细的错误信息
           if (queryError?.code) {
             return NextResponse.json(
