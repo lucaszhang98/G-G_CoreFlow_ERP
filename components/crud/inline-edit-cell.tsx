@@ -225,6 +225,13 @@ export function InlineEditCell({
           }
         }, [isOpen])
         
+        // 确保选项已加载
+        React.useEffect(() => {
+          if (fieldConfig.options && selectOptions.length === 0) {
+            setSelectOptions(fieldConfig.options)
+          }
+        }, [fieldConfig.options, selectOptions.length])
+        
         return (
           <div ref={containerRef} onClick={(e) => e.stopPropagation()} className="inline-edit-cell relative">
             <div className="relative">
