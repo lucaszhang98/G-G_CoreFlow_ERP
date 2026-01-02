@@ -51,6 +51,8 @@ export function InboundReceiptDetailPageClient({
         inboundReceipt={inboundReceipt}
         formatDate={formatDate}
         formatNumber={formatNumber}
+        orderDetails={orderDetails}
+        inboundReceiptId={inboundReceiptId}
       />
 
       {/* 仓点明细表格 */}
