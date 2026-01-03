@@ -253,6 +253,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 planned_unload_at: serialized.planned_unload_at || null,
                 total_container_volume: totalContainerVolume,
               }}
+              customerCode={inboundReceipt.orders?.customers?.code || null}
               orderDetails={serialized.orders?.order_detail?.map((detail: any) => {
                 // 获取 location_code
                 // delivery_location 可能是 location_id（数字字符串）或 location_code（字符串）
