@@ -334,7 +334,7 @@ export function CreateOrderDialog({
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="customer">客户名称 *</Label>
+                <Label htmlFor="customer">客户代码 *</Label>
                 <FuzzySearchSelect
                   value={orderData.customer_id}
                   onChange={(value) => setOrderData({ ...orderData, customer_id: value ? String(value) : null })}
@@ -363,7 +363,7 @@ export function CreateOrderDialog({
                       // API返回格式: { data: [...], pagination: {...} }
                       if (data && Array.isArray(data.data)) {
                         return data.data.map((customer: any) => ({
-                          label: customer.name || customer.company_name || customer.code || '',
+                          label: customer.code || customer.name || customer.company_name || '',
                           value: customer.id?.toString() || '',
                         }))
                       }
@@ -374,7 +374,7 @@ export function CreateOrderDialog({
                       return []
                     }
                   }}
-                  placeholder="搜索并选择客户"
+                  placeholder="搜索并选择客户代码"
                 />
               </div>
 
