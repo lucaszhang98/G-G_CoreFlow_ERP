@@ -261,9 +261,15 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
     let fieldConfig = config.fields[fieldKey]
     
     // 处理 customer_id -> customer 映射
+    // 优先使用 customer_id 的配置（如果存在），否则回退到 customer
     if (fieldKey === 'customer_id') {
-      fieldConfig = config.fields['customer']
-      if (fieldConfig) {
+      if (config.fields['customer_id']) {
+        // 如果 customer_id 配置存在，直接使用它
+        fieldConfig = config.fields['customer_id']
+        actualFieldKey = 'customer_id'
+      } else if (config.fields['customer']) {
+        // 否则回退到 customer 配置
+        fieldConfig = config.fields['customer']
         actualFieldKey = 'customer'
       }
     }
