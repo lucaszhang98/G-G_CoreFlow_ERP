@@ -93,22 +93,23 @@ export async function PUT(
       updated_at: new Date(),
     }
     
-    // 只在用户ID存在且有效时才设置 updated_by
-    if (session.user.id) {
+    // 只在用户ID存在且非空时才设置 updated_by
+    // session.user.id 是字符串，需要转换为 BigInt，但要确保不是空字符串
+    if (session.user.id && session.user.id.trim() !== '') {
       try {
         const userId = BigInt(session.user.id)
-        // 验证用户是否存在
-        const userExists = await prisma.users.findUnique({
-          where: { id: userId },
-          select: { id: true },
-        })
-        if (userExists) {
+        // 确保转换后的ID大于0（数据库中的ID都是正数）
+        if (userId > 0n) {
           updateData.updated_by = userId
+        } else {
+          console.warn('[Order Detail Update] Invalid user ID (must be > 0):', session.user.id)
         }
       } catch (error) {
-        // 如果用户ID无效或用户不存在，跳过 updated_by 字段
-        console.warn('[Order Detail Update] Invalid or non-existent user ID:', session.user.id)
+        // 如果转换失败（如非数字字符串），记录警告但不中断操作
+        console.warn('[Order Detail Update] Failed to convert user ID to BigInt:', session.user.id, error)
       }
+    } else {
+      console.warn('[Order Detail Update] User ID is empty or missing')
     }
 
     // 移除 undefined 值
