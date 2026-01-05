@@ -93,23 +93,16 @@ export async function PUT(
       updated_at: new Date(),
     }
     
-    // 只在用户ID存在且非空时才设置 updated_by
-    // session.user.id 是字符串，需要转换为 BigInt，但要确保不是空字符串
+    // 设置 updated_by：确保 session.user.id 非空且可转换为有效的 BigInt
     if (session.user.id && session.user.id.trim() !== '') {
       try {
         const userId = BigInt(session.user.id)
-        // 确保转换后的ID大于0（数据库中的ID都是正数）
         if (userId > 0n) {
           updateData.updated_by = userId
-        } else {
-          console.warn('[Order Detail Update] Invalid user ID (must be > 0):', session.user.id)
         }
       } catch (error) {
-        // 如果转换失败（如非数字字符串），记录警告但不中断操作
-        console.warn('[Order Detail Update] Failed to convert user ID to BigInt:', session.user.id, error)
+        // 转换失败时跳过，不影响其他字段的更新
       }
-    } else {
-      console.warn('[Order Detail Update] User ID is empty or missing')
     }
 
     // 移除 undefined 值
