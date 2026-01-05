@@ -10,13 +10,22 @@ import { EntityTable } from "@/components/crud/entity-table"
 import { pickupManagementConfig } from "@/lib/crud/configs/pickup-management"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw, Copy } from "lucide-react"
 import type { FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 export function PickupManagementClient() {
   const [isInitializing, setIsInitializing] = React.useState(false)
   const [hasInitialized, setHasInitialized] = React.useState(false)
   const [showInitButton, setShowInitButton] = React.useState(false)
+  const [selectedRows, setSelectedRows] = React.useState<any[]>([])
 
   // 检查是否需要初始化
   React.useEffect(() => {
@@ -106,6 +115,90 @@ export function PickupManagementClient() {
     }
   }, [])
 
+  // 复制柜号功能
+  const handleCopyContainerNumbers = React.useCallback((format: 'line' | 'comma' | 'space') => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要复制的记录')
+      return
+    }
+
+    // 提取所有柜号
+    const containerNumbers = selectedRows
+      .map((row: any) => row.container_number)
+      .filter(Boolean) // 过滤掉空值
+
+    if (containerNumbers.length === 0) {
+      toast.error('选中的记录中没有柜号')
+      return
+    }
+
+    // 根据格式拼接
+    let textToCopy = ''
+    switch (format) {
+      case 'line':
+        textToCopy = containerNumbers.join('\n')
+        break
+      case 'comma':
+        textToCopy = containerNumbers.join(', ')
+        break
+      case 'space':
+        textToCopy = containerNumbers.join(' ')
+        break
+    }
+
+    // 复制到剪贴板
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        toast.success(`已复制 ${containerNumbers.length} 个柜号到剪贴板`)
+      })
+      .catch((error) => {
+        console.error('复制失败:', error)
+        toast.error('复制失败，请重试')
+      })
+  }, [selectedRows])
+
+  // 自定义工具栏按钮
+  const customToolbarButtons = React.useMemo(() => {
+    if (selectedRows.length === 0) return null
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <Copy className="h-4 w-4" />
+            复制柜号 ({selectedRows.length})
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuLabel>选择复制格式</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => handleCopyContainerNumbers('line')}>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">换行分隔</span>
+              <span className="text-xs text-muted-foreground">每个柜号一行</span>
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleCopyContainerNumbers('comma')}>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">逗号分隔</span>
+              <span className="text-xs text-muted-foreground">A, B, C</span>
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleCopyContainerNumbers('space')}>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">空格分隔</span>
+              <span className="text-xs text-muted-foreground">A B C</span>
+            </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }, [selectedRows.length, handleCopyContainerNumbers])
+
   // 如果已经初始化或正在初始化，直接显示表格
   if (hasInitialized || !showInitButton) {
     return (
@@ -118,6 +211,8 @@ export function PickupManagementClient() {
         customActions={{
           onView: null, // 禁用查看详情功能
         }}
+        customToolbarButtons={customToolbarButtons}
+        onRowSelectionChange={setSelectedRows}
       />
     )
   }

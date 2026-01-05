@@ -132,6 +132,7 @@ interface EntityTableProps<T = any> {
     enabled: boolean // 是否启用批量导入
     onImport: () => void // 导入按钮点击回调
   } // 批量导入配置
+  onRowSelectionChange?: (rows: T[]) => void // 行选择变化回调
 }
 
 export function EntityTable<T = any>({ 
@@ -242,6 +243,11 @@ export function EntityTable<T = any>({
   const [batchEditDialogOpen, setBatchEditDialogOpen] = React.useState(false)
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = React.useState(false)
   const [batchEditValues, setBatchEditValues] = React.useState<Record<string, any>>({})
+  
+  // 当选中行变化时，通知父组件
+  React.useEffect(() => {
+    onRowSelectionChange?.(selectedRows)
+  }, [selectedRows, onRowSelectionChange])
   
   // 批量编辑字段更新处理函数（使用函数式更新，避免闭包问题）
   const handleBatchEditValueChange = React.useCallback((fieldKey: string, value: any) => {
