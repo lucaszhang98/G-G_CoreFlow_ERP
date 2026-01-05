@@ -43,6 +43,16 @@ export const orderConfig: EntityConfig = {
         valueField: 'id',
       },
     },
+    customer_id: {
+      key: 'customer_id',
+      label: '客户代码',
+      type: 'relation',
+      relation: {
+        model: 'customers',
+        displayField: 'code',
+        valueField: 'id',
+      },
+    },
     // user_id 改为显示负责人名称
     user_id: {
       key: 'user_id',
