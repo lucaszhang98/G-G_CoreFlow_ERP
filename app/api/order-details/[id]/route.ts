@@ -90,13 +90,25 @@ export async function PUT(
       volume_percentage: calculatedVolumePercentage ? parseFloat(calculatedVolumePercentage.toFixed(2)) : null, // 自动计算，不允许用户修改
       notes: notes !== undefined ? notes : undefined,
       po: po !== undefined ? (po || null) : undefined, // PO 字段
-      updated_by: session.user.id ? BigInt(session.user.id) : null,
       updated_at: new Date(),
     }
     
-    // 处理 null 值：将 null 转换为 undefined，这样 Prisma 会忽略它们
-    if (updateData.updated_by === null) {
-      updateData.updated_by = undefined
+    // 只在用户ID存在且有效时才设置 updated_by
+    if (session.user.id) {
+      try {
+        const userId = BigInt(session.user.id)
+        // 验证用户是否存在
+        const userExists = await prisma.users.findUnique({
+          where: { id: userId },
+          select: { id: true },
+        })
+        if (userExists) {
+          updateData.updated_by = userId
+        }
+      } catch (error) {
+        // 如果用户ID无效或用户不存在，跳过 updated_by 字段
+        console.warn('[Order Detail Update] Invalid or non-existent user ID:', session.user.id)
+      }
     }
 
     // 移除 undefined 值
