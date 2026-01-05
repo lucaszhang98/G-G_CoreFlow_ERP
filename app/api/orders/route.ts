@@ -12,14 +12,14 @@ export async function POST(request: NextRequest) {
   // 1. 使用通用 Handler 创建订单
   const response = await createCreateHandler(orderConfig)(request)
   
-  // 2. 如果创建成功且 operation_mode = 'warehouse'，自动创建 inbound_receipt
+  // 2. 如果创建成功且 operation_mode = 'unload'（拆柜），自动创建 inbound_receipt
   if (response.status === 200 || response.status === 201) {
     try {
       const responseData = await response.json()
       const orderId = responseData.data?.order_id
       const operationMode = responseData.data?.operation_mode
       
-      if (orderId && operationMode === 'warehouse') {
+      if (orderId && operationMode === 'unload') {
         const session = await auth()
         const userId = session?.user?.id ? BigInt(session.user.id) : undefined
         

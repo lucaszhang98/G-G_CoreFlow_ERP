@@ -47,12 +47,12 @@ export async function syncInboundReceiptForOrder(
       }
     }
 
-    // 2. 检查 operation_mode 是否为 warehouse
-    if (order.operation_mode !== 'warehouse') {
+    // 2. 检查 operation_mode 是否为 unload（拆柜）
+    if (order.operation_mode !== 'unload') {
       return {
         success: true,
         created: false,
-        message: `订单 ${orderId} 的 operation_mode 不是 warehouse，无需创建入库管理记录`,
+        message: `订单 ${orderId} 的 operation_mode 不是 unload，无需创建入库管理记录`,
       }
     }
 
@@ -156,7 +156,7 @@ export async function syncInboundReceiptsForOrders(
 
 /**
  * 同步所有缺失的入库管理记录
- * 查找所有 operation_mode = 'warehouse' 但没有 inbound_receipt 的订单
+ * 查找所有 operation_mode = 'unload'（拆柜）但没有 inbound_receipt 的订单
  * 
  * @param userId 创建用户ID（可选）
  * @returns 同步结果统计
@@ -174,7 +174,7 @@ export async function syncAllMissingInboundReceipts(
     // 查找所有需要同步的订单
     const ordersToSync = await prisma.orders.findMany({
       where: {
-        operation_mode: 'warehouse',
+        operation_mode: 'unload',
         inbound_receipt: null,
       },
       select: {

@@ -255,8 +255,8 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
           },
         })
 
-        // 如果 operation_mode = 'warehouse'，自动创建入库管理记录
-        if (firstRow.operation_mode === 'warehouse') {
+        // 如果 operation_mode = 'unload'（拆柜），自动创建入库管理记录
+        if (firstRow.operation_mode === 'unload') {
           // 获取默认仓库
           const defaultWarehouse = await tx.warehouses.findFirst({
             select: { warehouse_id: true },
