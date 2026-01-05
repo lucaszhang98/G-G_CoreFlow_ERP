@@ -829,8 +829,8 @@ export function DataTable<TData, TValue>({
                           return ''
                         }
                         
-                        // 处理右键复制
-                        const handleContextMenu = async (e: React.MouseEvent<HTMLTableCellElement>) => {
+                        // 处理右键复制（使用同步方法确保在用户交互上下文中）
+                        const handleContextMenu = (e: React.MouseEvent<HTMLTableCellElement>) => {
                           // 如果是操作列或复选框列，不显示复制菜单
                           if (isActionsCell || isSelectCell) {
                             return
@@ -861,41 +861,23 @@ export function DataTable<TData, TValue>({
                             return
                           }
                           
-                          // 定义回退复制方法
-                          const fallbackCopy = () => {
-                            const textarea = document.createElement('textarea')
-                            textarea.value = textToCopy
-                            textarea.style.position = 'fixed'
-                            textarea.style.left = '-999999px'
-                            textarea.style.top = '-999999px'
-                            document.body.appendChild(textarea)
-                            textarea.focus()
-                            textarea.select()
-                            
-                            let success = false
-                            try {
-                              success = document.execCommand('copy')
-                            } finally {
-                              document.body.removeChild(textarea)
-                            }
-                            return success
-                          }
+                          // 使用传统的同步复制方法（在右键上下文中更可靠）
+                          const textarea = document.createElement('textarea')
+                          textarea.value = textToCopy
+                          textarea.style.position = 'fixed'
+                          textarea.style.left = '-999999px'
+                          textarea.style.top = '-999999px'
+                          document.body.appendChild(textarea)
+                          textarea.focus()
+                          textarea.select()
                           
                           let copySuccess = false
-                          
-                          // 尝试使用现代 Clipboard API
-                          if (navigator.clipboard && navigator.clipboard.writeText) {
-                            try {
-                              await navigator.clipboard.writeText(textToCopy)
-                              copySuccess = true
-                            } catch (clipboardError) {
-                              // Clipboard API 失败（如权限被拒绝），静默失败并尝试回退方法
-                              console.log('Clipboard API 不可用，使用回退方法')
-                              copySuccess = fallbackCopy()
-                            }
-                          } else {
-                            // Clipboard API 不支持，直接使用回退方法
-                            copySuccess = fallbackCopy()
+                          try {
+                            copySuccess = document.execCommand('copy')
+                          } catch (error) {
+                            console.error('复制失败:', error)
+                          } finally {
+                            document.body.removeChild(textarea)
                           }
                           
                           // 根据复制结果显示提示
