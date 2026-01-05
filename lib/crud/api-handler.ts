@@ -1161,7 +1161,7 @@ export function createUpdateHandler(config: EntityConfig) {
       // 获取主键字段名（默认为 'id'）
       const idField = config.idField || 'id'
 
-      // 处理 BigInt 字段和 boolean 字段
+      // 处理 BigInt 字段、boolean 字段和日期字段
       const processedData: any = {}
       for (const [key, value] of Object.entries(submitData as Record<string, any>)) {
         const fieldConfig = config.fields[key]
@@ -1172,6 +1172,42 @@ export function createUpdateHandler(config: EntityConfig) {
             processedData[key] = Boolean(value)
           }
           continue // 跳过后续处理
+        }
+        
+        // 处理日期字段：将字符串转换为 Date 对象
+        if (fieldConfig?.type === 'date' && typeof value === 'string' && value) {
+          // 日期字符串格式：YYYY-MM-DD，转换为 Date 对象（UTC）
+          const [year, month, day] = value.split('-').map(Number)
+          if (year && month && day) {
+            processedData[key] = new Date(Date.UTC(year, month - 1, day))
+          } else {
+            processedData[key] = value
+          }
+          continue
+        }
+        
+        // 处理日期时间字段：将字符串转换为 Date 对象
+        if (fieldConfig?.type === 'datetime' && typeof value === 'string' && value) {
+          // 日期时间字符串，手动解析为 Date（不进行时区转换）
+          // 格式：YYYY-MM-DDTHH:mm 或 YYYY-MM-DDTHH:mm:ss
+          const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{3}))?/)
+          if (match) {
+            const [, year, month, day, hours, minutes, seconds = '0', milliseconds = '0'] = match
+            // 使用 UTC 方法创建 Date 对象，这样就不会进行时区转换
+            processedData[key] = new Date(Date.UTC(
+              parseInt(year, 10),
+              parseInt(month, 10) - 1,
+              parseInt(day, 10),
+              parseInt(hours, 10),
+              parseInt(minutes, 10),
+              parseInt(seconds, 10),
+              parseInt(milliseconds, 10)
+            ))
+          } else {
+            // 如果不是预期格式，尝试直接解析（可能会进行时区转换，但这是后备方案）
+            processedData[key] = new Date(value)
+          }
+          continue
         }
         
         if (fieldConfig?.relation) {
