@@ -25,7 +25,7 @@ const styles = StyleSheet.create({
     paddingTop: 5,
     paddingBottom: 5,
     paddingLeft: 6,
-    paddingRight: 10, // 增加右边距，防止内容被切掉
+    paddingRight: 14, // 进一步增加右边距，确保内容不被切掉
     position: 'relative',
   },
   row1: {
@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 5,
     left: 6,
-    right: 10, // 与 page paddingRight 一致
+    right: 14, // 与 page paddingRight 一致
     height: 22,
   },
   row2: {
@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 30,
     left: 6,
-    right: 10, // 与 page paddingRight 一致
+    right: 14, // 与 page paddingRight 一致
     height: 20,
   },
   row3: {
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     top: 53,
     bottom: 18,
     left: 6,
-    right: 10, // 与 page paddingRight 一致
+    right: 14, // 与 page paddingRight 一致
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'stretch',
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 5,
     left: 6,
-    right: 10, // 与 page paddingRight 一致
+    right: 14, // 与 page paddingRight 一致
     height: 10,
     display: 'flex',
     flexDirection: 'row',
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     lineHeight: 1,
-    flexShrink: 1, // 允许收缩
+    flexShrink: 1,
   },
   dateContainer: {
     display: 'flex',
@@ -115,16 +115,17 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     gap: 2,
     lineHeight: 1,
-    flexShrink: 1, // 允许收缩，防止超出
+    flexShrink: 1,
   },
   date: {
-    fontSize: 9, // 稍微减小，确保不超出
+    fontSize: 8, // 再稍微减小一点
     lineHeight: 1,
   },
   pageNumber: {
-    fontSize: 7, // 稍微减小，确保不超出
+    fontSize: 7,
     color: '#666',
     lineHeight: 1,
+    marginLeft: 1, // 添加一点左边距，确保与日期有间隔
   },
 })
 

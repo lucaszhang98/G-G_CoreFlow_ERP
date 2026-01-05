@@ -90,102 +90,150 @@ try {
 const PAGE_WIDTH = PageSizes.A4_LANDSCAPE.width // 297mm
 const PAGE_HEIGHT = PageSizes.A4_LANDSCAPE.height // 210mm
 
+// 固定高度分配（单位：mm，转换为点）
+const TITLE_HEIGHT = 8 // 标题区域高度
+const HEADER_HEIGHT = 10 // 主数据区域高度
+const PADDING = 12 // 页面padding
+const AVAILABLE_HEIGHT = PAGE_HEIGHT - (PADDING * 2) - TITLE_HEIGHT - HEADER_HEIGHT // 表格可用高度
+
 /**
- * 创建固定样式（不再动态缩放）
- * 保持字体大小不变，允许分页
+ * 根据数据行数计算缩放比例，确保内容在一页内显示
+ * 强制条件：无论有多少行，都必须在一页内显示，不能分页
+ * 注意：整体放大50%后，行高计算也需要相应调整
  */
-const styles = StyleSheet.create({
-  page: {
-    width: PAGE_WIDTH,
-    height: PAGE_HEIGHT,
-    paddingTop: 0, // 上下不留白
-    paddingBottom: 0,
-    paddingLeft: 12,
-    paddingRight: 12,
-    fontFamily: fontRegistered ? 'NotoSansSC' : 'Helvetica',
-  },
-  title: {
-    fontSize: 24, // 固定字体大小
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  headerSection: {
-    marginBottom: 15,
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    flexWrap: 'nowrap',
-    alignItems: 'flex-start',
-  },
-  headerItem: {
-    flex: 1,
-    marginRight: 12,
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  headerLabel: {
-    fontSize: 13.5, // 固定字体大小
-    color: '#666',
-    marginBottom: 3,
-  },
-  headerValue: {
-    fontSize: 15, // 固定字体大小
-    fontWeight: 'bold',
-    wordBreak: 'keep-all',
-    overflow: 'hidden',
-  },
-  table: {
-    marginTop: 7.5,
-    borderWidth: 1,
-    borderColor: '#000',
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f0f0f0',
-    borderBottomWidth: 1,
-    borderBottomColor: '#000',
-  },
-  tableHeaderCell: {
-    padding: 12, // 固定padding
-    fontSize: 33, // 固定字体大小
-    fontWeight: 'bold',
-    borderRightWidth: 1,
-    borderRightColor: '#000',
-    textAlign: 'center',
-    lineHeight: 2.25, // 固定行高
-    overflow: 'hidden',
-    wordBreak: 'keep-all',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-  },
-  tableCell: {
-    padding: 12, // 固定padding
-    fontSize: 33, // 固定字体大小
-    borderRightWidth: 1,
-    borderRightColor: '#ccc',
-    textAlign: 'center',
-    lineHeight: 2.25, // 固定行高
-    overflow: 'hidden',
-    wordBreak: 'keep-all',
-  },
-  // 列宽定义（7列）
-  col1: { width: '8%' },  // 性质
-  col2: { width: '18%' }, // 仓点
-  col3: { width: '10%' }, // 数量
-  col4: { width: '16%' }, // 备注
-  col5: { width: '16%' }, // 实际板数
-  col6: { width: '16%' }, // 库位
-  col7: { width: '16%' }, // 备注
-})
+function calculateScaleFactor(rowCount: number): number {
+  // 基础行高（单位：点/毫米）- 整体放大50%后的计算
+  // padding: 12点（放大50%），字体高度: 33点（放大50%），lineHeight: 2.25（放大50%），border: 1点
+  // 实际行高 = padding * 2 + 字体高度 * lineHeight + border
+  const baseRowHeight = (12 * 2) + (33 * 2.25) + 1 // 约 108 点（放大50%后）
+  const headerRowHeight = (12 * 2) + (33 * 2.25) + 1 // 表头行高
+  const totalTableHeight = headerRowHeight + (rowCount * baseRowHeight)
+  
+  // 强制条件：如果表格高度超过可用高度，必须计算缩放比例，确保在一页内
+  if (totalTableHeight > AVAILABLE_HEIGHT) {
+    const scaleFactor = AVAILABLE_HEIGHT / totalTableHeight
+    // 最小缩放比例限制在0.4，确保即使数据很多也能在一页内显示（从0.6降低到0.4）
+    // 如果数据太多，可以缩小到0.4，虽然字体会小一些，但能保证在一页内
+    return Math.max(0.4, scaleFactor * 0.95) // 留5%余量，确保不会溢出
+  }
+  
+  return 1.0 // 不需要缩放
+}
+
+/**
+ * 创建动态样式，根据行数自动调整
+ * 注意：返回普通对象而不是 StyleSheet，因为 StyleSheet.create 不能动态调用
+ */
+function createStyles(rowCount: number) {
+  const scaleFactor = calculateScaleFactor(rowCount)
+  
+  // 基础字体大小（整体放大50%）
+  const baseTitleFontSize = 16 * 1.5 // 24
+  const baseHeaderLabelFontSize = 9 * 1.5 // 13.5
+  const baseHeaderValueFontSize = 10 * 1.5 // 15
+  const baseTableFontSize = 22 * 1.5 // 33，整体放大50%
+  
+  // 根据缩放比例调整，但确保最小字体不会太小
+  // 注意：为了强制在一页内显示，当数据很多时，字体可能会缩小到最小值
+  const titleFontSize = Math.max(14, baseTitleFontSize * scaleFactor) // 最小14点（从18降低，确保能在一页内）
+  const headerLabelFontSize = Math.max(8, baseHeaderLabelFontSize * scaleFactor) // 最小8点（从10降低）
+  const headerValueFontSize = Math.max(10, baseHeaderValueFontSize * scaleFactor) // 最小10点（从12降低）
+  const tableFontSize = Math.max(16, baseTableFontSize * scaleFactor) // 最小16点（从21降低），确保即使数据很多也能在一页内
+  const cellPadding = Math.max(4, 12 * scaleFactor) // 最小4点padding（从6降低）
+  const lineHeight = Math.max(1.3, 2.25 * scaleFactor) // 最小1.3行高（从1.5降低）
+  
+  // 返回普通样式对象（不使用 StyleSheet.create，因为需要动态生成）
+  return {
+    page: {
+      width: PAGE_WIDTH,
+      height: PAGE_HEIGHT,
+      padding: PADDING,
+      fontFamily: fontRegistered ? 'NotoSansSC' : 'Helvetica', // 如果字体未注册，使用默认字体
+    },
+    title: {
+      fontSize: titleFontSize,
+      fontWeight: 'bold',
+      textAlign: 'center' as const,
+      marginBottom: 12 * scaleFactor, // 从8增加到12，放大50%
+    },
+    headerSection: {
+      marginBottom: 15 * scaleFactor, // 从10增加到15，放大50%
+      display: 'flex' as const,
+      flexDirection: 'row' as const,
+      justifyContent: 'space-between' as const,
+      flexWrap: 'nowrap' as const,
+      alignItems: 'flex-start' as const,
+    },
+    headerItem: {
+      flex: 1,
+      marginRight: 12 * scaleFactor, // 从8增加到12，放大50%
+      display: 'flex' as const,
+      flexDirection: 'column' as const,
+    },
+    headerLabel: {
+      fontSize: headerLabelFontSize,
+      color: '#666',
+      marginBottom: 3 * scaleFactor, // 从2增加到3，放大50%
+    },
+    headerValue: {
+      fontSize: headerValueFontSize,
+      fontWeight: 'bold' as const,
+      wordBreak: 'keep-all' as const,
+      overflow: 'hidden' as const,
+    },
+    table: {
+      marginTop: 7.5 * scaleFactor, // 从5增加到7.5，放大50%
+      borderWidth: 1,
+      borderColor: '#000',
+    },
+    tableHeader: {
+      flexDirection: 'row' as const,
+      backgroundColor: '#f0f0f0',
+      borderBottomWidth: 1,
+      borderBottomColor: '#000',
+    },
+    tableHeaderCell: {
+      padding: cellPadding,
+      fontSize: tableFontSize,
+      fontWeight: 'bold' as const,
+      borderRightWidth: 1,
+      borderRightColor: '#000',
+      textAlign: 'center' as const,
+      lineHeight: lineHeight,
+      overflow: 'hidden' as const,
+      wordBreak: 'keep-all' as const,
+    },
+    tableRow: {
+      flexDirection: 'row' as const,
+      borderBottomWidth: 1,
+      borderBottomColor: '#ccc',
+    },
+    tableCell: {
+      padding: cellPadding,
+      fontSize: tableFontSize,
+      borderRightWidth: 1,
+      borderRightColor: '#ccc',
+      textAlign: 'center' as const,
+      lineHeight: lineHeight,
+      overflow: 'hidden' as const,
+      wordBreak: 'keep-all' as const,
+    },
+    // 列宽定义（7列）- 调整仓点列更宽，确保所有内容都能显示
+    col1: { width: '8%' },  // 性质：从10%减少到8%
+    col2: { width: '18%' }, // 仓点：从12%增加到18%，确保所有内容都能显示
+    col3: { width: '10%' }, // 数量：从12%减少到10%
+    col4: { width: '16%' }, // 备注：保持16%
+    col5: { width: '16%' }, // 实际板数：保持16%
+    col6: { width: '16%' }, // 库位：保持16%
+    col7: { width: '16%' }, // 备注：从18%减少到16%
+  }
+}
 
 /**
  * 拆柜单据 PDF 文档
  */
 export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
+  // 根据数据行数动态创建样式
   const rowCount = data.orderDetails.length
   console.log('[UnloadSheet PDF Component] 渲染文档:', {
     rowCount,
@@ -194,14 +242,16 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
     fontError: fontError ? { message: fontError.message } : null,
   })
   
+  const styles = createStyles(rowCount)
+  
   return (
     <Document>
-      {/* 使用标准A4横向尺寸，允许分页，至少一页 */}
+      {/* 使用标准A4横向尺寸，强制只生成一页，不能分页 */}
       <Page 
         size="A4" 
         orientation="landscape" 
         style={styles.page}
-        wrap={true} // 允许自动换页
+        wrap={false} // 禁用自动换页，强制在一页内
       >
         {/* 标题 */}
         <Text style={styles.title}>拆柜单据</Text>
