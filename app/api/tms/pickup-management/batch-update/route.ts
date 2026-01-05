@@ -35,6 +35,9 @@ export async function POST(request: NextRequest) {
     if (updates.status !== undefined) {
       pickupUpdateData.status = updates.status
     }
+    if (updates.current_location !== undefined) {
+      pickupUpdateData.current_location = updates.current_location || null
+    }
     if (updates.notes !== undefined) {
       pickupUpdateData.notes = updates.notes
     }
@@ -50,26 +53,66 @@ export async function POST(request: NextRequest) {
         ? BigInt(updates.carrier_id) 
         : null
     }
-    // 日期字段
+    if (updates.container_type !== undefined) {
+      orderUpdateData.container_type = updates.container_type || null
+    }
+    // 日期字段 - 使用UTC处理避免时区转换
     if (updates.lfd_date !== undefined) {
-      orderUpdateData.lfd_date = updates.lfd_date 
-        ? new Date(updates.lfd_date) 
-        : null
+      if (updates.lfd_date && typeof updates.lfd_date === 'string') {
+        // YYYY-MM-DD 格式，转换为 UTC Date
+        const [year, month, day] = updates.lfd_date.split('-').map(Number)
+        if (year && month && day) {
+          orderUpdateData.lfd_date = new Date(Date.UTC(year, month - 1, day))
+        } else {
+          orderUpdateData.lfd_date = null
+        }
+      } else {
+        orderUpdateData.lfd_date = null
+      }
     }
     if (updates.pickup_date !== undefined) {
-      orderUpdateData.pickup_date = updates.pickup_date 
-        ? new Date(updates.pickup_date) 
-        : null
+      if (updates.pickup_date && typeof updates.pickup_date === 'string') {
+        // YYYY-MM-DDTHH:mm 格式，解析为 UTC 时间戳
+        const match = updates.pickup_date.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+        if (match) {
+          const [, year, month, day, hours, minutes] = match
+          orderUpdateData.pickup_date = new Date(Date.UTC(
+            parseInt(year, 10),
+            parseInt(month, 10) - 1,
+            parseInt(day, 10),
+            parseInt(hours, 10),
+            parseInt(minutes, 10)
+          ))
+        } else {
+          orderUpdateData.pickup_date = null
+        }
+      } else {
+        orderUpdateData.pickup_date = null
+      }
     }
     if (updates.ready_date !== undefined) {
-      orderUpdateData.ready_date = updates.ready_date 
-        ? new Date(updates.ready_date) 
-        : null
+      if (updates.ready_date && typeof updates.ready_date === 'string') {
+        const [year, month, day] = updates.ready_date.split('-').map(Number)
+        if (year && month && day) {
+          orderUpdateData.ready_date = new Date(Date.UTC(year, month - 1, day))
+        } else {
+          orderUpdateData.ready_date = null
+        }
+      } else {
+        orderUpdateData.ready_date = null
+      }
     }
     if (updates.return_deadline !== undefined) {
-      orderUpdateData.return_deadline = updates.return_deadline 
-        ? new Date(updates.return_deadline) 
-        : null
+      if (updates.return_deadline && typeof updates.return_deadline === 'string') {
+        const [year, month, day] = updates.return_deadline.split('-').map(Number)
+        if (year && month && day) {
+          orderUpdateData.return_deadline = new Date(Date.UTC(year, month - 1, day))
+        } else {
+          orderUpdateData.return_deadline = null
+        }
+      } else {
+        orderUpdateData.return_deadline = null
+      }
     }
 
     // 转换为 BigInt
