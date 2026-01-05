@@ -25,6 +25,104 @@ import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 import { LocationSelect } from "@/components/ui/location-select"
 
+// 关系字段选择组件（用于 customers, users, carriers 等）
+function RelationSelectField({
+  fieldKey,
+  actualFieldKey,
+  fieldConfig,
+  fieldValue,
+  setValue,
+  errors,
+}: {
+  fieldKey: string
+  actualFieldKey: string
+  fieldConfig: FieldConfig
+  fieldValue: any
+  setValue: (name: string, value: any, options?: any) => void
+  errors: any
+}) {
+  const [relationOptions, setRelationOptions] = React.useState<Array<{ label: string; value: string }>>([])
+  const [loadingOptions, setLoadingOptions] = React.useState(false)
+  
+  React.useEffect(() => {
+    const loadOptions = async () => {
+      if (!fieldConfig.relation) return
+      
+      setLoadingOptions(true)
+      try {
+        const modelName = fieldConfig.relation.model
+        const apiPath = `/api/${modelName}?unlimited=true`
+        
+        const response = await fetch(apiPath)
+        if (!response.ok) {
+          throw new Error(`加载${fieldConfig.label}选项失败`)
+        }
+        
+        const data = await response.json()
+        let items: any[] = []
+        if (Array.isArray(data)) {
+          items = data
+        } else if (data.data && Array.isArray(data.data)) {
+          items = data.data
+        } else if (data.items && Array.isArray(data.items)) {
+          items = data.items
+        }
+        
+        const displayField = fieldConfig.relation.displayField || 'name'
+        const valueField = fieldConfig.relation.valueField || 'id'
+        
+        const options = items
+          .filter((item: any) => {
+            const val = item[valueField] || item.id
+            return val != null && val !== ''
+          })
+          .map((item: any) => {
+            const label = item[displayField] || String(item[valueField] || '')
+            const value = String(item[valueField] || item.id || '')
+            return { label, value }
+          })
+        
+        setRelationOptions(options)
+      } catch (error) {
+        console.error(`加载${fieldConfig.label}选项失败:`, error)
+        toast.error(`加载${fieldConfig.label}选项失败`)
+      } finally {
+        setLoadingOptions(false)
+      }
+    }
+    
+    loadOptions()
+  }, [fieldConfig.relation, fieldConfig.label])
+  
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={fieldKey}>
+        {fieldConfig.label}
+        {fieldConfig.required && <span className="text-red-500">*</span>}
+      </Label>
+      <Select
+        value={fieldValue || ''}
+        onValueChange={(value) => setValue(fieldKey, value)}
+        disabled={loadingOptions}
+      >
+        <SelectTrigger id={fieldKey}>
+          <SelectValue placeholder={loadingOptions ? '加载中...' : (fieldConfig.placeholder || `请选择${fieldConfig.label}`)} />
+        </SelectTrigger>
+        <SelectContent>
+          {relationOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {errors[fieldKey] && (
+        <p className="text-sm text-red-500">{(errors[fieldKey] as any)?.message}</p>
+      )}
+    </div>
+  )
+}
+
 interface EntityFormProps<T = any> {
   data?: T | null
   config: EntityConfig
@@ -162,6 +260,14 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
     let actualFieldKey = fieldKey
     let fieldConfig = config.fields[fieldKey]
     
+    // 处理 customer_id -> customer 映射
+    if (fieldKey === 'customer_id') {
+      fieldConfig = config.fields['customer']
+      if (fieldConfig) {
+        actualFieldKey = 'customer'
+      }
+    }
+    
     // 强制映射 location_id 字段（无论 fieldConfig 是否存在，与批量编辑逻辑一致）
     if (fieldKey === 'location_id') {
       fieldConfig = config.fields['destination_location']
@@ -182,10 +288,14 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
 
     // 对于location类型字段，优先读取原始字段名（location_id）的值
     // 注意：fieldKey 是 formFields 中的字段名（如 location_id），actualFieldKey 是映射后的字段名（如 destination_location）
+    // 对于 relation 类型字段（如 customer_id），也需要使用 fieldKey 来读取值
     let fieldValue: any = null
     if (fieldConfig.type === 'location') {
       // 对于 location 类型字段，始终使用 fieldKey（formFields 中的字段名）来读取值
       // 因为 LocationSelect 的 onChange 会设置 fieldKey 的值
+      fieldValue = watch(fieldKey)
+    } else if (fieldConfig.type === 'relation' && fieldKey !== actualFieldKey) {
+      // 对于 relation 类型字段，如果 fieldKey 和 actualFieldKey 不同（如 customer_id vs customer），使用 fieldKey 读取值
       fieldValue = watch(fieldKey)
     } else {
       fieldValue = watch(actualFieldKey)
@@ -449,8 +559,18 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
             </div>
           )
         }
-        // 其他关联字段暂时跳过
-        return null
+        // 处理其他关联字段（如 customers, users, carriers 等）
+        // 使用 RelationSelectField 组件
+        // 注意：对于 customer_id 字段，需要使用 fieldKey（customer_id）来设置值，但使用 actualFieldKey（customer）来读取配置
+        return <RelationSelectField
+          key={fieldKey}
+          fieldKey={fieldKey}
+          actualFieldKey={actualFieldKey}
+          fieldConfig={fieldConfig}
+          fieldValue={watch(fieldKey)}
+          setValue={setValue}
+          errors={errors}
+        />
 
       case 'location':
         // 位置选择字段（使用 LocationSelect 组件）
