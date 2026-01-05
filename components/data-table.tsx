@@ -861,29 +861,45 @@ export function DataTable<TData, TValue>({
                             return
                           }
                           
-                          try {
-                            // 优先使用 Clipboard API
-                            if (navigator.clipboard && navigator.clipboard.writeText) {
-                              await navigator.clipboard.writeText(textToCopy)
-                            } else {
-                              // 回退到传统方法
-                              const textarea = document.createElement('textarea')
-                              textarea.value = textToCopy
-                              textarea.style.position = 'fixed'
-                              textarea.style.left = '-999999px'
-                              textarea.style.top = '-999999px'
-                              document.body.appendChild(textarea)
-                              textarea.focus()
-                              textarea.select()
-                              
-                              try {
-                                document.execCommand('copy')
-                              } finally {
-                                document.body.removeChild(textarea)
-                              }
-                            }
+                          // 定义回退复制方法
+                          const fallbackCopy = () => {
+                            const textarea = document.createElement('textarea')
+                            textarea.value = textToCopy
+                            textarea.style.position = 'fixed'
+                            textarea.style.left = '-999999px'
+                            textarea.style.top = '-999999px'
+                            document.body.appendChild(textarea)
+                            textarea.focus()
+                            textarea.select()
                             
-                            // 显示复制成功提示
+                            let success = false
+                            try {
+                              success = document.execCommand('copy')
+                            } finally {
+                              document.body.removeChild(textarea)
+                            }
+                            return success
+                          }
+                          
+                          let copySuccess = false
+                          
+                          // 尝试使用现代 Clipboard API
+                          if (navigator.clipboard && navigator.clipboard.writeText) {
+                            try {
+                              await navigator.clipboard.writeText(textToCopy)
+                              copySuccess = true
+                            } catch (clipboardError) {
+                              // Clipboard API 失败（如权限被拒绝），静默失败并尝试回退方法
+                              console.log('Clipboard API 不可用，使用回退方法')
+                              copySuccess = fallbackCopy()
+                            }
+                          } else {
+                            // Clipboard API 不支持，直接使用回退方法
+                            copySuccess = fallbackCopy()
+                          }
+                          
+                          // 根据复制结果显示提示
+                          if (copySuccess) {
                             setCopiedCellId(cell.id)
                             toast.success('已复制到剪贴板', {
                               duration: 1500,
@@ -893,37 +909,8 @@ export function DataTable<TData, TValue>({
                             setTimeout(() => {
                               setCopiedCellId(null)
                             }, 1500)
-                          } catch (error) {
-                            console.error('复制失败:', error)
-                            // 尝试最后的回退方案
-                            try {
-                              const textarea = document.createElement('textarea')
-                              textarea.value = textToCopy
-                              textarea.style.position = 'fixed'
-                              textarea.style.left = '-999999px'
-                              textarea.style.top = '-999999px'
-                              document.body.appendChild(textarea)
-                              textarea.focus()
-                              textarea.select()
-                              
-                              const success = document.execCommand('copy')
-                              document.body.removeChild(textarea)
-                              
-                              if (success) {
-                                setCopiedCellId(cell.id)
-                                toast.success('已复制到剪贴板', {
-                                  duration: 1500,
-                                })
-                                setTimeout(() => {
-                                  setCopiedCellId(null)
-                                }, 1500)
-                              } else {
-                                toast.error('复制失败，请手动选择文本复制')
-                              }
-                            } catch (fallbackError) {
-                              console.error('回退复制也失败:', fallbackError)
-                              toast.error('复制失败，请手动选择文本复制')
-                            }
+                          } else {
+                            toast.error('复制失败，请手动选择文本复制')
                           }
                         }
                         
