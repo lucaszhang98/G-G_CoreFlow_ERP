@@ -5,9 +5,14 @@ import { useRouter } from "next/navigation"
 import { EntityTable } from "@/components/crud/entity-table"
 import { inboundReceiptConfig } from "@/lib/crud/configs/inbound-receipts"
 import type { ClickableColumnConfig } from "@/lib/table/config"
+import { Button } from "@/components/ui/button"
+import { RefreshCw } from "lucide-react"
+import { toast } from "sonner"
 
 export function InboundReceiptTable() {
   const router = useRouter()
+  const [isSyncing, setIsSyncing] = React.useState(false)
+  const [refreshKey, setRefreshKey] = React.useState(0)
 
   // 可点击列配置：柜号列可点击跳转到入库管理详情
   const customClickableColumns: ClickableColumnConfig<any>[] = React.useMemo(() => [
@@ -171,11 +176,65 @@ export function InboundReceiptTable() {
     received_by: loadReceivedByOptions,
   }), [loadUnloadedByOptions, loadReceivedByOptions])
 
+  // 同步缺失的入库管理记录
+  const handleSyncMissingRecords = React.useCallback(async () => {
+    setIsSyncing(true)
+    try {
+      const response = await fetch('/api/admin/sync-inbound-receipts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '同步失败')
+      }
+
+      const result = await response.json()
+      
+      if (result.success) {
+        const created = result.data?.created || 0
+        if (created > 0) {
+          toast.success(`成功同步 ${created} 条记录`)
+          // 刷新表格
+          setRefreshKey(prev => prev + 1)
+        } else {
+          toast.info('没有需要同步的记录')
+        }
+      } else {
+        toast.error(result.message || '同步失败')
+      }
+    } catch (error: any) {
+      console.error('同步失败:', error)
+      toast.error(error.message || '同步失败，请重试')
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [])
+
+  // 自定义工具栏按钮
+  const customToolbarButtons = React.useMemo(() => (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleSyncMissingRecords}
+      disabled={isSyncing}
+      className="gap-2"
+    >
+      <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+      {isSyncing ? '同步中...' : '同步缺失记录'}
+    </Button>
+  ), [handleSyncMissingRecords, isSyncing])
+
   return (
     <EntityTable 
+      key={refreshKey}
       config={inboundReceiptConfig}
       customClickableColumns={customClickableColumns}
       fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}
+      customToolbarButtons={customToolbarButtons}
     />
   )
 }
