@@ -149,6 +149,7 @@ export function EntityTable<T = any>({
   expandableRows,
   customToolbarButtons,
   importConfig,
+  onRowSelectionChange,
 }: EntityTableProps<T>) {
   // 自动增强配置，生成 filterFields 和 advancedSearchFields（如果未配置）
   const enhancedConfig = React.useMemo(() => {
