@@ -829,8 +829,8 @@ export function DataTable<TData, TValue>({
                           return ''
                         }
                         
-                        // 处理右键复制（使用同步方法确保在用户交互上下文中）
-                        const handleContextMenu = (e: React.MouseEvent<HTMLTableCellElement>) => {
+                        // 处理右键复制
+                        const handleContextMenu = async (e: React.MouseEvent<HTMLTableCellElement>) => {
                           // 如果是操作列或复选框列，不显示复制菜单
                           if (isActionsCell || isSelectCell) {
                             return
@@ -861,27 +861,11 @@ export function DataTable<TData, TValue>({
                             return
                           }
                           
-                          // 使用传统的同步复制方法（在右键上下文中更可靠）
-                          const textarea = document.createElement('textarea')
-                          textarea.value = textToCopy
-                          textarea.style.position = 'fixed'
-                          textarea.style.left = '-999999px'
-                          textarea.style.top = '-999999px'
-                          document.body.appendChild(textarea)
-                          textarea.focus()
-                          textarea.select()
-                          
-                          let copySuccess = false
                           try {
-                            copySuccess = document.execCommand('copy')
-                          } catch (error) {
-                            console.error('复制失败:', error)
-                          } finally {
-                            document.body.removeChild(textarea)
-                          }
-                          
-                          // 根据复制结果显示提示
-                          if (copySuccess) {
+                            // 使用 Clipboard API 复制文本
+                            await navigator.clipboard.writeText(textToCopy)
+                            
+                            // 显示复制成功提示
                             setCopiedCellId(cell.id)
                             toast.success('已复制到剪贴板', {
                               duration: 1500,
@@ -891,7 +875,8 @@ export function DataTable<TData, TValue>({
                             setTimeout(() => {
                               setCopiedCellId(null)
                             }, 1500)
-                          } else {
+                          } catch (error) {
+                            console.error('复制失败:', error)
                             toast.error('复制失败，请手动选择文本复制')
                           }
                         }
