@@ -22,10 +22,10 @@ const styles = StyleSheet.create({
   page: {
     width: LABEL_WIDTH,
     height: LABEL_HEIGHT,
-    paddingTop: 5, // 顶部边距（增加美感）
-    paddingBottom: 5, // 底部边距（增加美感）
-    paddingLeft: 6, // 左侧边距（减少以给内容更多空间）
-    paddingRight: 6, // 右侧边距（减少以给内容更多空间）
+    paddingTop: 5,
+    paddingBottom: 5,
+    paddingLeft: 6,
+    paddingRight: 10, // 增加右边距，防止内容被切掉
     position: 'relative',
   },
   row1: {
@@ -37,10 +37,10 @@ const styles = StyleSheet.create({
     padding: 0,
     lineHeight: 1,
     position: 'absolute',
-    top: 5, // 顶部 padding
-    left: 6, // 左侧 padding（与 page paddingLeft 一致）
-    right: 6, // 右侧 padding（与 page paddingRight 一致）
-    height: 22, // 固定高度
+    top: 5,
+    left: 6,
+    right: 10, // 与 page paddingRight 一致
+    height: 22,
   },
   row2: {
     // 第二行：仓点（居中，更大更粗，与第一行有适当间距）
@@ -51,25 +51,25 @@ const styles = StyleSheet.create({
     padding: 0,
     lineHeight: 1,
     position: 'absolute',
-    top: 30, // 第一行位置 5 + 第一行高度 22 + 间距 3 = 30
-    left: 6, // 左侧 padding（与 page paddingLeft 一致）
-    right: 6, // 右侧 padding（与 page paddingRight 一致）
-    height: 20, // 固定高度
+    top: 30,
+    left: 6,
+    right: 10, // 与 page paddingRight 一致
+    height: 20,
   },
   row3: {
     // 第三行：条形码区域（与第二行和第四行有适当间距）
     position: 'absolute',
-    top: 53, // 第二行位置 30 + 第二行高度 20 + 间距 3 = 53
-    bottom: 18, // 第四行高度 10 + 底部 padding 5 + 间距 3 = 18
-    left: 6, // 左侧 padding（与 page paddingLeft 一致）
-    right: 6, // 右侧 padding（与 page paddingRight 一致）
+    top: 53,
+    bottom: 18,
+    left: 6,
+    right: 10, // 与 page paddingRight 一致
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'stretch', // 拉伸对齐，确保条形码填满宽度
-    justifyContent: 'flex-start', // 从顶部开始
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
     margin: 0,
     padding: 0,
-    overflow: 'hidden', // 隐藏溢出部分
+    overflow: 'hidden',
   },
   barcodeText: {
     fontSize: 8,
@@ -88,12 +88,12 @@ const styles = StyleSheet.create({
     objectFit: 'fill', // 使用 fill 而不是 contain，确保填满容器
   },
   row4: {
-    // 第四行：左侧客户代码，右侧预计拆柜日期和页码（与条形码有适当间距）
+    // 第四行：左侧客户代码，右侧预计拆柜日期和页码
     position: 'absolute',
-    bottom: 5, // 底部 padding
-    left: 6, // 左侧 padding（与 page paddingLeft 一致）
-    right: 6, // 右侧 padding（与 page paddingRight 一致）
-    height: 10, // 固定高度
+    bottom: 5,
+    left: 6,
+    right: 10, // 与 page paddingRight 一致
+    height: 10,
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -104,25 +104,25 @@ const styles = StyleSheet.create({
     lineHeight: 1,
   },
   customerCode: {
-    fontSize: 10, // 稍微增大
+    fontSize: 10,
     fontWeight: 'bold',
     lineHeight: 1,
+    flexShrink: 1, // 允许收缩
   },
   dateContainer: {
     display: 'flex',
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 2, // 减少间距，确保内容不超出
+    gap: 2,
     lineHeight: 1,
-    flexShrink: 0, // 防止收缩
+    flexShrink: 1, // 允许收缩，防止超出
   },
   date: {
-    fontSize: 10, // 稍微增大
+    fontSize: 9, // 稍微减小，确保不超出
     lineHeight: 1,
   },
   pageNumber: {
-    // 页码（在日期右侧）
-    fontSize: 8, // 稍微增大
+    fontSize: 7, // 稍微减小，确保不超出
     color: '#666',
     lineHeight: 1,
   },
