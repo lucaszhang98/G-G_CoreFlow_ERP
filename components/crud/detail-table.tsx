@@ -790,27 +790,49 @@ export function DetailTable({
                             )
                           }
                           return <td key={col} className="p-2 text-sm">{detail.delivery_nature === '亚马逊' ? 'AMZ' : (detail.delivery_nature || '-')}</td>
-                        case 'quantity':
-                          return <td key={col} className="p-2 text-sm">{formatNumber(detail.quantity)}</td>
-                        case 'volume':
-                          // 订单明细可以编辑体积，预约明细不允许编辑
-                          if (editingRowId === detailId && editingData && !appointmentId) {
-                            return (
-                              <td key={col} className="p-2 text-sm">
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  value={editingData.volume !== null && editingData.volume !== undefined ? editingData.volume : ''}
-                                  onChange={(e) => {
-                                    const value = e.target.value === '' ? null : parseFloat(e.target.value)
-                                    setEditingData({ ...editingData, volume: value })
-                                  }}
-                                  className="w-full"
-                                  placeholder="体积"
-                                />
-                              </td>
-                            )
-                          }
+                      case 'quantity':
+                        // 订单明细可以编辑数量，预约明细不允许编辑
+                        if (editingRowId === detailId && editingData && !appointmentId) {
+                          return (
+                            <td key={col} className="p-2 text-sm">
+                              <Input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={editingData.quantity || 1}
+                                onChange={(e) => {
+                                  const value = parseInt(e.target.value)
+                                  // 只允许正整数
+                                  if (value > 0 && Number.isInteger(value)) {
+                                    setEditingData({ ...editingData, quantity: value })
+                                  }
+                                }}
+                                className="w-full min-w-[100px] h-9"
+                                placeholder="数量"
+                              />
+                            </td>
+                          )
+                        }
+                        return <td key={col} className="p-2 text-sm">{formatNumber(detail.quantity)}</td>
+                      case 'volume':
+                        // 订单明细可以编辑体积，预约明细不允许编辑
+                        if (editingRowId === detailId && editingData && !appointmentId) {
+                          return (
+                            <td key={col} className="p-2 text-sm">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={editingData.volume !== null && editingData.volume !== undefined ? editingData.volume : ''}
+                                onChange={(e) => {
+                                  const value = e.target.value === '' ? null : parseFloat(e.target.value)
+                                  setEditingData({ ...editingData, volume: value })
+                                }}
+                                className="w-full"
+                                placeholder="体积"
+                              />
+                            </td>
+                          )
+                        }
                           return <td key={col} className="p-2 text-sm">{formatVolume(detail.volume)}</td>
                         case 'estimatedPallets':
                           // 预计板数：显示这个预约送了多少板（可编辑）
