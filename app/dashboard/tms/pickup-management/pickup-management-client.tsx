@@ -157,20 +157,18 @@ export function PickupManagementClient() {
       })
   }, [selectedRows])
 
-  // 自定义工具栏按钮
-  const customToolbarButtons = React.useMemo(() => {
-    if (selectedRows.length === 0) return null
-
+  // 自定义批量操作按钮
+  const customBatchActions = React.useMemo(() => {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
             size="sm"
-            className="gap-2"
+            className="min-w-[100px] h-9"
           >
-            <Copy className="h-4 w-4" />
-            复制柜号 ({selectedRows.length})
+            <Copy className="mr-2 h-4 w-4" />
+            复制柜号
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
@@ -197,7 +195,7 @@ export function PickupManagementClient() {
         </DropdownMenuContent>
       </DropdownMenu>
     )
-  }, [selectedRows.length, handleCopyContainerNumbers])
+  }, [handleCopyContainerNumbers])
 
   // 如果已经初始化或正在初始化，直接显示表格
   if (hasInitialized || !showInitButton) {
@@ -211,7 +209,7 @@ export function PickupManagementClient() {
         customActions={{
           onView: null, // 禁用查看详情功能
         }}
-        customToolbarButtons={customToolbarButtons}
+        customBatchActions={customBatchActions}
         onRowSelectionChange={setSelectedRows}
       />
     )

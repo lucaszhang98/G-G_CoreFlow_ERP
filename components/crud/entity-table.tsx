@@ -128,6 +128,7 @@ interface EntityTableProps<T = any> {
     getExpandedContent?: (row: T) => React.ReactNode | null // 获取展开内容
   } // 可展开行配置
   customToolbarButtons?: React.ReactNode // 自定义工具栏按钮（显示在新建按钮旁边）
+  customBatchActions?: React.ReactNode // 自定义批量操作按钮（显示在批量操作工具栏中）
   importConfig?: {
     enabled: boolean // 是否启用批量导入
     onImport: () => void // 导入按钮点击回调
@@ -148,6 +149,7 @@ export function EntityTable<T = any>({
   customSaveHandler,
   expandableRows,
   customToolbarButtons,
+  customBatchActions,
   importConfig,
   onRowSelectionChange,
 }: EntityTableProps<T>) {
@@ -2021,6 +2023,7 @@ export function EntityTable<T = any>({
                 批量删除
               </Button>
             )}
+            {customBatchActions}
             <Button
               variant="outline"
               size="sm"
