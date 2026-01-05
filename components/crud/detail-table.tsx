@@ -252,6 +252,7 @@ export function DetailTable({
       })
     } else {
       setEditingData({
+        quantity: detail.quantity, // 添加 quantity 字段
         estimated_pallets: detail.estimated_pallets,
         po: detail.po || null,
         delivery_location: detail.delivery_location,
@@ -799,15 +800,21 @@ export function DetailTable({
                                 type="number"
                                 min="1"
                                 step="1"
-                                value={editingData.quantity || 1}
+                                value={editingData.quantity ?? ''}
                                 onChange={(e) => {
-                                  const value = parseInt(e.target.value)
-                                  // 只允许正整数
-                                  if (value > 0 && Number.isInteger(value)) {
-                                    setEditingData({ ...editingData, quantity: value })
+                                  const inputValue = e.target.value
+                                  if (inputValue === '') {
+                                    // 允许清空，后续保存时会验证
+                                    setEditingData({ ...editingData, quantity: 1 })
+                                  } else {
+                                    const value = parseInt(inputValue)
+                                    // 只允许正整数
+                                    if (!isNaN(value) && value > 0 && Number.isInteger(value)) {
+                                      setEditingData({ ...editingData, quantity: value })
+                                    }
                                   }
                                 }}
-                                className="w-full min-w-[100px] h-9"
+                                className="w-full min-w-[80px] max-w-[100px] h-9"
                                 placeholder="数量"
                               />
                             </td>
@@ -827,7 +834,7 @@ export function DetailTable({
                                   const value = e.target.value === '' ? null : parseFloat(e.target.value)
                                   setEditingData({ ...editingData, volume: value })
                                 }}
-                                className="w-full"
+                                className="w-full min-w-[100px] max-w-[120px] h-9"
                                 placeholder="体积"
                               />
                             </td>
