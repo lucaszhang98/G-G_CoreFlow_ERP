@@ -771,17 +771,21 @@ export function DetailTable({
                           if (editingRowId === detailId && editingData && !appointmentId) {
                             return (
                               <td key={col} className="p-2 text-sm">
-                                <select
+                                <Select
                                   value={editingData.delivery_nature || ''}
-                                  onChange={(e) => setEditingData({ ...editingData, delivery_nature: e.target.value || null })}
-                                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                  onValueChange={(value) => setEditingData({ ...editingData, delivery_nature: value || null })}
                                 >
-                                  <option value="">请选择</option>
-                                  <option value="AMZ">AMZ</option>
-                                  <option value="扣货">扣货</option>
-                                  <option value="已放行">已放行</option>
-                                  <option value="私仓">私仓</option>
-                                </select>
+                                  <SelectTrigger className="h-9 min-w-[120px]">
+                                    <SelectValue placeholder="请选择" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="AMZ">AMZ</SelectItem>
+                                    <SelectItem value="扣货">扣货</SelectItem>
+                                    <SelectItem value="已放行">已放行</SelectItem>
+                                    <SelectItem value="私仓">私仓</SelectItem>
+                                    <SelectItem value="转仓">转仓</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </td>
                             )
                           }
