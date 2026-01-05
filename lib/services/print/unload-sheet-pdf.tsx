@@ -300,13 +300,13 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
               <Text style={[styles.tableCell, styles.col2]}>
                 {(() => {
                   let location = detail.deliveryLocation || '-'
-                  // 如果性质是转仓，仓点后加*
+                  // 如果性质是转仓，仓点后加+
                   if (detail.deliveryNature === '转仓') {
-                    location += '*'
+                    location += '+'
                   }
-                  // 如果性质是扣货，仓点后加hold
+                  // 如果性质是扣货，仓点后加-hold
                   else if (detail.deliveryNature === '扣货') {
-                    location += 'hold'
+                    location += '-hold'
                   }
                   return location
                 })()}

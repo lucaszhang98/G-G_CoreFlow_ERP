@@ -75,6 +75,9 @@ export async function generateLabelDataFromOrderDetail(
     throw new Error(`订单明细 ${orderDetailId} 缺少仓点代码 (delivery_location)`)
   }
 
+  // 获取送仓性质（delivery_nature）
+  const deliveryNature = orderDetail.delivery_nature || ''
+
   // 获取客户代码
   const customerCode = customer?.code || ''
   
@@ -120,6 +123,7 @@ export async function generateLabelDataFromOrderDetail(
     containerNumber,
     deliveryLocation,
     deliveryLocationCode,
+    deliveryNature,
     barcode,
     customerCode,
     plannedUnloadDate,

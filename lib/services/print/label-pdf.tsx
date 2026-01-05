@@ -147,13 +147,13 @@ export function LabelPage({ label, barcodeImage, pageNumber }: LabelPDFProps) {
       <Text style={styles.row2}>
         {(() => {
           let location = label.deliveryLocation || ''
-          // 如果性质是转仓，仓点后加*
+          // 如果性质是转仓，仓点后加+
           if (label.deliveryNature === '转仓') {
-            location += '*'
+            location += '+'
           }
-          // 如果性质是扣货，仓点后加hold
+          // 如果性质是扣货，仓点后加-hold
           else if (label.deliveryNature === '扣货') {
-            location += 'hold'
+            location += '-hold'
           }
           return location
         })()}
