@@ -893,6 +893,7 @@ function AddDetailDialog({ open, onOpenChange, onSave }: { open: boolean; onOpen
                 <SelectItem value="扣货">扣货</SelectItem>
                 <SelectItem value="已放行">已放行</SelectItem>
                 <SelectItem value="私仓">私仓</SelectItem>
+                <SelectItem value="转仓">转仓</SelectItem>
               </SelectContent>
             </Select>
           </div>
