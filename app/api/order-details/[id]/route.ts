@@ -97,7 +97,7 @@ export async function PUT(
     if (session.user.id && session.user.id.trim() !== '') {
       try {
         const userId = BigInt(session.user.id)
-        if (userId > 0n) {
+        if (userId > BigInt(0)) {
           updateData.updated_by = userId
         }
       } catch (error) {
