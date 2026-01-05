@@ -35,7 +35,7 @@ export const orderConfig: EntityConfig = {
     },
     customer: {
       key: 'customer',
-      label: '客户',
+      label: '客户代码',
       type: 'relation',
       relation: {
         model: 'customers',
