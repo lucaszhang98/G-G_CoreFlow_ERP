@@ -255,6 +255,29 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
           },
         })
 
+        // 如果 operation_mode = 'warehouse'，自动创建入库管理记录
+        if (firstRow.operation_mode === 'warehouse') {
+          // 获取默认仓库
+          const defaultWarehouse = await tx.warehouses.findFirst({
+            select: { warehouse_id: true },
+            orderBy: { warehouse_id: 'asc' },
+          })
+          
+          if (defaultWarehouse) {
+            await tx.inbound_receipt.create({
+              data: {
+                order_id: order.order_id,
+                warehouse_id: defaultWarehouse.warehouse_id,
+                status: 'pending',
+                planned_unload_at: null,
+                unload_method_code: null,
+                created_by: userId,
+                updated_by: userId,
+              },
+            })
+          }
+        }
+
         // 创建订单明细
         for (const row of rows) {
           const volume = row.volume
