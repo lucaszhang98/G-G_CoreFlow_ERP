@@ -105,6 +105,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       key: 'po',
       label: 'PO',
       type: 'textarea',
+      searchable: true,
       placeholder: '请输入PO信息',
     },
     notes: {
@@ -130,7 +131,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       'po',
       'notes',
     ],
-    searchFields: ['reference_number'], // 只搜索预约号码（最重要的字段）
+    searchFields: ['reference_number', 'po'], // 搜索预约号码和PO字段
     // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
     // filterFields 已由 search-config-generator 自动生成
     // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
