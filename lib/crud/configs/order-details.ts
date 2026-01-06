@@ -39,21 +39,18 @@ export const orderDetailConfig: EntityConfig = {
       key: 'customer_name',
       label: '客户',
       type: 'text',
-      sortable: true,
       searchable: true,
     },
     container_number: {
       key: 'container_number',
       label: '柜号',
       type: 'text',
-      sortable: true,
       searchable: true,
     },
     planned_unload_at: {
       key: 'planned_unload_at',
       label: '预计拆柜日期',
       type: 'date',
-      sortable: true,
     },
     delivery_location_code: {
       key: 'delivery_location_code',
