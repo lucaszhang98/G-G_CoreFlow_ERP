@@ -27,21 +27,18 @@ export const inventoryLotConfig: EntityConfig = {
       key: 'customer_name',
       label: '客户名称',
       type: 'text',
-      sortable: true,
       searchable: true,
     },
     container_number: {
       key: 'container_number',
       label: '柜号',
       type: 'text',
-      sortable: true,
       searchable: true,
     },
     planned_unload_at: {
       key: 'planned_unload_at',
       label: '预计拆柜日期',
       type: 'date',
-      sortable: true,
     },
     // 从orders_detail继承的字段（需要确认字段名）
     delivery_nature: {

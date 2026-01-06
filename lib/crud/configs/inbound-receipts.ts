@@ -26,45 +26,38 @@ export const inboundReceiptConfig: EntityConfig = {
       key: 'customer_name',
       label: '客户名称',
       type: 'text',
-      sortable: true,
       searchable: true,
     },
     container_number: {
       key: 'container_number',
       label: '柜号',
       type: 'text',
-      sortable: true,
       searchable: true,
     },
     order_date: {
       key: 'order_date',
       label: '预报日期',
       type: 'date',
-      sortable: true,
     },
     eta_date: {
       key: 'eta_date',
       label: '到港日期',
       type: 'date',
-      sortable: true,
     },
     ready_date: {
       key: 'ready_date',
       label: 'Ready日期',
       type: 'date',
-      sortable: true,
     },
     lfd_date: {
       key: 'lfd_date',
       label: 'LFD',
       type: 'date',
-      sortable: true,
     },
     pickup_date: {
       key: 'pickup_date',
       label: '提柜日期',
       type: 'date',
-      sortable: true,
     },
     status: {
       key: 'status',
@@ -120,7 +113,6 @@ export const inboundReceiptConfig: EntityConfig = {
       key: 'unload_method_name',
       label: '卸货方式',
       type: 'text',
-      sortable: true,
     },
     order_id: {
       key: 'order_id',

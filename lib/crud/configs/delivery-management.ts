@@ -26,20 +26,17 @@ export const deliveryManagementConfig: EntityConfig = {
       key: 'appointment_number',
       label: '预约号码',
       type: 'text',
-      sortable: true,
       searchable: true,
     },
     container_number: {
       key: 'container_number',
       label: '柜号',
       type: 'text',
-      sortable: true,
     },
     delivery_date: {
       key: 'delivery_date',
       label: '送货日期',
       type: 'datetime',
-      sortable: true,
     },
     origin_location: {
       key: 'origin_location',
