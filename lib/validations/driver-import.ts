@@ -24,7 +24,11 @@ export const driverImportRowSchema = z.object({
   
   contact_phone: z.string().optional().nullable().transform(val => val === null || val === undefined || val === '' ? null : val),
   
-  contact_email: z.string()
+  contact_email: z.union([
+    z.string(),
+    z.null(),
+    z.undefined()
+  ])
     .optional()
     .nullable()
     .transform(val => {
@@ -38,7 +42,7 @@ export const driverImportRowSchema = z.object({
     }),
   
   license_expiration: z.union([
-    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式必须是 YYYY-MM-DD'),
+    z.string(),
     z.date(),
     z.null(),
     z.undefined()
@@ -48,7 +52,13 @@ export const driverImportRowSchema = z.object({
     .transform(val => {
       if (val === null || val === undefined || val === '') return null
       if (val instanceof Date) return val.toISOString().split('T')[0]
-      return val
+      // 如果是字符串，验证格式
+      const strVal = String(val).trim()
+      if (strVal === '') return null
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(strVal)) {
+        throw new Error('日期格式必须是 YYYY-MM-DD')
+      }
+      return strVal
     }),
   
   status: z.union([
