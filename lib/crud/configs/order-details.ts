@@ -59,7 +59,6 @@ export const orderDetailConfig: EntityConfig = {
       key: 'delivery_location_code',
       label: '仓点',
       type: 'location',
-      sortable: true,
       searchable: true,
     },
     delivery_nature: {

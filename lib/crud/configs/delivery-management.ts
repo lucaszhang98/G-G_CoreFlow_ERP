@@ -88,7 +88,6 @@ export const deliveryManagementConfig: EntityConfig = {
         displayField: 'name',
         valueField: 'driver_id',
       },
-      sortable: true,
       // 关系字段不应该在 searchFields 中，应该通过筛选来搜索
     },
     driver_id: {

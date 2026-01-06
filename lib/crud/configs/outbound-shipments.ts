@@ -70,7 +70,6 @@ export const outboundShipmentConfig: EntityConfig = {
       key: 'origin_location',
       label: '起始地',
       type: 'location',
-      sortable: true,
     },
     trailer_code: {
       key: 'trailer_code',
@@ -88,7 +87,6 @@ export const outboundShipmentConfig: EntityConfig = {
       key: 'destination_location',
       label: '目的地',
       type: 'location',
-      sortable: true,
     },
     total_pallets: {
       key: 'total_pallets',

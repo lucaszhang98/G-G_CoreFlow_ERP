@@ -57,7 +57,6 @@ export const pickupManagementConfig: EntityConfig = {
         displayField: 'name',
         valueField: 'id',
       },
-      sortable: true,
     },
     container_type: {
       key: 'container_type',
@@ -83,7 +82,6 @@ export const pickupManagementConfig: EntityConfig = {
         valueField: 'carrier_id',
       },
       relationField: 'carrier_id', // 指定数据库字段名
-      sortable: true,
     },
     carrier_id: {
       key: 'carrier_id',

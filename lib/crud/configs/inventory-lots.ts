@@ -60,7 +60,6 @@ export const inventoryLotConfig: EntityConfig = {
       key: 'delivery_location',
       label: '仓点',
       type: 'location',
-      sortable: true,
       searchable: true,
     },
     // 表内自己的字段

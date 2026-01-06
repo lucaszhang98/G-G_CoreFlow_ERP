@@ -75,13 +75,11 @@ export const deliveryAppointmentConfig: EntityConfig = {
       key: 'origin_location',
       label: '起始地',
       type: 'location',
-      sortable: true,
     },
     destination_location: {
       key: 'destination_location',
       label: '目的地',
       type: 'location',
-      sortable: true,
     },
     confirmed_start: {
       key: 'confirmed_start',
