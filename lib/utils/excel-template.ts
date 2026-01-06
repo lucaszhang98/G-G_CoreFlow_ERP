@@ -55,8 +55,8 @@ export async function generateOrderImportTemplate(
     { key: 'volume', header: '体积', width: 10, required: true },
     // === Detail选填字段（隐藏） ===
     { key: 'fba', header: 'FBA', width: 15, required: false, hidden: true },
-    { key: 'detail_notes', header: '明细备注', width: 20, required: false, hidden: true },
     { key: 'po', header: 'PO', width: 15, required: false, hidden: true },
+    { key: 'detail_notes', header: '明细备注', width: 20, required: false, hidden: true },
   ]
 
   // 第1行：表头
@@ -270,8 +270,8 @@ export async function generateOrderImportTemplate(
   exampleRow.getCell(23).value = 100 // 数量
   exampleRow.getCell(24).value = 50.5 // 体积
   exampleRow.getCell(25).value = 'FBA123' // FBA
-  exampleRow.getCell(26).value = '测试明细' // 明细备注
-  exampleRow.getCell(27).value = 'PO123456' // PO
+  exampleRow.getCell(26).value = 'PO123456' // PO
+  exampleRow.getCell(27).value = '测试明细' // 明细备注
 
   // ===== Sheet 2: 字段说明 =====
   const instructionSheet = workbook.addWorksheet('字段说明')
@@ -315,8 +315,8 @@ export async function generateOrderImportTemplate(
     ['', '', '', ''],
     ['=== Detail选填字段（默认隐藏）===', '', '', ''],
     ['FBA', '否', '文本', '可留空'],
-    ['明细备注', '否', '文本', '订单明细备注'],
     ['PO', '否', '文本（最长1000字符）', '采购订单号'],
+    ['明细备注', '否', '文本', '订单明细备注'],
     ['', '', '', ''],
     ['重要说明', '', '', ''],
     ['1. 下拉框', '', '', '所有带下拉的字段点击即可看到选项，防止数据错误'],
