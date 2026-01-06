@@ -5,8 +5,7 @@
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { EntityTable } from "@/components/crud/entity-table"
-import { driverConfig } from "@/lib/crud/configs/drivers"
+import { DriversPageClient } from "./drivers-page-client"
 
 export default async function DriversPage() {
   const session = await auth()
@@ -17,7 +16,7 @@ export default async function DriversPage() {
 
   return (
     <DashboardLayout user={session.user || {}}>
-      <EntityTable config={driverConfig} />
+      <DriversPageClient />
     </DashboardLayout>
   )
 }
