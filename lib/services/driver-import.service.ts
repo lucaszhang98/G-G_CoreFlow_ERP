@@ -104,29 +104,14 @@ const driverImportConfig: ImportConfig<DriverImportRow> = {
           carrierId = carrier.carrier_id
         }
 
-        // 创建或查找联系人（如果提供了联系人信息）
-        let contactId: bigint | null = null
-        if (row.contact_name) {
-          const contact = await tx.contact_roles.create({
-            data: {
-              name: row.contact_name,
-              phone: row.contact_phone || null,
-              email: row.contact_email || null,
-              created_by: userId,
-              updated_by: userId,
-            },
-          })
-          contactId = contact.contact_id
-        }
-
-        // 创建司机
-        await tx.drivers.create({
+        // 先创建司机（不含联系人）
+        const driver = await tx.drivers.create({
           data: {
             driver_code: row.driver_code,
             license_number: row.license_number,
             license_plate: row.license_plate,
             carrier_id: carrierId,
-            contact_id: contactId,
+            contact_id: null, // 先不设置联系人
             license_expiration: row.license_expiration ? new Date(row.license_expiration) : null,
             status: row.status || 'active',
             notes: row.notes,
@@ -134,6 +119,28 @@ const driverImportConfig: ImportConfig<DriverImportRow> = {
             updated_by: userId,
           },
         })
+
+        // 创建联系人并关联到司机（如果提供了联系人信息）
+        if (row.contact_name) {
+          const contact = await tx.contact_roles.create({
+            data: {
+              related_entity_type: 'driver',
+              related_entity_id: driver.driver_id,
+              role: 'primary',
+              name: row.contact_name,
+              phone: row.contact_phone || null,
+              email: row.contact_email || null,
+              created_by: userId,
+              updated_by: userId,
+            },
+          })
+
+          // 更新司机的 contact_id
+          await tx.drivers.update({
+            where: { driver_id: driver.driver_id },
+            data: { contact_id: contact.contact_id },
+          })
+        }
       }
     })
   },
