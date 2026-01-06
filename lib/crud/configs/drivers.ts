@@ -26,6 +26,7 @@ export const driverConfig: EntityConfig = {
       key: 'driver_code',
       label: '司机代码',
       type: 'text',
+      required: true,
       sortable: true,
       searchable: true,
       placeholder: '请输入司机代码',
@@ -53,8 +54,18 @@ export const driverConfig: EntityConfig = {
       key: 'license_number',
       label: '驾驶证号',
       type: 'text',
+      required: true,
       searchable: true,
       placeholder: '请输入驾驶证号',
+    },
+    license_plate: {
+      key: 'license_plate',
+      label: '车牌号',
+      type: 'text',
+      required: true,
+      sortable: true,
+      searchable: true,
+      placeholder: '请输入车牌号',
     },
     status: {
       key: 'status',
@@ -89,8 +100,8 @@ export const driverConfig: EntityConfig = {
   list: {
     defaultSort: 'driver_code',
     defaultOrder: 'asc',
-    columns: ['driver_code', 'carrier', 'contact', 'license_number', 'status', 'created_at'],
-    searchFields: ['driver_code'], // 只搜索司机代码（最重要的字段）
+    columns: ['driver_code', 'license_number', 'license_plate', 'carrier', 'contact', 'status', 'created_at'],
+    searchFields: ['driver_code', 'license_number', 'license_plate'], // 搜索司机代码、驾驶证号、车牌号
     pageSize: 10,
     // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
     // filterFields 已由 search-config-generator 自动生成
@@ -106,6 +117,11 @@ export const driverConfig: EntityConfig = {
       delete: {
         enabled: true,
       },
+      import: {
+        enabled: true,
+        templatePath: '/api/drivers/import/template',
+        importPath: '/api/drivers/import',
+      },
     },
     // 行内编辑配置
     inlineEdit: {
@@ -114,7 +130,7 @@ export const driverConfig: EntityConfig = {
     },
   },
   
-  formFields: ['driver_code', 'license_number', 'license_expiration', 'status', 'carrier_id', 'contact', 'notes'],
+  formFields: ['driver_code', 'license_number', 'license_plate', 'license_expiration', 'status', 'carrier_id', 'contact', 'notes'],
   
   permissions: {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],

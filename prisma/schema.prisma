@@ -280,6 +280,7 @@ model drivers {
   carrier_id                      BigInt?
   driver_code                     String?               @unique @db.VarChar(50)
   license_number                  String?               @db.VarChar(100)
+  license_plate                   String?               @db.VarChar(10)
   license_expiration              DateTime?             @db.Date
   notes                           String?
   status                          String?               @default("active") @db.VarChar(50)
