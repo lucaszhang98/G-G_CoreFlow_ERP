@@ -98,7 +98,7 @@ export async function generateOrderImportTemplate(
   
   const dropdownOptions = {
     operation_mode: ['拆柜', '直送'],
-    container_type: ['40HQ', '40GP', '20GP', '20HQ', '45HQ'],
+    container_type: ['40DH', '45DH', '40RH', '45RH', '20GP', '其他'],
     do_issued: ['是', '否'],
     status: ['待处理', '已确认', '已发货', '已送达', '已取消', '已归档'],
     detail_type: ['AMZ', '扣货', '已放行', '私仓', '转仓']
@@ -250,7 +250,7 @@ export async function generateOrderImportTemplate(
   exampleRow.getCell(3).value = new Date('2024-12-15') // 订单日期
   exampleRow.getCell(4).value = '拆柜' // 操作方式
   exampleRow.getCell(5).value = locationCodes[0] || 'LAX001' // 目的地
-  exampleRow.getCell(6).value = '40HQ' // 货柜类型
+  exampleRow.getCell(6).value = '40DH' // 货柜类型
   exampleRow.getCell(7).value = new Date('2024-12-20') // ETA
   exampleRow.getCell(8).value = 'MBL123456' // MBL
   exampleRow.getCell(9).value = '是' // DO
@@ -289,7 +289,7 @@ export async function generateOrderImportTemplate(
     ['订单日期', '是', '日期格式（非文本）', '使用Excel日期格式，不要用文本。详见"重要说明"第2条'],
     ['操作方式', '是', '下拉：拆柜/直送', '从下拉列表选择'],
     ['目的地', '是', '下拉选择', '从下拉列表选择位置代码'],
-    ['货柜类型', '是', '下拉：40HQ/40GP/20GP/20HQ/45HQ', '从下拉列表选择'],
+    ['货柜类型', '是', '下拉：40DH/45DH/40RH/45RH/20GP/其他', '从下拉列表选择'],
     ['ETA', '是', '日期格式（非文本）', '预计到港日期，使用Excel日期格式'],
     ['MBL', '是', '文本（最长100字符）', '主提单号'],
     ['DO', '是', '下拉：是/否', 'DO是否已签发'],
