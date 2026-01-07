@@ -307,6 +307,10 @@ async function updatePickupManagement(
 
     const serializedUpdated = serializeBigInt(updated)
     const updatedOrder = serializedUpdated?.orders
+    
+    console.log('[提柜日期调试] 从数据库读取的 pickup_date:', updatedOrder?.pickup_date, '类型:', typeof updatedOrder?.pickup_date)
+    console.log('[提柜日期调试] pickup_date 是 Date 对象?', updatedOrder?.pickup_date instanceof Date)
+    console.log('[提柜日期调试] pickup_date.toISOString():', updatedOrder?.pickup_date?.toISOString?.())
 
     // 构建返回数据，确保所有字段都已序列化（包括嵌套对象中的BigInt）
     const responseData = {
