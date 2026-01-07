@@ -31,11 +31,11 @@ export async function generateAppointmentImportTemplate(
     { key: 'delivery_method', header: '派送方式', width: 12, required: true, hidden: false, outlineLevel: 0 },
     { key: 'appointment_account', header: '预约账号', width: 12, required: true, hidden: false, outlineLevel: 0 },
     { key: 'appointment_type', header: '预约类型', width: 12, required: true, hidden: false, outlineLevel: 0 },
-    { key: 'origin_location', header: '起始地', width: 15, required: true, hidden: false, outlineLevel: 0 },
     { key: 'destination_location', header: '目的地', width: 15, required: true, hidden: false, outlineLevel: 0 },
     { key: 'confirmed_start', header: '送货时间', width: 18, required: true, hidden: false, outlineLevel: 0 },
     
-    // 预约主表选填字段（黑色，默认隐藏）
+    // 预约主表选填字段（黑色，默认隐藏，可折叠）
+    { key: 'origin_location', header: '起始地', width: 15, required: false, hidden: true, outlineLevel: 1 },
     { key: 'rejected', header: '拒收', width: 10, required: false, hidden: true, outlineLevel: 1 },
     { key: 'po', header: 'PO', width: 15, required: false, hidden: true, outlineLevel: 1 },
     { key: 'notes', header: '备注', width: 20, required: false, hidden: true, outlineLevel: 1 },
@@ -117,7 +117,7 @@ export async function generateAppointmentImportTemplate(
       error: '请从下拉列表中选择：卡板、地板'
     }
     
-    // E列：起始地 - 下拉列表（引用位置代码参考表）
+    // E列：目的地 - 下拉列表（引用位置代码参考表）
     if (locationCodes.length > 0) {
       dataSheet.getCell(`E${rowNum}`).dataValidation = {
         type: 'list',
@@ -129,11 +129,11 @@ export async function generateAppointmentImportTemplate(
       }
     }
     
-    // F列：目的地 - 下拉列表（引用位置代码参考表）
+    // G列：起始地 - 下拉列表（引用位置代码参考表，选填，在折叠区域）
     if (locationCodes.length > 0) {
-      dataSheet.getCell(`F${rowNum}`).dataValidation = {
+      dataSheet.getCell(`G${rowNum}`).dataValidation = {
         type: 'list',
-        allowBlank: false,
+        allowBlank: true, // ✅ 允许为空
         formulae: [`位置代码参考!$A$2:$A$${locationCodes.length + 1}`],
         showErrorMessage: true,
         errorTitle: '无效的位置代码',
@@ -141,8 +141,8 @@ export async function generateAppointmentImportTemplate(
       }
     }
     
-    // G列：送货时间 - 日期时间格式（yyyy-mm-dd hh:mm）
-    const timeCell = dataSheet.getCell(`G${rowNum}`)
+    // F列：送货时间 - 日期时间格式（yyyy-mm-dd hh:mm）
+    const timeCell = dataSheet.getCell(`F${rowNum}`)
     timeCell.numFmt = 'yyyy-mm-dd hh:mm'  // 设置日期时间格式
     timeCell.dataValidation = {
       type: 'date',
@@ -154,17 +154,17 @@ export async function generateAppointmentImportTemplate(
       error: '请输入正确的日期时间格式'
     }
     
-    // H列：拒收 - 下拉列表
+    // H列：拒收 - 下拉列表（在折叠区域）
     dataSheet.getCell(`H${rowNum}`).dataValidation = {
       type: 'list',
       allowBlank: true,
       formulae: ['"是,否"']
     }
     
-    // I列：PO - 文本格式
+    // I列：PO - 文本格式（在折叠区域）
     dataSheet.getCell(`I${rowNum}`).numFmt = '@'
     
-    // J列：备注 - 文本格式
+    // J列：备注 - 文本格式（在折叠区域）
     dataSheet.getCell(`J${rowNum}`).numFmt = '@'
     
     // K列：订单号 - 文本格式（防止被当作数字）
@@ -218,9 +218,9 @@ export async function generateAppointmentImportTemplate(
   example1.getCell(2).value = '直送'                // B: 派送方式
   example1.getCell(3).value = 'AA'                  // C: 预约账号
   example1.getCell(4).value = '卡板'                // D: 预约类型
-  example1.getCell(5).value = exampleLocation1      // E: 起始地
-  example1.getCell(6).value = exampleLocation2      // F: 目的地
-  example1.getCell(7).value = '2025-12-20 14:30'   // G: 送货时间
+  example1.getCell(5).value = exampleLocation2      // E: 目的地
+  example1.getCell(6).value = '2025-12-20 14:30'   // F: 送货时间
+  example1.getCell(7).value = exampleLocation1      // G: 起始地（选填，在折叠区域）
   example1.getCell(8).value = '否'                  // H: 拒收
   example1.getCell(9).value = 'PO12345'            // I: PO
   example1.getCell(10).value = '优先配送'           // J: 备注
@@ -235,9 +235,9 @@ export async function generateAppointmentImportTemplate(
   example2.getCell(2).value = '直送'                // B: 派送方式（相同）
   example2.getCell(3).value = 'AA'                  // C: 预约账号（相同）
   example2.getCell(4).value = '卡板'                // D: 预约类型（相同）
-  example2.getCell(5).value = exampleLocation1      // E: 起始地（相同）
-  example2.getCell(6).value = exampleLocation2      // F: 目的地（相同）
-  example2.getCell(7).value = '2025-12-20 14:30'   // G: 送货时间（相同）
+  example2.getCell(5).value = exampleLocation2      // E: 目的地（相同）
+  example2.getCell(6).value = '2025-12-20 14:30'   // F: 送货时间（相同）
+  example2.getCell(7).value = exampleLocation1      // G: 起始地（相同，选填）
   example2.getCell(8).value = '否'                  // H: 拒收（相同）
   example2.getCell(9).value = 'PO12345'            // I: PO（相同）
   example2.getCell(10).value = '优先配送'           // J: 备注（相同）
@@ -246,15 +246,15 @@ export async function generateAppointmentImportTemplate(
   example2.getCell(13).value = '扣货'               // M: 性质（不同）
   example2.getCell(14).value = 30                  // N: 预计板数（不同）
 
-  // 示例3：新的预约
+  // 示例3：新的预约（不填写起始地，演示选填字段可以为空）
   const example3 = dataSheet.getRow(4)
   example3.getCell(1).value = 'AP-2025002'         // A: 预约号码
   example3.getCell(2).value = '自提'                // B: 派送方式
   example3.getCell(3).value = 'YTAQ'               // C: 预约账号
   example3.getCell(4).value = '地板'                // D: 预约类型
-  example3.getCell(5).value = exampleLocation1      // E: 起始地
-  example3.getCell(6).value = exampleLocation3      // F: 目的地
-  example3.getCell(7).value = '2025-12-21 10:00'   // G: 送货时间
+  example3.getCell(5).value = exampleLocation3      // E: 目的地
+  example3.getCell(6).value = '2025-12-21 10:00'   // F: 送货时间
+  example3.getCell(7).value = ''                   // G: 起始地（留空，演示选填）
   example3.getCell(8).value = '否'                  // H: 拒收
   example3.getCell(9).value = ''                   // I: PO
   example3.getCell(10).value = ''                  // J: 备注
@@ -278,11 +278,11 @@ export async function generateAppointmentImportTemplate(
     ['派送方式', '是', '下拉：私仓/自提/直送/卡派', '从下拉列表选择'],
     ['预约账号', '是', '下拉：AA/YTAQ/AYIE/KP/OLPN/DATONG/GG/other', '从下拉列表选择'],
     ['预约类型', '是', '下拉：卡板/地板', '从下拉列表选择'],
-    ['起始地', '是', '下拉选择', '从下拉列表选择位置代码，必须存在于位置管理中'],
     ['目的地', '是', '下拉选择', '从下拉列表选择位置代码，必须存在于位置管理中'],
     ['送货时间', '是', '日期时间格式', '格式 YYYY-MM-DD HH:MM，如：2025-12-20 14:30'],
     ['', '', '', ''],
-    ['=== 主表选填字段（默认隐藏）===', '', '', ''],
+    ['=== 主表选填字段（默认隐藏，可展开）===', '', '', ''],
+    ['起始地', '否', '下拉选择', '从下拉列表选择位置代码（选填），必须存在于位置管理中'],
     ['拒收', '否', '下拉：是/否', '默认为"否"'],
     ['PO', '否', '文本', '采购订单号，可留空'],
     ['备注', '否', '文本', '预约备注，可留空'],
@@ -296,7 +296,7 @@ export async function generateAppointmentImportTemplate(
     ['重要说明', '', '', ''],
     ['1. 列顺序', '', '', '预约主表必填 → 主表选填 → 明细必填 → 明细选填'],
     ['2. 下拉框', '', '', '所有带下拉的字段点击即可看到选项，防止数据错误'],
-    ['3. 位置代码', '', '', '起始地、目的地、仓点都从"位置代码参考"表中选择'],
+    ['3. 位置代码', '', '', '目的地、仓点从"位置代码参考"表中选择（必填），起始地可选填'],
     ['4. 订单号校验', '', '', '订单号必须存在于订单管理中，并且对应的明细（订单号+仓点+性质）也必须存在'],
     ['5. 板数校验', '', '', '系统会自动校验预计板数是否超过可用板数（已入库/未入库使用不同逻辑）'],
     ['6. 表头颜色', '', '', '红色表头=必填字段，黑色表头=选填字段'],

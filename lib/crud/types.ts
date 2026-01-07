@@ -28,7 +28,7 @@ export type FieldType =
 export interface FilterFieldConfig {
   field: string // 字段名
   label: string // 显示标签
-  type: 'select' | 'checkbox' | 'dateRange' | 'numberRange' // 筛选类型
+  type: 'select' | 'checkbox' | 'boolean' | 'dateRange' | 'numberRange' // 筛选类型（boolean 和 checkbox 等价）
   options?: { label: string; value: string }[] // select 类型使用（静态选项）
   loadOptions?: () => Promise<Array<{ label: string; value: string }>> // select 类型使用（动态加载选项）
   relation?: { // 关系字段（从关联表获取选项）

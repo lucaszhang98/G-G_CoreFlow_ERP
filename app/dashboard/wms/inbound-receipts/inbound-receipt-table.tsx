@@ -230,7 +230,7 @@ export function InboundReceiptTable() {
 
   return (
     <EntityTable 
-      key={refreshKey}
+      refreshKey={refreshKey}
       config={inboundReceiptConfig}
       customClickableColumns={customClickableColumns}
       fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}

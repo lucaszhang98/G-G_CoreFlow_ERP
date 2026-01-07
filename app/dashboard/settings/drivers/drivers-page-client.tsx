@@ -21,7 +21,7 @@ export function DriversPageClient() {
           enabled: true,
           onImport: () => setImportDialogOpen(true)
         }}
-        key={refreshTrigger}
+        refreshKey={refreshTrigger}
       />
       
       <DriverImportDialog

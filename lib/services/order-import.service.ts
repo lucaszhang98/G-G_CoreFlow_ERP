@@ -176,7 +176,29 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
       }
     }
 
-    // 第4步：检查订单号是否已存在于数据库
+    // 第4步：检查同一订单内是否有重复的明细行（送仓地点+性质组合）
+    for (const [orderNumber, rows] of orderGroups) {
+      if (rows.length > 1) {
+        // 记录已出现的明细行组合（送仓地点+性质）
+        const detailCombinations = new Map<string, number>()
+        
+        for (const row of rows) {
+          const key = `${row.detail_delivery_location_code}_${row.delivery_nature}`
+          
+          if (detailCombinations.has(key)) {
+            errors.push({
+              row: row.rowIndex,
+              field: '送仓地点',
+              message: `订单号"${orderNumber}"中，送仓地点"${row.detail_delivery_location_code}"和性质"${row.delivery_nature}"的组合重复出现，请检查数据或合并相同明细行`,
+            })
+          } else {
+            detailCombinations.set(key, row.rowIndex)
+          }
+        }
+      }
+    }
+
+    // 第5步：检查订单号是否已存在于数据库
     if (errors.length === 0) {
       const orderNumbers = Array.from(orderGroups.keys())
       const existingOrders = await prisma.orders.findMany({

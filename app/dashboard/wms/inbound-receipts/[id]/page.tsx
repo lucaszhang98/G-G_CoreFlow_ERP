@@ -1,9 +1,7 @@
 import { auth } from "@/auth"
 import { redirect, notFound } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Button } from "@/components/ui/button"
-import { ArrowLeft } from "lucide-react"
-import Link from "next/link"
+import { BackButton } from "@/components/ui/back-button"
 import prisma from "@/lib/prisma"
 import { InboundReceiptDetailPageClient } from "./inbound-receipt-detail-page-client"
 
@@ -226,11 +224,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
             {/* 页面标题 */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <Link href="/dashboard/wms/inbound-receipts">
-                  <Button variant="ghost" size="icon">
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                </Link>
+                <BackButton fallbackUrl="/dashboard/wms/inbound-receipts" />
                 <div>
                   <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                     {inboundReceipt.orders?.order_number || '入库管理详情'}

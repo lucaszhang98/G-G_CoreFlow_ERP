@@ -24,7 +24,7 @@ export function CustomersPageClient() {
           enabled: true,
           onImport: () => setImportDialogOpen(true)
         }}
-        key={refreshTrigger}
+        refreshKey={refreshTrigger}
       />
       
       <CustomerImportDialog

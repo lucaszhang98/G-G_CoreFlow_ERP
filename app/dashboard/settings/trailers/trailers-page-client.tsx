@@ -21,7 +21,7 @@ export function TrailersPageClient() {
           enabled: true,
           onImport: () => setImportDialogOpen(true)
         }}
-        key={refreshTrigger}
+        refreshKey={refreshTrigger}
       />
       
       <TrailerImportDialog

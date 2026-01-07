@@ -6,9 +6,7 @@
 import { notFound } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { ArrowLeft } from "lucide-react"
-import Link from "next/link"
+import { BackButton } from "@/components/ui/back-button"
 import prisma from "@/lib/prisma"
 import { EntityConfig } from "@/lib/crud/types"
 import { Decimal } from "@prisma/client/runtime/library"
@@ -213,11 +211,7 @@ export async function EntityDetail({ config, id, data: providedData, rightCard, 
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href={config.detailPath}>
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
+          <BackButton fallbackUrl={config.detailPath} />
           <div>
             <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
               {getDisplayName()}

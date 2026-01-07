@@ -52,6 +52,7 @@ export const orderConfig: EntityConfig = {
         displayField: 'code',
         valueField: 'id',
       },
+      hidden: true, // 隐藏字段，避免在筛选器中重复（使用 customer 虚拟字段替代）
     },
     // user_id 改为显示负责人名称
     user_id: {

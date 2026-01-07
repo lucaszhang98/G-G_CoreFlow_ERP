@@ -21,7 +21,7 @@ export function LocationsPageClient() {
           enabled: true,
           onImport: () => setImportDialogOpen(true)
         }}
-        key={refreshTrigger}
+        refreshKey={refreshTrigger}
       />
       
       <LocationImportDialog

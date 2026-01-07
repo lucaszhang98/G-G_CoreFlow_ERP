@@ -129,11 +129,15 @@ interface EntityTableProps<T = any> {
   } // 可展开行配置
   customToolbarButtons?: React.ReactNode // 自定义工具栏按钮（显示在新建按钮旁边）
   customBatchActions?: React.ReactNode // 自定义批量操作按钮（显示在批量操作工具栏中）
+  onSearchParamsChange?: (params: URLSearchParams) => void // 搜索参数变化回调
+  onTotalChange?: (total: number) => void // 总数变化回调
+  onFilteredTotalChange?: (filteredTotal: number) => void // 筛选后总数变化回调
   importConfig?: {
     enabled: boolean // 是否启用批量导入
     onImport: () => void // 导入按钮点击回调
   } // 批量导入配置
   onRowSelectionChange?: (rows: T[]) => void // 行选择变化回调
+  refreshKey?: number | string // 刷新触发器（变化时重新获取数据，但不卸载组件）
 }
 
 export function EntityTable<T = any>({ 
@@ -152,6 +156,10 @@ export function EntityTable<T = any>({
   customBatchActions,
   importConfig,
   onRowSelectionChange,
+  onSearchParamsChange,
+  onTotalChange,
+  onFilteredTotalChange,
+  refreshKey,
 }: EntityTableProps<T>) {
   // 自动增强配置，生成 filterFields 和 advancedSearchFields（如果未配置）
   const enhancedConfig = React.useMemo(() => {
@@ -167,6 +175,7 @@ export function EntityTable<T = any>({
   const [itemToDelete, setItemToDelete] = React.useState<T | null>(null)
   const [editingItem, setEditingItem] = React.useState<T | null>(null)
   
+  // ========== 状态初始化（服务端和客户端使用相同的默认值） ==========
   // 分页和排序状态
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(config.list.pageSize || 10)
@@ -178,30 +187,15 @@ export function EntityTable<T = any>({
     desc: config.list.defaultOrder === 'desc' 
   }])
   
-  // 搜索状态 - 从 URL 参数读取初始搜索值
-  const [search, setSearch] = React.useState(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      return params.get('search') || ''
-    }
-    return ''
-  })
-  const [searchInput, setSearchInput] = React.useState(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      return params.get('search') || ''
-    }
-    return ''
-  })
+  // 搜索状态
+  const [search, setSearch] = React.useState('')
+  const [searchInput, setSearchInput] = React.useState('')
   
   // 当路径变化时，重置搜索状态（清除之前的搜索值）
   // 使用 ref 来跟踪上一个路径，避免重复触发
   const prevPathnameRef = React.useRef<string | null>(null)
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      const urlSearch = params.get('search') || ''
-      
       // 如果路径真的变化了（不是初始化）
       if (prevPathnameRef.current !== null && prevPathnameRef.current !== pathname) {
         // 路径变化时，强制清除所有搜索状态
@@ -213,19 +207,6 @@ export function EntityTable<T = any>({
         setSearch('')
         setPage(1)
         // search 状态变化会触发 fetchData 的 useEffect，使用空字符串
-      } else if (prevPathnameRef.current === null) {
-        // 首次加载，从 URL 读取搜索值
-        if (urlSearch) {
-          setSearchInput(urlSearch)
-          setSearch(urlSearch)
-        }
-      } else {
-        // 路径没变，但 URL 参数可能变了
-        if (urlSearch !== searchInput) {
-          setSearchInput(urlSearch)
-          setSearch(urlSearch)
-          setPage(1)
-        }
       }
       
       prevPathnameRef.current = pathname
@@ -241,11 +222,140 @@ export function EntityTable<T = any>({
   const [advancedSearchValues, setAdvancedSearchValues] = React.useState<Record<string, any>>({})
   const [advancedSearchLogic, setAdvancedSearchLogic] = React.useState<'AND' | 'OR'>('AND')
   
+  // ========== 客户端挂载后从URL初始化状态（避免hydration错误） ==========
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    // 标记正在从URL初始化
+    isInitializingFromURL.current = true
+
+    const params = new URLSearchParams(window.location.search)
+    
+    // 分页和排序
+    const urlPage = params.get('page')
+    const urlLimit = params.get('limit')
+    const urlSort = params.get('sort')
+    const urlOrder = params.get('order')
+    
+    if (urlPage) setPage(parseInt(urlPage, 10))
+    if (urlLimit) setPageSize(parseInt(urlLimit, 10))
+    if (urlSort) {
+      setSort(urlSort)
+      setSorting([{ id: urlSort, desc: (urlOrder || config.list.defaultOrder) === 'desc' }])
+    }
+    if (urlOrder) setOrder(urlOrder as 'asc' | 'desc')
+    
+    // 搜索
+    const urlSearch = params.get('search')
+    if (urlSearch) {
+      setSearch(urlSearch)
+      setSearchInput(urlSearch)
+    }
+    
+    // 筛选条件（filter_开头的参数）
+    const filters: Record<string, any> = {}
+    params.forEach((value, key) => {
+      if (key.startsWith('filter_')) {
+        const filterKey = key.replace('filter_', '')
+        filters[filterKey] = value
+      }
+    })
+    if (Object.keys(filters).length > 0) {
+      setFilterValues(filters)
+    }
+    
+    // 高级搜索（advanced_开头的参数）
+    const advancedSearch: Record<string, any> = {}
+    params.forEach((value, key) => {
+      if (key.startsWith('advanced_') && key !== 'advanced_logic') {
+        const searchKey = key.replace('advanced_', '')
+        advancedSearch[searchKey] = value
+      }
+    })
+    if (Object.keys(advancedSearch).length > 0) {
+      setAdvancedSearchValues(advancedSearch)
+    }
+    
+    const advancedLogic = params.get('advanced_logic')
+    if (advancedLogic) {
+      setAdvancedSearchLogic(advancedLogic as 'AND' | 'OR')
+    }
+    
+    // 初始化完成后，允许后续的URL同步
+    // 使用 setTimeout 确保所有状态更新都已完成
+    setTimeout(() => {
+      isInitializingFromURL.current = false
+      hasInitialized.current = true
+    }, 0)
+  }, [config.list.defaultOrder]) // 只在挂载时执行一次
+  
   // 批量操作状态
   const [selectedRows, setSelectedRows] = React.useState<T[]>([])
   const [batchEditDialogOpen, setBatchEditDialogOpen] = React.useState(false)
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = React.useState(false)
   const [batchEditValues, setBatchEditValues] = React.useState<Record<string, any>>({})
+  
+  // ========== URL同步：通过useEffect监听状态变化并更新URL ==========
+  // 使用ref来跟踪是否正在从URL初始化状态，避免循环更新
+  const isInitializingFromURL = React.useRef(false)
+  const hasInitialized = React.useRef(false)
+  
+  React.useEffect(() => {
+    // 跳过首次挂载和从URL初始化期间的URL更新
+    if (!hasInitialized.current || isInitializingFromURL.current) {
+      return
+    }
+
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams()
+    
+    // 分页
+    if (page > 1) {
+      params.set('page', String(page))
+    }
+    if (pageSize !== (config.list.pageSize || 10)) {
+      params.set('limit', String(pageSize))
+    }
+    
+    // 排序
+    if (sort !== config.list.defaultSort) {
+      params.set('sort', sort)
+    }
+    if (order !== config.list.defaultOrder) {
+      params.set('order', order)
+    }
+    
+    // 搜索
+    if (search) {
+      params.set('search', search)
+    }
+    
+    // 筛选条件
+    Object.entries(filterValues).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') {
+        params.set(`filter_${key}`, String(value))
+      }
+    })
+    
+    // 高级搜索
+    Object.entries(advancedSearchValues).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') {
+        params.set(`advanced_${key}`, String(value))
+      }
+    })
+    
+    if (Object.keys(advancedSearchValues).length > 0 && advancedSearchLogic !== 'AND') {
+      params.set('advanced_logic', advancedSearchLogic)
+    }
+    
+    // 更新URL（使用replace避免堆积历史记录，scroll: false避免页面跳动）
+    const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname
+    router.replace(newUrl, { scroll: false })
+    
+    // 通知父组件
+    onSearchParamsChange?.(params)
+  }, [page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic, pathname, router, config.list.pageSize, config.list.defaultSort, config.list.defaultOrder, onSearchParamsChange])
   
   // 当选中行变化时，通知父组件
   React.useEffect(() => {
@@ -353,7 +463,22 @@ export function EntityTable<T = any>({
       
       setData(result.data || [])
       // 支持两种返回格式：pagination.total 或直接 total
-      setTotal(result.pagination?.total ?? result.total ?? 0)
+      const newTotal = result.pagination?.total ?? result.total ?? 0
+      setTotal(newTotal)
+      
+      // 触发回调
+      if (onSearchParamsChange) {
+        onSearchParamsChange(params)
+      }
+      if (onTotalChange) {
+        // 注意：这里的total是所有数据的总数，不是筛选后的总数
+        // 如果有筛选条件，应该传递筛选后的总数
+        onTotalChange(newTotal)
+      }
+      if (onFilteredTotalChange) {
+        // 如果有筛选或搜索条件，传递当前total，否则传递总数
+        onFilteredTotalChange(newTotal)
+      }
     } catch (error: any) {
       console.error(`[EntityTable] 获取${config.displayName}列表失败:`, error)
       const errorMsg = error?.message || `获取${config.displayName}列表失败`
@@ -361,14 +486,18 @@ export function EntityTable<T = any>({
       // 设置空数据，避免显示旧数据
       setData([])
       setTotal(0)
+      
+      // 错误时也触发回调
+      if (onTotalChange) onTotalChange(0)
+      if (onFilteredTotalChange) onFilteredTotalChange(0)
     } finally {
       setLoading(false)
     }
-  }, [config.apiPath, config.displayName])
+  }, [config.apiPath, config.displayName, onSearchParamsChange, onTotalChange, onFilteredTotalChange])
 
   React.useEffect(() => {
     fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
-  }, [fetchData, page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic])
+  }, [fetchData, page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic, refreshKey])
   
   // 处理搜索（防抖）
   // 使用 ref 来跟踪是否正在处理路径变化
@@ -1031,7 +1160,7 @@ export function EntityTable<T = any>({
     setPage(1)
   }
   
-  // 处理高级搜索变化
+  // 处理高级搜索变化（仅更新状态）
   const handleAdvancedSearchChange = (field: string, value: any) => {
     setAdvancedSearchValues((prev) => {
       const newValues = { ...prev, [field]: value }
@@ -1053,6 +1182,7 @@ export function EntityTable<T = any>({
   const handleResetAdvancedSearch = () => {
     setAdvancedSearchValues({})
     setAdvancedSearchLogic('AND')
+    setPage(1)
   }
   
   // 批量删除
@@ -2046,7 +2176,9 @@ export function EntityTable<T = any>({
         page={page}
         pageSize={pageSize}
         total={total}
-        onPageChange={setPage}
+        onPageChange={(newPage) => {
+          setPage(newPage)
+        }}
         onPageSizeChange={(newPageSize) => {
           setPageSize(newPageSize)
           setPage(1)

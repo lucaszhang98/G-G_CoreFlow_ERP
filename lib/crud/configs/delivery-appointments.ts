@@ -75,6 +75,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       key: 'origin_location',
       label: '起始地',
       type: 'location',
+      optional: true, // 起始地改为非必填
     },
     destination_location: {
       key: 'destination_location',

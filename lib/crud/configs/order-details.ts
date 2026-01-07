@@ -81,25 +81,25 @@ export const orderDetailConfig: EntityConfig = {
       key: 'actual_pallets',
       label: '实际板数',
       type: 'number',
-      sortable: true,
+      sortable: false, // 计算字段，不支持排序
     },
     remaining_pallets: {
       key: 'remaining_pallets',
       label: '剩余板数',
       type: 'number',
-      sortable: true,
+      sortable: false, // 计算字段，不支持排序
     },
     unbooked_pallets: {
       key: 'unbooked_pallets',
       label: '未约板数',
       type: 'number',
-      sortable: true,
+      sortable: false, // 计算字段，不支持排序
     },
     storage_location_code: {
       key: 'storage_location_code',
       label: '仓库位置',
       type: 'text',
-      sortable: true,
+      sortable: false, // 关联字段，不支持排序
       searchable: true,
     },
     notes: {
@@ -162,6 +162,16 @@ export const orderDetailConfig: EntityConfig = {
         label: '预计拆柜日期',
         type: 'dateRange',
         dateFields: ['planned_unload_at'],
+      },
+      {
+        field: 'booking_status',
+        label: '预约状态',
+        type: 'select',
+        options: [
+          { label: '未约', value: 'unbooked' }, // remaining_pallets > 0
+          { label: '约满', value: 'fully_booked' }, // remaining_pallets = 0
+          { label: '超约', value: 'overbooked' }, // remaining_pallets < 0
+        ],
       },
     ],
   },

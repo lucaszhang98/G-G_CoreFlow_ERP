@@ -156,8 +156,8 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
         return  // 订单不存在，后续校验无意义
       }
 
-      // 2. 验证位置是否存在
-      if (!locationsMap.has(row.origin_location_code)) {
+      // 2. 验证位置是否存在（起始地为可选字段）
+      if (row.origin_location_code && !locationsMap.has(row.origin_location_code)) {
         errors.push({
           row: rowIndex,
           field: '起始地',
@@ -376,9 +376,13 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
       for (const [referenceNumber, rows] of appointmentGroups) {
         const firstRow = rows[0]
 
-        // 获取位置ID
-        const originLocationId = locationsMap.get(firstRow.origin_location_code)
-        if (!originLocationId) {
+        // 获取位置ID（起始地为可选字段）
+        const originLocationId = firstRow.origin_location_code 
+          ? locationsMap.get(firstRow.origin_location_code) 
+          : null
+        
+        // 如果提供了起始地但不存在，则报错
+        if (firstRow.origin_location_code && !originLocationId) {
           throw new Error(`起始地"${firstRow.origin_location_code}"不存在`)
         }
         

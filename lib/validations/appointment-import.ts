@@ -35,9 +35,11 @@ export const appointmentImportRowSchema = z.object({
     message: '预约类型必须是：卡板、地板之一',
   }),
   
-  // 起始地（必填，位置代码）
-  origin_location_code: z.string({ message: '起始地为必填项' })
-    .min(1, '起始地不能为空'),
+  // 起始地（选填，位置代码）
+  origin_location_code: z.string().optional().nullable().transform(val => {
+    if (val === null || val === undefined || val === '') return null
+    return val
+  }),
   
   // 目的地（必填，位置代码）
   destination_location_code: z.string({ message: '目的地为必填项' })

@@ -15,7 +15,7 @@ import prisma from '@/lib/prisma'
  * - filter_customer_name: 客户筛选
  * - filter_delivery_nature: 送仓性质筛选
  * - filter_delivery_location_code: 仓点筛选
- * - filter_unbooked_pallets: 未约板数筛选（zero/non_zero/negative）
+ * - filter_booking_status: 预约状态筛选（unbooked/fully_booked/overbooked）
  * - filter_planned_unload_at_from/to: 预计拆柜日期范围筛选
  * 
  * 特殊说明：
@@ -70,9 +70,9 @@ export async function GET(request: NextRequest) {
       where.delivery_location = delivery_location
     }
 
-    // 未约板数筛选（由于未约板数是实时计算的，需要在查询后筛选）
+    // 预约状态筛选（由于未约板数是实时计算的，需要在查询后筛选）
     // 先不在这里处理，在查询后根据计算出的未约板数筛选
-    const unbooked_pallets_filter = searchParams.get('filter_unbooked_pallets')
+    const booking_status_filter = searchParams.get('filter_booking_status')
 
     const planned_unload_at_from = searchParams.get('filter_planned_unload_at_from')
     const planned_unload_at_to = searchParams.get('filter_planned_unload_at_to')
@@ -107,12 +107,12 @@ export async function GET(request: NextRequest) {
     }
 
     // 查询数据
-    // 如果有未约板数筛选，需要先查询所有数据（因为未约板数是实时计算的），筛选后再分页
-    // 为了性能考虑，设置最大查询限制（1000条）
-    const hasUnbookedFilter = unbooked_pallets_filter && unbooked_pallets_filter !== '__all__'
-    const MAX_QUERY_LIMIT = 1000
-    const queryLimit = hasUnbookedFilter ? MAX_QUERY_LIMIT : limit
-    const querySkip = hasUnbookedFilter ? undefined : (page - 1) * limit
+    // 如果有预约状态筛选，需要先查询所有数据（因为未约板数是实时计算的），筛选后再分页
+    // 为了性能考虑，设置最大查询限制（10000条）
+    const hasBookingStatusFilter = booking_status_filter && booking_status_filter !== '__all__'
+    const MAX_QUERY_LIMIT = 10000
+    const queryLimit = hasBookingStatusFilter ? MAX_QUERY_LIMIT : limit
+    const querySkip = hasBookingStatusFilter ? undefined : (page - 1) * limit
     
     const [items, total] = await Promise.all([
       prisma.order_detail.findMany({
@@ -248,10 +248,10 @@ export async function GET(request: NextRequest) {
       const totalAppointmentPallets = appointments.reduce((sum: number, appt: any) => sum + (appt.estimated_pallets || 0), 0)
 
       // 计算未约板数
-      // 已入库：使用 inventory_lots.unbooked_pallet_count
+      // 已入库：使用 inventory_lots.unbooked_pallet_count（如果为null则视为0）
       // 未入库：实时计算 = 预计板数 - 所有预约板数之和（允许负数，负数表示多约）
-      const unbooked_pallets: number | null = il
-        ? (il.unbooked_pallet_count ?? null) // 已入库，使用 inventory_lots 的 unbooked_pallet_count
+      const unbooked_pallets: number = il
+        ? (il.unbooked_pallet_count ?? 0) // 已入库，使用 inventory_lots 的 unbooked_pallet_count，null时视为0
         : (item.estimated_pallets || 0) - totalAppointmentPallets // 未入库，实时计算（允许负数）
 
       // 获取 location_code
@@ -284,33 +284,29 @@ export async function GET(request: NextRequest) {
     })
 
     /**
-     * 未约板数筛选函数
+     * 预约状态筛选函数
      * 在查询后筛选，因为未约板数是实时计算的
      * @param items 待筛选的数据项数组
-     * @param filterValue 筛选值：'zero'（无未约）、'non_zero'（有未约）、'negative'（多约）
+     * @param filterValue 筛选值：'unbooked'（未约）、'fully_booked'（约满）、'overbooked'（超约）
      * @returns 筛选后的数据项数组
      */
-    const filterByUnbookedPallets = (items: any[], filterValue: string): any[] => {
+    const filterByBookingStatus = (items: any[], filterValue: string): any[] => {
       if (!filterValue || filterValue === '__all__') {
         return items
       }
       
       return items.filter((item: any) => {
         const unbooked = item.unbooked_pallets
-        // 如果未约板数为null或undefined，不匹配任何筛选
-        if (unbooked === null || unbooked === undefined) {
-          return false
-        }
         
         switch (filterValue) {
-          case 'zero':
-            // 无未约：等于0
-            return unbooked === 0
-          case 'non_zero':
-            // 有未约：大于0
+          case 'unbooked':
+            // 未约：未约板数 > 0
             return unbooked > 0
-          case 'negative':
-            // 多约：小于0
+          case 'fully_booked':
+            // 约满：未约板数 = 0
+            return unbooked === 0
+          case 'overbooked':
+            // 超约：未约板数 < 0
             return unbooked < 0
           default:
             return true
@@ -318,17 +314,17 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // 应用未约板数筛选
-    const filteredItems = filterByUnbookedPallets(transformedItems, unbooked_pallets_filter || '')
-    const finalTotal = hasUnbookedFilter ? filteredItems.length : total
+    // 应用预约状态筛选
+    const filteredItems = filterByBookingStatus(transformedItems, booking_status_filter || '')
+    const finalTotal = hasBookingStatusFilter ? filteredItems.length : total
 
-    // 性能提示：如果筛选后的数据量很大，建议添加其他筛选条件
-    if (hasUnbookedFilter && filteredItems.length > MAX_QUERY_LIMIT) {
-      console.warn(`[order-details] 未约板数筛选返回了超过 ${MAX_QUERY_LIMIT} 条记录，建议添加其他筛选条件以提高性能`)
+    // 性能提示：如果查询的数据量达到上限，可能有数据未被筛选
+    if (hasBookingStatusFilter && items.length >= MAX_QUERY_LIMIT) {
+      console.warn(`[order-details] 预约状态筛选查询已达到上限 ${MAX_QUERY_LIMIT} 条记录，可能有数据未包含在筛选结果中，建议添加其他筛选条件`)
     }
 
     // 应用分页（在筛选后，如果有筛选的话）
-    const paginatedItems = hasUnbookedFilter
+    const paginatedItems = hasBookingStatusFilter
       ? filteredItems.slice((page - 1) * limit, page * limit)
       : filteredItems
 

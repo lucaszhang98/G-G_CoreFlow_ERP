@@ -102,11 +102,29 @@ export function createListHandler(config: EntityConfig) {
                   Object.assign(where, relationCondition)
                 }
               } else {
-                // 普通 select 字段（包括状态）
-                where[filterField.field] = filterValue
-                
-                if (process.env.NODE_ENV === 'development') {
-                  console.log(`[createListHandler] 设置筛选条件: ${filterField.field} = ${filterValue}`)
+                // 特殊处理：预约状态筛选
+                if (filterField.field === 'booking_status') {
+                  if (filterValue === 'unbooked') {
+                    // 有未约板数：remaining_pallets > 0
+                    where.remaining_pallets = { gt: 0 }
+                  } else if (filterValue === 'fully_booked') {
+                    // 已约满：remaining_pallets = 0
+                    where.remaining_pallets = 0
+                  } else if (filterValue === 'overbooked') {
+                    // 超约：remaining_pallets < 0
+                    where.remaining_pallets = { lt: 0 }
+                  }
+                  
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`[createListHandler] 设置预约状态筛选条件: ${filterValue}`)
+                  }
+                } else {
+                  // 普通 select 字段（包括状态）
+                  where[filterField.field] = filterValue
+                  
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`[createListHandler] 设置筛选条件: ${filterField.field} = ${filterValue}`)
+                  }
                 }
               }
             }
