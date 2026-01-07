@@ -243,7 +243,14 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
       orderGroups.get(row.order_number)!.push(row)
     })
 
+    // 预查询默认仓库（避免在事务内重复查询，减轻 Neon 事务压力）
+    const defaultWarehouse = await prisma.warehouses.findFirst({
+      select: { warehouse_id: true },
+      orderBy: { warehouse_id: 'asc' },
+    })
+
     // 使用事务批量导入（全部成功或全部失败）
+    // 配置更长的事务超时（Neon 环境需要，默认 5 秒，这里设置 30 秒）
     await prisma.$transaction(async (tx) => {
       for (const [orderNumber, rows] of orderGroups) {
         const firstRow = rows[0]
@@ -278,26 +285,18 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
         })
 
         // 如果 operation_mode = 'unload'（拆柜），自动创建入库管理记录
-        if (firstRow.operation_mode === 'unload') {
-          // 获取默认仓库（如果系统中没有仓库，则跳过创建入库记录）
-          const defaultWarehouse = await tx.warehouses.findFirst({
-            select: { warehouse_id: true },
-            orderBy: { warehouse_id: 'asc' },
+        if (firstRow.operation_mode === 'unload' && defaultWarehouse) {
+          await tx.inbound_receipt.create({
+            data: {
+              order_id: order.order_id,
+              warehouse_id: defaultWarehouse.warehouse_id,
+              status: 'pending',
+              planned_unload_at: null,
+              unload_method_code: null,
+              created_by: userId,
+              updated_by: userId,
+            },
           })
-          
-          if (defaultWarehouse) {
-            await tx.inbound_receipt.create({
-              data: {
-                order_id: order.order_id,
-                warehouse_id: defaultWarehouse.warehouse_id,
-                status: 'pending',
-                planned_unload_at: null,
-                unload_method_code: null,
-                created_by: userId,
-                updated_by: userId,
-              },
-            })
-          }
         }
 
         // 创建订单明细
@@ -325,6 +324,9 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
           })
         }
       }
+    }, {
+      maxWait: 10000, // 最大等待获取连接时间：10 秒
+      timeout: 60000, // 最大事务执行时间：60 秒（适应大批量导入）
     })
   },
 }
