@@ -308,20 +308,29 @@ async function updatePickupManagement(
     const serializedUpdated = serializeBigInt(updated)
     const updatedOrder = serializedUpdated?.orders
 
-    // 构建返回数据，确保所有字段都已序列化
+    // 构建返回数据，确保所有字段都已序列化（包括嵌套对象中的BigInt）
     const responseData = {
       pickup_id: String(serializedUpdated.pickup_id || ''),
       current_location: serializedUpdated.current_location || null,
       port_text: serializedUpdated.port_text || null,
       shipping_line: serializedUpdated.shipping_line || null,
-      driver: serializedUpdated.drivers || null,
+      driver: serializedUpdated.drivers ? {
+        driver_id: String(serializedUpdated.drivers.driver_id || ''),
+        driver_code: serializedUpdated.drivers.driver_code || null,
+        license_number: serializedUpdated.drivers.license_number || null,
+        license_plate: serializedUpdated.drivers.license_plate || null,
+      } : null,
       driver_id: serializedUpdated.driver_id ? String(serializedUpdated.driver_id) : null,
       status: serializedUpdated.status || null,
       notes: serializedUpdated.notes || null,
       container_type: updatedOrder?.container_type || null,
       port_location: updatedOrder?.locations_orders_port_location_idTolocations?.location_code || null,
       port_location_id: updatedOrder?.port_location_id ? String(updatedOrder.port_location_id) : null,
-      carrier: updatedOrder?.carriers || null,
+      carrier: updatedOrder?.carriers ? {
+        carrier_id: String(updatedOrder.carriers.carrier_id || ''),
+        name: updatedOrder.carriers.name || null,
+        carrier_code: updatedOrder.carriers.carrier_code || null,
+      } : null,
       carrier_id: updatedOrder?.carrier_id ? String(updatedOrder.carrier_id) : null,
       lfd_date: updatedOrder?.lfd_date || null,
       pickup_date: updatedOrder?.pickup_date || null,

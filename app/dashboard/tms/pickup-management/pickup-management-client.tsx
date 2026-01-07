@@ -136,7 +136,7 @@ export function PickupManagementClient() {
       const drivers = result.data || []
       
       return drivers.map((driver: any) => ({
-        label: `${driver.driver_code || ''} ${driver.license_plate ? `(${driver.license_plate})` : ''}`.trim(),
+        label: driver.driver_code || '',
         value: String(driver.driver_id || ''),
       }))
     } catch (error) {
