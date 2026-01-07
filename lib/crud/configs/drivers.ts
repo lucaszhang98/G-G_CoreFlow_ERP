@@ -117,16 +117,15 @@ export const driverConfig: EntityConfig = {
       delete: {
         enabled: true,
       },
-      import: {
-        enabled: true,
-        templatePath: '/api/drivers/import/template',
-        importPath: '/api/drivers/import',
-      },
     },
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
       fields: ['status'],
+    },
+    // 批量导入配置
+    import: {
+      enabled: true,
     },
   },
   
