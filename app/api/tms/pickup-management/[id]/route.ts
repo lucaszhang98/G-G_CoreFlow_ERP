@@ -179,9 +179,8 @@ async function updatePickupManagement(
       pickupUpdateData.shipping_line = body.shipping_line || null
     }
     if (body.driver_id !== undefined) {
-      pickupUpdateData.driver_id = body.driver_id 
-        ? BigInt(body.driver_id) 
-        : null
+      // 不需要手动转换 BigInt，Prisma 会自动处理
+      pickupUpdateData.driver_id = body.driver_id || null
     }
     if (body.notes !== undefined) {
       pickupUpdateData.notes = body.notes
@@ -189,14 +188,12 @@ async function updatePickupManagement(
 
     // 订单字段（通过提柜管理修改）
     if (body.port_location_id !== undefined) {
-      orderUpdateData.port_location_id = body.port_location_id 
-        ? BigInt(body.port_location_id) 
-        : null
+      // 不需要手动转换 BigInt，Prisma 会自动处理
+      orderUpdateData.port_location_id = body.port_location_id || null
     }
     if (body.carrier_id !== undefined) {
-      orderUpdateData.carrier_id = body.carrier_id 
-        ? BigInt(body.carrier_id) 
-        : null
+      // 不需要手动转换 BigInt，Prisma 会自动处理
+      orderUpdateData.carrier_id = body.carrier_id || null
     }
     if (body.container_type !== undefined) {
       orderUpdateData.container_type = body.container_type || null
@@ -239,16 +236,8 @@ async function updatePickupManagement(
     }
 
     // 调试：查看要更新的数据
-    try {
-      console.log('[提柜管理更新] pickupUpdateData:', JSON.stringify(pickupUpdateData, null, 2))
-    } catch (e) {
-      console.log('[提柜管理更新] pickupUpdateData 序列化失败:', pickupUpdateData)
-    }
-    try {
-      console.log('[提柜管理更新] orderUpdateData:', JSON.stringify(orderUpdateData, null, 2))
-    } catch (e) {
-      console.log('[提柜管理更新] orderUpdateData 序列化失败:', orderUpdateData)
-    }
+    console.log('[提柜管理更新] pickupUpdateData:', pickupUpdateData)
+    console.log('[提柜管理更新] orderUpdateData:', orderUpdateData)
 
     // 应用系统字段到 pickup_management
     const user = authResult.user || null
@@ -315,10 +304,6 @@ async function updatePickupManagement(
 
     const serializedUpdated = serializeBigInt(updated)
     const updatedOrder = serializedUpdated?.orders
-    
-    console.log('[提柜管理更新] serializedUpdated:', typeof serializedUpdated, serializedUpdated)
-    console.log('[提柜管理更新] serializedUpdated.driver_id 类型:', typeof serializedUpdated?.driver_id)
-    console.log('[提柜管理更新] serializedUpdated.drivers:', serializedUpdated?.drivers)
 
     // 构建返回数据，确保所有字段都已序列化（包括嵌套对象中的BigInt）
     const responseData = {
@@ -350,22 +335,7 @@ async function updatePickupManagement(
       return_deadline: updatedOrder?.return_deadline || null,
     }
 
-    try {
-      console.log('[提柜管理更新] 返回数据:', JSON.stringify(responseData, null, 2))
-    } catch (e) {
-      console.error('[提柜管理更新] 返回数据序列化失败:', e)
-      console.error('[提柜管理更新] 原始数据:', responseData)
-      
-      // 深度序列化所有字段
-      const safeResponseData = JSON.parse(JSON.stringify(responseData, (key, value) =>
-        typeof value === 'bigint' ? String(value) : value
-      ))
-      
-      return NextResponse.json({
-        success: true,
-        data: safeResponseData,
-      })
-    }
+    console.log('[提柜管理更新] 更新成功')
 
     return NextResponse.json({
       success: true,

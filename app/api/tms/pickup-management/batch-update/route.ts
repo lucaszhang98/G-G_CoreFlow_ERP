@@ -48,9 +48,8 @@ export async function POST(request: NextRequest) {
       pickupUpdateData.shipping_line = updates.shipping_line || null
     }
     if (updates.driver_id !== undefined) {
-      pickupUpdateData.driver_id = updates.driver_id 
-        ? BigInt(updates.driver_id) 
-        : null
+      // 不需要手动转换 BigInt，Prisma 会自动处理
+      pickupUpdateData.driver_id = updates.driver_id || null
     }
     if (updates.notes !== undefined) {
       pickupUpdateData.notes = updates.notes
@@ -58,14 +57,12 @@ export async function POST(request: NextRequest) {
 
     // 订单字段（通过提柜管理修改）
     if (updates.port_location_id !== undefined) {
-      orderUpdateData.port_location_id = updates.port_location_id 
-        ? BigInt(updates.port_location_id) 
-        : null
+      // 不需要手动转换 BigInt，Prisma 会自动处理
+      orderUpdateData.port_location_id = updates.port_location_id || null
     }
     if (updates.carrier_id !== undefined) {
-      orderUpdateData.carrier_id = updates.carrier_id 
-        ? BigInt(updates.carrier_id) 
-        : null
+      // 不需要手动转换 BigInt，Prisma 会自动处理
+      orderUpdateData.carrier_id = updates.carrier_id || null
     }
     if (updates.container_type !== undefined) {
       orderUpdateData.container_type = updates.container_type || null
