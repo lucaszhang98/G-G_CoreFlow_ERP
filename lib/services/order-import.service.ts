@@ -243,12 +243,6 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
       orderGroups.get(row.order_number)!.push(row)
     })
 
-    // 在事务外预查询默认仓库（避免在事务内重复查询，提高性能并避免连接池问题）
-    const defaultWarehouse = await prisma.warehouses.findFirst({
-      select: { warehouse_id: true },
-      orderBy: { warehouse_id: 'asc' },
-    })
-
     // 使用事务批量导入（全部成功或全部失败）
     await prisma.$transaction(async (tx) => {
       for (const [orderNumber, rows] of orderGroups) {
@@ -285,21 +279,25 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
 
         // 如果 operation_mode = 'unload'（拆柜），自动创建入库管理记录
         if (firstRow.operation_mode === 'unload') {
-          if (!defaultWarehouse) {
-            throw new Error('系统中没有仓库，无法为拆柜订单创建入库记录。请先在"设置-仓库管理"中添加仓库。')
-          }
-          
-          await tx.inbound_receipt.create({
-            data: {
-              order_id: order.order_id,
-              warehouse_id: defaultWarehouse.warehouse_id,
-              status: 'pending',
-              planned_unload_at: null,
-              unload_method_code: null,
-              created_by: userId,
-              updated_by: userId,
-            },
+          // 获取默认仓库（如果系统中没有仓库，则跳过创建入库记录）
+          const defaultWarehouse = await tx.warehouses.findFirst({
+            select: { warehouse_id: true },
+            orderBy: { warehouse_id: 'asc' },
           })
+          
+          if (defaultWarehouse) {
+            await tx.inbound_receipt.create({
+              data: {
+                order_id: order.order_id,
+                warehouse_id: defaultWarehouse.warehouse_id,
+                status: 'pending',
+                planned_unload_at: null,
+                unload_method_code: null,
+                created_by: userId,
+                updated_by: userId,
+              },
+            })
+          }
         }
 
         // 创建订单明细
