@@ -674,7 +674,7 @@ model pickup_management {
   earliest_appointment_time                 DateTime? @db.Timestamptz(6)
   status                                    String?   @default("planned") @db.VarChar(50)
   current_location                          String?   @db.VarChar(100)
-  port_location                             String?   @db.VarChar(10)
+  port_text                                 String?   @db.VarChar(10)
   shipping_line                             String?   @db.VarChar(10)
   driver_id                                 BigInt?
   notes                                     String?

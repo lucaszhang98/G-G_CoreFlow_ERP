@@ -38,6 +38,12 @@ export const pickupManagementConfig: EntityConfig = {
     },
     port_location: {
       key: 'port_location',
+      label: '码头/查验站',
+      type: 'location',
+      locationType: 'port', // 只显示码头类型的位置
+    },
+    port_text: {
+      key: 'port_text',
       label: '码头位置',
       type: 'text',
     },
@@ -215,6 +221,7 @@ export const pickupManagementConfig: EntityConfig = {
       'container_number',
       'mbl',
       'port_location',
+      'port_text',
       'shipping_line',
       'customer',
       'container_type',
@@ -241,6 +248,7 @@ export const pickupManagementConfig: EntityConfig = {
       enabled: true,
       fields: [
         'port_location',
+        'port_text',
         'shipping_line',
         'container_type',
         'carrier',
@@ -260,6 +268,7 @@ export const pickupManagementConfig: EntityConfig = {
         enabled: true,
         fields: [
           'port_location',
+          'port_text',
           'shipping_line',
           'container_type',
           'carrier',
