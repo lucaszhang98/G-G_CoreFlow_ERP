@@ -34,9 +34,9 @@ export async function GET(request: NextRequest) {
     filterConditions.forEach((condition) => {
       Object.keys(condition).forEach((fieldName) => {
         // 判断字段是否来自 orders 表
-        // 主表字段：pickup_id, order_id, status, notes, earliest_appointment_time, current_location
+        // 主表字段：pickup_id, order_id, status, notes, earliest_appointment_time, current_location, port_location, shipping_line, driver_id
         // 其他字段都来自 orders 表
-        const mainTableFields = ['pickup_id', 'order_id', 'status', 'notes', 'earliest_appointment_time', 'current_location']
+        const mainTableFields = ['pickup_id', 'order_id', 'status', 'notes', 'earliest_appointment_time', 'current_location', 'port_location', 'shipping_line', 'driver_id']
         if (mainTableFields.includes(fieldName)) {
           mainTableConditions.push(condition)
         } else {
@@ -153,6 +153,14 @@ export async function GET(request: NextRequest) {
             },
           },
         },
+        drivers: {
+          select: {
+            driver_id: true,
+            driver_code: true,
+            license_number: true,
+            license_plate: true,
+          },
+        },
       },
       orderBy: {
         created_at: order,
@@ -187,11 +195,14 @@ export async function GET(request: NextRequest) {
         ready_date: order?.ready_date || null,
         return_deadline: order?.return_deadline || null,
         warehouse_account: order?.warehouse_account || null,
-        port_location: order?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）
         port_location_id: order?.port_location_id ? String(order.port_location_id) : null,
         carrier: order?.carriers || null, // 返回完整的 carrier 对象，用于 relation 类型字段
         carrier_id: order?.carrier_id ? String(order.carrier_id) : null,
         // ========== 提柜管理自有字段（TMS 独有）==========
+        port_location: serialized.port_location || null, // 码头位置（文本字段，来自 pickup_management）
+        shipping_line: serialized.shipping_line || null, // 船司（文本字段，来自 pickup_management）
+        driver: serialized.drivers || null, // 返回完整的 driver 对象，用于 relation 类型字段
+        driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
         earliest_appointment_time: serialized.earliest_appointment_time || null,
         current_location: serialized.current_location || null,
         status: serialized.status || null, // 使用 pickup_management 的 status，不是 orders 的

@@ -38,9 +38,30 @@ export const pickupManagementConfig: EntityConfig = {
     },
     port_location: {
       key: 'port_location',
-      label: '码头/查验站',
-      type: 'location',
-      locationType: 'port', // 只显示码头类型的位置
+      label: '码头位置',
+      type: 'text',
+    },
+    shipping_line: {
+      key: 'shipping_line',
+      label: '船司',
+      type: 'text',
+    },
+    driver: {
+      key: 'driver',
+      label: '司机',
+      type: 'relation',
+      relation: {
+        model: 'drivers',
+        displayField: 'driver_code',
+        valueField: 'driver_id',
+      },
+      relationField: 'driver_id', // 指定数据库字段名
+    },
+    driver_id: {
+      key: 'driver_id',
+      label: '司机ID',
+      type: 'text',
+      hidden: true,
     },
     port_location_id: {
       key: 'port_location_id',
@@ -194,9 +215,11 @@ export const pickupManagementConfig: EntityConfig = {
       'container_number',
       'mbl',
       'port_location',
+      'shipping_line',
       'customer',
       'container_type',
       'carrier',
+      'driver',
       'do_issued',
       'order_date',
       'eta_date',
@@ -204,8 +227,8 @@ export const pickupManagementConfig: EntityConfig = {
       'delivery_location',
       'lfd_date',
       'pickup_date',
-        'ready_date',
-        'return_deadline',
+      'ready_date',
+      'return_deadline',
       'warehouse_account',
       'earliest_appointment_time',
       'current_location',
@@ -218,8 +241,10 @@ export const pickupManagementConfig: EntityConfig = {
       enabled: true,
       fields: [
         'port_location',
+        'shipping_line',
         'container_type',
         'carrier',
+        'driver',
         'lfd_date',
         'pickup_date',
         'ready_date',
@@ -235,8 +260,10 @@ export const pickupManagementConfig: EntityConfig = {
         enabled: true,
         fields: [
           'port_location',
+          'shipping_line',
           'container_type',
           'carrier',
+          'driver',
           'lfd_date',
           'pickup_date',
           'ready_date',
