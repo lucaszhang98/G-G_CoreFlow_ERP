@@ -38,6 +38,17 @@ export async function POST(request: NextRequest) {
     if (updates.current_location !== undefined) {
       pickupUpdateData.current_location = updates.current_location || null
     }
+    if (updates.port_text !== undefined) {
+      pickupUpdateData.port_text = updates.port_text || null
+    }
+    if (updates.shipping_line !== undefined) {
+      pickupUpdateData.shipping_line = updates.shipping_line || null
+    }
+    if (updates.driver_id !== undefined) {
+      pickupUpdateData.driver_id = updates.driver_id 
+        ? BigInt(updates.driver_id) 
+        : null
+    }
     if (updates.notes !== undefined) {
       pickupUpdateData.notes = updates.notes
     }
@@ -72,17 +83,16 @@ export async function POST(request: NextRequest) {
     }
     if (updates.pickup_date !== undefined) {
       if (updates.pickup_date && typeof updates.pickup_date === 'string') {
+        // 不转换时区！直接将输入的日期时间当作UTC时间存储
         // YYYY-MM-DDTHH:mm 格式，解析为 UTC 时间戳
-        const match = updates.pickup_date.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
-        if (match) {
-          const [, year, month, day, hours, minutes] = match
-          orderUpdateData.pickup_date = new Date(Date.UTC(
-            parseInt(year, 10),
-            parseInt(month, 10) - 1,
-            parseInt(day, 10),
-            parseInt(hours, 10),
-            parseInt(minutes, 10)
-          ))
+        const dateTimeStr = updates.pickup_date
+        if (dateTimeStr.includes('T')) {
+          const [datePart, timePart] = dateTimeStr.split('T')
+          const [year, month, day] = datePart.split('-').map(Number)
+          const timeWithSeconds = timePart.includes('Z') ? timePart.replace('Z', '') : timePart
+          const [hours, minutes, seconds = 0] = timeWithSeconds.split(':').map(Number)
+          // 使用Date.UTC直接创建UTC时间，不做任何时区转换
+          orderUpdateData.pickup_date = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds))
         } else {
           orderUpdateData.pickup_date = null
         }

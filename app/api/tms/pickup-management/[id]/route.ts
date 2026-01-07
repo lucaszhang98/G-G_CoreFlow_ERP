@@ -69,6 +69,14 @@ export async function GET(
             },
           },
         },
+        drivers: {
+          select: {
+            driver_id: true,
+            driver_code: true,
+            license_number: true,
+            license_plate: true,
+          },
+        },
       },
     })
 
@@ -104,6 +112,10 @@ export async function GET(
       carrier: order?.carriers || null, // 返回完整的 carrier 对象，用于 relation 类型字段
       carrier_id: order?.carrier_id ? String(order.carrier_id) : null,
       // 提柜管理自有字段
+      port_text: serialized.port_text || null,
+      shipping_line: serialized.shipping_line || null,
+      driver: serialized.drivers || null, // 返回完整的 driver 对象
+      driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
       earliest_appointment_time: serialized.earliest_appointment_time || null,
       current_location: serialized.current_location || null,
       status: serialized.status || null,
@@ -157,6 +169,17 @@ async function updatePickupManagement(
     if (body.current_location !== undefined) {
       pickupUpdateData.current_location = body.current_location || null
     }
+    if (body.port_text !== undefined) {
+      pickupUpdateData.port_text = body.port_text || null
+    }
+    if (body.shipping_line !== undefined) {
+      pickupUpdateData.shipping_line = body.shipping_line || null
+    }
+    if (body.driver_id !== undefined) {
+      pickupUpdateData.driver_id = body.driver_id 
+        ? BigInt(body.driver_id) 
+        : null
+    }
     if (body.notes !== undefined) {
       pickupUpdateData.notes = body.notes
     }
@@ -182,21 +205,20 @@ async function updatePickupManagement(
         : null
     }
     if (body.pickup_date !== undefined) {
-      // 不做时区转换，直接使用输入的日期时间
-      // datetime-local 输入格式为 YYYY-MM-DDTHH:mm，需要转换为 UTC 时间戳
       if (body.pickup_date) {
-        // 解析输入的日期时间字符串（格式：YYYY-MM-DDTHH:mm）
+        // 不转换时区！直接将输入的日期时间当作UTC时间存储
+        // 输入格式：YYYY-MM-DDTHH:mm 或 ISO字符串
         const dateTimeStr = body.pickup_date
-        // 如果已经是 ISO 格式，直接使用；否则解析为本地时间然后转换为 UTC
         if (dateTimeStr.includes('T')) {
-          // 解析为本地时间（不转换时区），然后转换为 UTC 格式
           const [datePart, timePart] = dateTimeStr.split('T')
           const [year, month, day] = datePart.split('-').map(Number)
-          const [hours, minutes] = (timePart || '00:00').split(':').map(Number)
-          // 创建 UTC 日期对象（直接使用输入的时分，不转换时区）
-          orderUpdateData.pickup_date = new Date(Date.UTC(year, month - 1, day, hours, minutes))
+          const timeWithSeconds = timePart.includes('Z') ? timePart.replace('Z', '') : timePart
+          const [hours, minutes, seconds = 0] = timeWithSeconds.split(':').map(Number)
+          // 使用Date.UTC直接创建UTC时间，不做任何时区转换
+          orderUpdateData.pickup_date = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds))
         } else {
-          orderUpdateData.pickup_date = new Date(body.pickup_date)
+          // 如果是纯日期，补充00:00:00
+          orderUpdateData.pickup_date = new Date(body.pickup_date + 'T00:00:00Z')
         }
       } else {
         orderUpdateData.pickup_date = null
@@ -263,6 +285,14 @@ async function updatePickupManagement(
             },
           },
         },
+        drivers: {
+          select: {
+            driver_id: true,
+            driver_code: true,
+            license_number: true,
+            license_plate: true,
+          },
+        },
       },
     })
 
@@ -274,6 +304,10 @@ async function updatePickupManagement(
       data: {
         pickup_id: String(serializedUpdated.pickup_id || ''),
         current_location: serializedUpdated.current_location || null,
+        port_text: serializedUpdated.port_text || null,
+        shipping_line: serializedUpdated.shipping_line || null,
+        driver: serializedUpdated.drivers || null,
+        driver_id: serializedUpdated.driver_id ? String(serializedUpdated.driver_id) : null,
         status: serializedUpdated.status || null,
         notes: serializedUpdated.notes || null,
         container_type: updatedOrder?.container_type || null,
