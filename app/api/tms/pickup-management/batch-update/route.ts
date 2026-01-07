@@ -11,6 +11,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { ids, updates } = body
 
+    // 调试：查看前端发送的数据
+    console.log('[提柜管理批量更新] 收到的数据:', JSON.stringify({ ids, updates }, null, 2))
+
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json(
         { error: '请提供要更新的记录ID列表' },

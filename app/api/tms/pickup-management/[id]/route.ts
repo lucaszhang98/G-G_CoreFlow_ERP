@@ -148,6 +148,9 @@ async function updatePickupManagement(
     const pickupId = resolvedParams.id
     const body = await request.json()
 
+    // 调试：查看前端发送的数据
+    console.log('[提柜管理更新] 收到的数据:', JSON.stringify(body, null, 2))
+
     // 获取 pickup_management 记录，以获取关联的 order_id
     const pickup = await prisma.pickup_management.findUnique({
       where: { pickup_id: BigInt(pickupId) },
@@ -235,10 +238,15 @@ async function updatePickupManagement(
         : null
     }
 
+    // 调试：查看要更新的数据
+    console.log('[提柜管理更新] pickupUpdateData:', JSON.stringify(pickupUpdateData, null, 2))
+    console.log('[提柜管理更新] orderUpdateData:', JSON.stringify(orderUpdateData, null, 2))
+
     // 应用系统字段到 pickup_management
     const user = authResult.user || null
     if (Object.keys(pickupUpdateData).length > 0) {
       await addSystemFields(pickupUpdateData, user, false)
+      console.log('[提柜管理更新] 准备更新 pickup_management，数据:', JSON.stringify(pickupUpdateData, null, 2))
       await prisma.pickup_management.update({
         where: { pickup_id: BigInt(pickupId) },
         data: pickupUpdateData,
@@ -248,6 +256,7 @@ async function updatePickupManagement(
     // 更新 orders 表（如果有关联字段需要更新）
     if (Object.keys(orderUpdateData).length > 0) {
       await addSystemFields(orderUpdateData, user, false)
+      console.log('[提柜管理更新] 准备更新 orders，数据:', JSON.stringify(orderUpdateData, null, 2))
       await prisma.orders.update({
         where: { order_id: pickup.order_id },
         data: orderUpdateData,
