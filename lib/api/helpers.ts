@@ -249,19 +249,20 @@ export function handleError(error: any, defaultMessage: string = '操作失败')
  * @param skipUserValidation 是否跳过用户验证（用于事务内部，避免嵌套查询）
  */
 export async function addSystemFields(data: any, user: any, isCreate: boolean = true, skipUserValidation: boolean = false): Promise<any> {
-  const userId = user?.id ? BigInt(user.id) : null
+  // 直接使用字符串 ID，让 Prisma 自动处理 BigInt 转换
+  const userId = user?.id || null
   const now = new Date()
   
   // 如果提供了 userId 且不需要跳过验证，验证用户是否存在于数据库中
-  let validUserId: bigint | null = null
+  let validUserId: string | number | null = null
   if (userId && !skipUserValidation) {
     try {
       const userExists = await prisma.users.findUnique({
-        where: { id: userId },
+        where: { id: BigInt(userId) },
         select: { id: true },
       })
       if (userExists) {
-        validUserId = userId
+        validUserId = userId  // 保持为字符串或数字，不转换为 BigInt
       }
     } catch (error) {
       // 如果查询失败，不设置 userId（允许为 null）
@@ -269,20 +270,20 @@ export async function addSystemFields(data: any, user: any, isCreate: boolean = 
     }
   } else if (userId && skipUserValidation) {
     // 在事务内部，假设用户存在（由调用方保证）
-    validUserId = userId
+    validUserId = userId  // 保持为字符串或数字，不转换为 BigInt
   }
   
   if (isCreate) {
     // 创建操作：设置 created_by 和 created_at
     if (!data.created_by && validUserId) {
-      data.created_by = validUserId
+      data.created_by = validUserId  // Prisma 会自动转换为 BigInt
     }
     if (!data.created_at) {
       data.created_at = now
     }
     // 创建时也设置 updated_by 和 updated_at
     if (!data.updated_by && validUserId) {
-      data.updated_by = validUserId
+      data.updated_by = validUserId  // Prisma 会自动转换为 BigInt
     }
     if (!data.updated_at) {
       data.updated_at = now
@@ -290,7 +291,7 @@ export async function addSystemFields(data: any, user: any, isCreate: boolean = 
   } else {
     // 更新操作：只更新 updated_by 和 updated_at
     if (validUserId) {
-      data.updated_by = validUserId
+      data.updated_by = validUserId  // Prisma 会自动转换为 BigInt
     }
     data.updated_at = now
     // 更新时不能修改 created_by 和 created_at
