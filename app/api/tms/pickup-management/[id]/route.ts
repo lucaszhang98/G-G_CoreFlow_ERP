@@ -308,27 +308,32 @@ async function updatePickupManagement(
     const serializedUpdated = serializeBigInt(updated)
     const updatedOrder = serializedUpdated?.orders
 
+    // 构建返回数据，确保所有字段都已序列化
+    const responseData = {
+      pickup_id: String(serializedUpdated.pickup_id || ''),
+      current_location: serializedUpdated.current_location || null,
+      port_text: serializedUpdated.port_text || null,
+      shipping_line: serializedUpdated.shipping_line || null,
+      driver: serializedUpdated.drivers || null,
+      driver_id: serializedUpdated.driver_id ? String(serializedUpdated.driver_id) : null,
+      status: serializedUpdated.status || null,
+      notes: serializedUpdated.notes || null,
+      container_type: updatedOrder?.container_type || null,
+      port_location: updatedOrder?.locations_orders_port_location_idTolocations?.location_code || null,
+      port_location_id: updatedOrder?.port_location_id ? String(updatedOrder.port_location_id) : null,
+      carrier: updatedOrder?.carriers || null,
+      carrier_id: updatedOrder?.carrier_id ? String(updatedOrder.carrier_id) : null,
+      lfd_date: updatedOrder?.lfd_date || null,
+      pickup_date: updatedOrder?.pickup_date || null,
+      ready_date: updatedOrder?.ready_date || null,
+      return_deadline: updatedOrder?.return_deadline || null,
+    }
+
+    console.log('[提柜管理更新] 返回数据:', JSON.stringify(responseData, null, 2))
+
     return NextResponse.json({
       success: true,
-      data: {
-        pickup_id: String(serializedUpdated.pickup_id || ''),
-        current_location: serializedUpdated.current_location || null,
-        port_text: serializedUpdated.port_text || null,
-        shipping_line: serializedUpdated.shipping_line || null,
-        driver: serializedUpdated.drivers || null,
-        driver_id: serializedUpdated.driver_id ? String(serializedUpdated.driver_id) : null,
-        status: serializedUpdated.status || null,
-        notes: serializedUpdated.notes || null,
-        container_type: updatedOrder?.container_type || null,
-        port_location: updatedOrder?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）
-        port_location_id: updatedOrder?.port_location_id ? String(updatedOrder.port_location_id) : null,
-        carrier: updatedOrder?.carriers || null,
-        carrier_id: updatedOrder?.carrier_id ? String(updatedOrder.carrier_id) : null,
-        lfd_date: updatedOrder?.lfd_date || null,
-        pickup_date: updatedOrder?.pickup_date || null,
-        ready_date: updatedOrder?.ready_date || null,
-        return_deadline: updatedOrder?.return_deadline || null,
-      },
+      data: responseData,
     })
   } catch (error: any) {
     console.error('更新提柜管理记录失败:', error)
