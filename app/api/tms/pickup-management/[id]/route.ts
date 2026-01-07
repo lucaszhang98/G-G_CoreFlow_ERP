@@ -205,19 +205,26 @@ async function updatePickupManagement(
         : null
     }
     if (body.pickup_date !== undefined) {
+      console.log('[提柜日期调试] 收到的 pickup_date:', body.pickup_date, '类型:', typeof body.pickup_date)
       if (body.pickup_date) {
         // 不转换时区！直接将输入的日期时间当作UTC时间存储
         // 输入格式：YYYY-MM-DDTHH:mm 或 ISO字符串
         const dateTimeStr = body.pickup_date
+        console.log('[提柜日期调试] dateTimeStr:', dateTimeStr, '包含T?', dateTimeStr.includes('T'))
         if (dateTimeStr.includes('T')) {
           const [datePart, timePart] = dateTimeStr.split('T')
+          console.log('[提柜日期调试] datePart:', datePart, 'timePart:', timePart)
           const [year, month, day] = datePart.split('-').map(Number)
           const timeWithSeconds = timePart.includes('Z') ? timePart.replace('Z', '') : timePart
           const [hours, minutes, seconds = 0] = timeWithSeconds.split(':').map(Number)
+          console.log('[提柜日期调试] 解析结果:', { year, month, day, hours, minutes, seconds })
           // 使用Date.UTC直接创建UTC时间，不做任何时区转换
-          orderUpdateData.pickup_date = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds))
+          const utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds))
+          console.log('[提柜日期调试] 生成的 UTC Date:', utcDate.toISOString())
+          orderUpdateData.pickup_date = utcDate
         } else {
           // 如果是纯日期，补充00:00:00
+          console.log('[提柜日期调试] 纯日期格式，补充 00:00:00')
           orderUpdateData.pickup_date = new Date(body.pickup_date + 'T00:00:00Z')
         }
       } else {
