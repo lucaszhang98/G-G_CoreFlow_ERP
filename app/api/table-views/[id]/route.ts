@@ -17,7 +17,7 @@ const prisma = new PrismaClient()
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 获取当前登录用户
@@ -30,7 +30,8 @@ export async function PUT(
     }
 
     const userId = BigInt(session.user.id)
-    const viewId = BigInt(params.id)
+    const { id } = await params
+    const viewId = BigInt(id)
     const body = await request.json()
 
     const {
@@ -120,7 +121,7 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 获取当前登录用户
@@ -133,7 +134,8 @@ export async function DELETE(
     }
 
     const userId = BigInt(session.user.id)
-    const viewId = BigInt(params.id)
+    const { id } = await params
+    const viewId = BigInt(id)
 
     // 验证权限：只能删除自己的视图
     const existingView = await prisma.table_views.findUnique({
@@ -177,7 +179,7 @@ export async function DELETE(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 获取当前登录用户
@@ -190,7 +192,8 @@ export async function PATCH(
     }
 
     const userId = BigInt(session.user.id)
-    const viewId = BigInt(params.id)
+    const { id } = await params
+    const viewId = BigInt(id)
 
     // 验证权限
     const existingView = await prisma.table_views.findUnique({
