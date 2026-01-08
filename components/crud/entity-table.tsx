@@ -2198,7 +2198,6 @@ export function EntityTable<T = any>({
         expandableRows={expandableRows}
         enableViewManager={true}
         viewManagerTableName={config.name}
-        viewManagerUserId={undefined}
       />
         </CardContent>
       </Card>
