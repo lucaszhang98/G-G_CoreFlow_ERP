@@ -38,26 +38,31 @@ export const inboundReceiptConfig: EntityConfig = {
       key: 'order_date',
       label: '预报日期',
       type: 'date',
+      sortable: true,
     },
     eta_date: {
       key: 'eta_date',
       label: '到港日期',
       type: 'date',
+      sortable: true,
     },
     ready_date: {
       key: 'ready_date',
       label: 'Ready日期',
       type: 'date',
+      sortable: true,
     },
     lfd_date: {
       key: 'lfd_date',
       label: 'LFD',
       type: 'date',
+      sortable: true,
     },
     pickup_date: {
       key: 'pickup_date',
       label: '提柜日期',
       type: 'date',
+      sortable: true,
     },
     status: {
       key: 'status',
@@ -138,8 +143,8 @@ export const inboundReceiptConfig: EntityConfig = {
   },
   
   list: {
-    defaultSort: 'created_at',
-    defaultOrder: 'desc',
+    defaultSort: 'eta_date',
+    defaultOrder: 'asc',
     columns: [
       'customer_name',
       'container_number',

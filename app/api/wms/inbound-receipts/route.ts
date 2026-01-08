@@ -111,19 +111,25 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // 排序 - Prisma 不支持多级嵌套排序，所以先按主表字段排序
-    const orderBy: any = {};
-    // 如果排序字段是关联表的字段，先按主表字段排序，后续可以在前端处理
+    // 排序 - 构建正确的排序条件
+    let orderBy: any = {};
+    
+    // 判断排序字段是来自主表还是 orders 表
+    const mainTableFields = ['inbound_receipt_id', 'status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes', 'created_at', 'updated_at', 'delivery_progress'];
+    
     if (sort === 'container_number') {
-      // container_number 实际对应 order_number，按 order_number 排序
-      orderBy.orders = { order_number: order };
-    } else if (sort === 'customer_name' || 
-        sort === 'order_date' || sort === 'eta_date' || sort === 'ready_date' || 
-        sort === 'lfd_date' || sort === 'pickup_date') {
-      // 这些字段来自关联表，先按创建时间排序
-      orderBy.created_at = 'desc';
+      // container_number 实际对应 order_number
+      orderBy = { orders: { order_number: order } };
+    } else if (mainTableFields.includes(sort)) {
+      // 主表字段直接排序
+      orderBy = { [sort]: order };
     } else {
-      orderBy[sort] = order;
+      // orders 表字段使用嵌套排序
+      orderBy = {
+        orders: {
+          [sort]: order
+        }
+      };
     }
 
     // 查询数据

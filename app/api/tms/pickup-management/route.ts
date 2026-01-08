@@ -97,6 +97,24 @@ export async function GET(request: NextRequest) {
     // 查询总数
     const total = await prisma.pickup_management.count({ where })
 
+    // 构建排序条件
+    let orderBy: any
+    
+    // 判断排序字段是来自主表还是 orders 表
+    const mainTableFields = ['pickup_id', 'status', 'notes', 'earliest_appointment_time', 'current_location', 'port_text', 'shipping_line', 'driver_id', 'created_at', 'updated_at']
+    
+    if (mainTableFields.includes(sort)) {
+      // 主表字段直接排序
+      orderBy = { [sort]: order }
+    } else {
+      // orders 表字段使用嵌套排序
+      orderBy = {
+        orders: {
+          [sort]: order
+        }
+      }
+    }
+
     // 查询数据
     const pickups = await prisma.pickup_management.findMany({
       where,
@@ -162,9 +180,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: {
-        created_at: order,
-      },
+      orderBy,
       skip: (page - 1) * limit,
       take: limit,
     })
