@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     // 使用 upsert 创建或更新视图
     const view = await prisma.table_views.upsert({
       where: {
-        unique_user_table_view_name: {
+        user_id_table_name_view_name: {
           user_id: userId,
           table_name: table_name,
           view_name: view_name,
