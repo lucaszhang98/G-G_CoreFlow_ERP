@@ -1038,7 +1038,9 @@ export function createCreateHandler(config: EntityConfig) {
         if (fieldConfig?.relation && fieldConfig.relation.valueField) {
           // 关系字段需要转换为 BigInt
           if (value) {
-            processedData[fieldConfig.relation.valueField] = BigInt(value as number)
+            // 如果字段名以 _id 结尾，使用字段名本身；否则使用 relation.valueField
+            const targetField = key.endsWith('_id') ? key : fieldConfig.relation.valueField
+            processedData[targetField] = BigInt(value as number)
           }
         } else if (typeof value === 'number' && key.endsWith('_id')) {
           processedData[key] = BigInt(value)
@@ -1230,8 +1232,8 @@ export function createUpdateHandler(config: EntityConfig) {
         
         if (fieldConfig?.relation) {
           if (value) {
-            // 优先使用 relationField，否则使用 valueField
-            const targetField = fieldConfig.relationField || fieldConfig.relation.valueField || key
+            // 优先使用 relationField，否则如果字段名以 _id 结尾使用字段名，最后才使用 valueField
+            const targetField = fieldConfig.relationField || (key.endsWith('_id') ? key : fieldConfig.relation.valueField) || key
             processedData[targetField] = BigInt(value as number)
           }
         } else if (typeof value === 'number' && key.endsWith('_id')) {
@@ -1537,7 +1539,7 @@ export function createBatchUpdateHandler(config: EntityConfig) {
         // 如果是relation字段，使用relationField映射
         let actualKey = key
         if (fieldConfig?.relation) {
-          actualKey = fieldConfig.relationField || fieldConfig.relation.valueField || key
+          actualKey = fieldConfig.relationField || (key.endsWith('_id') ? key : fieldConfig.relation.valueField) || key
         } else if (key === 'origin_location') {
           actualKey = 'origin_location_id'
         } else if (key === 'destination_location') {
