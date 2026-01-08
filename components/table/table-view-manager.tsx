@@ -33,25 +33,30 @@ import { toast } from "sonner"
 import {
   TableView,
   getTableViews,
+  getTableViewsSync,
   saveTableView,
   deleteTableView,
-  getDefaultView,
+  updateTableView,
+  setDefaultView,
+  getDefaultViewSync,
 } from "@/lib/table/view-manager"
 import { cn } from "@/lib/utils"
 
 interface TableViewManagerProps {
   tableName: string
-  userId?: string | number
   currentVisibility: Record<string, boolean>
+  currentSizing?: Record<string, number>
+  currentOrder?: string[]
   allColumns: string[]
   columnLabels?: Record<string, string>
-  onViewChange: (visibility: Record<string, boolean>) => void
+  onViewChange: (visibility: Record<string, boolean>, sizing?: Record<string, number>, order?: string[]) => void
 }
 
 export function TableViewManager({
   tableName,
-  userId,
   currentVisibility,
+  currentSizing,
+  currentOrder,
   allColumns,
   columnLabels = {},
   onViewChange,
@@ -65,28 +70,36 @@ export function TableViewManager({
   const [editingView, setEditingView] = React.useState<TableView | null>(null)
   const [deletingView, setDeletingView] = React.useState<TableView | null>(null)
   const [isDefault, setIsDefault] = React.useState(false)
+  const [loading, setLoading] = React.useState(false)
 
-  // 加载视图列表
-  const loadViews = React.useCallback(() => {
-    const loadedViews = getTableViews(tableName, userId)
-    setViews(loadedViews)
-    
-    // 检查当前可见性是否匹配某个视图
-    const matchingView = loadedViews.find(view => {
-      return allColumns.every(col => {
-        const viewValue = view.columnVisibility[col] !== undefined 
-          ? view.columnVisibility[col] 
-          : true
-        return viewValue === currentVisibility[col]
+  // 加载视图列表（异步）
+  const loadViews = React.useCallback(async () => {
+    try {
+      const loadedViews = await getTableViews(tableName)
+      setViews(loadedViews)
+      
+      // 检查当前可见性是否匹配某个视图
+      const matchingView = loadedViews.find(view => {
+        return allColumns.every(col => {
+          const viewValue = view.columnVisibility[col] !== undefined 
+            ? view.columnVisibility[col] 
+            : true
+          return viewValue === currentVisibility[col]
+        })
       })
-    })
-    
-    if (matchingView) {
-      setCurrentViewId(matchingView.id)
-    } else {
-      setCurrentViewId(null)
+      
+      if (matchingView) {
+        setCurrentViewId(matchingView.id)
+      } else {
+        setCurrentViewId(null)
+      }
+    } catch (error) {
+      console.error('加载视图列表失败:', error)
+      // 失败时从缓存读取
+      const cachedViews = getTableViewsSync(tableName)
+      setViews(cachedViews)
     }
-  }, [tableName, userId, allColumns, currentVisibility])
+  }, [tableName, allColumns, currentVisibility])
 
   React.useEffect(() => {
     loadViews()
@@ -102,8 +115,8 @@ export function TableViewManager({
       finalVisibility[col] = view.columnVisibility[col] === false ? false : true
     })
     
-    // 调用 onViewChange 更新列可见性状态
-    onViewChange(finalVisibility)
+    // 调用 onViewChange 更新列可见性、列宽和列顺序
+    onViewChange(finalVisibility, view.columnSizing, view.columnOrder)
     setCurrentViewId(view.id)
     
     // 延迟关闭下拉菜单，避免菜单定位问题
@@ -114,81 +127,86 @@ export function TableViewManager({
   }
 
   // 保存当前视图
-  const handleSaveView = () => {
+  const handleSaveView = async () => {
     if (!viewName.trim()) {
       toast.error('请输入视图名称')
       return
     }
 
+    setLoading(true)
     try {
       // 保存当前所有列的可见性状态
-      // 确保所有列都被包含，隐藏的列保存为 false，显示的列保存为 true
       const completeVisibility: Record<string, boolean> = {}
       allColumns.forEach(col => {
-        // 如果 currentVisibility 中有该列的状态，使用它；否则默认为 true（显示）
-        // 这样可以确保所有列都被保存
         completeVisibility[col] = currentVisibility[col] !== undefined 
           ? (currentVisibility[col] === false ? false : true)
           : true
       })
       
-      const newView = saveTableView(
+      const newView = await saveTableView(
         tableName,
         {
           name: viewName.trim(),
           columnVisibility: completeVisibility,
+          columnSizing: currentSizing,
+          columnOrder: currentOrder,
           isDefault,
-        },
-        userId
+        }
       )
       
-      setViews(getTableViews(tableName, userId))
+      await loadViews()
       setCurrentViewId(newView.id)
       setSaveDialogOpen(false)
       setViewName("")
       setIsDefault(false)
       toast.success('视图已保存')
-    } catch (error) {
-      toast.error('保存视图失败')
+    } catch (error: any) {
+      console.error('保存视图失败:', error)
+      toast.error(error.message || '保存视图失败')
+    } finally {
+      setLoading(false)
     }
   }
 
   // 更新视图
-  const handleUpdateView = () => {
+  const handleUpdateView = async () => {
     if (!editingView || !viewName.trim()) {
       return
     }
 
+    setLoading(true)
     try {
-      saveTableView(
+      await updateTableView(
         tableName,
+        editingView.id,
         {
-          id: editingView.id,
           name: viewName.trim(),
-          columnVisibility: editingView.columnVisibility,
           isDefault,
-        },
-        userId
+        }
       )
       
-      setViews(getTableViews(tableName, userId))
+      await loadViews()
       setEditDialogOpen(false)
       setEditingView(null)
       setViewName("")
       setIsDefault(false)
       toast.success('视图已更新')
-    } catch (error) {
-      toast.error('更新视图失败')
+    } catch (error: any) {
+      console.error('更新视图失败:', error)
+      toast.error(error.message || '更新视图失败')
+    } finally {
+      setLoading(false)
     }
   }
 
   // 删除视图
-  const handleDeleteView = () => {
+  const handleDeleteView = async () => {
     if (!deletingView) return
 
+    setLoading(true)
     try {
-      deleteTableView(tableName, deletingView.id, userId)
-      setViews(getTableViews(tableName, userId))
+      await deleteTableView(tableName, deletingView.id)
+      await loadViews()
       
       // 如果删除的是当前视图，清除当前视图ID
       if (currentViewId === deletingView.id) {
@@ -198,34 +216,31 @@ export function TableViewManager({
       setDeleteDialogOpen(false)
       setDeletingView(null)
       toast.success('视图已删除')
-    } catch (error) {
-      toast.error('删除视图失败')
+    } catch (error: any) {
+      console.error('删除视图失败:', error)
+      toast.error(error.message || '删除视图失败')
+    } finally {
+      setLoading(false)
     }
   }
 
   // 设置为默认视图
-  const handleSetDefault = (view: TableView) => {
+  const handleSetDefault = async (view: TableView) => {
+    setLoading(true)
     try {
-      saveTableView(
-        tableName,
-        {
-          id: view.id,
-          name: view.name,
-          columnVisibility: view.columnVisibility,
-          isDefault: true,
-        },
-        userId
-      )
-      
-      setViews(getTableViews(tableName, userId))
+      await setDefaultView(tableName, view.id)
+      await loadViews()
       toast.success('已设置为默认视图')
       
-      // 如果设置的是当前视图，立即应用（因为默认视图会在页面刷新时自动加载）
+      // 如果设置的是当前视图，立即应用
       if (currentViewId === view.id) {
         applyView(view)
       }
-    } catch (error) {
-      toast.error('设置默认视图失败')
+    } catch (error: any) {
+      console.error('设置默认视图失败:', error)
+      toast.error(error.message || '设置默认视图失败')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -244,7 +259,7 @@ export function TableViewManager({
   }
 
   const currentView = views.find(v => v.id === currentViewId)
-  const defaultView = getDefaultView(tableName, userId)
+  const defaultView = getDefaultViewSync(tableName)
 
   const [dropdownOpen, setDropdownOpen] = React.useState(false)
 
@@ -401,12 +416,12 @@ export function TableViewManager({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setSaveDialogOpen(false)} disabled={loading}>
               取消
             </Button>
-            <Button onClick={handleSaveView}>
+            <Button onClick={handleSaveView} disabled={loading}>
               <Save className="mr-2 h-4 w-4" />
-              保存
+              {loading ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -450,12 +465,12 @@ export function TableViewManager({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={loading}>
               取消
             </Button>
-            <Button onClick={handleUpdateView}>
+            <Button onClick={handleUpdateView} disabled={loading}>
               <Check className="mr-2 h-4 w-4" />
-              保存
+              {loading ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -471,12 +486,12 @@ export function TableViewManager({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={loading}>
               取消
             </Button>
-            <Button variant="destructive" onClick={handleDeleteView}>
+            <Button variant="destructive" onClick={handleDeleteView} disabled={loading}>
               <Trash2 className="mr-2 h-4 w-4" />
-              删除
+              {loading ? '删除中...' : '删除'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -606,6 +606,7 @@ model users {
   wms_labor_logs_wms_labor_logs_created_byTousers                     wms_labor_logs[]           @relation("wms_labor_logs_created_byTousers")
   wms_labor_logs_wms_labor_logs_updated_byTousers                     wms_labor_logs[]           @relation("wms_labor_logs_updated_byTousers")
   wms_labor_logs_wms_labor_logs_user_idTousers                        wms_labor_logs[]           @relation("wms_labor_logs_user_idTousers")
+  table_views                                                          table_views[]              @relation("table_views_user_idTousers")
 
   @@index([department_id], map: "idx_users_department")
   @@index([email], map: "idx_users_email")
@@ -932,4 +933,29 @@ model inventory_forecast_weekly {
   @@index([location_group, week_start_date], map: "idx_forecast_weekly_location_group")
   @@index([calculated_at], map: "idx_forecast_weekly_calculated_at")
   @@schema("analytics")
+}
+
+/// 表格视图配置（用户自定义的表格列显示/宽度/顺序配置）
+model table_views {
+  id                BigInt   @id @default(autoincrement())
+  user_id           BigInt   // 用户ID
+  table_name        String   @db.VarChar(100) // 表名，如 "orders", "drivers"
+  view_name         String   @db.VarChar(100) // 视图名称，如 "日常管理"
+  column_visibility Json     // 列可见性配置 {column_id: boolean}
+  column_sizing     Json?    // 列宽配置 {column_id: number}
+  column_order      String[] // 列顺序 [column_id, ...]
+  is_default        Boolean  @default(false) // 是否为默认视图
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @updatedAt @db.Timestamptz(6)
+
+  // 关联到用户表
+  user users @relation("table_views_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade)
+
+  // 联合唯一索引：同一用户同一表的视图名不能重复
+  @@unique([user_id, table_name, view_name], map: "unique_user_table_view_name")
+  // 索引：加速按用户+表名查询
+  @@index([user_id, table_name], map: "idx_table_views_user_table")
+  // 索引：加速查找默认视图
+  @@index([user_id, table_name, is_default], map: "idx_table_views_default")
+  @@schema("public")
 }

@@ -6,6 +6,8 @@ import {
   ColumnFiltersState,
   SortingState,
   VisibilityState,
+  ColumnOrderState,
+  ColumnSizingState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -13,7 +15,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { ChevronDown, ChevronRight, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Columns3, Copy, Check } from "lucide-react"
+import { ChevronDown, ChevronRight, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Columns3, Copy, Check, GripVertical } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 
@@ -120,10 +122,32 @@ export function DataTable<TData, TValue>({
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set())
   // 复制状态（用于显示复制成功提示）
   const [copiedCellId, setCopiedCellId] = React.useState<string | null>(null)
+  // 拖拽状态
+  const [draggedColumn, setDraggedColumn] = React.useState<string | null>(null)
+  const [dragOverColumn, setDragOverColumn] = React.useState<string | null>(null)
+  // Resize 状态（用于禁用拖拽）
+  const [isResizing, setIsResizing] = React.useState(false)
   
   React.useEffect(() => {
     setMounted(true)
   }, [])
+
+  // 全局监听 mouseup 事件，确保 resize 结束时重置状态
+  React.useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isResizing) {
+        setIsResizing(false)
+      }
+    }
+    
+    window.addEventListener('mouseup', handleGlobalMouseUp)
+    window.addEventListener('touchend', handleGlobalMouseUp)
+    
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp)
+      window.removeEventListener('touchend', handleGlobalMouseUp)
+    }
+  }, [isResizing])
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting)
 
   // 同步初始排序状态（只在真正改变时更新，避免无限循环）
@@ -150,6 +174,8 @@ export function DataTable<TData, TValue>({
   // 视图管理：初始化列可见性（根据保存的视图）
   // 初始状态为空对象，等待 table 初始化后再应用默认视图
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+  const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>({})
+  const [columnOrder, setColumnOrder] = React.useState<ColumnOrderState>([])
   
   const [rowSelection, setRowSelection] = React.useState({})
   const [pageIndex, setPageIndex] = React.useState(0)
@@ -295,10 +321,22 @@ export function DataTable<TData, TValue>({
     manualPagination: serverSidePagination,
     manualSorting: serverSidePagination, // 服务器端排序：禁用客户端排序
     pageCount: serverSidePagination ? calculatedPageCount : undefined,
+    // 启用列宽调整和列排序
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onColumnSizingChange: setColumnSizing,
+    onColumnOrderChange: setColumnOrder,
+    defaultColumn: {
+      size: 150, // 默认列宽
+      minSize: 50, // 最小列宽
+      maxSize: 800, // 最大列宽
+    },
     state: {
       sorting,
       columnFilters,
       columnVisibility,
+      columnSizing,
+      columnOrder,
       rowSelection: enableRowSelection ? rowSelection : {},
       pagination: {
         pageIndex: currentPage,
@@ -322,6 +360,13 @@ export function DataTable<TData, TValue>({
         if (defaultView) {
           const initialVisibility = applyViewToVisibility(defaultView, allColumnIds)
           setColumnVisibility(initialVisibility)
+          // 应用保存的列宽和列顺序
+          if (defaultView.columnSizing) {
+            setColumnSizing(defaultView.columnSizing)
+          }
+          if (defaultView.columnOrder && defaultView.columnOrder.length > 0) {
+            setColumnOrder(defaultView.columnOrder)
+          }
         }
       }
     }
@@ -420,6 +465,66 @@ export function DataTable<TData, TValue>({
     handlePageChange(0)
   }
 
+  // 列拖拽处理函数
+  const handleDragStart = React.useCallback((e: React.DragEvent, columnId: string) => {
+    setDraggedColumn(columnId)
+    e.dataTransfer.effectAllowed = 'move'
+  }, [])
+
+  const handleDragOver = React.useCallback((e: React.DragEvent, columnId: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverColumn(columnId)
+  }, [])
+
+  const handleDragLeave = React.useCallback(() => {
+    setDragOverColumn(null)
+  }, [])
+
+  const handleDrop = React.useCallback((e: React.DragEvent, targetColumnId: string) => {
+    e.preventDefault()
+    
+    if (!draggedColumn || draggedColumn === targetColumnId) {
+      setDraggedColumn(null)
+      setDragOverColumn(null)
+      return
+    }
+
+    // 获取当前列顺序
+    const currentOrder = table.getState().columnOrder
+    const allColumns = table.getAllLeafColumns().map(col => col.id)
+    
+    // 如果当前没有设置列顺序，使用默认顺序
+    const orderToUse = currentOrder.length > 0 ? currentOrder : allColumns
+    
+    // 找到拖拽列和目标列的索引
+    const draggedIndex = orderToUse.indexOf(draggedColumn)
+    const targetIndex = orderToUse.indexOf(targetColumnId)
+    
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedColumn(null)
+      setDragOverColumn(null)
+      return
+    }
+    
+    // 创建新的列顺序
+    const newOrder = [...orderToUse]
+    newOrder.splice(draggedIndex, 1)
+    newOrder.splice(targetIndex, 0, draggedColumn)
+    
+    // 更新列顺序
+    setColumnOrder(newOrder)
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+    
+    toast.success('列顺序已更新')
+  }, [draggedColumn, table])
+
+  const handleDragEnd = React.useCallback(() => {
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }, [])
+
   return (
     <div className="w-full space-y-4">
       {/* 工具栏 - 已移到 EntityTable 中，这里不再显示 */}
@@ -484,7 +589,13 @@ export function DataTable<TData, TValue>({
       {/* 表格 */}
       <div className="border-0 bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <Table className="w-full border-collapse table-auto sticky-table">
+          <Table 
+            className="border-collapse sticky-table"
+            style={{ 
+              width: table.getCenterTotalSize(),
+              minWidth: '100%' // 保证最小宽度为100%，防止右侧空白
+            }}
+          >
             <TableHeader className="bg-gradient-to-r from-gray-50/80 to-gray-100/80 dark:from-gray-800/80 dark:to-gray-700/80">
             {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="hover:bg-transparent border-b-2 border-border/50 [&_th]:pb-3 [&_th]:pt-3 [&_th]:border-t-0 [&_th]:first:pl-4 [&_th]:last:pr-4">
@@ -591,6 +702,8 @@ export function DataTable<TData, TValue>({
                                         tableName={viewManagerTableName}
                                         userId={viewManagerUserId}
                                         currentVisibility={currentColumnVisibility}
+                                        currentSizing={columnSizing}
+                                        currentOrder={columnOrder}
                                         allColumns={(() => {
                                           // 获取所有列ID（排除 select 列）
                                           const allColumns = table.getAllColumns()
@@ -599,9 +712,11 @@ export function DataTable<TData, TValue>({
                                             .filter((id): id is string => !!id && id !== 'select')
                                         })()}
                                         columnLabels={columnLabels}
-                                        onViewChange={(visibility) => {
-                                          // 直接更新列可见性状态，react-table 会自动应用
+                                        onViewChange={(visibility, sizing, order) => {
+                                          // 直接更新列可见性、列宽和列顺序状态，react-table 会自动应用
                                           setColumnVisibility(visibility)
+                                          if (sizing) setColumnSizing(sizing)
+                                          if (order) setColumnOrder(order)
                                         }}
                                       />
                                     </div>
@@ -662,24 +777,54 @@ export function DataTable<TData, TValue>({
                   const widthClass = (header.column.columnDef.meta as any)?.widthClass || ''
                   const alignRight = (header.column.columnDef.meta as any)?.alignRight || false
                   
+                  // 判断是否可以拖拽（复选框列和操作列不可拖拽，正在resize时也不可拖拽）
+                  const isDraggable = !isSelectColumn && !isActionsColumn && !isResizing
+                  const isDragging = draggedColumn === columnId
+                  const isDragOver = dragOverColumn === columnId
+                  
                   return (
                     <TableHead 
                       key={header.id} 
                       className={cn(
-                        "font-semibold text-sm text-foreground/90 py-3",
+                        "font-semibold text-sm text-foreground/90 py-3 relative group",
                         isActionsColumn ? 'px-2' : 'px-3',
                         widthClass,
                         "whitespace-nowrap",
                         shouldSticky && stickyPosition === 'left' && "sticky z-20",
-                        isSelectColumn && "left-0 bg-gradient-to-r from-gray-50/95 via-gray-50/95 to-transparent dark:from-gray-800/95 dark:via-gray-800/95"
+                        isSelectColumn && "left-0 bg-gradient-to-r from-gray-50/95 via-gray-50/95 to-transparent dark:from-gray-800/95 dark:via-gray-800/95",
+                        isDragging && "opacity-50",
+                        isDragOver && "bg-blue-100 dark:bg-blue-900/30"
                       )}
-                      style={shouldSticky && stickyPosition === 'left' ? { 
-                        left: 0,
-                        boxShadow: '2px 0 4px -2px rgba(0, 0, 0, 0.1)'
-                      } : undefined}
+                      style={{
+                        ...(shouldSticky && stickyPosition === 'left' ? { 
+                          left: 0,
+                          boxShadow: '2px 0 4px -2px rgba(0, 0, 0, 0.1)'
+                        } : {}),
+                        width: header.getSize(),
+                      }}
+                      draggable={isDraggable}
+                      onDragStart={isDraggable ? (e) => handleDragStart(e, columnId) : undefined}
+                      onDragOver={isDraggable ? (e) => handleDragOver(e, columnId) : undefined}
+                      onDragLeave={isDraggable ? handleDragLeave : undefined}
+                      onDrop={isDraggable ? (e) => handleDrop(e, columnId) : undefined}
+                      onDragEnd={isDraggable ? handleDragEnd : undefined}
                     >
                       {header.isPlaceholder ? null : (
                         <div className="flex items-center justify-center">
+                          {/* 拖拽手柄 - 只在未resize时显示 */}
+                          {isDraggable && !isResizing && (
+                            <div 
+                              className="absolute left-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-10"
+                              onMouseDown={(e) => {
+                                // 确保拖拽手柄可以触发拖拽
+                                e.stopPropagation()
+                              }}
+                              title="拖动改变列顺序"
+                            >
+                              <GripVertical className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                          )}
+                          
                           <div className="flex items-center gap-2 justify-center">
                             <span className="truncate">
                             {flexRender(
@@ -703,6 +848,47 @@ export function DataTable<TData, TValue>({
                               </button>
                             )}
                           </div>
+                          
+                          {/* Resize Handle - 更宽的可点击区域 */}
+                          {!isSelectColumn && !isActionsColumn && (
+                            <div
+                              onMouseDown={(e) => {
+                                e.stopPropagation() // 阻止拖拽事件
+                                e.preventDefault() // 防止文本选择
+                                setIsResizing(true)
+                                
+                                // 调用 TanStack Table 的 resize handler
+                                const resizeHandler = header.getResizeHandler()
+                                if (resizeHandler) {
+                                  resizeHandler(e)
+                                }
+                              }}
+                              onTouchStart={(e) => {
+                                e.stopPropagation()
+                                setIsResizing(true)
+                                
+                                const resizeHandler = header.getResizeHandler()
+                                if (resizeHandler) {
+                                  resizeHandler(e)
+                                }
+                              }}
+                              className={cn(
+                                "absolute right-0 top-0 h-full w-3 cursor-col-resize select-none touch-none z-30",
+                                "flex items-center justify-center",
+                                "opacity-0 group-hover:opacity-100 transition-opacity",
+                                header.column.getIsResizing() && "opacity-100"
+                              )}
+                              title="拖动调整列宽"
+                            >
+                              {/* 视觉指示器 */}
+                              <div className={cn(
+                                "w-0.5 h-full rounded-full transition-colors pointer-events-none",
+                                header.column.getIsResizing() 
+                                  ? "bg-blue-600" 
+                                  : "bg-gray-300 hover:bg-blue-500 dark:bg-gray-600 dark:hover:bg-blue-500"
+                              )} />
+                            </div>
+                          )}
                         </div>
                       )}
                     </TableHead>
@@ -897,16 +1083,19 @@ export function DataTable<TData, TValue>({
                               shouldShowContextMenu && "cursor-context-menu",
                               isCopied && "bg-green-50 dark:bg-green-950/20"
                             )}
-                            style={shouldSticky ? { 
-                              left: stickyPosition === 'left' ? 0 : undefined,
-                              right: stickyPosition === 'right' ? 0 : undefined,
-                              backgroundColor: shouldSticky ? 'var(--background)' : undefined,
-                              boxShadow: shouldSticky 
-                                ? (stickyPosition === 'left' 
-                                  ? '2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
-                                  : '-2px 0 4px -2px rgba(0, 0, 0, 0.1)')
-                                : undefined
-                            } : undefined}
+                            style={{
+                              width: cell.column.getSize(),
+                              ...(shouldSticky ? { 
+                                left: stickyPosition === 'left' ? 0 : undefined,
+                                right: stickyPosition === 'right' ? 0 : undefined,
+                                backgroundColor: shouldSticky ? 'var(--background)' : undefined,
+                                boxShadow: shouldSticky 
+                                  ? (stickyPosition === 'left' 
+                                    ? '2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
+                                    : '-2px 0 4px -2px rgba(0, 0, 0, 0.1)')
+                                  : undefined
+                              } : {})
+                            }}
                             onContextMenu={handleContextMenu}
                             onClick={(e) => {
                               // 如果点击的是可编辑单元格，阻止事件冒泡到行

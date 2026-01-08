@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import ExcelJS from "exceljs"
 import { generateOrderExportExcel, OrderExportData } from "@/lib/utils/order-export-excel"
 export function OrdersPageClient() {
+  const [mounted, setMounted] = React.useState(false)
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false)
   const [importDialogOpen, setImportDialogOpen] = React.useState(false)
   const [refreshKey, setRefreshKey] = React.useState(0)
@@ -25,6 +26,11 @@ export function OrdersPageClient() {
   const [currentSearchParams, setCurrentSearchParams] = React.useState<URLSearchParams>(new URLSearchParams())
   const [totalCount, setTotalCount] = React.useState(0) // 全部数据总数（固定值，只在初始加载时设置）
   const [filteredCount, setFilteredCount] = React.useState(0) // 当前筛选结果数
+
+  // 防止 hydration 错误
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // 初始加载时获取全部数据总数（排除archived，与默认显示一致）
   React.useEffect(() => {
@@ -300,7 +306,7 @@ export function OrdersPageClient() {
   ) : null
 
   // 自定义工具栏按钮（批量导出下拉菜单）
-  const customToolbarButtons = (
+  const customToolbarButtons = mounted ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button 
@@ -342,6 +348,16 @@ export function OrdersPageClient() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  ) : (
+    <Button 
+      variant="outline"
+      size="lg"
+      disabled
+      className="group relative h-11 px-6 text-base font-medium border-2 border-blue-200 bg-white text-blue-600 shadow-sm"
+    >
+      <Download className="mr-2 h-5 w-5" />
+      <span>批量导出</span>
+    </Button>
   )
 
   return (
