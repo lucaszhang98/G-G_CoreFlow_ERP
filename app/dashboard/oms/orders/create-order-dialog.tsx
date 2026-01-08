@@ -64,7 +64,7 @@ export function CreateOrderDialog({
     order_number: '',
     order_date: new Date().toISOString().split('T')[0], // 默认今天
     eta_date: null as string | null,
-    container_type: '40HQ',
+    container_type: '40DH',
     mbl_number: '',
     status: 'pending' as 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'archived',
     operation_mode: null as 'unload' | 'direct_delivery' | null,
@@ -85,7 +85,7 @@ export function CreateOrderDialog({
       order_number: '',
       order_date: new Date().toISOString().split('T')[0],
       eta_date: null,
-      container_type: '40HQ',
+      container_type: '40DH',
       mbl_number: '',
       status: 'pending',
       operation_mode: null,
@@ -418,7 +418,12 @@ export function CreateOrderDialog({
                     <SelectValue placeholder="选择柜型" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="40HQ">40HQ</SelectItem>
+                    <SelectItem value="40DH">40DH</SelectItem>
+                    <SelectItem value="45DH">45DH</SelectItem>
+                    <SelectItem value="40RH">40RH</SelectItem>
+                    <SelectItem value="45RH">45RH</SelectItem>
+                    <SelectItem value="20GP">20GP</SelectItem>
+                    <SelectItem value="其他">其他</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

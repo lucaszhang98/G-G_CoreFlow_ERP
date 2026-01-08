@@ -186,8 +186,8 @@ export const orderImportRowSchema = z.object({
     .string()
     .min(1, '货柜类型不能为空')
     .refine(
-      val => ['40HQ', '40GP', '20GP', '20HQ', '45HQ'].includes(val),
-      '货柜类型必须是40HQ/40GP/20GP/20HQ/45HQ之一'
+      val => ['40DH', '45DH', '40RH', '45RH', '20GP', '其他'].includes(val),
+      '货柜类型必须是40DH/45DH/40RH/45RH/20GP/其他之一'
     ),
   
   eta_date: z
