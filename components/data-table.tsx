@@ -68,7 +68,6 @@ interface DataTableProps<TData, TValue> {
   // 视图管理
   enableViewManager?: boolean // 是否启用视图管理
   viewManagerTableName?: string // 视图管理的表名（用于区分不同表格）
-  viewManagerUserId?: string | number // 用户ID（用于区分不同用户的视图）
   // 可排序列配置（如果未指定，则所有列都可排序）
   sortableColumns?: string[]
   // 行选择相关
@@ -106,7 +105,6 @@ export function DataTable<TData, TValue>({
   columnLabels = {},
   enableViewManager = false,
   viewManagerTableName,
-  viewManagerUserId,
   sortableColumns = [],
   enableRowSelection = false,
   onRowSelectionChange,
@@ -708,7 +706,6 @@ export function DataTable<TData, TValue>({
                                     <div className="px-2 py-1.5 border-b">
                                       <TableViewManager
                                         tableName={viewManagerTableName}
-                                        userId={viewManagerUserId}
                                         currentVisibility={currentColumnVisibility}
                                         currentSizing={columnSizing}
                                         currentOrder={columnOrder}
