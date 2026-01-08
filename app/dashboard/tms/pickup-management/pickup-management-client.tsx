@@ -10,7 +10,7 @@ import { EntityTable } from "@/components/crud/entity-table"
 import { pickupManagementConfig } from "@/lib/crud/configs/pickup-management"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Copy } from "lucide-react"
+import { RefreshCw, Copy, FileText } from "lucide-react"
 import type { FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
 import {
   DropdownMenu,
@@ -20,12 +20,48 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { PickupSummaryDialog } from "@/components/pickup-management/pickup-summary-dialog"
 
 export function PickupManagementClient() {
   const [isInitializing, setIsInitializing] = React.useState(false)
   const [hasInitialized, setHasInitialized] = React.useState(false)
   const [showInitButton, setShowInitButton] = React.useState(false)
   const [selectedRows, setSelectedRows] = React.useState<any[]>([])
+  const [summaryDialogOpen, setSummaryDialogOpen] = React.useState(false)
+  // 用于追踪勾选顺序的状态
+  const [orderedSelectedRows, setOrderedSelectedRows] = React.useState<any[]>([])
+  const selectedIdsRef = React.useRef<Set<string>>(new Set())
+
+  // 维护按勾选顺序排列的数组
+  React.useEffect(() => {
+    const currentSelectedIds = new Set(selectedRows.map(row => String(row.pickup_id)))
+    
+    // 找出新增的选中项（之前没选，现在选中了）
+    const newlySelected = selectedRows.filter(row => {
+      const id = String(row.pickup_id)
+      return !selectedIdsRef.current.has(id)
+    })
+    
+    // 找出被取消选中的项
+    const deselectedIds = new Set<string>()
+    selectedIdsRef.current.forEach(id => {
+      if (!currentSelectedIds.has(id)) {
+        deselectedIds.add(id)
+      }
+    })
+    
+    // 更新有序数组
+    setOrderedSelectedRows(prev => {
+      // 先移除被取消选中的
+      let updated = prev.filter(row => !deselectedIds.has(String(row.pickup_id)))
+      // 再添加新选中的
+      updated = [...updated, ...newlySelected]
+      return updated
+    })
+    
+    // 更新 ref
+    selectedIdsRef.current = currentSelectedIds
+  }, [selectedRows])
 
   // 检查是否需要初始化
   React.useEffect(() => {
@@ -147,13 +183,13 @@ export function PickupManagementClient() {
 
   // 复制柜号功能
   const handleCopyContainerNumbers = React.useCallback((format: 'line' | 'comma' | 'space') => {
-    if (selectedRows.length === 0) {
+    if (orderedSelectedRows.length === 0) {
       toast.error('请先选择要复制的记录')
       return
     }
 
-    // 提取所有柜号
-    const containerNumbers = selectedRows
+    // 提取所有柜号（按勾选顺序）
+    const containerNumbers = orderedSelectedRows
       .map((row: any) => row.container_number)
       .filter(Boolean) // 过滤掉空值
 
@@ -185,65 +221,94 @@ export function PickupManagementClient() {
         console.error('复制失败:', error)
         toast.error('复制失败，请重试')
       })
-  }, [selectedRows])
+  }, [orderedSelectedRows])
 
   // 自定义批量操作按钮
   const customBatchActions = React.useMemo(() => {
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="min-w-[100px] h-9"
-          >
-            <Copy className="mr-2 h-4 w-4" />
-            复制柜号
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuLabel>选择复制格式</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => handleCopyContainerNumbers('line')}>
-            <div className="flex flex-col gap-1">
-              <span className="font-medium">换行分隔</span>
-              <span className="text-xs text-muted-foreground">每个柜号一行</span>
-            </div>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => handleCopyContainerNumbers('comma')}>
-            <div className="flex flex-col gap-1">
-              <span className="font-medium">逗号分隔</span>
-              <span className="text-xs text-muted-foreground">A, B, C</span>
-            </div>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => handleCopyContainerNumbers('space')}>
-            <div className="flex flex-col gap-1">
-              <span className="font-medium">空格分隔</span>
-              <span className="text-xs text-muted-foreground">A B C</span>
-            </div>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <>
+        {/* 汇总信息按钮 */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[100px] h-9"
+          onClick={() => {
+            if (orderedSelectedRows.length === 0) {
+              toast.error('请先选择要汇总的记录')
+              return
+            }
+            setSummaryDialogOpen(true)
+          }}
+        >
+          <FileText className="mr-2 h-4 w-4" />
+          汇总信息
+        </Button>
+
+        {/* 复制柜号下拉菜单 */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-w-[100px] h-9"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              复制柜号
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>选择复制格式</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => handleCopyContainerNumbers('line')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">换行分隔</span>
+                <span className="text-xs text-muted-foreground">每个柜号一行</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopyContainerNumbers('comma')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">逗号分隔</span>
+                <span className="text-xs text-muted-foreground">A, B, C</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopyContainerNumbers('space')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">空格分隔</span>
+                <span className="text-xs text-muted-foreground">A B C</span>
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>
     )
-  }, [handleCopyContainerNumbers])
+  }, [handleCopyContainerNumbers, orderedSelectedRows])
 
   // 如果已经初始化或正在初始化，直接显示表格
   if (hasInitialized || !showInitButton) {
     return (
-      <EntityTable 
-        config={pickupManagementConfig}
-        fieldFuzzyLoadOptions={{
-          carrier: loadCarrierOptions,
-          carrier_id: loadCarrierOptions, // 也支持 carrier_id 作为 key
-          driver: loadDriverOptions,
-          driver_id: loadDriverOptions, // 也支持 driver_id 作为 key
-        }}
-        customActions={{
-          onView: null, // 禁用查看详情功能
-        }}
-        customBatchActions={customBatchActions}
-        onRowSelectionChange={setSelectedRows}
-      />
+      <>
+        <EntityTable 
+          config={pickupManagementConfig}
+          fieldFuzzyLoadOptions={{
+            carrier: loadCarrierOptions,
+            carrier_id: loadCarrierOptions, // 也支持 carrier_id 作为 key
+            driver: loadDriverOptions,
+            driver_id: loadDriverOptions, // 也支持 driver_id 作为 key
+          }}
+          customActions={{
+            onView: null, // 禁用查看详情功能
+          }}
+          customBatchActions={customBatchActions}
+          onRowSelectionChange={setSelectedRows}
+        />
+        
+        {/* 汇总信息对话框 */}
+        <PickupSummaryDialog
+          open={summaryDialogOpen}
+          onOpenChange={setSummaryDialogOpen}
+          selectedRecords={orderedSelectedRows}
+        />
+      </>
     )
   }
 
