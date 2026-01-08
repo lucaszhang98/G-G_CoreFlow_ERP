@@ -356,21 +356,29 @@ export function DataTable<TData, TValue>({
         .filter((id): id is string => !!id && id !== 'select') // 排除 select 列
       
       if (allColumnIds.length > 0) {
-        const defaultView = getDefaultView(viewManagerTableName, viewManagerUserId)
-        if (defaultView) {
-          const initialVisibility = applyViewToVisibility(defaultView, allColumnIds)
-          setColumnVisibility(initialVisibility)
-          // 应用保存的列宽和列顺序
-          if (defaultView.columnSizing) {
-            setColumnSizing(defaultView.columnSizing)
-          }
-          if (defaultView.columnOrder && defaultView.columnOrder.length > 0) {
-            setColumnOrder(defaultView.columnOrder)
+        // 异步加载默认视图
+        const loadDefaultView = async () => {
+          try {
+            const defaultView = await getDefaultView(viewManagerTableName)
+            if (defaultView) {
+              const initialVisibility = applyViewToVisibility(defaultView, allColumnIds)
+              setColumnVisibility(initialVisibility)
+              // 应用保存的列宽和列顺序
+              if (defaultView.columnSizing) {
+                setColumnSizing(defaultView.columnSizing)
+              }
+              if (defaultView.columnOrder && defaultView.columnOrder.length > 0) {
+                setColumnOrder(defaultView.columnOrder)
+              }
+            }
+          } catch (error) {
+            console.error('加载默认视图失败:', error)
           }
         }
+        loadDefaultView()
       }
     }
-  }, [enableViewManager, viewManagerTableName, viewManagerUserId, table])
+  }, [enableViewManager, viewManagerTableName, table])
 
   // 处理分页变化
   // 计算实际的总页数
