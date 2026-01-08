@@ -26,14 +26,23 @@ function getStorageKey(tableName: string): string {
 
 /**
  * 从 localStorage 读取缓存
+ * @param currentUserId 当前用户ID，用于验证缓存是否属于当前用户
  */
-function getCachedViews(tableName: string): TableView[] | null {
+function getCachedViews(tableName: string, currentUserId?: string): TableView[] | null {
   try {
     const key = getStorageKey(tableName)
     const cached = localStorage.getItem(key)
     if (!cached) return null
     
     const data = JSON.parse(cached)
+    
+    // 如果提供了 currentUserId，验证缓存是否属于当前用户
+    if (currentUserId && data.userId && data.userId !== currentUserId) {
+      console.warn('缓存用户不匹配，清除缓存')
+      localStorage.removeItem(key)
+      return null
+    }
+    
     // 检查缓存是否过期
     if (data.timestamp && Date.now() - data.timestamp < CACHE_EXPIRY) {
       // 验证数据完整性
@@ -50,11 +59,12 @@ function getCachedViews(tableName: string): TableView[] | null {
 /**
  * 写入 localStorage 缓存
  */
-function setCachedViews(tableName: string, views: TableView[]): void {
+function setCachedViews(tableName: string, views: TableView[], userId?: string): void {
   try {
     const key = getStorageKey(tableName)
     localStorage.setItem(key, JSON.stringify({
       views,
+      userId, // 存储用户ID，用于验证
       timestamp: Date.now(),
     }))
   } catch (error) {
@@ -103,8 +113,11 @@ async function fetchViewsFromDatabase(tableName: string): Promise<TableView[]> {
       }))
       .filter((v: TableView) => v.columnVisibility !== undefined)
     
-    // 更新缓存
-    setCachedViews(tableName, views)
+    // 从第一个视图中提取 user_id（所有视图都属于同一用户）
+    const userId = result.data && result.data.length > 0 ? result.data[0].user_id : undefined
+    
+    // 更新缓存，包含 user_id
+    setCachedViews(tableName, views, userId)
     
     return views
   } catch (error) {
@@ -114,30 +127,30 @@ async function fetchViewsFromDatabase(tableName: string): Promise<TableView[]> {
 }
 
 /**
- * 获取所有视图（优先从缓存，缓存失效则从数据库）
+ * 获取所有视图（优先从数据库，确保用户隔离）
+ * 注意：为了确保用户切换时不会看到其他用户的缓存，我们始终从数据库加载
  */
 export async function getTableViews(tableName: string): Promise<TableView[]> {
-  // 1. 先尝试从缓存读取
-  const cached = getCachedViews(tableName)
-  if (cached) {
-    return cached
-  }
-  
-  // 2. 缓存失效，从数据库加载
   try {
+    // 直接从数据库加载，确保始终获取当前用户的数据
     return await fetchViewsFromDatabase(tableName)
   } catch (error) {
-    console.error('获取视图失败，返回空数组:', error)
-    return []
+    console.error('获取视图失败，尝试从缓存读取:', error)
+    // 如果数据库加载失败（如网络问题），尝试读取缓存
+    const cached = getCachedViews(tableName)
+    return cached || []
   }
 }
 
 /**
  * 同步版本的 getTableViews（用于非异步环境，仅返回缓存）
+ * ⚠️ 不推荐使用：无法验证用户隔离，可能返回其他用户的缓存数据
+ * 建议使用异步的 getTableViews() 替代
+ * @deprecated
  */
 export function getTableViewsSync(tableName: string): TableView[] {
-  const cached = getCachedViews(tableName)
-  return cached || []
+  // 不使用缓存，直接返回空数组（因为无法验证用户）
+  return []
 }
 
 /**
@@ -308,10 +321,12 @@ export async function getDefaultView(tableName: string): Promise<TableView | nul
 
 /**
  * 同步版本的 getDefaultView（仅从缓存读取）
+ * ⚠️ 不推荐使用：无法验证用户隔离
+ * @deprecated
  */
 export function getDefaultViewSync(tableName: string): TableView | null {
-  const views = getTableViewsSync(tableName)
-  return views.find(v => v.isDefault) || views[0] || null
+  // 不使用缓存，直接返回 null（因为无法验证用户）
+  return null
 }
 
 /**
@@ -406,6 +421,7 @@ export async function refreshViewsCache(tableName: string): Promise<TableView[]>
 
 /**
  * 清除所有表格视图缓存（用于调试和升级后清理）
+ * 建议在用户登出时调用，防止缓存泄露到其他用户
  */
 export function clearAllViewsCache(): void {
   try {
@@ -417,4 +433,12 @@ export function clearAllViewsCache(): void {
   } catch (error) {
     console.error('清除缓存失败:', error)
   }
+}
+
+/**
+ * 在用户登出时调用，清除所有视图缓存
+ * 防止下一个登录用户看到上一个用户的缓存
+ */
+export function onUserLogout(): void {
+  clearAllViewsCache()
 }
