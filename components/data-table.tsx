@@ -158,8 +158,36 @@ export function DataTable<TData, TValue>({
     // 只响应左键，右键留给右键菜单
     if (e.button !== 0) return
     
-    const container = scrollContainerRef.current
+    // 查找真正的可滚动容器（从当前元素向上查找）
+    let container = scrollContainerRef.current
     if (!container) return
+    
+    // 如果当前容器不可滚动，尝试向上查找（最多5层）
+    let scrollableContainer: HTMLElement | null = container
+    let depth = 0
+    while (scrollableContainer && depth < 5) {
+      const canScroll = scrollableContainer.scrollWidth > scrollableContainer.clientWidth
+      if (canScroll) {
+        console.log('✅ Found scrollable container at depth', depth, ':', {
+          element: scrollableContainer.tagName,
+          className: scrollableContainer.className,
+          scrollWidth: scrollableContainer.scrollWidth,
+          clientWidth: scrollableContainer.clientWidth,
+          maxScroll: scrollableContainer.scrollWidth - scrollableContainer.clientWidth
+        })
+        break
+      }
+      // 向上查找父元素
+      scrollableContainer = scrollableContainer.parentElement
+      depth++
+    }
+    
+    if (!scrollableContainer) {
+      console.log('❌ No scrollable container found')
+      return
+    }
+    
+    container = scrollableContainer
     
     // 检查是否点击在交互元素上（按钮、输入框、链接、复选框等）
     const target = e.target as HTMLElement
@@ -176,13 +204,15 @@ export function DataTable<TData, TValue>({
     
     if (isInteractiveElement) return
     
-    // 记录初始位置
+    // 记录初始位置（使用找到的可滚动容器）
     scrollStartRef.current = {
       x: e.clientX,
       scrollLeft: container.scrollLeft,
       hasMoved: false
     }
     
+    // 保存容器引用供 mousemove 使用
+    scrollContainerRef.current = container
     isDraggingScrollRef.current = true
   }
 
