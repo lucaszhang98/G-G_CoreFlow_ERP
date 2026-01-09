@@ -332,4 +332,46 @@
     z-index: 99999 !important;
     pointer-events: auto !important;
   }
+  
+  /* ============================================
+   * 拖拽滚动容器
+   * ============================================ */
+  
+  /* 滚动容器：只在容器本身（非子元素）显示 grab 光标 */
+  .scroll-container {
+    cursor: grab;
+  }
+  
+  /* 拖拽中的滚动容器 */
+  .scroll-container.dragging-scroll {
+    cursor: grabbing !important;
+  }
+  
+  /* 拖拽时禁止文本选择 */
+  .scroll-container.dragging-scroll * {
+    user-select: none !important;
+  }
+  
+  /* 表格单元格的光标优先级高于容器 */
+  .scroll-container table td,
+  .scroll-container table th {
+    cursor: default;
+  }
+  
+  /* 单元格的右键菜单光标优先级最高 */
+  .scroll-container .cursor-context-menu,
+  .scroll-container [oncontextmenu]:not([data-no-context-cursor]) {
+    cursor: context-menu !important;
+  }
+  
+  /* 可交互元素保持原有光标 */
+  .scroll-container button,
+  .scroll-container a,
+  .scroll-container input,
+  .scroll-container select,
+  .scroll-container textarea,
+  .scroll-container [role="button"],
+  .scroll-container [role="checkbox"] {
+    cursor: inherit;
+  }
 }

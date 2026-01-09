@@ -126,6 +126,12 @@ export function DataTable<TData, TValue>({
   // Resize 状态（用于禁用拖拽）
   const [isResizing, setIsResizing] = React.useState(false)
   
+  // 拖拽滚动状态
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+  const [isDraggingScroll, setIsDraggingScroll] = React.useState(false)
+  const [scrollDragStart, setScrollDragStart] = React.useState({ x: 0, y: 0, scrollLeft: 0 })
+  const dragThreshold = 5 // 移动超过5px才算拖拽
+  
   React.useEffect(() => {
     setMounted(true)
   }, [])
@@ -146,6 +152,86 @@ export function DataTable<TData, TValue>({
       window.removeEventListener('touchend', handleGlobalMouseUp)
     }
   }, [isResizing])
+
+  // 拖拽滚动处理函数
+  const handleScrollMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    // 只响应左键，右键留给右键菜单
+    if (e.button !== 0) return
+    
+    const container = scrollContainerRef.current
+    if (!container) return
+    
+    // 检查是否可以滚动（有横向滚动条）
+    if (container.scrollWidth <= container.clientWidth) return
+    
+    // 检查是否点击在交互元素上（按钮、输入框、链接、复选框等）
+    const target = e.target as HTMLElement
+    const isInteractiveElement = 
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('a') ||
+      target.closest('select') ||
+      target.closest('textarea') ||
+      target.closest('[role="button"]') ||
+      target.closest('[role="checkbox"]') ||
+      target.closest('.resize-handle') || // 排除调整列宽的手柄
+      target.classList.contains('resize-handle')
+    
+    if (isInteractiveElement) return
+    
+    // 记录初始位置，但先不开始拖拽（等移动超过阈值）
+    setScrollDragStart({
+      x: e.pageX,
+      y: e.pageY,
+      scrollLeft: container.scrollLeft
+    })
+  }
+
+  const handleScrollMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const container = scrollContainerRef.current
+    if (!container || scrollDragStart.x === 0) return
+    
+    const dx = e.pageX - scrollDragStart.x
+    const dy = e.pageY - scrollDragStart.y
+    const distance = Math.sqrt(dx * dx + dy * dy)
+    
+    // 移动超过阈值才开始拖拽
+    if (!isDraggingScroll && distance > dragThreshold) {
+      setIsDraggingScroll(true)
+    }
+    
+    if (isDraggingScroll) {
+      container.scrollLeft = scrollDragStart.scrollLeft - dx
+      // 阻止默认行为（如文本选择）
+      e.preventDefault()
+    }
+  }
+
+  const handleScrollMouseUp = () => {
+    setIsDraggingScroll(false)
+    setScrollDragStart({ x: 0, y: 0, scrollLeft: 0 })
+  }
+
+  const handleScrollMouseLeave = () => {
+    // 移出容器时重置状态
+    setIsDraggingScroll(false)
+    setScrollDragStart({ x: 0, y: 0, scrollLeft: 0 })
+  }
+
+  // 监听全局 mouseup 事件，确保拖拽结束
+  React.useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDraggingScroll || scrollDragStart.x !== 0) {
+        setIsDraggingScroll(false)
+        setScrollDragStart({ x: 0, y: 0, scrollLeft: 0 })
+      }
+    }
+    
+    window.addEventListener('mouseup', handleGlobalMouseUp)
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp)
+    }
+  }, [isDraggingScroll, scrollDragStart])
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting)
 
   // 同步初始排序状态（只在真正改变时更新，避免无限循环）
@@ -594,7 +680,17 @@ export function DataTable<TData, TValue>({
 
       {/* 表格 */}
       <div className="border-0 bg-card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div 
+          ref={scrollContainerRef}
+          className={cn(
+            "overflow-x-auto scroll-container",
+            isDraggingScroll && "dragging-scroll"
+          )}
+          onMouseDown={handleScrollMouseDown}
+          onMouseMove={handleScrollMouseMove}
+          onMouseUp={handleScrollMouseUp}
+          onMouseLeave={handleScrollMouseLeave}
+        >
           <Table 
             className="border-collapse sticky-table"
             style={{ 
