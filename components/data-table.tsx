@@ -1158,9 +1158,8 @@ export function DataTable<TData, TValue>({
                         
                         const isCopied = copiedCellId === cell.id
                         
-                        // 确定 cursor 样式：编辑状态下不显示 context-menu
-                        // 只有在非编辑状态、非操作列、非复选框列时才显示右键菜单图标
-                        const shouldShowContextMenu = !isActionsCell && !isSelectCell && !isEditing
+                        // 确定是否可以右键复制：非编辑状态、非操作列、非复选框列
+                        const canContextMenu = !isActionsCell && !isSelectCell && !isEditing
                         
                         return (
                           <TableCell 
@@ -1171,7 +1170,6 @@ export function DataTable<TData, TValue>({
                               widthClass,
                               shouldSticky && stickyPosition === 'left' && "sticky z-10 left-0",
                               shouldSticky && stickyPosition === 'right' && "sticky right-0 z-10",
-                              shouldShowContextMenu && "cursor-context-menu",
                               isCopied && "bg-green-50 dark:bg-green-950/20"
                             )}
                             style={{
@@ -1201,12 +1199,9 @@ export function DataTable<TData, TValue>({
                                 }
                               }
                             }}
-                            data-tooltip={!isActionsCell && !isSelectCell && !isEditing ? '右键点击复制' : undefined}
+                            data-tooltip={canContextMenu ? '右键点击复制' : undefined}
                           >
-                            <div className={cn(
-                              "flex justify-center truncate relative",
-                              shouldShowContextMenu && "cursor-context-menu"
-                            )}>
+                            <div className="flex justify-center truncate relative">
                               {flexRender(
                                 cell.column.columnDef.cell,
                                 cell.getContext()
