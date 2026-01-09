@@ -155,8 +155,13 @@ export function DataTable<TData, TValue>({
 
   // 拖拽滚动处理函数
   const handleScrollMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    console.log('🚀 Mouse down event triggered!', e.button)
+    
     // 只响应左键，右键留给右键菜单
-    if (e.button !== 0) return
+    if (e.button !== 0) {
+      console.log('❌ Not left button')
+      return
+    }
     
     const container = scrollContainerRef.current
     if (!container) return
