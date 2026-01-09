@@ -164,7 +164,17 @@ export function DataTable<TData, TValue>({
     }
     
     const container = scrollContainerRef.current
-    if (!container) return
+    if (!container) {
+      console.log('❌ Container not found')
+      return
+    }
+    
+    console.log('✅ Container found:', {
+      scrollLeft: container.scrollLeft,
+      scrollWidth: container.scrollWidth,
+      clientWidth: container.clientWidth,
+      canScroll: container.scrollWidth > container.clientWidth
+    })
     
     // 检查是否点击在交互元素上（按钮、输入框、链接、复选框等）
     const target = e.target as HTMLElement
@@ -179,7 +189,12 @@ export function DataTable<TData, TValue>({
       target.closest('.resize-handle') || // 排除调整列宽的手柄
       target.classList.contains('resize-handle')
     
-    if (isInteractiveElement) return
+    if (isInteractiveElement) {
+      console.log('❌ Interactive element detected, ignoring')
+      return
+    }
+    
+    console.log('✅ Starting drag initialization')
     
     // 记录初始位置
     scrollStartRef.current = {
@@ -189,6 +204,7 @@ export function DataTable<TData, TValue>({
     }
     
     isDraggingScrollRef.current = true
+    console.log('✅ Drag initialized successfully')
   }
 
   // 使用全局监听器处理鼠标移动和释放
@@ -207,6 +223,7 @@ export function DataTable<TData, TValue>({
         if (!scrollStartRef.current.hasMoved) {
           scrollStartRef.current.hasMoved = true
           setIsDraggingScroll(true)
+          console.log('🎯 Drag activated! Distance:', distance)
         }
         
         // 计算新的滚动位置
@@ -216,7 +233,21 @@ export function DataTable<TData, TValue>({
         // 钳制在 [0, maxScrollLeft] 范围内
         const clampedScrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft))
         
+        const before = container.scrollLeft
         container.scrollLeft = clampedScrollLeft
+        const after = container.scrollLeft
+        
+        if (distance > 10 && distance < 15) { // 只在刚开始拖动时打印一次
+          console.log('📜 Scrolling:', { 
+            dx, 
+            newScrollLeft, 
+            clamped: clampedScrollLeft, 
+            before, 
+            after,
+            changed: before !== after,
+            maxScroll: maxScrollLeft
+          })
+        }
         
         e.preventDefault()
       }
