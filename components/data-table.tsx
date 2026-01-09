@@ -167,6 +167,20 @@ export function DataTable<TData, TValue>({
       return
     }
     
+    // 检查是否可以滚动
+    const canScroll = container.scrollWidth > container.clientWidth
+    console.log('📊 Container info:', {
+      scrollWidth: container.scrollWidth,
+      clientWidth: container.clientWidth,
+      canScroll: canScroll,
+      currentScrollLeft: container.scrollLeft
+    })
+    
+    if (!canScroll) {
+      console.log('⚠️ No horizontal scroll available')
+      return
+    }
+    
     // 检查是否点击在交互元素上（按钮、输入框、链接、复选框等）
     const target = e.target as HTMLElement
     const isInteractiveElement = 
@@ -215,9 +229,21 @@ export function DataTable<TData, TValue>({
           console.log('🎯 Drag activated, distance:', distance)
         }
         
+        // 计算新的滚动位置，并确保在有效范围内
         const newScrollLeft = scrollStartRef.current.scrollLeft - dx
-        container.scrollLeft = newScrollLeft
-        console.log('📜 Scrolling:', { dx, newScrollLeft })
+        const maxScrollLeft = container.scrollWidth - container.clientWidth
+        
+        // 钳制在 [0, maxScrollLeft] 范围内
+        const clampedScrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft))
+        
+        container.scrollLeft = clampedScrollLeft
+        console.log('📜 Scrolling:', { 
+          dx, 
+          calculated: newScrollLeft, 
+          clamped: clampedScrollLeft,
+          actual: container.scrollLeft,
+          maxScroll: maxScrollLeft
+        })
         e.preventDefault()
       }
     }
@@ -231,7 +257,7 @@ export function DataTable<TData, TValue>({
       }
     }
     
-    window.addEventListener('mousemove', handleGlobalMouseMove)
+    window.addEventListener('mousemove', handleGlobalMouseMove, { passive: false })
     window.addEventListener('mouseup', handleGlobalMouseUp)
     
     return () => {
