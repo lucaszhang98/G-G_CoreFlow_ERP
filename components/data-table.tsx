@@ -158,37 +158,6 @@ export function DataTable<TData, TValue>({
     // 只响应左键，右键留给右键菜单
     if (e.button !== 0) return
     
-    // 查找真正的可滚动容器（从当前元素向上查找）
-    let container = scrollContainerRef.current
-    if (!container) return
-    
-    // 如果当前容器不可滚动，尝试向上查找（最多5层）
-    let scrollableContainer: HTMLElement | null = container
-    let depth = 0
-    while (scrollableContainer && depth < 5) {
-      const canScroll = scrollableContainer.scrollWidth > scrollableContainer.clientWidth
-      if (canScroll) {
-        console.log('✅ Found scrollable container at depth', depth, ':', {
-          element: scrollableContainer.tagName,
-          className: scrollableContainer.className,
-          scrollWidth: scrollableContainer.scrollWidth,
-          clientWidth: scrollableContainer.clientWidth,
-          maxScroll: scrollableContainer.scrollWidth - scrollableContainer.clientWidth
-        })
-        break
-      }
-      // 向上查找父元素
-      scrollableContainer = scrollableContainer.parentElement
-      depth++
-    }
-    
-    if (!scrollableContainer) {
-      console.log('❌ No scrollable container found')
-      return
-    }
-    
-    container = scrollableContainer
-    
     // 检查是否点击在交互元素上（按钮、输入框、链接、复选框等）
     const target = e.target as HTMLElement
     const isInteractiveElement = 
@@ -204,15 +173,13 @@ export function DataTable<TData, TValue>({
     
     if (isInteractiveElement) return
     
-    // 记录初始位置（使用找到的可滚动容器）
+    // 记录初始位置（使用 window 的横向滚动位置）
     scrollStartRef.current = {
       x: e.clientX,
-      scrollLeft: container.scrollLeft,
+      scrollLeft: window.scrollX,
       hasMoved: false
     }
     
-    // 保存容器引用供 mousemove 使用
-    scrollContainerRef.current = container
     isDraggingScrollRef.current = true
   }
 
@@ -220,9 +187,6 @@ export function DataTable<TData, TValue>({
   React.useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (!isDraggingScrollRef.current) return
-      
-      const container = scrollContainerRef.current
-      if (!container) return
       
       const dx = e.clientX - scrollStartRef.current.x
       const distance = Math.abs(dx)
@@ -232,32 +196,16 @@ export function DataTable<TData, TValue>({
         if (!scrollStartRef.current.hasMoved) {
           scrollStartRef.current.hasMoved = true
           setIsDraggingScroll(true)
-          console.log('🎯 Starting drag, container:', {
-            element: container.tagName,
-            className: container.className,
-            scrollWidth: container.scrollWidth,
-            clientWidth: container.clientWidth,
-            maxScroll: container.scrollWidth - container.clientWidth
-          })
         }
         
-        // 计算新的滚动位置，并确保在有效范围内
+        // 计算新的滚动位置
         const newScrollLeft = scrollStartRef.current.scrollLeft - dx
-        const maxScrollLeft = container.scrollWidth - container.clientWidth
         
-        // 钳制在 [0, maxScrollLeft] 范围内
+        // 使用 window.scrollTo 进行横向滚动
+        const maxScrollLeft = document.documentElement.scrollWidth - window.innerWidth
         const clampedScrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft))
         
-        const oldScroll = container.scrollLeft
-        container.scrollLeft = clampedScrollLeft
-        const newScroll = container.scrollLeft
-        
-        console.log('📜 Setting scroll:', { 
-          target: clampedScrollLeft, 
-          before: oldScroll,
-          after: newScroll,
-          changed: oldScroll !== newScroll
-        })
+        window.scrollTo(clampedScrollLeft, window.scrollY)
         
         e.preventDefault()
       }
