@@ -202,6 +202,13 @@ export function DataTable<TData, TValue>({
         if (!scrollStartRef.current.hasMoved) {
           scrollStartRef.current.hasMoved = true
           setIsDraggingScroll(true)
+          console.log('🎯 Starting drag, container:', {
+            element: container.tagName,
+            className: container.className,
+            scrollWidth: container.scrollWidth,
+            clientWidth: container.clientWidth,
+            maxScroll: container.scrollWidth - container.clientWidth
+          })
         }
         
         // 计算新的滚动位置，并确保在有效范围内
@@ -211,7 +218,17 @@ export function DataTable<TData, TValue>({
         // 钳制在 [0, maxScrollLeft] 范围内
         const clampedScrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft))
         
+        const oldScroll = container.scrollLeft
         container.scrollLeft = clampedScrollLeft
+        const newScroll = container.scrollLeft
+        
+        console.log('📜 Setting scroll:', { 
+          target: clampedScrollLeft, 
+          before: oldScroll,
+          after: newScroll,
+          changed: oldScroll !== newScroll
+        })
+        
         e.preventDefault()
       }
     }
