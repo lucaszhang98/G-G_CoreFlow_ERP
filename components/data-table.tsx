@@ -158,6 +158,9 @@ export function DataTable<TData, TValue>({
     // 只响应左键，右键留给右键菜单
     if (e.button !== 0) return
     
+    const container = scrollContainerRef.current
+    if (!container) return
+    
     // 检查是否点击在交互元素上（按钮、输入框、链接、复选框等）
     const target = e.target as HTMLElement
     const isInteractiveElement = 
@@ -173,10 +176,10 @@ export function DataTable<TData, TValue>({
     
     if (isInteractiveElement) return
     
-    // 记录初始位置（使用 window 的横向滚动位置）
+    // 记录初始位置
     scrollStartRef.current = {
       x: e.clientX,
-      scrollLeft: window.scrollX,
+      scrollLeft: container.scrollLeft,
       hasMoved: false
     }
     
@@ -187,6 +190,9 @@ export function DataTable<TData, TValue>({
   React.useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (!isDraggingScrollRef.current) return
+      
+      const container = scrollContainerRef.current
+      if (!container) return
       
       const dx = e.clientX - scrollStartRef.current.x
       const distance = Math.abs(dx)
@@ -200,12 +206,12 @@ export function DataTable<TData, TValue>({
         
         // 计算新的滚动位置
         const newScrollLeft = scrollStartRef.current.scrollLeft - dx
+        const maxScrollLeft = container.scrollWidth - container.clientWidth
         
-        // 使用 window.scrollTo 进行横向滚动
-        const maxScrollLeft = document.documentElement.scrollWidth - window.innerWidth
+        // 钳制在 [0, maxScrollLeft] 范围内
         const clampedScrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft))
         
-        window.scrollTo(clampedScrollLeft, window.scrollY)
+        container.scrollLeft = clampedScrollLeft
         
         e.preventDefault()
       }
@@ -686,7 +692,7 @@ export function DataTable<TData, TValue>({
           <Table 
             className="border-collapse sticky-table"
             style={{ 
-              width: table.getCenterTotalSize(),
+              width: table.getCenterTotalSize(), // 使用列宽总和
               minWidth: '100%' // 保证最小宽度为100%，防止右侧空白
             }}
           >
