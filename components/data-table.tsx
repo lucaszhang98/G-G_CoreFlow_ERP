@@ -127,7 +127,7 @@ export function DataTable<TData, TValue>({
   const [isResizing, setIsResizing] = React.useState(false)
   
   // 拖拽滚动状态
-  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+  const scrollContainerRef = React.useRef<HTMLElement | null>(null)
   const [isDraggingScroll, setIsDraggingScroll] = React.useState(false)
   const isDraggingScrollRef = React.useRef(false)
   const scrollStartRef = React.useRef({ x: 0, scrollLeft: 0, hasMoved: false })
