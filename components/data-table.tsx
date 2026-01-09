@@ -155,26 +155,8 @@ export function DataTable<TData, TValue>({
 
   // 拖拽滚动处理函数
   const handleScrollMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    console.log('🚀 Mouse down event triggered!', e.button)
-    
     // 只响应左键，右键留给右键菜单
-    if (e.button !== 0) {
-      console.log('❌ Not left button')
-      return
-    }
-    
-    const container = scrollContainerRef.current
-    if (!container) {
-      console.log('❌ Container not found')
-      return
-    }
-    
-    console.log('✅ Container found:', {
-      scrollLeft: container.scrollLeft,
-      scrollWidth: container.scrollWidth,
-      clientWidth: container.clientWidth,
-      canScroll: container.scrollWidth > container.clientWidth
-    })
+    if (e.button !== 0) return
     
     // 检查是否点击在交互元素上（按钮、输入框、链接、复选框等）
     const target = e.target as HTMLElement
@@ -189,22 +171,45 @@ export function DataTable<TData, TValue>({
       target.closest('.resize-handle') || // 排除调整列宽的手柄
       target.classList.contains('resize-handle')
     
-    if (isInteractiveElement) {
-      console.log('❌ Interactive element detected, ignoring')
+    if (isInteractiveElement) return
+    
+    // 从点击的元素开始向上查找，找到第一个可滚动的容器
+    let scrollableContainer: HTMLElement | null = target as HTMLElement
+    let depth = 0
+    const maxDepth = 10
+    
+    while (scrollableContainer && depth < maxDepth) {
+      // 检查是否有横向滚动条
+      if (scrollableContainer.scrollWidth > scrollableContainer.clientWidth) {
+        console.log('✅ Found scrollable container at depth', depth, ':', {
+          element: scrollableContainer.tagName,
+          className: scrollableContainer.className,
+          scrollWidth: scrollableContainer.scrollWidth,
+          clientWidth: scrollableContainer.clientWidth,
+          maxScroll: scrollableContainer.scrollWidth - scrollableContainer.clientWidth
+        })
+        break
+      }
+      scrollableContainer = scrollableContainer.parentElement
+      depth++
+    }
+    
+    if (!scrollableContainer || scrollableContainer.scrollWidth <= scrollableContainer.clientWidth) {
+      console.log('⚠️ No scrollable container found')
       return
     }
     
-    console.log('✅ Starting drag initialization')
+    // 更新 ref 指向找到的可滚动容器
+    scrollContainerRef.current = scrollableContainer
     
     // 记录初始位置
     scrollStartRef.current = {
       x: e.clientX,
-      scrollLeft: container.scrollLeft,
+      scrollLeft: scrollableContainer.scrollLeft,
       hasMoved: false
     }
     
     isDraggingScrollRef.current = true
-    console.log('✅ Drag initialized successfully')
   }
 
   // 使用全局监听器处理鼠标移动和释放
@@ -218,12 +223,11 @@ export function DataTable<TData, TValue>({
       const dx = e.clientX - scrollStartRef.current.x
       const distance = Math.abs(dx)
       
-      // 移动超过3px才算拖拽（降低阈值）
+      // 移动超过3px才算拖拽
       if (distance > 3) {
         if (!scrollStartRef.current.hasMoved) {
           scrollStartRef.current.hasMoved = true
           setIsDraggingScroll(true)
-          console.log('🎯 Drag activated! Distance:', distance)
         }
         
         // 计算新的滚动位置
@@ -233,21 +237,7 @@ export function DataTable<TData, TValue>({
         // 钳制在 [0, maxScrollLeft] 范围内
         const clampedScrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft))
         
-        const before = container.scrollLeft
         container.scrollLeft = clampedScrollLeft
-        const after = container.scrollLeft
-        
-        if (distance > 10 && distance < 15) { // 只在刚开始拖动时打印一次
-          console.log('📜 Scrolling:', { 
-            dx, 
-            newScrollLeft, 
-            clamped: clampedScrollLeft, 
-            before, 
-            after,
-            changed: before !== after,
-            maxScroll: maxScrollLeft
-          })
-        }
         
         e.preventDefault()
       }
