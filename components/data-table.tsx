@@ -156,10 +156,16 @@ export function DataTable<TData, TValue>({
   // 拖拽滚动处理函数
   const handleScrollMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     // 只响应左键，右键留给右键菜单
-    if (e.button !== 0) return
+    if (e.button !== 0) {
+      console.log('🖱️ Not left button, ignoring')
+      return
+    }
     
     const container = scrollContainerRef.current
-    if (!container) return
+    if (!container) {
+      console.log('❌ Container not found')
+      return
+    }
     
     // 检查是否点击在交互元素上（按钮、输入框、链接、复选框等）
     const target = e.target as HTMLElement
@@ -174,7 +180,10 @@ export function DataTable<TData, TValue>({
       target.closest('.resize-handle') || // 排除调整列宽的手柄
       target.classList.contains('resize-handle')
     
-    if (isInteractiveElement) return
+    if (isInteractiveElement) {
+      console.log('⚠️ Interactive element, ignoring:', target.tagName)
+      return
+    }
     
     // 记录初始位置
     scrollStartRef.current = {
@@ -184,6 +193,7 @@ export function DataTable<TData, TValue>({
     }
     
     isDraggingScrollRef.current = true
+    console.log('✅ Drag start:', { x: e.clientX, scrollLeft: container.scrollLeft })
   }
 
   // 使用全局监听器处理鼠标移动和释放
@@ -202,15 +212,19 @@ export function DataTable<TData, TValue>({
         if (!scrollStartRef.current.hasMoved) {
           scrollStartRef.current.hasMoved = true
           setIsDraggingScroll(true)
+          console.log('🎯 Drag activated, distance:', distance)
         }
         
-        container.scrollLeft = scrollStartRef.current.scrollLeft - dx
+        const newScrollLeft = scrollStartRef.current.scrollLeft - dx
+        container.scrollLeft = newScrollLeft
+        console.log('📜 Scrolling:', { dx, newScrollLeft })
         e.preventDefault()
       }
     }
     
     const handleGlobalMouseUp = () => {
       if (isDraggingScrollRef.current) {
+        console.log('🛑 Drag end')
         isDraggingScrollRef.current = false
         setIsDraggingScroll(false)
         scrollStartRef.current = { x: 0, scrollLeft: 0, hasMoved: false }
