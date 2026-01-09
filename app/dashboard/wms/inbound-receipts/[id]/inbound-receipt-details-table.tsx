@@ -159,10 +159,24 @@ export function InboundReceiptDetailsTable({
   // 开始编辑
   const handleStartEdit = (detailId: string) => {
     const inventoryInfo = getInventoryInfo(detailId)
+    const existingLots = lotsByDetailId.get(detailId) || []
+    
+    // 如果有多个记录，使用第一个记录的值（因为保存时会合并）
+    // 如果只有一个记录，使用它的值
+    // 如果没有记录，使用0
+    let initialPalletCount = 0
+    let initialStorageLocation = inventoryInfo.storage_location_code || ''
+    
+    if (existingLots.length > 0) {
+      // 使用第一个记录的值，而不是累加值
+      initialPalletCount = existingLots[0].pallet_count || 0
+      initialStorageLocation = existingLots[0].storage_location_code || ''
+    }
+    
     setEditingDetailId(detailId)
     setEditingValues({
-      storage_location_code: inventoryInfo.storage_location_code || '',
-      pallet_count: inventoryInfo.total_pallet_count || 0,
+      storage_location_code: initialStorageLocation,
+      pallet_count: initialPalletCount,
     })
   }
 
@@ -188,20 +202,51 @@ export function InboundReceiptDetailsTable({
       const existingLots = lotsByDetailId.get(detailId) || []
       
       if (existingLots.length > 0) {
-        // 有现有记录，更新第一个（通常一个仓点只有一个库存批次）
-        const firstLot = existingLots[0]
-        const response = await fetch(`/api/wms/inventory-lots/${firstLot.inventory_lot_id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            storage_location_code: editingValues.storage_location_code || null,
-            pallet_count: editingValues.pallet_count || 0,
-          }),
-        })
+        // 有现有记录
+        if (existingLots.length === 1) {
+          // 只有一个记录，直接更新
+          const firstLot = existingLots[0]
+          const response = await fetch(`/api/wms/inventory-lots/${firstLot.inventory_lot_id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              storage_location_code: editingValues.storage_location_code || null,
+              pallet_count: editingValues.pallet_count || 0,
+            }),
+          })
 
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || '更新失败')
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new Error(errorData.error || '更新失败')
+          }
+        } else {
+          // 有多个记录，需要合并：更新第一个，删除其他的
+          // 先更新第一个记录
+          const firstLot = existingLots[0]
+          const response = await fetch(`/api/wms/inventory-lots/${firstLot.inventory_lot_id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              storage_location_code: editingValues.storage_location_code || null,
+              pallet_count: editingValues.pallet_count || 0,
+            }),
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new Error(errorData.error || '更新失败')
+          }
+
+          // 删除其他重复的记录
+          for (let i = 1; i < existingLots.length; i++) {
+            const lotToDelete = existingLots[i]
+            const deleteResponse = await fetch(`/api/wms/inventory-lots/${lotToDelete.inventory_lot_id}`, {
+              method: 'DELETE',
+            })
+            if (!deleteResponse.ok) {
+              console.warn(`删除重复库存批次 ${lotToDelete.inventory_lot_id} 失败`)
+            }
+          }
         }
       } else {
         // 没有现有记录，创建新的
@@ -391,11 +436,27 @@ export function InboundReceiptDetailsTable({
                       <Input
                         type="number"
                         min="0"
-                        value={editingValues?.pallet_count || 0}
-                        onChange={(e) => setEditingValues(prev => prev ? {
-                          ...prev,
-                          pallet_count: parseInt(e.target.value) || 0
-                        } : null)}
+                        step="1"
+                        value={editingValues?.pallet_count?.toString() ?? '0'}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          // 处理空字符串或无效输入
+                          if (value === '' || value === null || value === undefined) {
+                            setEditingValues(prev => prev ? {
+                              ...prev,
+                              pallet_count: 0
+                            } : null)
+                            return
+                          }
+                          // 解析为整数
+                          const numValue = parseInt(value, 10)
+                          if (!isNaN(numValue) && numValue >= 0) {
+                            setEditingValues(prev => prev ? {
+                              ...prev,
+                              pallet_count: numValue
+                            } : null)
+                          }
+                        }}
                         placeholder="实际板数"
                         className="w-full"
                       />
