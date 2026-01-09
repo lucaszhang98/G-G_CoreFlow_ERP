@@ -156,30 +156,10 @@ export function DataTable<TData, TValue>({
   // 拖拽滚动处理函数
   const handleScrollMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     // 只响应左键，右键留给右键菜单
-    if (e.button !== 0) {
-      console.log('🖱️ Not left button, ignoring')
-      return
-    }
+    if (e.button !== 0) return
     
     const container = scrollContainerRef.current
-    if (!container) {
-      console.log('❌ Container not found')
-      return
-    }
-    
-    // 检查是否可以滚动
-    const canScroll = container.scrollWidth > container.clientWidth
-    console.log('📊 Container info:', {
-      scrollWidth: container.scrollWidth,
-      clientWidth: container.clientWidth,
-      canScroll: canScroll,
-      currentScrollLeft: container.scrollLeft
-    })
-    
-    if (!canScroll) {
-      console.log('⚠️ No horizontal scroll available')
-      return
-    }
+    if (!container) return
     
     // 检查是否点击在交互元素上（按钮、输入框、链接、复选框等）
     const target = e.target as HTMLElement
@@ -194,10 +174,7 @@ export function DataTable<TData, TValue>({
       target.closest('.resize-handle') || // 排除调整列宽的手柄
       target.classList.contains('resize-handle')
     
-    if (isInteractiveElement) {
-      console.log('⚠️ Interactive element, ignoring:', target.tagName)
-      return
-    }
+    if (isInteractiveElement) return
     
     // 记录初始位置
     scrollStartRef.current = {
@@ -207,7 +184,6 @@ export function DataTable<TData, TValue>({
     }
     
     isDraggingScrollRef.current = true
-    console.log('✅ Drag start:', { x: e.clientX, scrollLeft: container.scrollLeft })
   }
 
   // 使用全局监听器处理鼠标移动和释放
@@ -226,7 +202,6 @@ export function DataTable<TData, TValue>({
         if (!scrollStartRef.current.hasMoved) {
           scrollStartRef.current.hasMoved = true
           setIsDraggingScroll(true)
-          console.log('🎯 Drag activated, distance:', distance)
         }
         
         // 计算新的滚动位置，并确保在有效范围内
@@ -237,20 +212,12 @@ export function DataTable<TData, TValue>({
         const clampedScrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft))
         
         container.scrollLeft = clampedScrollLeft
-        console.log('📜 Scrolling:', { 
-          dx, 
-          calculated: newScrollLeft, 
-          clamped: clampedScrollLeft,
-          actual: container.scrollLeft,
-          maxScroll: maxScrollLeft
-        })
         e.preventDefault()
       }
     }
     
     const handleGlobalMouseUp = () => {
       if (isDraggingScrollRef.current) {
-        console.log('🛑 Drag end')
         isDraggingScrollRef.current = false
         setIsDraggingScroll(false)
         scrollStartRef.current = { x: 0, scrollLeft: 0, hasMoved: false }
