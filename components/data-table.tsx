@@ -127,7 +127,8 @@ export function DataTable<TData, TValue>({
   const [isResizing, setIsResizing] = React.useState(false)
   
   // 拖拽滚动状态
-  const scrollContainerRef = React.useRef<HTMLElement | null>(null)
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+  const actualScrollContainerRef = React.useRef<HTMLElement | null>(null)
   const [isDraggingScroll, setIsDraggingScroll] = React.useState(false)
   const isDraggingScrollRef = React.useRef(false)
   const scrollStartRef = React.useRef({ x: 0, scrollLeft: 0, hasMoved: false })
@@ -199,8 +200,8 @@ export function DataTable<TData, TValue>({
       return
     }
     
-    // 更新 ref 指向找到的可滚动容器
-    scrollContainerRef.current = scrollableContainer
+    // 保存找到的可滚动容器
+    actualScrollContainerRef.current = scrollableContainer
     
     // 记录初始位置
     scrollStartRef.current = {
@@ -217,7 +218,7 @@ export function DataTable<TData, TValue>({
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (!isDraggingScrollRef.current) return
       
-      const container = scrollContainerRef.current
+      const container = actualScrollContainerRef.current
       if (!container) return
       
       const dx = e.clientX - scrollStartRef.current.x
@@ -248,6 +249,7 @@ export function DataTable<TData, TValue>({
         isDraggingScrollRef.current = false
         setIsDraggingScroll(false)
         scrollStartRef.current = { x: 0, scrollLeft: 0, hasMoved: false }
+        actualScrollContainerRef.current = null
       }
     }
     
