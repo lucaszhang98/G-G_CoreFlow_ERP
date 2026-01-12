@@ -6,6 +6,7 @@ import { inboundReceiptCreateSchema } from '@/lib/validations/inbound-receipt';
 import prisma from '@/lib/prisma';
 import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper';
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
+import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
 
 // GET - 获取拆柜规划列表（使用统一框架，但需要自定义处理关联数据）
 export async function GET(request: NextRequest) {
@@ -382,6 +383,10 @@ export async function POST(request: NextRequest) {
     // 检查订单是否存在
     const order = await prisma.orders.findUnique({
       where: { order_id: BigInt(data.order_id) },
+      select: {
+        pickup_date: true,
+        eta_date: true,
+      },
     });
     if (!order) {
       return NextResponse.json(
@@ -416,8 +421,15 @@ export async function POST(request: NextRequest) {
 
     // 处理拆柜日期
     if (data.planned_unload_at) {
+      // 如果提供了拆柜日期，使用提供的值
       const [year, month, day] = data.planned_unload_at.split('-').map(Number);
       createData.planned_unload_at = new Date(Date.UTC(year, month - 1, day));
+    } else {
+      // 如果没有提供拆柜日期，根据 Excel 公式自动计算
+      const calculatedUnloadDate = calculateUnloadDate(order.pickup_date, order.eta_date);
+      if (calculatedUnloadDate) {
+        createData.planned_unload_at = calculatedUnloadDate;
+      }
     }
 
     // 自动添加系统维护字段
