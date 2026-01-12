@@ -74,6 +74,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                       },
                     },
                   },
+                  // 不添加 where 条件，查询所有关联的预约明细
                 },
               },
               orderBy: {
@@ -224,6 +225,28 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
     return value
   }))
 
+  // 调试：检查预约数据
+  if (serialized.orders?.order_detail) {
+    serialized.orders.order_detail.forEach((detail: any, index: number) => {
+      const appointmentLinesCount = detail.appointment_detail_lines?.length || 0
+      const validAppointmentsCount = (detail.appointment_detail_lines || []).filter((line: any) => 
+        line.delivery_appointments !== null && line.delivery_appointments !== undefined
+      ).length
+      if (appointmentLinesCount > 0) {
+        console.log(`[入库管理调试] 订单明细 ${detail.id} (${index + 1}/${serialized.orders.order_detail.length}):`, {
+          预约明细数量: appointmentLinesCount,
+          有效预约数量: validAppointmentsCount,
+          预约明细: detail.appointment_detail_lines?.map((line: any) => ({
+            id: line.id,
+            appointment_id: line.appointment_id,
+            has_delivery_appointments: !!line.delivery_appointments,
+            reference_number: line.delivery_appointments?.reference_number,
+          }))
+        })
+      }
+    })
+  }
+
   return (
     <DashboardLayout user={session.user || {}}>
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50/30 dark:from-gray-950 dark:via-gray-900 dark:to-blue-950/20">
@@ -278,15 +301,26 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 const detailVolume = detail.volume ? Number(detail.volume) : null
                 
                 // 从 appointment_detail_lines 提取预约信息
-                const appointments = (detail.appointment_detail_lines || []).map((line: any) => ({
-                  appointment_id: line.delivery_appointments?.appointment_id?.toString() || null,
-                  reference_number: line.delivery_appointments?.reference_number || null,
-                  confirmed_start: line.delivery_appointments?.confirmed_start || null,
-                  location_id: line.delivery_appointments?.location_id?.toString() || null,
-                  status: line.delivery_appointments?.status || null,
-                  order_id: line.delivery_appointments?.order_id?.toString() || null,
-                  estimated_pallets: line.estimated_pallets || 0,
-                }))
+                const appointments = (detail.appointment_detail_lines || []).map((line: any) => {
+                  // 调试：检查数据结构
+                  if (!line.delivery_appointments) {
+                    console.warn(`[入库管理] 订单明细 ${detail.id} 的预约明细 ${line.id} 没有关联的 delivery_appointments`, line)
+                  }
+                  return {
+                    appointment_id: line.delivery_appointments?.appointment_id?.toString() || null,
+                    reference_number: line.delivery_appointments?.reference_number || null,
+                    confirmed_start: line.delivery_appointments?.confirmed_start || null,
+                    location_id: line.delivery_appointments?.location_id?.toString() || null,
+                    status: line.delivery_appointments?.status || null,
+                    order_id: line.delivery_appointments?.order_id?.toString() || null,
+                    estimated_pallets: line.estimated_pallets || 0,
+                  }
+                }).filter((appt: any) => appt.appointment_id !== null) // 过滤掉无效的预约
+                
+                // 调试：检查是否有预约
+                if (detail.appointment_detail_lines && detail.appointment_detail_lines.length > 0 && appointments.length === 0) {
+                  console.warn(`[入库管理] 订单明细 ${detail.id} 有 ${detail.appointment_detail_lines.length} 条预约明细，但提取后为0`, detail.appointment_detail_lines)
+                }
                 
                 return {
                   ...detail,
