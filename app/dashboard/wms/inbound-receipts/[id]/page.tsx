@@ -226,25 +226,34 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
   }))
 
   // 调试：检查预约数据
+  const orderNumber = serialized.orders?.order_number || '未知订单'
+  console.log(`[入库管理调试] 订单号: ${orderNumber}, 入库管理ID: ${resolvedParams.id}`)
   if (serialized.orders?.order_detail) {
+    console.log(`[入库管理调试] 订单明细总数: ${serialized.orders.order_detail.length}`)
     serialized.orders.order_detail.forEach((detail: any, index: number) => {
       const appointmentLinesCount = detail.appointment_detail_lines?.length || 0
       const validAppointmentsCount = (detail.appointment_detail_lines || []).filter((line: any) => 
         line.delivery_appointments !== null && line.delivery_appointments !== undefined
       ).length
-      if (appointmentLinesCount > 0) {
-        console.log(`[入库管理调试] 订单明细 ${detail.id} (${index + 1}/${serialized.orders.order_detail.length}):`, {
-          预约明细数量: appointmentLinesCount,
-          有效预约数量: validAppointmentsCount,
-          预约明细: detail.appointment_detail_lines?.map((line: any) => ({
-            id: line.id,
-            appointment_id: line.appointment_id,
-            has_delivery_appointments: !!line.delivery_appointments,
-            reference_number: line.delivery_appointments?.reference_number,
-          }))
-        })
+      console.log(`[入库管理调试] 订单明细 ${detail.id} (${index + 1}/${serialized.orders.order_detail.length}):`, {
+        order_detail_id: detail.id,
+        预约明细数量: appointmentLinesCount,
+        有效预约数量: validAppointmentsCount,
+        预约明细: detail.appointment_detail_lines?.map((line: any) => ({
+          id: line.id,
+          appointment_id: line.appointment_id,
+          has_delivery_appointments: !!line.delivery_appointments,
+          reference_number: line.delivery_appointments?.reference_number,
+          confirmed_start: line.delivery_appointments?.confirmed_start,
+        })) || []
+      })
+      // 如果没有预约明细，也打印出来
+      if (appointmentLinesCount === 0) {
+        console.log(`[入库管理调试] ⚠️ 订单明细 ${detail.id} 没有预约明细`)
       }
     })
+  } else {
+    console.log(`[入库管理调试] ⚠️ 订单没有 order_detail`)
   }
 
   return (
@@ -301,10 +310,22 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 const detailVolume = detail.volume ? Number(detail.volume) : null
                 
                 // 从 appointment_detail_lines 提取预约信息
-                const appointments = (detail.appointment_detail_lines || []).map((line: any) => {
+                const rawAppointmentLines = detail.appointment_detail_lines || []
+                console.log(`[入库管理调试] 订单明细 ${detail.id} 原始预约明细数量: ${rawAppointmentLines.length}`)
+                
+                const appointments = rawAppointmentLines.map((line: any) => {
                   // 调试：检查数据结构
                   if (!line.delivery_appointments) {
-                    console.warn(`[入库管理] 订单明细 ${detail.id} 的预约明细 ${line.id} 没有关联的 delivery_appointments`, line)
+                    console.warn(`[入库管理] 订单明细 ${detail.id} 的预约明细 ${line.id} 没有关联的 delivery_appointments`, {
+                      line_id: line.id,
+                      appointment_id: line.appointment_id,
+                      estimated_pallets: line.estimated_pallets,
+                    })
+                  } else {
+                    console.log(`[入库管理调试] ✅ 订单明细 ${detail.id} 的预约明细 ${line.id} 有 delivery_appointments:`, {
+                      appointment_id: line.delivery_appointments.appointment_id,
+                      reference_number: line.delivery_appointments.reference_number,
+                    })
                   }
                   return {
                     appointment_id: line.delivery_appointments?.appointment_id?.toString() || null,
@@ -315,12 +336,18 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                     order_id: line.delivery_appointments?.order_id?.toString() || null,
                     estimated_pallets: line.estimated_pallets || 0,
                   }
-                }).filter((appt: any) => appt.appointment_id !== null) // 过滤掉无效的预约
+                })
+                
+                const validAppointments = appointments.filter((appt: any) => appt.appointment_id !== null)
+                console.log(`[入库管理调试] 订单明细 ${detail.id} 提取后有效预约数量: ${validAppointments.length}/${appointments.length}`)
                 
                 // 调试：检查是否有预约
-                if (detail.appointment_detail_lines && detail.appointment_detail_lines.length > 0 && appointments.length === 0) {
-                  console.warn(`[入库管理] 订单明细 ${detail.id} 有 ${detail.appointment_detail_lines.length} 条预约明细，但提取后为0`, detail.appointment_detail_lines)
+                if (rawAppointmentLines.length > 0 && validAppointments.length === 0) {
+                  console.warn(`[入库管理] ⚠️ 订单明细 ${detail.id} 有 ${rawAppointmentLines.length} 条预约明细，但提取后为0`, rawAppointmentLines)
                 }
+                
+                // 使用过滤后的有效预约
+                const finalAppointments = validAppointments
                 
                 return {
                   ...detail,
@@ -332,7 +359,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                   delivery_location: deliveryLocationCode, // 显示 location_code
                   fba: detail.fba || null,
                   notes: detail.notes || null,
-                  appointments: appointments, // 添加预约信息
+                  appointments: finalAppointments, // 添加预约信息
                 }
               }) || []}
               inventoryLots={serialized.inventory_lots?.map((lot: any) => ({
