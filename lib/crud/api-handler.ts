@@ -14,6 +14,7 @@ import { getSchema } from './schema-loader'
 import { buildRelationFilterCondition } from './relation-filter-helper'
 import { enhanceConfigWithSearchFields } from './search-config-generator'
 import prisma from '@/lib/prisma'
+import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 
 /**
  * 获取 Prisma 模型
@@ -1095,11 +1096,26 @@ export function createCreateHandler(config: EntityConfig) {
           
           // 如果不存在，则创建入库记录
           if (!existingInboundReceipt) {
+            // 获取订单的 pickup_date 和 eta_date 用于计算拆柜日期
+            const orderForCalculation = await prisma.orders.findUnique({
+              where: { order_id: item.order_id },
+              select: {
+                pickup_date: true,
+                eta_date: true,
+              },
+            })
+            
+            // 计算拆柜日期
+            const calculatedUnloadDate = orderForCalculation
+              ? calculateUnloadDate(orderForCalculation.pickup_date, orderForCalculation.eta_date)
+              : null
+            
             await prisma.inbound_receipt.create({
               data: {
                 order_id: item.order_id,
                 warehouse_id: warehouseId,
                 status: 'pending',
+                planned_unload_at: calculatedUnloadDate,
                 created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                 updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
               },
@@ -1276,11 +1292,26 @@ export function createUpdateHandler(config: EntityConfig) {
               
               const warehouseId = firstWarehouse?.warehouse_id || BigInt(1000)
               
+              // 获取订单的 pickup_date 和 eta_date 用于计算拆柜日期
+              const orderForCalculation = await prisma.orders.findUnique({
+                where: { order_id: currentOrder.order_id },
+                select: {
+                  pickup_date: true,
+                  eta_date: true,
+                },
+              })
+              
+              // 计算拆柜日期
+              const calculatedUnloadDate = orderForCalculation
+                ? calculateUnloadDate(orderForCalculation.pickup_date, orderForCalculation.eta_date)
+                : null
+              
               await prisma.inbound_receipt.create({
                 data: {
                   order_id: currentOrder.order_id,
                   warehouse_id: warehouseId,
                   status: 'pending',
+                  planned_unload_at: calculatedUnloadDate,
                   created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                   updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                 },
@@ -1306,11 +1337,26 @@ export function createUpdateHandler(config: EntityConfig) {
               
               const warehouseId = firstWarehouse?.warehouse_id || BigInt(1000)
               
+              // 获取订单的 pickup_date 和 eta_date 用于计算拆柜日期
+              const orderForCalculation = await prisma.orders.findUnique({
+                where: { order_id: currentOrder.order_id },
+                select: {
+                  pickup_date: true,
+                  eta_date: true,
+                },
+              })
+              
+              // 计算拆柜日期
+              const calculatedUnloadDate = orderForCalculation
+                ? calculateUnloadDate(orderForCalculation.pickup_date, orderForCalculation.eta_date)
+                : null
+              
               await prisma.inbound_receipt.create({
                 data: {
                   order_id: currentOrder.order_id,
                   warehouse_id: warehouseId,
                   status: 'pending',
+                  planned_unload_at: calculatedUnloadDate,
                   created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                   updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                 },
