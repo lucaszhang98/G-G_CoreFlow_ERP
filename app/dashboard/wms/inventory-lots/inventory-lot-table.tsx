@@ -38,9 +38,23 @@ export function InventoryLotTable() {
     },
   ], [router]);
 
-  // 获取送仓预约数据
+  // 获取送仓预约数据（通过 order_detail.appointment_detail_lines）
   const getDeliveryAppointments = (row: any) => {
-    return row.orders?.delivery_appointments || []
+    if (!row.order_detail?.appointment_detail_lines) {
+      return []
+    }
+    // 从 appointment_detail_lines 提取预约信息
+    return row.order_detail.appointment_detail_lines
+      .map((line: any) => ({
+        appointment_id: line.delivery_appointments?.appointment_id?.toString() || null,
+        reference_number: line.delivery_appointments?.reference_number || null,
+        confirmed_start: line.delivery_appointments?.confirmed_start || null,
+        location_id: line.delivery_appointments?.location_id?.toString() || null,
+        status: line.delivery_appointments?.status || null,
+        order_id: line.delivery_appointments?.order_id?.toString() || null,
+        estimated_pallets: line.estimated_pallets || 0,
+      }))
+      .filter((appt: any) => appt.appointment_id !== null) // 过滤掉无效的预约
   }
 
   // 格式化日期（送仓日隐藏年份，只显示月-日）
@@ -114,7 +128,7 @@ export function InventoryLotTable() {
                 </TableHeader>
                 <TableBody>
                   {appointments.map((appt: any, index: number) => (
-                    <TableRow key={appt.appointment_id}>
+                    <TableRow key={appt.appointment_id || `appt-${index}`}>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>
                         {appt.reference_number ? (
@@ -134,7 +148,7 @@ export function InventoryLotTable() {
                       </TableCell>
                       <TableCell>{formatDate(appt.confirmed_start)}</TableCell>
                       <TableCell>
-                        {formatInteger(row.pallet_count)}
+                        {formatInteger(appt.estimated_pallets)}
                       </TableCell>
                     </TableRow>
                   ))}

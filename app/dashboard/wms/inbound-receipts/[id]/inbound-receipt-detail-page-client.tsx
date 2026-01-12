@@ -12,7 +12,6 @@ interface InboundReceiptDetailPageClientProps {
   inboundReceipt: any
   orderDetails: any[]
   inventoryLots: any[]
-  deliveryAppointments: any[]
   inboundReceiptId: string
   customerCode?: string // 客户代码
 }
@@ -21,7 +20,6 @@ export function InboundReceiptDetailPageClient({
   inboundReceipt,
   orderDetails,
   inventoryLots,
-  deliveryAppointments,
   inboundReceiptId,
   customerCode,
 }: InboundReceiptDetailPageClientProps) {
@@ -186,7 +184,6 @@ export function InboundReceiptDetailPageClient({
             inboundReceiptId={inboundReceiptId}
             orderDetails={orderDetails}
             inventoryLots={inventoryLots}
-            deliveryAppointments={deliveryAppointments}
             warehouseId={inboundReceipt?.warehouse_id?.toString() || inboundReceipt?.warehouses?.warehouse_id?.toString() || ''}
             onRefresh={handleRefresh}
           />

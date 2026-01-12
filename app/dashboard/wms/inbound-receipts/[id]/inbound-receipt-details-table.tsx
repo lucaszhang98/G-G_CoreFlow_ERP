@@ -27,6 +27,7 @@ interface OrderDetail {
   delivery_nature: string | null
   volume_percentage: number | null // 分仓占比（从数据库自动生成）
   delivery_location?: string | null // 添加送仓地点
+  appointments?: DeliveryAppointment[] // 该订单明细关联的预约
 }
 
 interface InventoryLot {
@@ -50,19 +51,19 @@ interface InventoryLot {
 }
 
 interface DeliveryAppointment {
-  appointment_id: string
+  appointment_id: string | null
   order_id: string | null
   reference_number: string | null
   confirmed_start: string | null
   location_id: string | null
   status: string | null
+  estimated_pallets?: number // 预约明细的预计板数
 }
 
 interface InboundReceiptDetailsTableProps {
   inboundReceiptId: string
   orderDetails: OrderDetail[]
   inventoryLots: InventoryLot[]
-  deliveryAppointments: DeliveryAppointment[]
   warehouseId: string // 添加 warehouse_id
   onRefresh: () => void
 }
@@ -71,7 +72,6 @@ export function InboundReceiptDetailsTable({
   inboundReceiptId,
   orderDetails,
   inventoryLots,
-  deliveryAppointments,
   warehouseId,
   onRefresh,
 }: InboundReceiptDetailsTableProps) {
@@ -317,10 +317,10 @@ export function InboundReceiptDetailsTable({
     return detail.delivery_location || null
   }
 
-  // 获取该仓点对应的送仓预约（通过order_id匹配）
-  const getAppointmentsForDetail = (orderId: string | null) => {
-    if (!orderId) return []
-    return deliveryAppointments.filter(appt => appt.order_id === orderId)
+  // 获取该订单明细对应的送仓预约（直接从 orderDetail.appointments 获取）
+  const getAppointmentsForDetail = (detailId: string) => {
+    const detail = orderDetails.find(d => d.id === detailId)
+    return detail?.appointments || []
   }
 
   // 格式化日期
@@ -381,7 +381,7 @@ export function InboundReceiptDetailsTable({
             const deliveryLocation = getDeliveryLocation(detail)
             const percentage = detail.volume_percentage // 使用数据库字段
             const isExpanded = expandedRows.has(detail.id)
-            const appointments = getAppointmentsForDetail(detail.order_id)
+            const appointments = getAppointmentsForDetail(detail.id)
 
             return (
               <React.Fragment key={detail.id}>
@@ -531,7 +531,7 @@ export function InboundReceiptDetailsTable({
                             </TableHeader>
                             <TableBody>
                               {appointments.map((appt, index) => (
-                                <TableRow key={appt.appointment_id}>
+                                <TableRow key={appt.appointment_id || `appt-${index}`}>
                                   <TableCell>{index + 1}</TableCell>
                                   <TableCell>
                                     {appt.reference_number ? (
@@ -551,8 +551,7 @@ export function InboundReceiptDetailsTable({
                                   </TableCell>
                                   <TableCell>{formatDate(appt.confirmed_start)}</TableCell>
                                   <TableCell>
-                                    {/* 板数需要从inventory_lots获取，这里暂时显示"-"，后续可以根据业务逻辑填充 */}
-                                    {formatInteger(inventoryInfo.total_pallet_count)}
+                                    {formatInteger(appt.estimated_pallets)}
                                   </TableCell>
                                 </TableRow>
                               ))}

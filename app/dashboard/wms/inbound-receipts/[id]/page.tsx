@@ -58,18 +58,26 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 volume_percentage: true,
                 notes: true,
                 order_id: true,
+                appointment_detail_lines: {
+                  select: {
+                    id: true,
+                    estimated_pallets: true,
+                    appointment_id: true,
+                    delivery_appointments: {
+                      select: {
+                        appointment_id: true,
+                        reference_number: true,
+                        confirmed_start: true,
+                        location_id: true,
+                        status: true,
+                        order_id: true,
+                      },
+                    },
+                  },
+                },
               },
               orderBy: {
                 volume_percentage: 'desc', // 按分仓占比降序排列
-              },
-            },
-            delivery_appointments: {
-              select: {
-                appointment_id: true,
-                reference_number: true,
-                confirmed_start: true,
-                location_id: true,
-                status: true,
               },
             },
           },
@@ -269,6 +277,17 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 // 计算该明细的体积（从 order_detail.volume 获取）
                 const detailVolume = detail.volume ? Number(detail.volume) : null
                 
+                // 从 appointment_detail_lines 提取预约信息
+                const appointments = (detail.appointment_detail_lines || []).map((line: any) => ({
+                  appointment_id: line.delivery_appointments?.appointment_id?.toString() || null,
+                  reference_number: line.delivery_appointments?.reference_number || null,
+                  confirmed_start: line.delivery_appointments?.confirmed_start || null,
+                  location_id: line.delivery_appointments?.location_id?.toString() || null,
+                  status: line.delivery_appointments?.status || null,
+                  order_id: line.delivery_appointments?.order_id?.toString() || null,
+                  estimated_pallets: line.estimated_pallets || 0,
+                }))
+                
                 return {
                   ...detail,
                   id: detail.id.toString(),
@@ -279,6 +298,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                   delivery_location: deliveryLocationCode, // 显示 location_code
                   fba: detail.fba || null,
                   notes: detail.notes || null,
+                  appointments: appointments, // 添加预约信息
                 }
               }) || []}
               inventoryLots={serialized.inventory_lots?.map((lot: any) => ({
@@ -299,11 +319,6 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                   notes: lot.order_detail.notes || null,
                 } : null,
                 delivery_location: lot.orders?.delivery_location || null,
-              })) || []}
-              deliveryAppointments={serialized.orders?.delivery_appointments?.map((appt: any) => ({
-                ...appt,
-                appointment_id: appt.appointment_id.toString(),
-                order_id: serialized.orders?.order_id?.toString() || null,
               })) || []}
               inboundReceiptId={resolvedParams.id}
             />
