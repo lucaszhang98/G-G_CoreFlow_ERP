@@ -551,7 +551,7 @@ export function InboundReceiptDetailsTable({
                                   </TableCell>
                                   <TableCell>{formatDate(appt.confirmed_start)}</TableCell>
                                   <TableCell>
-                                    {formatInteger(appt.estimated_pallets)}
+                                    {formatInteger(appt.estimated_pallets ?? null)}
                                   </TableCell>
                                 </TableRow>
                               ))}
