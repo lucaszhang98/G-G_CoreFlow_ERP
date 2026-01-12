@@ -40,21 +40,49 @@ export function InventoryLotTable() {
 
   // 获取送仓预约数据（通过 order_detail.appointment_detail_lines）
   const getDeliveryAppointments = (row: any) => {
+    console.log(`[库存管理调试] 检查行数据:`, {
+      inventory_lot_id: row.inventory_lot_id,
+      order_detail_id: row.order_detail_id,
+      has_order_detail: !!row.order_detail,
+      has_appointment_detail_lines: !!row.order_detail?.appointment_detail_lines,
+      appointment_detail_lines_count: row.order_detail?.appointment_detail_lines?.length || 0,
+    })
+    
     if (!row.order_detail?.appointment_detail_lines) {
+      console.log(`[库存管理调试] ⚠️ 订单明细 ${row.order_detail_id} 没有 appointment_detail_lines`)
       return []
     }
+    
+    const rawLines = row.order_detail.appointment_detail_lines
+    console.log(`[库存管理调试] 订单明细 ${row.order_detail_id} 有 ${rawLines.length} 条预约明细`)
+    
     // 从 appointment_detail_lines 提取预约信息
-    return row.order_detail.appointment_detail_lines
-      .map((line: any) => ({
-        appointment_id: line.delivery_appointments?.appointment_id?.toString() || null,
-        reference_number: line.delivery_appointments?.reference_number || null,
-        confirmed_start: line.delivery_appointments?.confirmed_start || null,
-        location_id: line.delivery_appointments?.location_id?.toString() || null,
-        status: line.delivery_appointments?.status || null,
-        order_id: line.delivery_appointments?.order_id?.toString() || null,
-        estimated_pallets: line.estimated_pallets || 0,
-      }))
+    const appointments = rawLines
+      .map((line: any, index: number) => {
+        const hasDeliveryAppointments = !!line.delivery_appointments
+        console.log(`[库存管理调试] 预约明细 ${index + 1}/${rawLines.length}:`, {
+          line_id: line.id,
+          appointment_id: line.appointment_id,
+          has_delivery_appointments: hasDeliveryAppointments,
+          reference_number: line.delivery_appointments?.reference_number,
+          estimated_pallets: line.estimated_pallets,
+        })
+        
+        return {
+          appointment_id: line.delivery_appointments?.appointment_id?.toString() || null,
+          reference_number: line.delivery_appointments?.reference_number || null,
+          confirmed_start: line.delivery_appointments?.confirmed_start || null,
+          location_id: line.delivery_appointments?.location_id?.toString() || null,
+          status: line.delivery_appointments?.status || null,
+          order_id: line.delivery_appointments?.order_id?.toString() || null,
+          estimated_pallets: line.estimated_pallets || 0,
+        }
+      })
       .filter((appt: any) => appt.appointment_id !== null) // 过滤掉无效的预约
+    
+    console.log(`[库存管理调试] 订单明细 ${row.order_detail_id} 提取后有效预约数量: ${appointments.length}/${rawLines.length}`)
+    
+    return appointments
   }
 
   // 格式化日期（送仓日隐藏年份，只显示月-日）

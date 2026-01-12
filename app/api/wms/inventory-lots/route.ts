@@ -151,6 +151,23 @@ export async function GET(request: NextRequest) {
             estimated_pallets: true,
             delivery_nature: true,
             delivery_location: true,
+            appointment_detail_lines: {
+              select: {
+                id: true,
+                estimated_pallets: true,
+                appointment_id: true,
+                delivery_appointments: {
+                  select: {
+                    appointment_id: true,
+                    reference_number: true,
+                    confirmed_start: true,
+                    location_id: true,
+                    status: true,
+                    order_id: true,
+                  },
+                },
+              },
+            },
           },
         },
         inbound_receipt: {
