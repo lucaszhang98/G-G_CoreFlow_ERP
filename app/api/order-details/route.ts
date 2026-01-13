@@ -32,7 +32,14 @@ export async function GET(request: NextRequest) {
         estimated_pallets: true,
         remaining_pallets: true, // 剩余板数
         delivery_nature: true,
-        delivery_location: true,
+        delivery_location_id: true,
+        locations_order_detail_delivery_location_idTolocations: {
+          select: {
+            location_id: true,
+            location_code: true,
+            name: true,
+          },
+        },
         fba: true,
         volume_percentage: true,
         notes: true,

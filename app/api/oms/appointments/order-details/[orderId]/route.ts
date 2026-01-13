@@ -72,7 +72,14 @@ export async function GET(
         estimated_pallets: true,
         remaining_pallets: true, // 未约板数（预计板数 - 所有预约板数之和）
         delivery_nature: true,
-        delivery_location: true,
+        delivery_location_id: true,
+        locations_order_detail_delivery_location_idTolocations: {
+          select: {
+            location_id: true,
+            location_code: true,
+            name: true,
+          },
+        },
         fba: true,
         volume_percentage: true,
         notes: true,
