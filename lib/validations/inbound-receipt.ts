@@ -14,14 +14,17 @@ export const inboundReceiptCreateSchema = z.object({
     .optional()
     .nullable(),
   unloaded_by: z.string()
-    .max(200, '拆柜人员名称长度不能超过 200')
     .optional()
-    .nullable(),
-  received_by: z.number()
-    .int()
-    .positive('入库人员ID必须为正整数')
+    .nullable()
+    .refine((val) => !val || /^\d+$/.test(val), {
+      message: '拆柜人员ID必须是数字字符串',
+    }),
+  received_by: z.string()
     .optional()
-    .nullable(),
+    .nullable()
+    .refine((val) => !val || /^\d+$/.test(val), {
+      message: '入库人员ID必须是数字字符串',
+    }),
   delivery_progress: z.number()
     .min(0, '送货进度不能小于0')
     .max(100, '送货进度不能大于100')
@@ -54,14 +57,17 @@ export const inboundReceiptUpdateSchema = z.object({
     .optional()
     .nullable(),
   unloaded_by: z.string()
-    .max(200, '拆柜人员名称长度不能超过 200')
     .optional()
-    .nullable(),
-  received_by: z.number()
-    .int()
-    .positive('入库人员ID必须为正整数')
+    .nullable()
+    .refine((val) => !val || /^\d+$/.test(val), {
+      message: '拆柜人员ID必须是数字字符串',
+    }),
+  received_by: z.string()
     .optional()
-    .nullable(),
+    .nullable()
+    .refine((val) => !val || /^\d+$/.test(val), {
+      message: '入库人员ID必须是数字字符串',
+    }),
   // delivery_progress 不在更新 schema 中，因为它是自动生成的
   notes: z.string()
     .max(1000, '备注长度不能超过 1000')

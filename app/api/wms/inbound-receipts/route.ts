@@ -284,10 +284,8 @@ export async function GET(request: NextRequest) {
           ready_date: order?.ready_date || null,
           lfd_date: order?.lfd_date || null,
           pickup_date: order?.pickup_date || null,
-          unloaded_by: serialized.users_inbound_receipt_unloaded_byTousers?.full_name || null, // 拆柜人员（显示用户名）
-          unloaded_by_id: serialized.unloaded_by || null, // 拆柜人员ID
-          received_by: serialized.users_inbound_receipt_received_byTousers?.full_name || null, // 入库人员（显示用户名）
-          received_by_id: serialized.received_by || null, // 入库人员ID
+          unloaded_by: serialized.unloaded_by || null, // 拆柜人员ID
+          received_by: serialized.received_by || null, // 入库人员ID
           warehouse_name: serialized.warehouses?.name || null,
           unload_method_name: serialized.unload_methods?.description || null,
           // 计算后的送货进度（按板数加权平均）

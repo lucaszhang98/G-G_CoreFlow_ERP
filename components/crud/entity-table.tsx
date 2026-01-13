@@ -856,14 +856,10 @@ export function EntityTable<T = any>({
           
           // 比较处理后的值是否改变
           let originalValue: string | number | null = null
-          if (key === 'unloaded_by') {
-            // unloaded_by 的原始值是 BigInt ID，但 API 返回的是 unloaded_by_id
-            const unloadedById = (row as any)['unloaded_by_id']
-            originalValue = unloadedById !== undefined && unloadedById !== null ? String(unloadedById) : null
-          } else if (key === 'received_by') {
-            // received_by 的原始值是 BigInt ID，但 API 返回的是 received_by_id
-            const receivedById = (row as any)['received_by_id']
-            originalValue = receivedById !== undefined && receivedById !== null ? String(receivedById) : null
+          if (key === 'unloaded_by' || key === 'received_by') {
+            // unloaded_by 和 received_by 的原始值是 BigInt ID，API 返回的也是 ID
+            const originalIdValue = (row as any)[key]
+            originalValue = originalIdValue !== undefined && originalIdValue !== null ? String(originalIdValue) : null
           } else {
             originalValue = originalId ? Number(originalId) : null
           }
@@ -1058,19 +1054,12 @@ export function EntityTable<T = any>({
                         updatedItem[key] = responseData.data[key]
                       }
                     })
-                    // 确保 received_by 和 received_by_id 都被更新（如果 API 返回了）
+                    // 更新 received_by 和 unloaded_by（API返回的是ID）
                     if (responseData.data.received_by !== undefined) {
-                      updatedItem.received_by = responseData.data.received_by // 用户名（用于显示）
+                      updatedItem.received_by = responseData.data.received_by // ID
                     }
-                    if (responseData.data.received_by_id !== undefined) {
-                      updatedItem.received_by_id = responseData.data.received_by_id // ID（用于编辑）
-                    }
-                    // 确保 unloaded_by 和 unloaded_by_id 都被更新（如果 API 返回了）
                     if (responseData.data.unloaded_by !== undefined) {
-                      updatedItem.unloaded_by = responseData.data.unloaded_by // 用户名（用于显示）
-                    }
-                    if (responseData.data.unloaded_by_id !== undefined) {
-                      updatedItem.unloaded_by_id = responseData.data.unloaded_by_id // ID（用于编辑）
+                      updatedItem.unloaded_by = responseData.data.unloaded_by // ID
                     }
                     return updatedItem
                   }
@@ -1722,9 +1711,8 @@ export function EntityTable<T = any>({
             if (fieldConfig.relationField) {
               idKey = fieldConfig.relationField
             } else if (fieldKey === 'unloaded_by') {
-              // unloaded_by 在数据库中存储的是 BigInt ID
-              // API 返回的 unloaded_by 是显示的用户名，实际ID在 unloaded_by_id 字段中
-              idKey = 'unloaded_by_id'
+              // unloaded_by 在数据库中存储的是 BigInt ID，API 返回的也是 ID
+              idKey = 'unloaded_by'
               const idValue = (row.original as any)[idKey]
               if (idValue !== undefined && idValue !== null) {
                 initialValue = String(idValue)
@@ -1732,9 +1720,8 @@ export function EntityTable<T = any>({
                 initialValue = null
               }
             } else if (fieldKey === 'received_by') {
-              // received_by 在数据库中存储的是 BigInt ID
-              // API 返回的 received_by 是显示的用户名，实际ID在 received_by_id 字段中
-              idKey = 'received_by_id'
+              // received_by 在数据库中存储的是 BigInt ID，API 返回的也是 ID
+              idKey = 'received_by'
               const idValue = (row.original as any)[idKey]
               if (idValue !== undefined && idValue !== null) {
                 initialValue = String(idValue)
@@ -1891,10 +1878,6 @@ export function EntityTable<T = any>({
         
         if (fieldConfig.type === 'relation') {
           const value = row.getValue(fieldKey)
-          // 如果 value 已经是字符串（API 已经转换了，如 name），直接显示
-          if (typeof value === 'string' && value) {
-            return <div>{value}</div>
-          }
           // 如果 value 是对象，尝试获取 displayField
           if (value && typeof value === 'object') {
             const displayValue = fieldConfig.relation?.displayField
@@ -1902,7 +1885,7 @@ export function EntityTable<T = any>({
               : value
             return <div>{displayValue || '-'}</div>
           }
-          // 如果 value 是数字（ID）或 null/undefined，尝试从关联数据中获取显示值
+          // value 是 ID（数字或字符串）或 null/undefined，从关联数据中获取显示值
           // 检查是否有关联数据（如 users_inbound_receipt_received_byTousers）
           const relationKey = `users_inbound_receipt_${fieldKey}Tousers`
           const relationData = (row.original as any)[relationKey]
