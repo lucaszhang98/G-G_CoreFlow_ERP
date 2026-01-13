@@ -149,9 +149,16 @@ export async function GET(request: NextRequest) {
             quantity: true,
             volume: true,
             estimated_pallets: true,
-            delivery_nature: true,
-            delivery_location: true,
-            appointment_detail_lines: {
+          delivery_nature: true,
+          delivery_location_id: true,
+          locations_order_detail_delivery_location_idTolocations: {
+            select: {
+              location_id: true,
+              location_code: true,
+              name: true,
+            },
+          },
+          appointment_detail_lines: {
               select: {
                 id: true,
                 estimated_pallets: true,
@@ -252,105 +259,8 @@ export async function GET(request: NextRequest) {
       throw new Error(`数据库查询失败: ${dbError.message || '未知错误'}`);
     }
 
-    // 获取所有唯一的 delivery_location（location_id）用于查询 location_code
-    // delivery_location 在 order_detail 中是 String? 类型，存储的是 location_id 的字符串形式
-    const locationIdStrings = new Set<string>()
-    items.forEach((item: any) => {
-      try {
-        const deliveryLocation = item?.order_detail?.delivery_location
-        if (deliveryLocation !== null && deliveryLocation !== undefined && deliveryLocation !== '') {
-          // 转换为字符串形式的 ID
-          const idStr = String(deliveryLocation).trim()
-          // 检查是否是有效的数字字符串
-          const numId = Number(idStr)
-          if (idStr && !isNaN(numId) && numId > 0 && Number.isInteger(numId)) {
-            locationIdStrings.add(idStr)
-          }
-        }
-      } catch (e) {
-        // 忽略单个 item 的处理错误
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('处理 delivery_location 时出错:', e, item)
-        }
-      }
-    })
-    
-    // 批量查询 locations 获取 location_code
-    const locationsMap = new Map<string, string>()
-    if (locationIdStrings.size > 0) {
-      try {
-        // 将字符串 ID 转换为 BigInt 数组用于 Prisma 查询
-        const locationIds: bigint[] = []
-        for (const idStr of locationIdStrings) {
-          try {
-            const numId = Number(idStr)
-            if (!isNaN(numId) && numId > 0 && Number.isInteger(numId)) {
-              locationIds.push(BigInt(idStr))
-            }
-          } catch (e) {
-            if (process.env.NODE_ENV === 'development') {
-              console.warn(`无法转换 location_id: ${idStr}`, e)
-            }
-          }
-        }
-        
-        if (locationIds.length > 0) {
-          try {
-            const locations = await prisma.locations.findMany({
-              where: {
-                location_id: {
-                  in: locationIds,
-                },
-              },
-              select: {
-                location_id: true,
-                location_code: true,
-              },
-            })
-            
-            locations.forEach((loc: any) => {
-              try {
-                const locId = typeof loc.location_id === 'bigint' 
-                  ? loc.location_id.toString() 
-                  : String(loc.location_id)
-                const locCode = loc.location_code || ''
-                if (locId && locCode) {
-                  locationsMap.set(locId, locCode)
-                }
-              } catch (e) {
-                // 忽略单个 location 的处理错误
-                if (process.env.NODE_ENV === 'development') {
-                  console.warn('处理 location 数据时出错:', e, loc)
-                }
-              }
-            })
-          } catch (prismaError: any) {
-            console.error('Prisma 查询 locations 失败:', prismaError)
-            if (process.env.NODE_ENV === 'development') {
-              console.error('查询的 location_ids:', locationIds.map(id => id.toString()))
-              console.error('Error details:', {
-                message: prismaError?.message,
-                code: prismaError?.code,
-                meta: prismaError?.meta,
-              })
-            }
-            // 即使查询失败，也继续处理，只是没有 location_code 映射
-          }
-        }
-      } catch (locError: any) {
-        console.error('查询 locations 失败:', locError)
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Location ID Strings:', Array.from(locationIdStrings))
-          console.error('Error details:', {
-            message: locError?.message,
-            code: locError?.code,
-            meta: locError?.meta,
-            stack: locError?.stack,
-          })
-        }
-        // 即使查询失败，也继续处理，只是没有 location_code 映射
-      }
-    }
+    // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
+    // 不需要手动查询 locations 了
 
     // 转换数据格式，添加关联字段
     const serializedItems = items.map((item: any) => {
@@ -369,20 +279,8 @@ export async function GET(request: NextRequest) {
         // 预计拆柜日期
         const plannedUnloadAt = inboundReceipt?.planned_unload_at || null;
         
-        // 送仓地点（仓点）- 从 order_detail 获取，并转换为 location_code
-        const deliveryLocationId = orderDetail?.delivery_location
-        let deliveryLocation: string | null = null
-        if (deliveryLocationId) {
-          try {
-            // 尝试从 locationsMap 获取 location_code
-            const locIdStr = typeof deliveryLocationId === 'string'
-              ? deliveryLocationId
-              : String(deliveryLocationId)
-            deliveryLocation = locationsMap.get(locIdStr) || locIdStr
-          } catch (e) {
-            deliveryLocation = String(deliveryLocationId)
-          }
-        }
+        // 送仓地点（仓点）- 从 order_detail 关联数据获取 location_code
+        const deliveryLocation = orderDetail?.locations_order_detail_delivery_location_idTolocations?.location_code || null
         
         // 送仓性质
         const deliveryNature = orderDetail?.delivery_nature || null;
