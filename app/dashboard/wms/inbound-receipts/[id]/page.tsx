@@ -231,6 +231,16 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
     }
     return value
   }))
+  
+  // 调试：检查关联数据
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[入库管理详情] 关联数据检查:', {
+      unloaded_by: serialized.unloaded_by,
+      received_by: serialized.received_by,
+      users_inbound_receipt_unloaded_byTousers: serialized.users_inbound_receipt_unloaded_byTousers,
+      users_inbound_receipt_received_byTousers: serialized.users_inbound_receipt_received_byTousers,
+    })
+  }
 
   // 调试：检查预约数据
   const orderNumber = serialized.orders?.order_number || '未知订单'
