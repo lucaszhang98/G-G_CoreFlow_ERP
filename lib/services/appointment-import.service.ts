@@ -68,7 +68,14 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
           select: {
             id: true,
             order_id: true,
-            delivery_location: true,
+            delivery_location_id: true,
+            locations_order_detail_delivery_location_idTolocations: {
+              select: {
+                location_id: true,
+                location_code: true,
+                name: true,
+              },
+            },
             delivery_nature: true,
             estimated_pallets: true,
             remaining_pallets: true,
