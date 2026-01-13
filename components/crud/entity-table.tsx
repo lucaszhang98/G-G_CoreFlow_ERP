@@ -859,16 +859,21 @@ export function EntityTable<T = any>({
           if (key === 'unloaded_by') {
             // unloaded_by 的原始值是 BigInt ID，但 API 返回的是 unloaded_by_id
             const unloadedById = (row as any)['unloaded_by_id']
-            originalValue = unloadedById ? String(unloadedById) : null
+            originalValue = unloadedById !== undefined && unloadedById !== null ? String(unloadedById) : null
           } else if (key === 'received_by') {
             // received_by 的原始值是 BigInt ID，但 API 返回的是 received_by_id
             const receivedById = (row as any)['received_by_id']
-            originalValue = receivedById ? String(receivedById) : null
+            originalValue = receivedById !== undefined && receivedById !== null ? String(receivedById) : null
           } else {
             originalValue = originalId ? Number(originalId) : null
           }
           
-          if (processedValue !== originalValue) {
+          // 对于 unloaded_by 和 received_by，如果新值不为 null，或者原始值为 null 但新值不为 null，都需要更新
+          const shouldUpdate = processedValue !== originalValue || 
+            (processedValue !== null && originalValue === null) ||
+            (processedValue === null && originalValue !== null)
+          
+          if (shouldUpdate) {
             // 使用数据库字段名（如 carrier_id）而不是配置字段名（如 carrier）
             updates[dbFieldName] = processedValue
           }
