@@ -1904,6 +1904,7 @@ export function EntityTable<T = any>({
             })
           }
           
+          // 尝试从关联数据中获取显示值
           if (relationData) {
             // 优先使用配置的displayField（通常是full_name）
             const displayField = fieldConfig.relation?.displayField || 'full_name'
@@ -1918,7 +1919,8 @@ export function EntityTable<T = any>({
             return <div>-</div>
           }
           
-          // 如果有ID但没有关联数据，显示ID（临时，应该不会发生）
+          // 如果有ID但没有关联数据，显示ID（这不应该发生，但如果发生了，至少显示ID）
+          // 注意：这通常意味着API没有返回关联数据，需要检查API的include配置
           return <div>{String(originalValue)}</div>
         }
         
