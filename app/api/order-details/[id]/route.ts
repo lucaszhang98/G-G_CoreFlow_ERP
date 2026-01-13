@@ -19,12 +19,13 @@ export async function PUT(
     const { quantity, volume, delivery_nature, delivery_location, fba, notes, po } = body
 
     // 验证和转换 delivery_location：如果是 location_code，转换为 location_id
-    let validatedDeliveryLocation: string | null = null
+    // delivery_location 现在应该是 location_id（BigInt）或 location_code（string）
+    let validatedDeliveryLocationId: bigint | null = null
     if (delivery_location) {
       const locStr = String(delivery_location)
       // 如果是数字字符串，直接使用（location_id）
       if (/^\d+$/.test(locStr)) {
-        validatedDeliveryLocation = locStr
+        validatedDeliveryLocationId = BigInt(locStr)
       } else {
         // 如果是 location_code，查询对应的 location_id
         const location = await prisma.locations.findFirst({
@@ -32,7 +33,7 @@ export async function PUT(
           select: { location_id: true },
         })
         if (location) {
-          validatedDeliveryLocation = location.location_id.toString()
+          validatedDeliveryLocationId = location.location_id
         } else {
           // 如果找不到对应的 location，返回错误
           return NextResponse.json(
@@ -85,7 +86,7 @@ export async function PUT(
       volume: volume !== undefined ? (volume ? parseFloat(volume) : null) : undefined,
       estimated_pallets: calculatedEstimatedPallets, // 自动计算，不允许用户修改
       delivery_nature: delivery_nature !== undefined ? delivery_nature : undefined,
-      delivery_location: delivery_location !== undefined ? validatedDeliveryLocation : undefined,
+      delivery_location_id: delivery_location !== undefined ? validatedDeliveryLocationId : undefined,
       fba: fba !== undefined ? fba : undefined,
       volume_percentage: calculatedVolumePercentage ? parseFloat(calculatedVolumePercentage.toFixed(2)) : null, // 自动计算，不允许用户修改
       notes: notes !== undefined ? notes : undefined,
