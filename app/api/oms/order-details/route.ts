@@ -67,7 +67,10 @@ export async function GET(request: NextRequest) {
 
     const delivery_location = searchParams.get('filter_delivery_location_code')
     if (delivery_location && delivery_location !== '__all__') {
-      where.delivery_location = delivery_location
+      // 通过关联的 locations 表筛选 location_code
+      where.locations_order_detail_delivery_location_idTolocations = {
+        location_code: delivery_location,
+      }
     }
 
     // 预约状态筛选（由于未约板数是实时计算的，需要在查询后筛选）
@@ -101,7 +104,9 @@ export async function GET(request: NextRequest) {
     } else if (sort === 'planned_unload_at') {
       orderBy.orders = { inbound_receipt: { planned_unload_at: order } }
     } else if (sort === 'delivery_location_code') {
-      orderBy.delivery_location = order
+      orderBy.locations_order_detail_delivery_location_idTolocations = {
+        location_code: order,
+      }
     } else {
       orderBy[sort] = order
     }
@@ -171,56 +176,8 @@ export async function GET(request: NextRequest) {
       prisma.order_detail.count({ where }),
     ])
 
-    // 获取所有唯一的 delivery_location（location_id）用于查询 location_code
-    const locationIdStrings = new Set<string>()
-    items.forEach((item: any) => {
-      const deliveryLocation = item?.delivery_location
-      if (deliveryLocation !== null && deliveryLocation !== undefined && deliveryLocation !== '') {
-        const idStr = String(deliveryLocation).trim()
-        const numId = Number(idStr)
-        if (idStr && !isNaN(numId) && numId > 0 && Number.isInteger(numId)) {
-          locationIdStrings.add(idStr)
-        }
-      }
-    })
-
-    // 批量查询 locations 获取 location_code
-    const locationsMap = new Map<string, string>()
-    if (locationIdStrings.size > 0) {
-      const locationIds: bigint[] = []
-      for (const idStr of locationIdStrings) {
-        try {
-          const numId = Number(idStr)
-          if (!isNaN(numId) && numId > 0 && Number.isInteger(numId)) {
-            locationIds.push(BigInt(idStr))
-          }
-        } catch (e) {
-          // 忽略
-        }
-      }
-
-      if (locationIds.length > 0) {
-        const locations = await prisma.locations.findMany({
-          where: {
-            location_id: {
-              in: locationIds,
-            },
-          },
-          select: {
-            location_id: true,
-            location_code: true,
-          },
-        })
-
-        locations.forEach((loc: any) => {
-          const locId = typeof loc.location_id === 'bigint' 
-            ? loc.location_id.toString() 
-            : String(loc.location_id)
-          const locCode = loc.location_code || ''
-          locationsMap.set(locId, locCode)
-        })
-      }
-    }
+    // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
+    // 不需要手动查询 locations 了
 
     // 转换数据格式
     const transformedItems = items.map((item: any) => {
@@ -254,11 +211,8 @@ export async function GET(request: NextRequest) {
         ? (il.unbooked_pallet_count ?? 0) // 已入库，使用 inventory_lots 的 unbooked_pallet_count，null时视为0
         : (item.estimated_pallets || 0) - totalAppointmentPallets // 未入库，实时计算（允许负数）
 
-      // 获取 location_code
-      const deliveryLocationId = item.delivery_location
-      const delivery_location_code = deliveryLocationId 
-        ? locationsMap.get(String(deliveryLocationId)) || null
-        : null
+      // 获取 location_code（从关联数据中获取）
+      const delivery_location_code = item.locations_order_detail_delivery_location_idTolocations?.location_code || null
 
       return {
         id: String(item.id),
