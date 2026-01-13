@@ -280,6 +280,27 @@ export async function PUT(
     const serialized = serializeBigInt(inboundReceipt);
     const orderData = serialized.orders;
 
+    // 查找 unloaded_by 对应的用户ID（如果 unloaded_by 是用户名字符串）
+    let unloadedById: string | null = null
+    if (serialized.unloaded_by) {
+      try {
+        const user = await prisma.users.findFirst({
+          where: {
+            OR: [
+              { username: serialized.unloaded_by },
+              { full_name: serialized.unloaded_by },
+            ],
+          },
+          select: { id: true },
+        })
+        if (user) {
+          unloadedById = String(user.id)
+        }
+      } catch (error) {
+        console.error('查找 unloaded_by 用户ID失败:', error)
+      }
+    }
+
     // 计算送货进度：从关联的 inventory_lots 按板数加权平均
     // 公式：delivery_progress = Σ(delivery_progress_i * pallet_count_i) / Σ(pallet_count_i)
     let calculatedDeliveryProgress = 0;

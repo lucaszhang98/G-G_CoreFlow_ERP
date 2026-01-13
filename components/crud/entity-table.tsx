@@ -1078,6 +1078,11 @@ export function EntityTable<T = any>({
                     if (responseData.data.received_by !== undefined && responseData.data.received_by_id !== undefined) {
                       updatedItem.received_by_id = responseData.data.received_by_id
                     }
+                    // 确保 unloaded_by_id 也被更新（如果 API 返回了 unloaded_by_id）
+                    // unloaded_by 在数据库中存储的是用户名字符串，但前端编辑时需要用户ID
+                    if (responseData.data.unloaded_by_id !== undefined) {
+                      updatedItem.unloaded_by_id = responseData.data.unloaded_by_id
+                    }
                     return updatedItem
                   }
                   return item
