@@ -24,10 +24,12 @@ import { PickupSummaryDialog } from "@/components/pickup-management/pickup-summa
 
 export function PickupManagementClient() {
   const [isInitializing, setIsInitializing] = React.useState(false)
+  const [isSyncing, setIsSyncing] = React.useState(false)
   const [hasInitialized, setHasInitialized] = React.useState(false)
   const [showInitButton, setShowInitButton] = React.useState(false)
   const [selectedRows, setSelectedRows] = React.useState<any[]>([])
   const [summaryDialogOpen, setSummaryDialogOpen] = React.useState(false)
+  const [refreshKey, setRefreshKey] = React.useState(0) // 用于强制刷新表格
   // 用于追踪勾选顺序的状态
   const [orderedSelectedRows, setOrderedSelectedRows] = React.useState<any[]>([])
   const selectedIdsRef = React.useRef<Set<string>>(new Set())
@@ -95,7 +97,7 @@ export function PickupManagementClient() {
     return () => clearTimeout(timer)
   }, [])
 
-  // 初始化提柜管理记录
+  // 初始化提柜管理记录（用于首次初始化）
   const handleInitialize = async () => {
     setIsInitializing(true)
     try {
@@ -120,6 +122,34 @@ export function PickupManagementClient() {
       setIsInitializing(false)
     }
   }
+
+  // 同步提柜管理记录（为缺失的订单创建记录）
+  const handleSync = React.useCallback(async () => {
+    setIsSyncing(true)
+    try {
+      const response = await fetch('/api/tms/pickup-management/initialize', {
+        method: 'POST',
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        if (data.created > 0) {
+          toast.success(`成功同步 ${data.created} 条提柜管理记录`)
+          // 刷新表格数据
+          setRefreshKey(prev => prev + 1)
+        } else {
+          toast.info('所有订单都已有关联的提柜管理记录，无需同步')
+        }
+      } else {
+        toast.error(data.error || '同步失败')
+      }
+    } catch (error: any) {
+      console.error('同步提柜管理记录失败:', error)
+      toast.error('同步失败，请稍后重试')
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [])
 
   // 加载承运公司选项（用于承运公司字段的模糊搜索）
   const loadCarrierOptions = React.useCallback(async (search: string = ''): Promise<FuzzySearchOption[]> => {
@@ -223,6 +253,31 @@ export function PickupManagementClient() {
       })
   }, [orderedSelectedRows])
 
+  // 自定义工具栏按钮（同步按钮）
+  const customToolbarButtons = React.useMemo(() => {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleSync}
+        disabled={isSyncing}
+        className="gap-2"
+      >
+        {isSyncing ? (
+          <>
+            <RefreshCw className="h-4 w-4 animate-spin" />
+            同步中...
+          </>
+        ) : (
+          <>
+            <RefreshCw className="h-4 w-4" />
+            同步提柜数据
+          </>
+        )}
+      </Button>
+    )
+  }, [isSyncing, handleSync])
+
   // 自定义批量操作按钮
   const customBatchActions = React.useMemo(() => {
     return (
@@ -288,6 +343,7 @@ export function PickupManagementClient() {
     return (
       <>
         <EntityTable 
+          key={refreshKey}
           config={pickupManagementConfig}
           fieldFuzzyLoadOptions={{
             carrier: loadCarrierOptions,
@@ -298,6 +354,7 @@ export function PickupManagementClient() {
           customActions={{
             onView: null, // 禁用查看详情功能
           }}
+          customToolbarButtons={customToolbarButtons}
           customBatchActions={customBatchActions}
           onRowSelectionChange={setSelectedRows}
         />

@@ -284,6 +284,21 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
           },
         })
 
+        // 自动创建提柜管理记录（所有订单都需要）
+        try {
+          await tx.pickup_management.create({
+            data: {
+              order_id: order.order_id,
+              status: 'planned', // 默认状态：计划中
+              created_by: userId,
+              updated_by: userId,
+            },
+          })
+        } catch (pickupError: any) {
+          // 如果创建失败（例如已存在），记录错误但不影响订单创建
+          console.warn(`为订单 ${order.order_number} 创建提柜管理记录失败:`, pickupError)
+        }
+
         // 如果 operation_mode = 'unload'（拆柜），自动创建入库管理记录
         if (firstRow.operation_mode === 'unload' && defaultWarehouse) {
           await tx.inbound_receipt.create({
