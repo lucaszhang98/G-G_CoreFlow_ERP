@@ -327,7 +327,7 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
               estimated_pallets: estimatedPallets,
               remaining_pallets: estimatedPallets, // 初始未约板数 = 预计板数
               delivery_nature: row.delivery_nature,
-              delivery_location: locationMap
+              delivery_location_id: locationMap
                 .get(row.detail_delivery_location_code)!
                 .toString(),
               fba: row.fba || null,
