@@ -1053,13 +1053,19 @@ export function EntityTable<T = any>({
                         updatedItem[key] = responseData.data[key]
                       }
                     })
-                    // 确保 received_by_id 也被更新（如果 API 返回了 received_by）
-                    if (responseData.data.received_by !== undefined && responseData.data.received_by_id !== undefined) {
-                      updatedItem.received_by_id = responseData.data.received_by_id
+                    // 确保 received_by 和 received_by_id 都被更新（如果 API 返回了）
+                    if (responseData.data.received_by !== undefined) {
+                      updatedItem.received_by = responseData.data.received_by // 用户名（用于显示）
                     }
-                    // 确保 unloaded_by_id 也被更新（如果 API 返回了 unloaded_by）
-                    if (responseData.data.unloaded_by !== undefined && responseData.data.unloaded_by_id !== undefined) {
-                      updatedItem.unloaded_by_id = responseData.data.unloaded_by_id
+                    if (responseData.data.received_by_id !== undefined) {
+                      updatedItem.received_by_id = responseData.data.received_by_id // ID（用于编辑）
+                    }
+                    // 确保 unloaded_by 和 unloaded_by_id 都被更新（如果 API 返回了）
+                    if (responseData.data.unloaded_by !== undefined) {
+                      updatedItem.unloaded_by = responseData.data.unloaded_by // 用户名（用于显示）
+                    }
+                    if (responseData.data.unloaded_by_id !== undefined) {
+                      updatedItem.unloaded_by_id = responseData.data.unloaded_by_id // ID（用于编辑）
                     }
                     return updatedItem
                   }

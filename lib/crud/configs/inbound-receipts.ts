@@ -315,6 +315,13 @@ export const inboundReceiptConfig: EntityConfig = {
           username: true,
         },
       },
+      users_inbound_receipt_unloaded_byTousers: {
+        select: {
+          id: true,
+          full_name: true,
+          username: true,
+        },
+      },
       warehouses: {
         select: {
           warehouse_id: true,
