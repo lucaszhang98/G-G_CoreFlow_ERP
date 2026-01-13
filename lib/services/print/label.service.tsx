@@ -54,6 +54,14 @@ export async function generateLabelDataFromOrderDetail(
           },
         },
       },
+      // 获取 delivery_location_id 关联的 location 数据
+      locations_order_detail_delivery_location_idTolocations: {
+        select: {
+          location_id: true,
+          location_code: true,
+          name: true,
+        },
+      },
     },
   })
 
