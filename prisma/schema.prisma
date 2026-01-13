@@ -592,6 +592,7 @@ model users {
   freight_bills_freight_bills_updated_byTousers                       freight_bills[]            @relation("freight_bills_updated_byTousers")
   inbound_receipt_inbound_receipt_created_byTousers                   inbound_receipt[]          @relation("inbound_receipt_created_byTousers")
   inbound_receipt_inbound_receipt_received_byTousers                  inbound_receipt[]          @relation("inbound_receipt_received_byTousers")
+  inbound_receipt_inbound_receipt_unloaded_byTousers                   inbound_receipt[]          @relation("inbound_receipt_unloaded_byTousers")
   inbound_receipt_inbound_receipt_updated_byTousers                   inbound_receipt[]          @relation("inbound_receipt_updated_byTousers")
   inventory_lots_inventory_lots_created_byTousers                     inventory_lots[]           @relation("inventory_lots_created_byTousers")
   inventory_lots_inventory_lots_updated_byTousers                     inventory_lots[]           @relation("inventory_lots_updated_byTousers")
@@ -746,7 +747,7 @@ model inbound_receipt {
   inbound_receipt_id                       BigInt           @id @default(autoincrement())
   notes                                    String?
   order_id                                 BigInt           @unique
-  unloaded_by                              String?          @db.VarChar
+  unloaded_by                              BigInt?
   received_by                              BigInt?
   warehouse_id                             BigInt
   status                                   String           @default("pending") @db.VarChar(50)
@@ -759,6 +760,7 @@ model inbound_receipt {
   delivery_progress                        Decimal?         @db.Decimal(5, 2)
   users_inbound_receipt_created_byTousers  users?           @relation("inbound_receipt_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   orders                                   orders           @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)
+  users_inbound_receipt_unloaded_byTousers users?           @relation("inbound_receipt_unloaded_byTousers", fields: [unloaded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users_inbound_receipt_received_byTousers users?           @relation("inbound_receipt_received_byTousers", fields: [received_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   unload_methods                           unload_methods?  @relation(fields: [unload_method_code], references: [method_code], onDelete: NoAction, onUpdate: NoAction)
   users_inbound_receipt_updated_byTousers  users?           @relation("inbound_receipt_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)

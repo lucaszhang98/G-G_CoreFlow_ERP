@@ -1733,15 +1733,13 @@ export function EntityTable<T = any>({
             if (fieldConfig.relationField) {
               idKey = fieldConfig.relationField
             } else if (fieldKey === 'unloaded_by') {
-              // unloaded_by 在数据库中存储的是字符串（用户名字），不是ID
-              // API 返回的 unloaded_by 是用户名字符串，但前端编辑时需要用户ID
-              // 优先使用 unloaded_by_id（如果 API 返回了）
-              const unloadedById = (row.original as any)['unloaded_by_id']
-              if (unloadedById !== undefined && unloadedById !== null) {
-                initialValue = String(unloadedById)
+              // unloaded_by 在数据库中存储的是 BigInt ID
+              // API 返回的 unloaded_by 是显示的用户名，实际ID在 unloaded_by_id 字段中
+              idKey = 'unloaded_by_id'
+              const idValue = (row.original as any)[idKey]
+              if (idValue !== undefined && idValue !== null) {
+                initialValue = String(idValue)
               } else {
-                // 如果没有 unloaded_by_id，使用 unloaded_by（用户名字符串）
-                // 但这样会导致 FuzzySearchSelect 无法匹配，所以设置为 null
                 initialValue = null
               }
             } else if (fieldKey === 'received_by') {

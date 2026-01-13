@@ -68,13 +68,8 @@ export function convertRelationFilterValue(
     return null
   }
 
-  // 特殊处理：unloaded_by 是字符串类型（在 schema 中是 String?），不转换为 BigInt
-  if (dbFieldName === 'unloaded_by') {
-    return String(filterValue)
-  }
-
-  // 特殊处理：received_by 是 BigInt 类型，需要转换为 BigInt
-  if (dbFieldName === 'received_by') {
+  // 特殊处理：unloaded_by 和 received_by 都是 BigInt 类型，需要转换为 BigInt
+  if (dbFieldName === 'unloaded_by' || dbFieldName === 'received_by') {
     // 确保是有效的数字字符串
     if (typeof filterValue === 'string' && /^\d+$/.test(filterValue)) {
       try {

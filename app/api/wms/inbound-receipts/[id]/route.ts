@@ -199,25 +199,7 @@ export async function PUT(
 
     if (data.status !== undefined) updateData.status = data.status;
     if (data.notes !== undefined) updateData.notes = data.notes || null;
-    if (data.unloaded_by !== undefined) {
-      // unloaded_by 存储的是用户名字符串
-      // 如果传入的是用户ID（数字字符串），需要转换为用户名字
-      if (data.unloaded_by && /^\d+$/.test(String(data.unloaded_by))) {
-        try {
-          const userId = BigInt(data.unloaded_by)
-          const user = await prisma.users.findUnique({
-            where: { id: userId },
-            select: { full_name: true, username: true },
-          })
-          updateData.unloaded_by = user?.full_name || user?.username || null
-        } catch (error) {
-          console.error('获取用户名字失败:', error)
-          updateData.unloaded_by = data.unloaded_by || null
-        }
-      } else {
-        updateData.unloaded_by = data.unloaded_by || null
-      }
-    }
+    if (data.unloaded_by !== undefined) updateData.unloaded_by = data.unloaded_by ? BigInt(data.unloaded_by) : null;
     if (data.received_by !== undefined) updateData.received_by = data.received_by ? BigInt(data.received_by) : null;
     // delivery_progress 是自动生成的，不允许手动修改
     if (data.unload_method_code !== undefined) updateData.unload_method_code = data.unload_method_code || null;
@@ -280,27 +262,6 @@ export async function PUT(
     const serialized = serializeBigInt(inboundReceipt);
     const orderData = serialized.orders;
 
-    // 查找 unloaded_by 对应的用户ID（如果 unloaded_by 是用户名字符串）
-    let unloadedById: string | null = null
-    if (serialized.unloaded_by) {
-      try {
-        const user = await prisma.users.findFirst({
-          where: {
-            OR: [
-              { username: serialized.unloaded_by },
-              { full_name: serialized.unloaded_by },
-            ],
-          },
-          select: { id: true },
-        })
-        if (user) {
-          unloadedById = String(user.id)
-        }
-      } catch (error) {
-        console.error('查找 unloaded_by 用户ID失败:', error)
-      }
-    }
-
     // 计算送货进度：从关联的 inventory_lots 按板数加权平均
     // 公式：delivery_progress = Σ(delivery_progress_i * pallet_count_i) / Σ(pallet_count_i)
     let calculatedDeliveryProgress = 0;
@@ -340,8 +301,8 @@ export async function PUT(
         pickup_date: orderData?.pickup_date || null,
         received_by: serialized.users_inbound_receipt_received_byTousers?.full_name || null,
         received_by_id: serialized.received_by || null,
-        unloaded_by: serialized.unloaded_by || null, // 拆柜人员（用户名字符串）
-        unloaded_by_id: unloadedById, // 拆柜人员ID（用于前端编辑）
+        unloaded_by: serialized.users_inbound_receipt_unloaded_byTousers?.full_name || null, // 拆柜人员（显示用户名）
+        unloaded_by_id: serialized.unloaded_by || null, // 拆柜人员ID
         warehouse_name: serialized.warehouses?.name || null,
         unload_method_name: serialized.unload_methods?.description || null,
         // 计算后的送货进度（按板数加权平均）
