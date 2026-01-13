@@ -171,6 +171,13 @@ export async function GET(request: NextRequest) {
               },
             },
           },
+          locations_order_detail_delivery_location_idTolocations: {
+            select: {
+              location_id: true,
+              location_code: true,
+              name: true,
+            },
+          },
         },
       }),
       prisma.order_detail.count({ where }),
@@ -221,7 +228,7 @@ export async function GET(request: NextRequest) {
         customer_name: customer?.name || null,
         container_number: item.orders?.order_number || null, // container_number 实际是 order_number
         planned_unload_at: ir?.planned_unload_at || null,
-        delivery_location: item.delivery_location,
+        delivery_location: delivery_location_code, // 使用 location_code 作为 delivery_location
         delivery_location_code,
         delivery_nature: item.delivery_nature,
         estimated_pallets: item.estimated_pallets || 0,
