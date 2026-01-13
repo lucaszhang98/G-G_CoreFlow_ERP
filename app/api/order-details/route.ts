@@ -62,48 +62,19 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // 获取 locations 数据，用于将 delivery_location (location_id) 转换为 location_code
-    const locationIds = orderDetails
-      .map(detail => detail.delivery_location)
-      .filter((loc): loc is string => !!loc && !isNaN(Number(loc)))
-      .map(loc => BigInt(loc))
-
-    let locationsMap = new Map<string, string>()
-    if (locationIds.length > 0) {
-      try {
-        const locations = await prisma.locations.findMany({
-          where: {
-            location_id: {
-              in: locationIds,
-            },
-          },
-          select: {
-            location_id: true,
-            location_code: true,
-          },
-        })
-
-        locations.forEach(loc => {
-          locationsMap.set(loc.location_id.toString(), loc.location_code || '')
-        })
-      } catch (error) {
-        console.error('获取 locations 失败:', error)
-      }
-    }
+    // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
+    // 不需要手动查询 locations 了
 
     // 序列化并格式化数据
     const serializedDetails = orderDetails.map(detail => {
       const serialized = serializeBigInt(detail)
-      const deliveryLocationId = serialized.delivery_location
-      const locationCode = deliveryLocationId && locationsMap.has(deliveryLocationId)
-        ? locationsMap.get(deliveryLocationId) || null
-        : null
+      // 从关联数据中获取 location_code
+      const locationCode = serialized.locations_order_detail_delivery_location_idTolocations?.location_code || null
 
       return {
         ...serialized,
-        // 如果存在 location_code，使用它作为 delivery_location（用于显示）
-        // 但保留原始的 delivery_location_id 用于编辑
-        delivery_location: locationCode || serialized.delivery_location,
+        // 使用 location_code 作为 delivery_location（用于显示）
+        delivery_location: locationCode,
         delivery_location_code: locationCode, // 添加 location_code 字段（备用）
       }
     })
@@ -136,12 +107,13 @@ export async function POST(request: NextRequest) {
     const { order_id, quantity, volume, delivery_nature, delivery_location, fba, notes, po, estimated_pallets } = body
 
     // 验证和转换 delivery_location：如果是 location_code，转换为 location_id
-    let validatedDeliveryLocation: string | null = null
+    // delivery_location 现在应该是 location_id（BigInt）或 location_code（string）
+    let validatedDeliveryLocationId: bigint | null = null
     if (delivery_location) {
       const locStr = String(delivery_location)
       // 如果是数字字符串，直接使用（location_id）
       if (/^\d+$/.test(locStr)) {
-        validatedDeliveryLocation = locStr
+        validatedDeliveryLocationId = BigInt(locStr)
       } else {
         // 如果是 location_code，查询对应的 location_id
         const location = await prisma.locations.findFirst({
@@ -149,7 +121,7 @@ export async function POST(request: NextRequest) {
           select: { location_id: true },
         })
         if (location) {
-          validatedDeliveryLocation = location.location_id.toString()
+          validatedDeliveryLocationId = location.location_id
         } else {
           // 如果找不到对应的 location，返回错误
           return NextResponse.json(
@@ -192,7 +164,7 @@ export async function POST(request: NextRequest) {
         estimated_pallets: calculatedEstimatedPallets, // 自动计算
         remaining_pallets: calculatedEstimatedPallets, // 初始化未约板数 = 预计板数（还没有预约）
         delivery_nature: delivery_nature || null,
-        delivery_location: validatedDeliveryLocation,
+        delivery_location_id: validatedDeliveryLocationId,
         fba: fba || null,
         volume_percentage: calculatedVolumePercentage ? parseFloat(calculatedVolumePercentage.toFixed(2)) : null, // 自动计算，保留2位小数
         notes: notes || null,
