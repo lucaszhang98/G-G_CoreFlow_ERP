@@ -340,6 +340,8 @@ export async function PUT(
         pickup_date: orderData?.pickup_date || null,
         received_by: serialized.users_inbound_receipt_received_byTousers?.full_name || null,
         received_by_id: serialized.received_by || null,
+        unloaded_by: serialized.unloaded_by || null, // 拆柜人员（用户名字符串）
+        unloaded_by_id: unloadedById, // 拆柜人员ID（用于前端编辑）
         warehouse_name: serialized.warehouses?.name || null,
         unload_method_name: serialized.unload_methods?.description || null,
         // 计算后的送货进度（按板数加权平均）
