@@ -1057,8 +1057,8 @@ export function EntityTable<T = any>({
           const responseData = JSON.parse(responseText)
           console.log(`[EntityTable] 更新成功，响应数据:`, responseData)
           
-          // 如果API返回了更新后的数据，直接更新本地数据，避免刷新整个列表
-          if (responseData.success && responseData.data && editingRowId) {
+          // 如果API返回了更新后的数据（无论是否有 success 字段），直接更新本地数据，避免刷新整个列表
+          if (responseData.data && editingRowId) {
             const idField = config.idField || 'id'
             const rowId = String((row as any)[idField])
             if (rowId === String(editingRowId)) {
@@ -1088,7 +1088,7 @@ export function EntityTable<T = any>({
               setEditingRowId(null)
               setEditingValues({})
               editingValuesRef.current = {}
-              toast.success(`更新${config.displayName}成功`)
+              toast.success(responseData.message || `更新${config.displayName}成功`)
               return // 直接返回，不刷新整个列表
             }
           }
