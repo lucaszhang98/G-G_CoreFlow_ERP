@@ -1064,7 +1064,7 @@ export function EntityTable<T = any>({
             if (rowId === String(editingRowId)) {
               // 更新当前行的数据
               setData((prevData) => {
-                return prevData.map((item: any) => {
+                const newData = prevData.map((item: any) => {
                   const itemId = String(item[idField])
                   if (itemId === rowId) {
                     // 合并更新后的数据，保留原有数据，只更新返回的字段
@@ -1074,10 +1074,15 @@ export function EntityTable<T = any>({
                         updatedItem[key] = responseData.data[key]
                       }
                     })
+                    // 确保 received_by_id 也被更新（如果 API 返回了 received_by）
+                    if (responseData.data.received_by !== undefined && responseData.data.received_by_id !== undefined) {
+                      updatedItem.received_by_id = responseData.data.received_by_id
+                    }
                     return updatedItem
                   }
                   return item
                 })
+                return newData
               })
               // 清除编辑状态
               setEditingRowId(null)

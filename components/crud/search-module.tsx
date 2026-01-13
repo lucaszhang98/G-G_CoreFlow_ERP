@@ -152,6 +152,12 @@ export function SearchModule({
     }
   }, [])
   
+  // 使用 ref 存储 fieldFuzzyLoadOptions，避免依赖变化导致无限循环
+  const fieldFuzzyLoadOptionsRef = React.useRef(fieldFuzzyLoadOptions)
+  React.useEffect(() => {
+    fieldFuzzyLoadOptionsRef.current = fieldFuzzyLoadOptions
+  }, [fieldFuzzyLoadOptions])
+
   // 在组件顶层统一处理关系字段标签的加载
   React.useEffect(() => {
     if (!mounted) return
@@ -162,7 +168,7 @@ export function SearchModule({
         if (currentValue && currentValue !== '__all__' && !relationFilterLabelsMap[filter.field]?.[String(currentValue)]) {
           // 需要加载标签
           // 优先使用 fieldFuzzyLoadOptions（如果有），否则使用通用 API
-          const loadFuzzyOptions = fieldFuzzyLoadOptions?.[filter.field] || (async (search: string): Promise<FuzzySearchOption[]> => {
+          const loadFuzzyOptions = fieldFuzzyLoadOptionsRef.current?.[filter.field] || (async (search: string): Promise<FuzzySearchOption[]> => {
             try {
               const params = new URLSearchParams()
               if (search) {
@@ -198,7 +204,9 @@ export function SearchModule({
         }
       }
     })
-  }, [mounted, filterFields, filterValues, relationFilterLabelsMap, loadRelationFieldLabel, fieldFuzzyLoadOptions])
+    // 移除 fieldFuzzyLoadOptions 和 loadRelationFieldLabel 从依赖数组，使用 ref 和稳定的函数引用
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, filterFields, filterValues, relationFilterLabelsMap])
 
   // 计算活跃的筛选数量（考虑范围类型）
   const activeFilterCount = React.useMemo(() => {
