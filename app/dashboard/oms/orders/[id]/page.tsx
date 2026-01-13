@@ -174,74 +174,8 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
       })
     }
 
-    // 获取所有唯一的 delivery_location（可能是 location_id 或 location_code）
-    const deliveryLocations = order.order_detail
-      .map((detail: any) => detail.delivery_location_id)
-      .filter((loc: any) => loc !== null && loc !== undefined)
-    
-    // 批量查询 locations 获取 location_code
-    const locationsMap = new Map<string, string>()
-    if (deliveryLocations.length > 0) {
-      // 分离数字类型的 location_id 和字符串类型的 location_code
-      const numericIds: bigint[] = []
-      const stringCodes: string[] = []
-      
-      deliveryLocations.forEach((loc: any) => {
-        // 检查是否为数字（location_id）
-        if (typeof loc === 'number' || (typeof loc === 'string' && !isNaN(Number(loc)) && loc.trim() !== '')) {
-          try {
-            numericIds.push(BigInt(loc))
-          } catch (e) {
-            // 如果转换失败，可能是 location_code
-            stringCodes.push(String(loc))
-          }
-        } else {
-          // 字符串类型，可能是 location_code
-          stringCodes.push(String(loc))
-        }
-      })
-      
-      // 查询数字类型的 location_id
-      if (numericIds.length > 0) {
-        const locationsById = await prisma.locations.findMany({
-          where: {
-            location_id: {
-              in: numericIds,
-            },
-          },
-          select: {
-            location_id: true,
-            location_code: true,
-          },
-        })
-        
-        locationsById.forEach((loc: any) => {
-          locationsMap.set(loc.location_id.toString(), loc.location_code || '')
-        })
-      }
-      
-      // 查询字符串类型的 location_code
-      if (stringCodes.length > 0) {
-        const locationsByCode = await prisma.locations.findMany({
-          where: {
-            location_code: {
-              in: stringCodes,
-            },
-          },
-          select: {
-            location_id: true,
-            location_code: true,
-          },
-        })
-        
-        locationsByCode.forEach((loc: any) => {
-          // 使用 location_code 作为 key（因为 delivery_location 存储的是 code）
-          locationsMap.set(loc.location_code || '', loc.location_code || '')
-          // 同时也用 location_id 作为 key（以防万一）
-          locationsMap.set(loc.location_id.toString(), loc.location_code || '')
-        })
-      }
-    }
+    // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
+    // 不需要手动查询 locations 了
 
     // 为每个明细计算预计板数和分仓占比（覆盖数据库中的值）
     order.order_detail = order.order_detail.map((detail: any) => {
