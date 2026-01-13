@@ -71,7 +71,14 @@ export async function GET(
             },
             orders: {
               select: {
-                delivery_location: true,
+                delivery_location_id: true,
+                locations_order_detail_delivery_location_idTolocations: {
+                  select: {
+                    location_id: true,
+                    location_code: true,
+                    name: true,
+                  },
+                },
               },
             },
           } as any,
