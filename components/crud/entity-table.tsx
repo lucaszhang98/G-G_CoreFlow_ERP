@@ -829,10 +829,8 @@ export function EntityTable<T = any>({
           let dbFieldName: string
           if (fieldConfig.relationField) {
             dbFieldName = fieldConfig.relationField
-          } else if (key === 'received_by') {
-            dbFieldName = key // received_by 直接使用原字段名（数据库字段是 received_by，存储的是 BigInt ID）
-          } else if (key === 'unloaded_by') {
-            dbFieldName = key // unloaded_by 直接使用原字段名（数据库字段是 unloaded_by，存储的是用户名字符串）
+          } else if (key === 'received_by' || key === 'unloaded_by') {
+            dbFieldName = key // received_by 和 unloaded_by 直接使用原字段名（数据库字段都是 BigInt ID）
           } else if (key === 'carrier') {
             dbFieldName = 'carrier_id' // carrier 字段映射到 carrier_id
           } else if (key.endsWith('_id')) {
@@ -1078,9 +1076,8 @@ export function EntityTable<T = any>({
                     if (responseData.data.received_by !== undefined && responseData.data.received_by_id !== undefined) {
                       updatedItem.received_by_id = responseData.data.received_by_id
                     }
-                    // 确保 unloaded_by_id 也被更新（如果 API 返回了 unloaded_by_id）
-                    // unloaded_by 在数据库中存储的是用户名字符串，但前端编辑时需要用户ID
-                    if (responseData.data.unloaded_by_id !== undefined) {
+                    // 确保 unloaded_by_id 也被更新（如果 API 返回了 unloaded_by）
+                    if (responseData.data.unloaded_by !== undefined && responseData.data.unloaded_by_id !== undefined) {
                       updatedItem.unloaded_by_id = responseData.data.unloaded_by_id
                     }
                     return updatedItem
