@@ -33,6 +33,11 @@ export function getRelationDbFieldName(
     return fieldConfig.relationField
   }
 
+  // 特殊处理：unloaded_by 和 received_by 直接使用原字段名（不在后面添加 _id）
+  if (filterField.field === 'unloaded_by' || filterField.field === 'received_by') {
+    return filterField.field
+  }
+
   const valueField = fieldConfig.relation.valueField || 'id'
   
   // 如果 valueField 是 'id'，需要根据字段名判断
@@ -61,6 +66,27 @@ export function convertRelationFilterValue(
   // 验证值是否有效
   if (!filterValue || filterValue === '__all__' || filterValue.trim() === '') {
     return null
+  }
+
+  // 特殊处理：unloaded_by 是字符串类型（在 schema 中是 String?），不转换为 BigInt
+  if (dbFieldName === 'unloaded_by') {
+    return String(filterValue)
+  }
+
+  // 特殊处理：received_by 是 BigInt 类型，需要转换为 BigInt
+  if (dbFieldName === 'received_by') {
+    // 确保是有效的数字字符串
+    if (typeof filterValue === 'string' && /^\d+$/.test(filterValue)) {
+      try {
+        return BigInt(filterValue)
+      } catch (e) {
+        console.error(`[convertRelationFilterValue] BigInt 转换失败: ${filterValue} (字段: ${dbFieldName})`, e)
+        return null
+      }
+    } else {
+      console.error(`[convertRelationFilterValue] 无效的 ID 值: ${filterValue} (字段: ${dbFieldName})`)
+      return null
+    }
   }
 
   // 如果是 ID 字段（以 _id 结尾或字段名是 id），转换为 BigInt
