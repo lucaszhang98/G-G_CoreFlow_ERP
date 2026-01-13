@@ -67,12 +67,12 @@ export async function generateLabelDataFromOrderDetail(
   // 获取柜号（订单号）
   const containerNumber = order?.order_number || ''
 
-  // 获取仓点（delivery_location）
-  const deliveryLocation = orderDetail.delivery_location || ''
-  const deliveryLocationCode = orderDetail.delivery_location || ''
+  // 获取仓点（delivery_location_id 关联的 location_code）
+  const deliveryLocationCode = orderDetail.locations_order_detail_delivery_location_idTolocations?.location_code || ''
+  const deliveryLocation = deliveryLocationCode
   
   if (!deliveryLocationCode) {
-    throw new Error(`订单明细 ${orderDetailId} 缺少仓点代码 (delivery_location)`)
+    throw new Error(`订单明细 ${orderDetailId} 缺少仓点代码 (delivery_location_id)`)
   }
 
   // 获取送仓性质（delivery_nature）
