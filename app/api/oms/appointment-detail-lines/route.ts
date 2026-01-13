@@ -34,7 +34,14 @@ export async function GET(request: NextRequest) {
             estimated_pallets: true, // 总板数
             remaining_pallets: true, // 剩余板数
             delivery_nature: true,
-            delivery_location: true,
+            delivery_location_id: true,
+            locations_order_detail_delivery_location_idTolocations: {
+              select: {
+                location_id: true,
+                location_code: true,
+                name: true,
+              },
+            },
             fba: true,
             volume_percentage: true,
             notes: true,
@@ -63,34 +70,8 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // 获取 locations 数据，用于将 delivery_location (location_id) 转换为 location_code
-    const locationIds = appointmentDetailLines
-      .map(line => line.order_detail.delivery_location)
-      .filter((loc): loc is string => !!loc && !isNaN(Number(loc)))
-      .map(loc => BigInt(loc))
-
-    let locationsMap = new Map<string, string>()
-    if (locationIds.length > 0) {
-      try {
-        const locations = await prisma.locations.findMany({
-          where: {
-            location_id: {
-              in: locationIds,
-            },
-          },
-          select: {
-            location_id: true,
-            location_code: true,
-          },
-        })
-
-        locations.forEach(loc => {
-          locationsMap.set(loc.location_id.toString(), loc.location_code || '')
-        })
-      } catch (error) {
-        console.error('获取 locations 失败:', error)
-      }
-    }
+    // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
+    // 不需要手动查询 locations 了
 
     // 获取所有 order_detail_id，用于查询库存
     const orderDetailIds = appointmentDetailLines.map(line => line.order_detail_id)
@@ -121,10 +102,8 @@ export async function GET(request: NextRequest) {
       const serialized = serializeBigInt(line)
       const orderDetail = serializeBigInt(line.order_detail)
       const orderDetailOrders = line.order_detail.orders ? serializeBigInt(line.order_detail.orders) : null
-      const deliveryLocationId = orderDetail.delivery_location
-      const locationCode = deliveryLocationId && locationsMap.has(deliveryLocationId)
-        ? locationsMap.get(deliveryLocationId) || null
-        : null
+      // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
+      const locationCode = orderDetail.locations_order_detail_delivery_location_idTolocations?.location_code || null
 
       // 检查是否已入库
       const inventoryLot = inventoryMap.get(line.order_detail_id)
@@ -159,7 +138,7 @@ export async function GET(request: NextRequest) {
         has_inventory: hasInventory, // 是否有库存
         inventory_pallets: hasInventory ? inventoryLot.pallet_count : null, // 库存板数
         delivery_nature: orderDetail.delivery_nature,
-        delivery_location: locationCode || orderDetail.delivery_location,
+        delivery_location: locationCode,
         delivery_location_code: locationCode,
         fba: orderDetail.fba,
         volume_percentage: orderDetail.volume_percentage,
