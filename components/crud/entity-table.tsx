@@ -844,15 +844,8 @@ export function EntityTable<T = any>({
           let processedValue: string | number | null
           if (value === '' || value === null || value === undefined) {
             processedValue = null
-          } else if (key === 'unloaded_by') {
-            // unloaded_by 存储的是用户名字符串，但下拉框返回的是用户ID
-            // 需要根据用户ID查找用户名字，这需要异步处理
-            // 暂时先保存用户ID，后续可以通过API转换
-            // 或者，我们需要在保存前先获取用户名字
-            // 为了简化，我们先保存用户ID，API会处理转换
-            processedValue = String(value)
-          } else if (key === 'received_by') {
-            // received_by 存储的是 BigInt ID，下拉框返回的是用户ID字符串
+          } else if (key === 'unloaded_by' || key === 'received_by') {
+            // unloaded_by 和 received_by 存储的是 BigInt ID，下拉框返回的是用户ID字符串
             // API 期望 string 类型，会转换为 BigInt
             processedValue = String(value)
           } else {
@@ -864,18 +857,9 @@ export function EntityTable<T = any>({
           // 比较处理后的值是否改变
           let originalValue: string | number | null = null
           if (key === 'unloaded_by') {
-            // unloaded_by 的原始值是用户名字符串，新值是用户ID字符串
-            // 由于无法直接比较（用户名 vs ID），我们总是更新（如果值不为空且与原始值不同）
-            // 原始值可能是用户名字符串，也可能是用户ID（如果之前保存过ID）
-            const originalUnloadedBy = (row as any)['unloaded_by']
-            // 如果原始值是用户名字符串，而新值是用户ID，总是更新（让API处理转换）
-            // 如果原始值也是用户ID字符串，则比较
-            if (originalUnloadedBy && /^\d+$/.test(String(originalUnloadedBy))) {
-              originalValue = String(originalUnloadedBy)
-            } else {
-              // 原始值是用户名字符串，无法与新ID比较，总是更新
-              originalValue = null // 设置为null，确保会更新
-            }
+            // unloaded_by 的原始值是 BigInt ID，但 API 返回的是 unloaded_by_id
+            const unloadedById = (row as any)['unloaded_by_id']
+            originalValue = unloadedById ? String(unloadedById) : null
           } else if (key === 'received_by') {
             // received_by 的原始值是 BigInt ID，但 API 返回的是 received_by_id
             const receivedById = (row as any)['received_by_id']
@@ -884,10 +868,7 @@ export function EntityTable<T = any>({
             originalValue = originalId ? Number(originalId) : null
           }
           
-          // 对于 unloaded_by，如果原始值是用户名字符串，总是更新（让API处理转换）
-          if (key === 'unloaded_by' && originalValue === null && processedValue !== null) {
-            updates[dbFieldName] = processedValue
-          } else if (processedValue !== originalValue) {
+          if (processedValue !== originalValue) {
             // 使用数据库字段名（如 carrier_id）而不是配置字段名（如 carrier）
             updates[dbFieldName] = processedValue
           }
