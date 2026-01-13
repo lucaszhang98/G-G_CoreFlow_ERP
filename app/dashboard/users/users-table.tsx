@@ -25,7 +25,9 @@ export function UsersTable() {
   }, [])
 
   // 字段选项加载函数（用于批量编辑和行内编辑中的关系字段）
+  // 同时支持 department 和 department_id 作为 key
   const fieldLoadOptions = React.useMemo(() => ({
+    department: loadDepartmentsOptions,
     department_id: loadDepartmentsOptions,
   }), [loadDepartmentsOptions])
 

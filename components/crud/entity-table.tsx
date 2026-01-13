@@ -1749,16 +1749,20 @@ export function EntityTable<T = any>({
           
           // 获取字段的 loadOptions 和 loadFuzzyOptions 函数（如果提供）
           // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id/unloaded_by/received_by/carrier_id
+          // 但也可能直接使用 parent/manager/department/carrier
           const loadOptionsKey = actualFieldKeyForEdit === 'parent_id' ? 'parent_id' 
+            : actualFieldKeyForEdit === 'parent' ? ('parent_id' in (fieldLoadOptions || {}) ? 'parent_id' : 'parent')
             : actualFieldKeyForEdit === 'manager_id' ? 'manager_id'
+            : actualFieldKeyForEdit === 'manager' ? ('manager_id' in (fieldLoadOptions || {}) ? 'manager_id' : 'manager')
             : actualFieldKeyForEdit === 'department_id' ? 'department_id'
+            : actualFieldKeyForEdit === 'department' ? ('department_id' in (fieldLoadOptions || {}) ? 'department_id' : 'department')
             : actualFieldKeyForEdit === 'unloaded_by' ? 'unloaded_by'
             : actualFieldKeyForEdit === 'received_by' ? 'received_by'
             : actualFieldKeyForEdit === 'carrier_id' ? 'carrier_id'
             : fieldKey === 'carrier' ? 'carrier' // carrier 字段也支持
             : fieldKey
-          const loadOptions = fieldLoadOptions?.[loadOptionsKey] || fieldLoadOptions?.[fieldKey]
-          const loadFuzzyOptions = fieldFuzzyLoadOptions?.[loadOptionsKey] || fieldFuzzyLoadOptions?.[fieldKey]
+          const loadOptions = fieldLoadOptions?.[loadOptionsKey] || fieldLoadOptions?.[fieldKey] || (actualFieldKeyForEdit === 'department' ? fieldLoadOptions?.['department_id'] : undefined)
+          const loadFuzzyOptions = fieldFuzzyLoadOptions?.[loadOptionsKey] || fieldFuzzyLoadOptions?.[fieldKey] || (actualFieldKeyForEdit === 'department' ? fieldFuzzyLoadOptions?.['department_id'] : undefined)
           
           // 对于关系字段，如果没有 loadOptions 和 loadFuzzyOptions，尝试使用 select 类型渲染
           const effectiveType = fieldConfig.type === 'relation' && !loadOptions && !loadFuzzyOptions && fieldConfig.options
