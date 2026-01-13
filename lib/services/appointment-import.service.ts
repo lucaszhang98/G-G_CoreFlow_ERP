@@ -195,7 +195,7 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
       
       const orderDetail = order.order_detail.find(
         (od: any) =>
-          od.delivery_location === detailLocationId.toString() &&
+          od.delivery_location_id?.toString() === detailLocationId.toString() &&
           od.delivery_nature === row.delivery_nature
       )
 
@@ -454,7 +454,7 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
           // 从当前行的订单中查找订单明细
           const orderDetail = rowOrder.order_detail.find(
             (od: any) =>
-              od.delivery_location === detailLocationId.toString() &&
+              od.delivery_location_id?.toString() === detailLocationId.toString() &&
               od.delivery_nature === row.delivery_nature
           )
 
