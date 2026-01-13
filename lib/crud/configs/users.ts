@@ -32,14 +32,6 @@ export const userConfig: EntityConfig = {
       searchable: true,
       placeholder: '请输入用户名',
     },
-    email: {
-      key: 'email',
-      label: '邮箱',
-      type: 'email',
-      required: true,
-      searchable: true,
-      placeholder: '请输入邮箱',
-    },
     full_name: {
       key: 'full_name',
       label: '姓名',
@@ -107,7 +99,7 @@ export const userConfig: EntityConfig = {
   list: {
     defaultSort: 'username',
     defaultOrder: 'asc',
-    columns: ['username', 'email', 'full_name', 'role', 'status', 'department'],
+    columns: ['username', 'full_name', 'role', 'status', 'department'],
     searchFields: ['username'], // 只搜索用户名（最重要的字段）
     pageSize: 10,
     // 筛选配置（快速筛选）- 手动定义，只包含需要的角色选项
@@ -155,7 +147,7 @@ export const userConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['role', 'status', 'department'],
+        fields: ['role', 'status', 'full_name', 'department'],
       },
       delete: {
         enabled: true,
@@ -168,7 +160,7 @@ export const userConfig: EntityConfig = {
     },
   },
   
-  formFields: ['username', 'email', 'password', 'full_name', 'role', 'status', 'department_id', 'phone'],
+  formFields: ['username', 'password', 'full_name', 'role', 'status', 'department_id', 'phone'],
   
   permissions: {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'], // 允许所有登录用户查看用户列表（用于关系字段）

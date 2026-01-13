@@ -88,23 +88,9 @@ export async function PUT(
 
     const data = validationResult.data;
 
-    // 如果修改了邮箱，检查是否冲突
-    if (data.email && data.email !== existing.email) {
-      const emailExists = await prisma.users.findUnique({
-        where: { email: data.email },
-      });
-      if (emailExists) {
-        return NextResponse.json(
-          { error: '邮箱已存在' },
-          { status: 409 }
-        );
-      }
-    }
-
     // 更新用户
     const updateData: any = {};
 
-    if (data.email) updateData.email = data.email;
     if (data.full_name !== undefined) updateData.full_name = data.full_name;
     if (data.department_id !== undefined) {
       updateData.department_id = data.department_id ? BigInt(data.department_id) : null;
@@ -140,12 +126,6 @@ export async function PUT(
       message: '用户更新成功',
     });
   } catch (error: any) {
-    if (error.code === 'P2002') {
-      return NextResponse.json(
-        { error: '邮箱已存在' },
-        { status: 409 }
-      );
-    }
     return handleError(error, '更新用户失败');
   }
 }
