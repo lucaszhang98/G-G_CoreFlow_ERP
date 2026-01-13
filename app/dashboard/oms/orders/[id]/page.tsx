@@ -92,7 +92,14 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             volume: true,
             estimated_pallets: true,
             delivery_nature: true,
-            delivery_location: true,
+            delivery_location_id: true,
+            locations_order_detail_delivery_location_idTolocations: {
+              select: {
+                location_id: true,
+                location_code: true,
+                name: true,
+              },
+            },
             fba: true,
             volume_percentage: true,
             notes: true,
@@ -370,8 +377,8 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                 order_id: detail.order_id?.toString() || null,
                 detail_id: detail.detail_id?.toString() || null,
                 volume: detail.volume ? Number(detail.volume) : null,
-                delivery_location: detail.delivery_location_code || detail.delivery_location || null, // 优先使用 location_code
-                location_code: detail.delivery_location_code || null, // 添加 location_code 字段供 detail-table 使用
+                delivery_location: detail.locations_order_detail_delivery_location_idTolocations?.location_code || null,
+                location_code: detail.locations_order_detail_delivery_location_idTolocations?.location_code || null, // 添加 location_code 字段供 detail-table 使用
                 fba: detail.fba || null,
                 volume_percentage: detail.volume_percentage ? Number(detail.volume_percentage) : null,
                 notes: detail.notes || null,
