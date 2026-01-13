@@ -57,8 +57,8 @@ export const userConfig: EntityConfig = {
         { label: 'OMS经理', value: 'oms_manager' },
         { label: 'TMS经理', value: 'tms_manager' },
         { label: 'WMS经理', value: 'wms_manager' },
-        { label: '员工', value: 'employee' },
-        { label: '用户', value: 'user' },
+        { label: '叉车工', value: 'wms_outbound_worker' },
+        { label: '力工', value: 'wms_inbound_worker' },
       ],
     },
     status: {
@@ -78,6 +78,7 @@ export const userConfig: EntityConfig = {
       relation: {
         model: 'departments',
         displayField: 'name',
+        valueField: 'id',
       },
     },
     phone: {
@@ -109,8 +110,44 @@ export const userConfig: EntityConfig = {
     columns: ['username', 'email', 'full_name', 'role', 'status', 'department'],
     searchFields: ['username'], // 只搜索用户名（最重要的字段）
     pageSize: 10,
-    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
-    // filterFields 已由 search-config-generator 自动生成
+    // 筛选配置（快速筛选）- 手动定义，只包含需要的角色选项
+    filterFields: [
+      // 角色筛选
+      {
+        field: 'role',
+        label: '角色',
+        type: 'select',
+        options: [
+          { label: '管理员', value: 'admin' },
+          { label: 'OMS经理', value: 'oms_manager' },
+          { label: 'TMS经理', value: 'tms_manager' },
+          { label: 'WMS经理', value: 'wms_manager' },
+          { label: '叉车工', value: 'wms_outbound_worker' },
+          { label: '力工', value: 'wms_inbound_worker' },
+        ],
+      },
+      // 状态筛选
+      {
+        field: 'status',
+        label: '状态',
+        type: 'select',
+        options: [
+          { label: '活跃', value: 'active' },
+          { label: '停用', value: 'inactive' },
+        ],
+      },
+      // 部门筛选
+      {
+        field: 'department',
+        label: '部门',
+        type: 'select',
+        relation: {
+          model: 'departments',
+          displayField: 'name',
+          valueField: 'id',
+        },
+      },
+    ],
     // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
     // advancedSearchFields 已由 search-config-generator 自动生成
     // 批量操作配置
@@ -118,7 +155,7 @@ export const userConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['role', 'status'],
+        fields: ['role', 'status', 'department'],
       },
       delete: {
         enabled: true,
@@ -127,7 +164,7 @@ export const userConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['role', 'status', 'full_name'],
+      fields: ['role', 'status', 'full_name', 'department'],
     },
   },
   
