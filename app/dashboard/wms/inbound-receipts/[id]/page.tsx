@@ -255,22 +255,8 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
               }}
               customerCode={inboundReceipt.orders?.customers?.code || undefined}
               orderDetails={serialized.orders?.order_detail?.map((detail: any) => {
-                // 获取 location_code
-                // delivery_location 可能是 location_id（数字字符串）或 location_code（字符串）
-                let deliveryLocationCode: string | null = null
-                if (detail.delivery_location) {
-                  const locStr = String(detail.delivery_location)
-                  // 先尝试直接查找（如果是 location_code）
-                  deliveryLocationCode = locationsMap.get(locStr) || null
-                  // 如果不是，且是数字字符串，尝试通过 location_id 查找
-                  if (!deliveryLocationCode && /^\d+$/.test(locStr)) {
-                    deliveryLocationCode = locationsMap.get(locStr) || null
-                  }
-                  // 如果还是找不到，使用原值（可能是 location_code）
-                  if (!deliveryLocationCode) {
-                    deliveryLocationCode = locStr
-                  }
-                }
+                // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
+                const deliveryLocationCode = detail.locations_order_detail_delivery_location_idTolocations?.location_code || null
 
                 // 计算该明细的体积（从 order_detail.volume 获取）
                 const detailVolume = detail.volume ? Number(detail.volume) : null
