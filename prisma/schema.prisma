@@ -608,7 +608,6 @@ model users {
   table_views                                                          table_views[]              @relation("table_views_user_idTousers")
 
   @@index([department_id], map: "idx_users_department")
-  @@index([email], map: "idx_users_email")
   @@schema("public")
 }
 
