@@ -176,7 +176,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 
     // 获取所有唯一的 delivery_location（可能是 location_id 或 location_code）
     const deliveryLocations = order.order_detail
-      .map((detail: any) => detail.delivery_location)
+      .map((detail: any) => detail.delivery_location_id)
       .filter((loc: any) => loc !== null && loc !== undefined)
     
     // 批量查询 locations 获取 location_code
@@ -267,18 +267,8 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
       // 获取 location_code
       // delivery_location 可能是 location_id（数字）或 location_code（字符串）
       let deliveryLocationCode: string | null = null
-      if (detail.delivery_location) {
-        const locKey = detail.delivery_location.toString()
-        // 先尝试用原值作为 key 查找
-        deliveryLocationCode = locationsMap.get(locKey) || null
-        // 如果找不到，且原值是字符串，可能原值就是 location_code
-        if (!deliveryLocationCode && typeof detail.delivery_location === 'string') {
-          // 检查是否已经是 location_code（在 locationsMap 中作为 key 存在）
-          if (locationsMap.has(detail.delivery_location)) {
-            deliveryLocationCode = detail.delivery_location
-          }
-        }
-      }
+      // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
+      deliveryLocationCode = detail.locations_order_detail_delivery_location_idTolocations?.location_code || null
 
       return {
         ...detail,
