@@ -161,7 +161,8 @@ export function SearchModule({
         const currentValue = filterValues[filter.field]
         if (currentValue && currentValue !== '__all__' && !relationFilterLabelsMap[filter.field]?.[String(currentValue)]) {
           // 需要加载标签
-          const loadFuzzyOptions = async (search: string): Promise<FuzzySearchOption[]> => {
+          // 优先使用 fieldFuzzyLoadOptions（如果有），否则使用通用 API
+          const loadFuzzyOptions = fieldFuzzyLoadOptions?.[filter.field] || (async (search: string): Promise<FuzzySearchOption[]> => {
             try {
               const params = new URLSearchParams()
               if (search) {
@@ -191,13 +192,13 @@ export function SearchModule({
               console.error(`加载${filter.label}选项失败:`, error)
               return []
             }
-          }
+          })
           
           loadRelationFieldLabel(filter, currentValue, loadFuzzyOptions)
         }
       }
     })
-  }, [mounted, filterFields, filterValues, relationFilterLabelsMap, loadRelationFieldLabel])
+  }, [mounted, filterFields, filterValues, relationFilterLabelsMap, loadRelationFieldLabel, fieldFuzzyLoadOptions])
 
   // 计算活跃的筛选数量（考虑范围类型）
   const activeFilterCount = React.useMemo(() => {
@@ -513,15 +514,15 @@ export function SearchModule({
                           className={`
                             h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200
                             ${isActive
-                              ? "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-md shadow-indigo-500/20"
-                              : "border-gray-200 dark:border-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
+                              ? "border-indigo-200 dark:border-indigo-600 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-200 dark:hover:bg-indigo-900/60 shadow-sm"
+                              : "border-gray-200 dark:border-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20"
                             }
                           `}
                         />
                         {isActive && (
                           <Badge 
                             variant="secondary" 
-                            className="absolute -top-2 -right-2 h-4 min-w-4 px-1 bg-white/20 text-white border-0 shrink-0 z-10"
+                            className="absolute -top-2 -right-2 h-4 min-w-4 px-1 bg-indigo-500 text-white border-0 shrink-0 z-10"
                           >
                             1
                           </Badge>

@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
     filterConditions.forEach((condition) => {
       Object.keys(condition).forEach((fieldName) => {
         // 判断字段是否来自 orders 表
-        // 主表字段：inbound_receipt_id, order_id, status, planned_unload_at, unloaded_by, received_by, notes
-        const mainTableFields = ['inbound_receipt_id', 'order_id', 'status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes']
+        // 主表字段：inbound_receipt_id, order_id, status, planned_unload_at, unloaded_by, received_by, notes, delivery_progress
+        const mainTableFields = ['inbound_receipt_id', 'order_id', 'status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes', 'delivery_progress']
         if (mainTableFields.includes(fieldName)) {
           mainTableConditions.push(condition)
         } else {

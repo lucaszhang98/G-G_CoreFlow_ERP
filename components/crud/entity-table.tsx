@@ -829,8 +829,10 @@ export function EntityTable<T = any>({
           let dbFieldName: string
           if (fieldConfig.relationField) {
             dbFieldName = fieldConfig.relationField
-          } else if (key === 'unloaded_by' || key === 'received_by') {
-            dbFieldName = key // unloaded_by 和 received_by 直接使用原字段名
+          } else if (key === 'received_by') {
+            dbFieldName = key // received_by 直接使用原字段名（数据库字段是 received_by，存储的是 BigInt ID）
+          } else if (key === 'unloaded_by') {
+            dbFieldName = key // unloaded_by 直接使用原字段名（数据库字段是 unloaded_by，存储的是用户名字符串）
           } else if (key === 'carrier') {
             dbFieldName = 'carrier_id' // carrier 字段映射到 carrier_id
           } else if (key.endsWith('_id')) {
@@ -841,23 +843,40 @@ export function EntityTable<T = any>({
           const originalId = (row as any)[dbFieldName] || (row as any)[key]
           
           // 处理空值：空字符串、null、undefined 都转换为 null
-          // 对于 unloaded_by 和 received_by，API 期望 string 类型
           let processedValue: string | number | null
           if (value === '' || value === null || value === undefined) {
             processedValue = null
+          } else if (key === 'unloaded_by') {
+            // unloaded_by 存储的是用户名字符串，但下拉框返回的是用户ID
+            // 需要根据用户ID查找用户名字，这需要异步处理
+            // 暂时先保存用户ID，后续可以通过API转换
+            // 或者，我们需要在保存前先获取用户名字
+            // 为了简化，我们先保存用户ID，API会处理转换
+            processedValue = String(value)
+          } else if (key === 'received_by') {
+            // received_by 存储的是 BigInt ID，下拉框返回的是用户ID字符串
+            // API 期望 string 类型，会转换为 BigInt
+            processedValue = String(value)
           } else {
-            // 对于 unloaded_by 和 received_by，保持为 string 类型（API 期望 string）
-            if (key === 'unloaded_by' || key === 'received_by') {
-              processedValue = String(value)
-            } else {
-              const numValue = Number(value)
-              // 如果转换后是 NaN，设置为 null；如果是 0，也设置为 null（0 通常不是有效的 ID）
-              processedValue = (isNaN(numValue) || numValue === 0) ? null : numValue
-            }
+            const numValue = Number(value)
+            // 如果转换后是 NaN，设置为 null；如果是 0，也设置为 null（0 通常不是有效的 ID）
+            processedValue = (isNaN(numValue) || numValue === 0) ? null : numValue
           }
           
           // 比较处理后的值是否改变
-          const originalValue = originalId ? (key === 'unloaded_by' || key === 'received_by' ? String(originalId) : Number(originalId)) : null
+          let originalValue: string | number | null = null
+          if (key === 'unloaded_by') {
+            // unloaded_by 的原始值是用户名字符串，需要与新的用户ID比较
+            // 由于无法直接比较，我们总是更新（如果值不为空）
+            originalValue = originalId ? String(originalId) : null
+          } else if (key === 'received_by') {
+            // received_by 的原始值是 BigInt ID，但 API 返回的是 received_by_id
+            const receivedById = (row as any)['received_by_id']
+            originalValue = receivedById ? String(receivedById) : null
+          } else {
+            originalValue = originalId ? Number(originalId) : null
+          }
+          
           if (processedValue !== originalValue) {
             // 使用数据库字段名（如 carrier_id）而不是配置字段名（如 carrier）
             updates[dbFieldName] = processedValue
@@ -1691,25 +1710,54 @@ export function EntityTable<T = any>({
             let idKey: string
             if (fieldConfig.relationField) {
               idKey = fieldConfig.relationField
-            } else if (fieldKey === 'unloaded_by' || fieldKey === 'received_by') {
-              idKey = fieldKey // unloaded_by 和 received_by 直接使用原字段名
+            } else if (fieldKey === 'unloaded_by') {
+              // unloaded_by 在数据库中存储的是字符串（用户名字），不是ID
+              // API 返回的 unloaded_by 就是字符串值，直接使用
+              idKey = fieldKey
+              const idValue = (row.original as any)[idKey]
+              if (idValue !== undefined && idValue !== null) {
+                initialValue = String(idValue)
+              } else {
+                initialValue = null
+              }
+            } else if (fieldKey === 'received_by') {
+              // received_by 在数据库中存储的是 BigInt ID
+              // API 返回的 received_by 是显示的用户名，实际ID在 received_by_id 字段中
+              idKey = 'received_by_id'
+              const idValue = (row.original as any)[idKey]
+              if (idValue !== undefined && idValue !== null) {
+                initialValue = String(idValue)
+              } else {
+                initialValue = null
+              }
             } else if (fieldKey === 'parent_id' || fieldKey === 'manager_id' || fieldKey === 'department_id' || fieldKey === 'carrier_id') {
               idKey = fieldKey
+              const idValue = (row.original as any)[idKey]
+              if (idValue !== undefined && idValue !== null) {
+                initialValue = String(idValue)
+              }
             } else if (fieldKey === 'department') {
               idKey = 'department_id'
+              const idValue = (row.original as any)[idKey]
+              if (idValue !== undefined && idValue !== null) {
+                initialValue = String(idValue)
+              }
             } else if (fieldKey === 'carrier') {
               idKey = 'carrier_id'
+              const idValue = (row.original as any)[idKey]
+              if (idValue !== undefined && idValue !== null) {
+                initialValue = String(idValue)
+              }
             } else {
               idKey = `${fieldKey}_id`
-            }
-            const idValue = (row.original as any)[idKey]
-            // 优先使用 _id 字段的值（这是实际的 ID）
-            if (idValue !== undefined && idValue !== null) {
-              initialValue = String(idValue)
-            } else if (initialValue && typeof initialValue === 'string') {
-              // 如果 initialValue 是字符串（可能是显示值），尝试从关联数据中获取 ID
-              // 这种情况通常不会发生，因为 API 应该返回 _id 字段
-              initialValue = initialValue
+              const idValue = (row.original as any)[idKey]
+              if (idValue !== undefined && idValue !== null) {
+                initialValue = String(idValue)
+              } else if (initialValue && typeof initialValue === 'string') {
+                // 如果 initialValue 是字符串（可能是显示值），尝试从关联数据中获取 ID
+                // 这种情况通常不会发生，因为 API 应该返回 _id 字段
+                initialValue = initialValue
+              }
             }
           } else if (fieldConfig.type === 'date') {
             // 对于日期字段，格式化为 YYYY-MM-DD 格式
