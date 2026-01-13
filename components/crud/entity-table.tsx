@@ -1893,8 +1893,21 @@ export function EntityTable<T = any>({
           const relationKey = `users_inbound_receipt_${fieldKey}Tousers`
           const relationData = (row.original as any)[relationKey]
           
-          if (relationData && fieldConfig.relation?.displayField) {
-            const displayValue = relationData[fieldConfig.relation.displayField]
+          // 调试日志（仅开发环境）
+          if (process.env.NODE_ENV === 'development' && (fieldKey === 'unloaded_by' || fieldKey === 'received_by')) {
+            console.log(`[EntityTable] Rendering ${fieldKey}:`, {
+              originalValue,
+              relationKey,
+              relationData,
+              displayField: fieldConfig.relation?.displayField,
+              hasRelationData: !!relationData
+            })
+          }
+          
+          if (relationData) {
+            // 优先使用配置的displayField（通常是full_name）
+            const displayField = fieldConfig.relation?.displayField || 'full_name'
+            const displayValue = relationData[displayField] || relationData.full_name || relationData.username
             if (displayValue) {
               return <div>{displayValue}</div>
             }
@@ -1905,8 +1918,7 @@ export function EntityTable<T = any>({
             return <div>-</div>
           }
           
-          // 如果有ID但没有关联数据，尝试从下拉框选项缓存中查找（借鉴下拉框的方式）
-          // 这不应该发生，但如果发生了，至少显示ID而不是"-"
+          // 如果有ID但没有关联数据，显示ID（临时，应该不会发生）
           return <div>{String(originalValue)}</div>
         }
         
