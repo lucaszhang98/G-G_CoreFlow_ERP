@@ -90,6 +90,13 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
             username: true,
           },
         },
+        users_inbound_receipt_unloaded_byTousers: {
+          select: {
+            id: true,
+            full_name: true,
+            username: true,
+          },
+        },
         warehouses: {
           select: {
             warehouse_id: true,
@@ -282,7 +289,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                 ...serialized,
                 customer_name: inboundReceipt.orders?.customers?.name || null,
                 container_number: inboundReceipt.orders?.order_number || null,
-                unloaded_by: serialized.unloaded_by || null,
+                unloaded_by: serialized.users_inbound_receipt_unloaded_byTousers?.full_name || null,
                 received_by: serialized.users_inbound_receipt_received_byTousers?.full_name || null,
                 planned_unload_at: serialized.planned_unload_at || null,
                 total_container_volume: totalContainerVolume,
