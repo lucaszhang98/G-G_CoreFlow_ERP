@@ -460,6 +460,8 @@ export async function POST(request: NextRequest) {
           pickup_date: orderData?.pickup_date || null,
           received_by: serialized.users_inbound_receipt_received_byTousers?.full_name || null,
           received_by_id: serialized.received_by || null,
+          unloaded_by: serialized.users_inbound_receipt_unloaded_byTousers?.full_name || null, // 拆柜人员（显示用户名）
+          unloaded_by_id: serialized.unloaded_by || null, // 拆柜人员ID
           warehouse_name: serialized.warehouses?.name || null,
           unload_method_name: serialized.unload_methods?.description || null,
         },
