@@ -45,8 +45,8 @@ export async function GET(request: NextRequest) {
     filterConditions.forEach((condition) => {
       Object.keys(condition).forEach((fieldName) => {
         // 判断字段是否来自 order_detail 表
-        // order_detail 字段：delivery_nature, delivery_location
-        if (fieldName === 'delivery_nature' || fieldName === 'delivery_location') {
+        // order_detail 字段：delivery_nature, delivery_location_id
+        if (fieldName === 'delivery_nature' || fieldName === 'delivery_location' || fieldName === 'delivery_location_id') {
           Object.assign(orderDetailConditions, condition)
         }
         // 判断字段是否来自主表
@@ -476,7 +476,14 @@ export async function POST(request: NextRequest) {
             volume: true,
             estimated_pallets: true,
             delivery_nature: true,
-            delivery_location: true,
+            delivery_location_id: true,
+            locations_order_detail_delivery_location_idTolocations: {
+              select: {
+                location_id: true,
+                location_code: true,
+                name: true,
+              },
+            },
           },
         },
         inbound_receipt: {
@@ -507,7 +514,7 @@ export async function POST(request: NextRequest) {
         customer_name: order?.customers?.name || null,
         container_number: order?.order_number || null,
         planned_unload_at: inboundReceipt?.planned_unload_at || null,
-        delivery_location: orderDetail?.delivery_location || null,
+        delivery_location: orderDetail?.locations_order_detail_delivery_location_idTolocations?.location_code || null,
         delivery_nature: orderDetail?.delivery_nature || null,
         delivery_progress: serialized.delivery_progress !== null && serialized.delivery_progress !== undefined
           ? serialized.delivery_progress

@@ -71,7 +71,7 @@ export async function GET(
         customer_name: order?.customers?.name || null,
         container_number: order?.order_number || null,
         planned_unload_at: inboundReceipt?.planned_unload_at || null,
-        delivery_location: order?.delivery_location || null,
+        delivery_location: orderDetail?.locations_order_detail_delivery_location_idTolocations?.location_code || null,
         delivery_nature: orderDetail?.delivery_nature || null,
         delivery_progress: serialized.delivery_progress !== null && serialized.delivery_progress !== undefined
           ? serialized.delivery_progress
@@ -258,7 +258,7 @@ export async function PUT(
         customer_name: order?.customers?.name || null,
         container_number: order?.order_number || null,
         planned_unload_at: inboundReceipt?.planned_unload_at || null,
-        delivery_location: order?.delivery_location || null,
+        delivery_location: orderDetail?.locations_order_detail_delivery_location_idTolocations?.location_code || null,
         delivery_nature: orderDetail?.delivery_nature || null,
         delivery_progress: serialized.delivery_progress !== null && serialized.delivery_progress !== undefined
           ? serialized.delivery_progress
