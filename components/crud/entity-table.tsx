@@ -1889,12 +1889,30 @@ export function EntityTable<T = any>({
           // 检查是否有关联数据（如 users_inbound_receipt_received_byTousers）
           const relationKey = `users_inbound_receipt_${fieldKey}Tousers`
           const relationData = (row.original as any)[relationKey]
+          
+          // 调试日志
+          if (process.env.NODE_ENV === 'development' && (fieldKey === 'unloaded_by' || fieldKey === 'received_by')) {
+            console.log(`[EntityTable] Rendering ${fieldKey}:`, {
+              value,
+              relationKey,
+              relationData,
+              displayField: fieldConfig.relation?.displayField,
+              rowOriginal: row.original
+            })
+          }
+          
           if (relationData && fieldConfig.relation?.displayField) {
             const displayValue = relationData[fieldConfig.relation.displayField]
-            return <div>{displayValue || '-'}</div>
+            if (displayValue) {
+              return <div>{displayValue}</div>
+            }
           }
           // 如果 value 是 null 或 undefined，显示 "-"
-          return <div>-</div>
+          if (!value) {
+            return <div>-</div>
+          }
+          // 如果有ID但没有关联数据，显示ID（临时，应该不会发生）
+          return <div>{String(value)}</div>
         }
         
         if (fieldConfig.type === 'boolean') {
