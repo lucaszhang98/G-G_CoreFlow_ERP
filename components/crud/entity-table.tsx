@@ -1873,17 +1873,6 @@ export function EntityTable<T = any>({
         if (fieldConfig.type === 'location') {
           const value = row.getValue(fieldKey)
           // location字段统一返回location_code字符串
-          // 如果值是纯数字字符串（可能是已删除的location_id），显示友好提示
-          if (value && typeof value === 'string' && /^\d+$/.test(value)) {
-            // 这是一个数字字符串，可能是已删除的位置ID
-            // 检查是否有对应的location_code（通过关联数据）
-            // 如果没有，显示"位置已删除"提示
-            return (
-              <div className="text-muted-foreground italic">
-                {value} (位置已删除)
-              </div>
-            )
-          }
           return <div>{value || '-'}</div>
         }
         

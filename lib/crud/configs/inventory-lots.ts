@@ -56,7 +56,12 @@ export const inventoryLotConfig: EntityConfig = {
     delivery_location: {
       key: 'delivery_location',
       label: '仓点',
-      type: 'location',
+      type: 'relation',
+      relation: {
+        model: 'locations',
+        displayField: 'location_code',
+        valueField: 'location_id',
+      },
       searchable: true,
     },
     // 表内自己的字段
@@ -203,8 +208,9 @@ export const inventoryLotConfig: EntityConfig = {
           displayField: 'location_code',
           valueField: 'location_id',
         },
-        // 注意：delivery_location 是 order_detail 表的字段，存储的是 location_id 的字符串形式
+        // 注意：delivery_location_id 是 order_detail 表的字段，存储的是 location_id (BigInt)
         // 通过 relation 配置，使用模糊搜索下拉框来选择位置
+        // 现在有外键约束，删除位置时会自动设置为 NULL
       },
       // 剩余板数筛选（零/非零）
       {
@@ -319,7 +325,14 @@ export const inventoryLotConfig: EntityConfig = {
           volume: true,
           estimated_pallets: true,
           delivery_nature: true,
-          delivery_location: true,
+          delivery_location_id: true,
+          locations_order_detail_delivery_location_idTolocations: {
+            select: {
+              location_id: true,
+              location_code: true,
+              name: true,
+            },
+          },
           appointment_detail_lines: {
             select: {
               id: true,

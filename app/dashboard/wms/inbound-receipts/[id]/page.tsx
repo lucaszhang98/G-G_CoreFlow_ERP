@@ -123,7 +123,14 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
               select: {
                 id: true,
                 delivery_nature: true,
-                delivery_location: true,
+                delivery_location_id: true,
+                locations_order_detail_delivery_location_idTolocations: {
+                  select: {
+                    location_id: true,
+                    location_code: true,
+                    name: true,
+                  },
+                },
                 fba: true,
                 volume: true,
                 estimated_pallets: true,
@@ -151,69 +158,8 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
     notFound()
   }
 
-  // 获取所有唯一的 delivery_location 用于查询 location_code
-  // delivery_location 可能是 location_id（数字字符串）或 location_code（字符串）
-  const deliveryLocations = inboundReceipt.orders?.order_detail
-    ?.map((detail: any) => detail.delivery_location)
-    .filter((id: any) => id !== null && id !== undefined) || []
-  
-  // 分离数字字符串（location_id）和非数字字符串（location_code）
-  const locationIds: bigint[] = []
-  const locationCodes: string[] = []
-  
-  deliveryLocations.forEach((loc: any) => {
-    const locStr = String(loc)
-    // 判断是否为数字字符串
-    if (/^\d+$/.test(locStr)) {
-      locationIds.push(BigInt(locStr))
-    } else {
-      locationCodes.push(locStr)
-    }
-  })
-  
-  // 批量查询 locations 获取 location_code
-  const locationsMap = new Map<string, string>()
-  
-  // 通过 location_id 查询
-  if (locationIds.length > 0) {
-    const locations = await prisma.locations.findMany({
-      where: {
-        location_id: {
-          in: locationIds,
-        },
-      },
-      select: {
-        location_id: true,
-        location_code: true,
-      },
-    })
-    
-    locations.forEach((loc: any) => {
-      locationsMap.set(loc.location_id.toString(), loc.location_code || '')
-    })
-  }
-  
-  // 通过 location_code 查询（如果 delivery_location 本身就是 location_code）
-  if (locationCodes.length > 0) {
-    const locations = await prisma.locations.findMany({
-      where: {
-        location_code: {
-          in: locationCodes,
-        },
-      },
-      select: {
-        location_id: true,
-        location_code: true,
-      },
-    })
-    
-    locations.forEach((loc: any) => {
-      // 将 location_code 映射到 location_code（用于显示）
-      locationsMap.set(loc.location_code || '', loc.location_code || '')
-      // 同时也将 location_id 映射到 location_code
-      locationsMap.set(loc.location_id.toString(), loc.location_code || '')
-    })
-  }
+  // delivery_location_id 现在有外键约束，关联数据会通过 Prisma include 自动加载
+  // 不需要手动查询 locations 了
 
   // 计算整柜体积（使用 volume 字段）
   const totalContainerVolume = inboundReceipt.orders?.order_detail?.reduce((sum: number, detail: any) => {
