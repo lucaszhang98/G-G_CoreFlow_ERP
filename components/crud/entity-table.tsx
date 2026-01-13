@@ -1877,29 +1877,21 @@ export function EntityTable<T = any>({
         }
         
         if (fieldConfig.type === 'relation') {
-          const value = row.getValue(fieldKey)
+          // 直接从 row.original 获取值，确保获取到的是原始数据
+          const originalValue = (row.original as any)[fieldKey]
+          
           // 如果 value 是对象，尝试获取 displayField
-          if (value && typeof value === 'object') {
+          if (originalValue && typeof originalValue === 'object') {
             const displayValue = fieldConfig.relation?.displayField
-              ? (value as any)?.[fieldConfig.relation.displayField]
-              : value
+              ? (originalValue as any)?.[fieldConfig.relation.displayField]
+              : originalValue
             return <div>{displayValue || '-'}</div>
           }
+          
           // value 是 ID（数字或字符串）或 null/undefined，从关联数据中获取显示值
           // 检查是否有关联数据（如 users_inbound_receipt_received_byTousers）
           const relationKey = `users_inbound_receipt_${fieldKey}Tousers`
           const relationData = (row.original as any)[relationKey]
-          
-          // 调试日志
-          if (process.env.NODE_ENV === 'development' && (fieldKey === 'unloaded_by' || fieldKey === 'received_by')) {
-            console.log(`[EntityTable] Rendering ${fieldKey}:`, {
-              value,
-              relationKey,
-              relationData,
-              displayField: fieldConfig.relation?.displayField,
-              rowOriginal: row.original
-            })
-          }
           
           if (relationData && fieldConfig.relation?.displayField) {
             const displayValue = relationData[fieldConfig.relation.displayField]
@@ -1907,12 +1899,15 @@ export function EntityTable<T = any>({
               return <div>{displayValue}</div>
             }
           }
+          
           // 如果 value 是 null 或 undefined，显示 "-"
-          if (!value) {
+          if (!originalValue) {
             return <div>-</div>
           }
-          // 如果有ID但没有关联数据，显示ID（临时，应该不会发生）
-          return <div>{String(value)}</div>
+          
+          // 如果有ID但没有关联数据，尝试从下拉框选项缓存中查找（借鉴下拉框的方式）
+          // 这不应该发生，但如果发生了，至少显示ID而不是"-"
+          return <div>{String(originalValue)}</div>
         }
         
         if (fieldConfig.type === 'boolean') {
