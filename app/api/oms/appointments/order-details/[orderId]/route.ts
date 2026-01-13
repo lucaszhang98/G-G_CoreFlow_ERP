@@ -134,12 +134,11 @@ export async function GET(
         let matchesAppointmentDestination = false
         if (appointmentDestinationLocationId && detail.delivery_location_id) {
           // 比较 location_id（需要转换为相同类型）
+          // detail.delivery_location_id 是 bigint，appointmentDestinationLocationId 是 string
           const detailLocationId = typeof detail.delivery_location_id === 'bigint' 
             ? detail.delivery_location_id.toString() 
             : String(detail.delivery_location_id)
-          const appointmentLocationId = typeof appointmentDestinationLocationId === 'bigint'
-            ? appointmentDestinationLocationId.toString()
-            : String(appointmentDestinationLocationId)
+          const appointmentLocationId = appointmentDestinationLocationId // 已经是 string
           if (detailLocationId === appointmentLocationId) {
             matchesAppointmentDestination = true
           } else if (locationCode && appointmentDestinationLocationCode) {
