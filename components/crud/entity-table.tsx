@@ -1621,20 +1621,32 @@ export function EntityTable<T = any>({
     // actualFieldKey 已经在上面定义过了，这里直接使用
     
     // 检查字段是否可编辑（需要检查原始字段名和映射后的字段名）
-    // 对于 parent/manager/department，需要检查 parent_id/manager_id/department_id
-    const editableFieldKey = (fieldKey === 'parent' && editableFields.includes('parent_id')) 
-      ? 'parent_id' 
-      : (fieldKey === 'manager' && editableFields.includes('manager_id'))
-        ? 'manager_id'
-        : (fieldKey === 'department' && editableFields.includes('department_id'))
-          ? 'department_id'
-          : fieldKey
-    
+    // 对于 parent/manager/department，需要同时检查 parent/manager/department 和 parent_id/manager_id/department_id
     const isEditable = inlineEditEnabled && (
       editableFields.includes(fieldKey) || 
       editableFields.includes(actualFieldKey) ||
-      editableFields.includes(editableFieldKey)
+      (fieldKey === 'parent' && editableFields.includes('parent_id')) ||
+      (fieldKey === 'manager' && editableFields.includes('manager_id')) ||
+      (fieldKey === 'department' && editableFields.includes('department_id')) ||
+      (actualFieldKey === 'parent' && editableFields.includes('parent_id')) ||
+      (actualFieldKey === 'manager' && editableFields.includes('manager_id')) ||
+      (actualFieldKey === 'department' && editableFields.includes('department_id'))
     )
+    
+    // 确定编辑时使用的字段名（用于 onChange）
+    const editableFieldKey = (fieldKey === 'parent' && editableFields.includes('parent_id')) 
+      ? 'parent_id' 
+      : (fieldKey === 'parent' && editableFields.includes('parent'))
+        ? 'parent'
+        : (fieldKey === 'manager' && editableFields.includes('manager_id'))
+          ? 'manager_id'
+          : (fieldKey === 'manager' && editableFields.includes('manager'))
+            ? 'manager'
+            : (fieldKey === 'department' && editableFields.includes('department_id'))
+              ? 'department_id'
+              : (fieldKey === 'department' && editableFields.includes('department'))
+                ? 'department'
+                : fieldKey
     
     // 创建 cell 渲染函数
     const createCellRenderer = () => {
@@ -1713,21 +1725,27 @@ export function EntityTable<T = any>({
           }
           
           // 确定实际使用的 fieldKey（用于 onChange 和 fieldLoadOptions）
-          // 如果 fieldKey 是 parent、manager、department 或 carrier，但 editableFields 中有对应的 _id 字段，使用后者
+          // 如果 fieldKey 是 parent、manager、department 或 carrier，优先使用 editableFields 中的字段名
           // 对于 unloaded_by 和 received_by，直接使用原字段名
           const actualFieldKeyForEdit = (fieldKey === 'unloaded_by' || fieldKey === 'received_by')
             ? fieldKey
-            : editableFields.includes(`${fieldKey}_id`) 
-              ? `${fieldKey}_id` 
+            : (fieldKey === 'parent' && editableFields.includes('parent'))
+              ? 'parent'
               : (fieldKey === 'parent' && editableFields.includes('parent_id'))
                 ? 'parent_id'
-                : (fieldKey === 'manager' && editableFields.includes('manager_id'))
-                  ? 'manager_id'
-                  : (fieldKey === 'department' && editableFields.includes('department_id'))
-                    ? 'department_id'
-                    : (fieldKey === 'carrier' && editableFields.includes('carrier'))
-                      ? 'carrier' // carrier 字段在 editableFields 中就是 'carrier'，但实际保存时使用 carrier_id
-                      : fieldKey
+                : (fieldKey === 'manager' && editableFields.includes('manager'))
+                  ? 'manager'
+                  : (fieldKey === 'manager' && editableFields.includes('manager_id'))
+                    ? 'manager_id'
+                    : (fieldKey === 'department' && editableFields.includes('department'))
+                      ? 'department'
+                      : (fieldKey === 'department' && editableFields.includes('department_id'))
+                        ? 'department_id'
+                        : (fieldKey === 'carrier' && editableFields.includes('carrier'))
+                          ? 'carrier' // carrier 字段在 editableFields 中就是 'carrier'，但实际保存时使用 carrier_id
+                          : editableFields.includes(`${fieldKey}_id`) 
+                            ? `${fieldKey}_id` 
+                            : fieldKey
           
           // 获取字段的 loadOptions 和 loadFuzzyOptions 函数（如果提供）
           // 注意：fieldLoadOptions 的 key 可能是 parent_id/manager_id/department_id/unloaded_by/received_by/carrier_id
