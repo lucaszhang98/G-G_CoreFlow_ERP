@@ -104,7 +104,7 @@ export function InboundReceiptTable() {
       const result = await response.json()
       const users = result.data || []
       const options = users.map((user: any) => ({
-        label: user.name || user.username || `用户 ${user.id}`,
+        label: user.full_name || user.username || `用户 ${user.id}`,
         value: String(user.id),
       }))
       
@@ -157,7 +157,7 @@ export function InboundReceiptTable() {
       const result = await response.json()
       const users = result.data || []
       const options = users.map((user: any) => ({
-        label: user.name || user.username || `用户 ${user.id}`,
+        label: user.full_name || user.username || `用户 ${user.id}`,
         value: String(user.id),
       }))
       

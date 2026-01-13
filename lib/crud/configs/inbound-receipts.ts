@@ -84,8 +84,12 @@ export const inboundReceiptConfig: EntityConfig = {
     unloaded_by: {
       key: 'unloaded_by',
       label: '拆柜人员',
-      type: 'text',
-      searchable: true,
+      type: 'relation',
+      relation: {
+        model: 'users',
+        displayField: 'full_name',
+        valueField: 'id',
+      },
     },
     received_by: {
       key: 'received_by',
@@ -175,6 +179,17 @@ export const inboundReceiptConfig: EntityConfig = {
           { label: '已到仓', value: 'arrived' },
           { label: '已入库', value: 'received' },
         ],
+      },
+      // 拆柜人员筛选
+      {
+        field: 'unloaded_by',
+        label: '拆柜人员',
+        type: 'select',
+        relation: {
+          model: 'users',
+          displayField: 'full_name',
+          valueField: 'id',
+        },
       },
       // 入库人员筛选
       {
