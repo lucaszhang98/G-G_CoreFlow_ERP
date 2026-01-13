@@ -94,30 +94,8 @@ export async function GET(
       },
     })
 
-    // 获取所有 delivery_location 的 location_id（如果 delivery_location 是 location_id）
-    const deliveryLocationIds = orderDetails
-      .map(d => d.delivery_location)
-      .filter((loc): loc is string => !!loc && !isNaN(Number(loc)))
-      .map(loc => BigInt(loc))
-    
-    // 批量查询 locations 获取 location_code
-    const locationsMap = new Map<string, string>()
-    if (deliveryLocationIds.length > 0) {
-      const locations = await prisma.locations.findMany({
-        where: {
-          location_id: {
-            in: deliveryLocationIds,
-          },
-        },
-        select: {
-          location_id: true,
-          location_code: true,
-        },
-      })
-      locations.forEach(loc => {
-        locationsMap.set(loc.location_id.toString(), loc.location_code || '')
-      })
-    }
+    // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
+    // 不需要手动查询 locations 了
 
     // 检查每个明细是否在库存中，并获取库存板数
     const detailsWithInventory = await Promise.all(
@@ -180,8 +158,8 @@ export async function GET(
           remaining_pallets: unbookedPallets, // 未约板数（已入库用 inventory_lots.unbooked_pallet_count，未入库用 order_detail.remaining_pallets）
           unbooked_pallets: unbookedPallets, // 未约板数（已入库用 inventory_lots.unbooked_pallet_count，未入库用 order_detail.remaining_pallets）
           delivery_nature: detail.delivery_nature,
-          delivery_location: detail.delivery_location || null,
-          location_code: locationCode, // 新增：location_code
+          delivery_location: locationCode, // 使用 location_code 作为 delivery_location
+          location_code: locationCode,
           fba: detail.fba || null,
           volume_percentage: detail.volume_percentage ? Number(detail.volume_percentage) : null,
           notes: detail.notes || null,
