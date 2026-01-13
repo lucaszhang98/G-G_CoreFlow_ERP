@@ -72,36 +72,33 @@ export async function GET(request: NextRequest) {
     }
 
     // 搜索条件
-    if (search) {
+    if (search && search.trim()) {
       const searchConditions: any[] = [];
       
-      // 客户名称搜索（需要同时满足操作方式为拆柜）
-      if (search.trim()) {
-        searchConditions.push(
-          { 
-            orders: { 
-              operation_mode: 'unload',
-              customers: { name: { contains: search } } 
-            } 
-          },
-          { 
-            orders: { 
-              operation_mode: 'unload',
-              order_number: { contains: search } 
-            } 
-          }
-        );
-      }
+      // 柜号搜索（对应 orders.order_number）- 最重要的搜索字段
+      searchConditions.push(
+        { 
+          orders: { 
+            operation_mode: 'unload',
+            order_number: { contains: search, mode: 'insensitive' } 
+          } 
+        }
+      );
       
-      // 拆柜人员搜索
-      if (search.trim() && searchConditions.length > 0) {
-        searchConditions.push({ unloaded_by: { contains: search } });
-      }
+      // 客户名称搜索（需要同时满足操作方式为拆柜）
+      searchConditions.push(
+        { 
+          orders: { 
+            operation_mode: 'unload',
+            customers: { name: { contains: search, mode: 'insensitive' } } 
+          } 
+        }
+      );
       
       if (searchConditions.length > 0) {
         where.OR = searchConditions;
-        // 移除单独的 orders 条件，因为搜索条件中已经包含状态筛选
-        delete where.orders;
+        // 保留基础的 operation_mode 条件，确保所有结果都是拆柜订单
+        // 注意：OR 条件中的每个条件都已经包含了 operation_mode: 'unload'
       }
     }
     
@@ -140,7 +137,9 @@ export async function GET(request: NextRequest) {
     
     try {
       // 构建 include 对象，确保所有关联都正确
-      const includeConfig = {
+      // 注意：用户关联字段需要在 Prisma Client 重新生成后才可用
+      // 如果遇到 "Unknown field" 错误，请运行: npx prisma generate
+      const includeConfig: any = {
         orders: {
           select: {
             order_id: true,
@@ -157,20 +156,6 @@ export async function GET(request: NextRequest) {
                 code: true,
               },
             },
-          },
-        },
-        users_inbound_receipt_received_byTousers: {
-          select: {
-            id: true,
-            full_name: true,
-            username: true,
-          },
-        },
-        users_inbound_receipt_unloaded_byTousers: {
-          select: {
-            id: true,
-            full_name: true,
-            username: true,
           },
         },
         warehouses: {
@@ -194,6 +179,28 @@ export async function GET(request: NextRequest) {
         },
       };
 
+      // 尝试添加用户关联字段（如果 Prisma Client 已重新生成）
+      // 如果这些字段不存在，查询仍会成功，只是不会包含用户信息
+      try {
+        includeConfig.users_inbound_receipt_received_byTousers = {
+          select: {
+            id: true,
+            full_name: true,
+            username: true,
+          },
+        };
+        includeConfig.users_inbound_receipt_unloaded_byTousers = {
+          select: {
+            id: true,
+            full_name: true,
+            username: true,
+          },
+        };
+      } catch (e) {
+        // 如果字段不存在，忽略错误（会在下面的查询中处理）
+        console.warn('用户关联字段可能不可用，请运行 npx prisma generate');
+      }
+
       // 检查 Prisma 客户端是否有 inbound_receipt 模型
       if (!prisma.inbound_receipt) {
         throw new Error('Prisma 客户端未找到 inbound_receipt 模型，请运行 npx prisma generate');
@@ -207,31 +214,69 @@ export async function GET(request: NextRequest) {
         take: limit,
       };
 
-      // 添加 include，但先尝试简化版本
-      try {
-        queryOptions.include = includeConfig;
-      } catch (includeError: any) {
-        console.error('构建 include 配置失败:', includeError);
-        // 如果 include 配置有问题，先不使用关联查询
-        queryOptions.include = {
-          orders: {
-            select: {
-              order_id: true,
-              order_number: true,
-              order_date: true,
-              eta_date: true,
-              ready_date: true,
-              lfd_date: true,
-              pickup_date: true,
-            },
-          },
-        };
-      }
+      // 添加 include，如果包含用户关联字段失败，使用简化版本
+      queryOptions.include = includeConfig;
 
-      [items, total] = await Promise.all([
-        prisma.inbound_receipt.findMany(queryOptions),
-        prisma.inbound_receipt.count({ where }),
-      ]);
+      // 尝试查询，如果失败（可能是 Prisma Client 未重新生成），使用简化版本
+      try {
+        [items, total] = await Promise.all([
+          prisma.inbound_receipt.findMany(queryOptions),
+          prisma.inbound_receipt.count({ where }),
+        ]);
+      } catch (queryError: any) {
+        // 如果查询失败，可能是因为用户关联字段不存在
+        if (queryError.message?.includes('Unknown field') || queryError.message?.includes('users_inbound_receipt')) {
+          console.warn('用户关联字段不可用，使用简化查询。请运行: npx prisma generate');
+          // 使用简化版本的 include（不包含用户关联字段）
+          const simplifiedInclude = {
+            orders: {
+              select: {
+                order_id: true,
+                order_number: true,
+                order_date: true,
+                eta_date: true,
+                ready_date: true,
+                lfd_date: true,
+                pickup_date: true,
+                customers: {
+                  select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                  },
+                },
+              },
+            },
+            warehouses: {
+              select: {
+                warehouse_id: true,
+                name: true,
+                warehouse_code: true,
+              },
+            },
+            unload_methods: {
+              select: {
+                method_code: true,
+                description: true,
+              },
+            },
+            inventory_lots: {
+              select: {
+                delivery_progress: true,
+                pallet_count: true,
+              },
+            },
+          };
+          queryOptions.include = simplifiedInclude;
+          [items, total] = await Promise.all([
+            prisma.inbound_receipt.findMany(queryOptions),
+            prisma.inbound_receipt.count({ where }),
+          ]);
+        } else {
+          // 其他错误，直接抛出
+          throw queryError;
+        }
+      }
     } catch (dbError: any) {
       console.error('数据库查询错误:', dbError);
       console.error('错误堆栈:', dbError.stack);
