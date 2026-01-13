@@ -41,7 +41,7 @@ export function InboundReceiptBasicInfoCard({
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-muted-foreground">拆柜人员</h4>
             <p className="text-sm font-semibold">
-              {inboundReceipt.unloaded_by || "-"}
+              {inboundReceipt.users_inbound_receipt_unloaded_byTousers?.full_name || "-"}
             </p>
           </div>
 
@@ -57,7 +57,7 @@ export function InboundReceiptBasicInfoCard({
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-muted-foreground">入库人员</h4>
             <p className="text-sm font-semibold">
-              {inboundReceipt.received_by || "-"}
+              {inboundReceipt.users_inbound_receipt_received_byTousers?.full_name || "-"}
             </p>
           </div>
 
