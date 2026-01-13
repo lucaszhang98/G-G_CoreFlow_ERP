@@ -1893,17 +1893,6 @@ export function EntityTable<T = any>({
           const relationKey = `users_inbound_receipt_${fieldKey}Tousers`
           const relationData = (row.original as any)[relationKey]
           
-          // 调试日志（仅开发环境）
-          if (process.env.NODE_ENV === 'development' && (fieldKey === 'unloaded_by' || fieldKey === 'received_by')) {
-            console.log(`[EntityTable] Rendering ${fieldKey}:`, {
-              originalValue,
-              relationKey,
-              relationData,
-              displayField: fieldConfig.relation?.displayField,
-              hasRelationData: !!relationData
-            })
-          }
-          
           // 尝试从关联数据中获取显示值
           if (relationData) {
             // 优先使用配置的displayField（通常是full_name）
