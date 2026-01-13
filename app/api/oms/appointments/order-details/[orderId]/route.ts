@@ -127,25 +127,17 @@ export async function GET(
           ? (inventoryLots[0].unbooked_pallet_count ?? inventoryLots[0].pallet_count ?? 0)
           : (detail.remaining_pallets ?? detail.estimated_pallets ?? 0)
 
-        // 获取 location_code：如果 delivery_location 是 location_id，从 locationsMap 获取；否则直接使用 delivery_location（可能是 location_code）
-        let locationCode = null
-        if (detail.delivery_location) {
-          if (locationsMap.has(detail.delivery_location)) {
-            locationCode = locationsMap.get(detail.delivery_location) || null
-          } else {
-            // 如果不在 map 中，可能是 location_code 字符串，直接使用
-            locationCode = detail.delivery_location
-          }
-        }
+        // 获取 location_code（从关联数据中获取）
+        const locationCode = detail.locations_order_detail_delivery_location_idTolocations?.location_code || null
         
         // 检查送仓地点是否与预约目的地一致
         let matchesAppointmentDestination = false
-        if (appointmentDestinationLocationId && detail.delivery_location) {
-          // 如果 delivery_location 是 location_id，直接比较
-          if (detail.delivery_location === appointmentDestinationLocationId) {
+        if (appointmentDestinationLocationId && detail.delivery_location_id) {
+          // 比较 location_id
+          if (detail.delivery_location_id === appointmentDestinationLocationId) {
             matchesAppointmentDestination = true
           } else if (locationCode && appointmentDestinationLocationCode) {
-            // 如果 delivery_location 是 location_code，比较 location_code
+            // 比较 location_code
             matchesAppointmentDestination = locationCode === appointmentDestinationLocationCode
           }
         }
