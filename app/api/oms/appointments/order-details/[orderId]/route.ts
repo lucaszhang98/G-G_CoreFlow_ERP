@@ -133,8 +133,14 @@ export async function GET(
         // 检查送仓地点是否与预约目的地一致
         let matchesAppointmentDestination = false
         if (appointmentDestinationLocationId && detail.delivery_location_id) {
-          // 比较 location_id
-          if (detail.delivery_location_id === appointmentDestinationLocationId) {
+          // 比较 location_id（需要转换为相同类型）
+          const detailLocationId = typeof detail.delivery_location_id === 'bigint' 
+            ? detail.delivery_location_id.toString() 
+            : String(detail.delivery_location_id)
+          const appointmentLocationId = typeof appointmentDestinationLocationId === 'bigint'
+            ? appointmentDestinationLocationId.toString()
+            : String(appointmentDestinationLocationId)
+          if (detailLocationId === appointmentLocationId) {
             matchesAppointmentDestination = true
           } else if (locationCode && appointmentDestinationLocationCode) {
             // 比较 location_code
