@@ -58,6 +58,9 @@ interface SearchModuleProps {
   onAdvancedSearchLogicChange: (logic: 'AND' | 'OR') => void
   onAdvancedSearch: () => void
   onResetAdvancedSearch: () => void
+  
+  // 字段模糊搜索加载函数（用于 relation 类型的 filter）
+  fieldFuzzyLoadOptions?: Record<string, (search: string) => Promise<FuzzySearchOption[]>>
 }
 
 export function SearchModule({
@@ -78,6 +81,7 @@ export function SearchModule({
   onAdvancedSearchLogicChange,
   onAdvancedSearch,
   onResetAdvancedSearch,
+  fieldFuzzyLoadOptions,
 }: SearchModuleProps) {
   // 只在客户端挂载后渲染 Radix UI 组件，避免 hydration 错误
   const [mounted, setMounted] = React.useState(false)
@@ -428,7 +432,8 @@ export function SearchModule({
                     const isActive = currentValue && currentValue !== '__all__' && currentValue !== null && currentValue !== ''
                     
                     // 创建模糊搜索加载函数
-                    const loadFuzzyOptions = async (search: string): Promise<FuzzySearchOption[]> => {
+                    // 优先使用 fieldFuzzyLoadOptions（如果有），否则使用通用 API
+                    const loadFuzzyOptions = fieldFuzzyLoadOptions?.[filter.field] || (async (search: string): Promise<FuzzySearchOption[]> => {
                       try {
                         const params = new URLSearchParams()
                         if (search) {
@@ -458,7 +463,7 @@ export function SearchModule({
                         console.error(`加载${filter.label}选项失败:`, error)
                         return []
                       }
-                    }
+                    })
                     
                     // 只在客户端挂载后渲染 FuzzySearchSelect，避免 hydration 错误
                     if (!mounted) {

@@ -841,18 +841,24 @@ export function EntityTable<T = any>({
           const originalId = (row as any)[dbFieldName] || (row as any)[key]
           
           // 处理空值：空字符串、null、undefined 都转换为 null
-          let processedValue: number | null
+          // 对于 unloaded_by 和 received_by，API 期望 string 类型
+          let processedValue: string | number | null
           if (value === '' || value === null || value === undefined) {
             processedValue = null
           } else {
-            const numValue = Number(value)
-            // 如果转换后是 NaN，设置为 null；如果是 0，也设置为 null（0 通常不是有效的 ID）
-            processedValue = (isNaN(numValue) || numValue === 0) ? null : numValue
+            // 对于 unloaded_by 和 received_by，保持为 string 类型（API 期望 string）
+            if (key === 'unloaded_by' || key === 'received_by') {
+              processedValue = String(value)
+            } else {
+              const numValue = Number(value)
+              // 如果转换后是 NaN，设置为 null；如果是 0，也设置为 null（0 通常不是有效的 ID）
+              processedValue = (isNaN(numValue) || numValue === 0) ? null : numValue
+            }
           }
           
           // 比较处理后的值是否改变
-          const originalNum = originalId ? Number(originalId) : null
-          if (processedValue !== originalNum) {
+          const originalValue = originalId ? (key === 'unloaded_by' || key === 'received_by' ? String(originalId) : Number(originalId)) : null
+          if (processedValue !== originalValue) {
             // 使用数据库字段名（如 carrier_id）而不是配置字段名（如 carrier）
             updates[dbFieldName] = processedValue
           }
@@ -2138,6 +2144,7 @@ export function EntityTable<T = any>({
         onAdvancedSearchLogicChange={setAdvancedSearchLogic}
         onAdvancedSearch={handleAdvancedSearch}
         onResetAdvancedSearch={handleResetAdvancedSearch}
+        fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}
       />
       
       {/* 统计信息和批量操作工具栏 */}
