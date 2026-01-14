@@ -4,7 +4,7 @@ export const locationCreateSchema = z.object({
   location_code: z.string()
     .min(1, '位置代码不能为空')
     .max(50, '位置代码长度不能超过 50')
-    .regex(/^[a-zA-Z0-9\-_\.]+$/, '位置代码只能包含英文字母、数字和符号（-、_、.），不允许中文'),
+    .regex(/^[a-zA-Z0-9\-_\.\s]+$/, '位置代码只能包含英文字母、数字和符号（-、_、.、空格），不允许中文'),
   name: z.string()
     .min(1, '位置名称不能为空')
     .max(200, '位置名称长度不能超过 200'),
