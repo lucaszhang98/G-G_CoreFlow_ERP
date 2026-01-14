@@ -108,11 +108,6 @@ export const inboundReceiptConfig: EntityConfig = {
       sortable: true,
       computed: true, // 计算字段：从关联的 inventory_lots 按板数加权平均计算
     },
-    notes: {
-      key: 'notes',
-      label: '备注',
-      type: 'textarea',
-    },
     unload_method_code: {
       key: 'unload_method_code',
       label: '卸货方式代码',
@@ -163,7 +158,6 @@ export const inboundReceiptConfig: EntityConfig = {
       'received_by',
       'unload_method_name',
       'delivery_progress',
-      'notes',
     ],
     searchFields: ['container_number'], // 只搜索柜号（最重要的字段）
     pageSize: 20,
@@ -257,7 +251,7 @@ export const inboundReceiptConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes'],
+        fields: ['status', 'planned_unload_at', 'unloaded_by', 'received_by'],
       },
       delete: {
         enabled: false,
@@ -277,7 +271,6 @@ export const inboundReceiptConfig: EntityConfig = {
     'planned_unload_at',
     'unloaded_by',
     'received_by',
-    'notes',
   ],
   
   permissions: {

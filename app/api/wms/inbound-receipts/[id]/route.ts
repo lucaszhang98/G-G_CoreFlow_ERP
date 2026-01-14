@@ -205,7 +205,6 @@ export async function PUT(
     const updateData: any = {};
 
     if (data.status !== undefined) updateData.status = data.status;
-    if (data.notes !== undefined) updateData.notes = data.notes || null;
     if (data.unloaded_by !== undefined) updateData.unloaded_by = data.unloaded_by ? BigInt(data.unloaded_by) : null;
     if (data.received_by !== undefined) updateData.received_by = data.received_by ? BigInt(data.received_by) : null;
     // delivery_progress 是自动生成的，不允许手动修改

@@ -747,7 +747,6 @@ model freight_bills {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model inbound_receipt {
   inbound_receipt_id                       BigInt           @id @default(autoincrement())
-  notes                                    String?
   order_id                                 BigInt           @unique
   unloaded_by                              BigInt?
   received_by                              BigInt?

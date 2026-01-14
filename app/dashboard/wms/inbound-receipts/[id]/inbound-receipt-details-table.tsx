@@ -27,6 +27,7 @@ interface OrderDetail {
   delivery_nature: string | null
   volume_percentage: number | null // 分仓占比（从数据库自动生成）
   delivery_location?: string | null // 添加送仓地点
+  notes?: string | null // 备注字段
   appointments?: DeliveryAppointment[] // 该订单明细关联的预约
 }
 
@@ -82,6 +83,7 @@ export function InboundReceiptDetailsTable({
   const [editingValues, setEditingValues] = React.useState<{
     storage_location_code: string
     pallet_count: number
+    notes: string
   } | null>(null)
 
   // 切换展开/收起
@@ -160,12 +162,14 @@ export function InboundReceiptDetailsTable({
   const handleStartEdit = (detailId: string) => {
     const inventoryInfo = getInventoryInfo(detailId)
     const existingLots = lotsByDetailId.get(detailId) || []
+    const orderDetail = orderDetails.find(d => d.id === detailId)
     
     // 如果有多个记录，使用第一个记录的值（因为保存时会合并）
     // 如果只有一个记录，使用它的值
     // 如果没有记录，使用0
     let initialPalletCount = 0
     let initialStorageLocation = inventoryInfo.storage_location_code || ''
+    let initialNotes = orderDetail?.notes || ''
     
     if (existingLots.length > 0) {
       // 使用第一个记录的值，而不是累加值
@@ -177,6 +181,7 @@ export function InboundReceiptDetailsTable({
     setEditingValues({
       storage_location_code: initialStorageLocation,
       pallet_count: initialPalletCount,
+      notes: initialNotes,
     })
   }
 
@@ -196,6 +201,22 @@ export function InboundReceiptDetailsTable({
       if (!orderDetail) {
         toast.error('找不到对应的订单明细')
         return
+      }
+
+      // 先更新订单明细的备注
+      if (editingValues.notes !== undefined) {
+        const notesResponse = await fetch(`/api/order-details/${detailId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            notes: editingValues.notes || null,
+          }),
+        })
+
+        if (!notesResponse.ok) {
+          const errorData = await notesResponse.json()
+          throw new Error(errorData.error || '更新备注失败')
+        }
       }
 
       // 检查是否已有库存批次记录
@@ -474,7 +495,19 @@ export function InboundReceiptDetailsTable({
                     {inventoryInfo.unload_transfer_notes || "-"}
                   </TableCell>
                   <TableCell className="max-w-xs">
-                    {inventoryInfo.notes || "-"}
+                    {editingDetailId === detail.id ? (
+                      <Input
+                        value={editingValues?.notes || ''}
+                        onChange={(e) => setEditingValues(prev => prev ? {
+                          ...prev,
+                          notes: e.target.value
+                        } : null)}
+                        placeholder="备注"
+                        className="w-full"
+                      />
+                    ) : (
+                      detail.notes || "-"
+                    )}
                   </TableCell>
                   <TableCell>
                     {editingDetailId === detail.id ? (
