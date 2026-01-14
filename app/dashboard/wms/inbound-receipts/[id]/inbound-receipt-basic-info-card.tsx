@@ -80,6 +80,14 @@ export function InboundReceiptBasicInfoCard({
                 : "-"}
             </p>
           </div>
+
+          {/* 备注 */}
+          <div className="space-y-2 md:col-span-2 lg:col-span-3">
+            <h4 className="text-sm font-medium text-muted-foreground">备注</h4>
+            <p className="text-sm font-semibold whitespace-pre-wrap">
+              {inboundReceipt.notes || "-"}
+            </p>
+          </div>
         </div>
       </CardContent>
     </Card>
