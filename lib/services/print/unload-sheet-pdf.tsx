@@ -8,11 +8,13 @@
  */
 
 import React from 'react'
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer'
+import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer'
 import { UnloadSheetData } from './types'
 import { PageSizes, formatDate } from './print-templates'
 import path from 'path'
 import fs from 'fs'
+import JsBarcode from 'jsbarcode'
+import { createCanvas } from 'canvas'
 
 // 注册中文字体
 // 优先使用 public/fonts 目录中的字体文件，如果不存在则尝试 node_modules
@@ -128,14 +130,14 @@ function createStyles(rowCount: number) {
   const scaleFactor = calculateScaleFactor(rowCount)
   
   // 基础字体大小（整体放大50%）
-  const baseTitleFontSize = 16 * 1.5 // 24
+  const baseTitleFontSize = 32 * 1.5 // 48 - 标题（柜号）字体更大
   const baseHeaderLabelFontSize = 9 * 1.5 // 13.5
   const baseHeaderValueFontSize = 10 * 1.5 // 15
   const baseTableFontSize = 22 * 1.5 // 33，整体放大50%
   
   // 根据缩放比例调整，但确保最小字体不会太小
   // 注意：为了强制在一页内显示，当数据很多时，字体可能会缩小到最小值
-  const titleFontSize = Math.max(14, baseTitleFontSize * scaleFactor) // 最小14点（从18降低，确保能在一页内）
+  const titleFontSize = Math.max(24, baseTitleFontSize * scaleFactor) // 最小24点，确保柜号足够大
   const headerLabelFontSize = Math.max(8, baseHeaderLabelFontSize * scaleFactor) // 最小8点（从10降低）
   const headerValueFontSize = Math.max(10, baseHeaderValueFontSize * scaleFactor) // 最小10点（从12降低）
   const tableFontSize = Math.max(16, baseTableFontSize * scaleFactor) // 最小16点（从21降低），确保即使数据很多也能在一页内
@@ -155,6 +157,13 @@ function createStyles(rowCount: number) {
       fontWeight: 'bold',
       textAlign: 'center' as const,
       marginBottom: 12 * scaleFactor, // 从8增加到12，放大50%
+      letterSpacing: 2, // 增加字间距，让柜号更清晰
+    },
+    barcodeImage: {
+      width: 150 * scaleFactor, // 条形码宽度
+      height: 50 * scaleFactor, // 条形码高度
+      maxWidth: 150 * scaleFactor,
+      maxHeight: 50 * scaleFactor,
     },
     headerSection: {
       marginBottom: 15 * scaleFactor, // 从10增加到15，放大50%
