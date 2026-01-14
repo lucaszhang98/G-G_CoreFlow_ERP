@@ -239,6 +239,30 @@ function createStyles(rowCount: number) {
 }
 
 /**
+ * 生成条形码图片（Base64）
+ * @param barcodeText 条形码文本
+ * @returns Base64 编码的图片字符串
+ */
+function generateBarcodeImage(barcodeText: string): string {
+  try {
+    const canvas = createCanvas(200, 80)
+    // JsBarcode 可以直接传入 canvas 对象
+    JsBarcode(canvas, barcodeText, {
+      format: 'CODE128',
+      width: 2,
+      height: 60,
+      displayValue: true,
+      fontSize: 14,
+      margin: 5,
+    })
+    return canvas.toDataURL('image/png')
+  } catch (error) {
+    console.error('生成条形码失败:', error)
+    return ''
+  }
+}
+
+/**
  * 拆柜单据 PDF 文档
  */
 export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
@@ -253,6 +277,10 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
   
   const styles = createStyles(rowCount)
   
+  // 生成条形码图片（柜号）
+  const containerNumber = data.containerNumber || ''
+  const barcodeImage = containerNumber ? generateBarcodeImage(containerNumber.replace(/\s+/g, '')) : null
+  
   return (
     <Document>
       {/* 使用标准A4横向尺寸，强制只生成一页，不能分页 */}
@@ -262,14 +290,18 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
         style={styles.page}
         wrap={false} // 禁用自动换页，强制在一页内
       >
-        {/* 标题 */}
-        <Text style={styles.title}>拆柜单据</Text>
+        {/* 标题：显示柜号，尽可能大 */}
+        <Text style={styles.title}>{containerNumber || '-'}</Text>
 
         {/* 主数据 */}
         <View style={styles.headerSection}>
           <View style={styles.headerItem}>
-            <Text style={styles.headerLabel}>柜号：</Text>
-            <Text style={styles.headerValue}>{data.containerNumber || '-'}</Text>
+            <Text style={styles.headerLabel}>条形码：</Text>
+            {barcodeImage ? (
+              <Image src={barcodeImage} style={styles.barcodeImage} />
+            ) : (
+              <Text style={styles.headerValue}>-</Text>
+            )}
           </View>
           <View style={styles.headerItem}>
             <Text style={styles.headerLabel}>拆柜人员：</Text>
