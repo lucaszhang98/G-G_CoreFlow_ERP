@@ -1317,12 +1317,23 @@ export function createUpdateHandler(config: EntityConfig) {
                 ? calculateUnloadDate(orderForCalculation.pickup_date, orderForCalculation.eta_date)
                 : null
               
+              // 收集订单明细的备注（合并所有非空的备注）
+              const orderDetails = await prisma.order_detail.findMany({
+                where: { order_id: currentOrder.order_id },
+                select: { notes: true },
+              })
+              const notesList = orderDetails
+                .map(detail => detail.notes)
+                .filter((note): note is string => note !== null && note !== undefined && note.trim() !== '')
+              const combinedNotes = notesList.length > 0 ? notesList.join('\n') : null
+
               await prisma.inbound_receipt.create({
                 data: {
                   order_id: currentOrder.order_id,
                   warehouse_id: warehouseId,
                   status: 'pending',
                   planned_unload_at: calculatedUnloadDate,
+                  notes: combinedNotes,
                   created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                   updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                 },
@@ -1362,12 +1373,23 @@ export function createUpdateHandler(config: EntityConfig) {
                 ? calculateUnloadDate(orderForCalculation.pickup_date, orderForCalculation.eta_date)
                 : null
               
+              // 收集订单明细的备注（合并所有非空的备注）
+              const orderDetails = await prisma.order_detail.findMany({
+                where: { order_id: currentOrder.order_id },
+                select: { notes: true },
+              })
+              const notesList = orderDetails
+                .map(detail => detail.notes)
+                .filter((note): note is string => note !== null && note !== undefined && note.trim() !== '')
+              const combinedNotes = notesList.length > 0 ? notesList.join('\n') : null
+
               await prisma.inbound_receipt.create({
                 data: {
                   order_id: currentOrder.order_id,
                   warehouse_id: warehouseId,
                   status: 'pending',
                   planned_unload_at: calculatedUnloadDate,
+                  notes: combinedNotes,
                   created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                   updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                 },
