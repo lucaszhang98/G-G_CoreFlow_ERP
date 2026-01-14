@@ -86,6 +86,9 @@ export async function generateLabelDataFromOrderDetail(
   // 获取送仓性质（delivery_nature）
   const deliveryNature = orderDetail.delivery_nature || ''
 
+  // 获取备注（用于私仓时显示）
+  const notes = orderDetail.notes || ''
+
   // 获取客户代码
   const customerCode = customer?.code || ''
   
@@ -132,6 +135,7 @@ export async function generateLabelDataFromOrderDetail(
     deliveryLocation,
     deliveryLocationCode,
     deliveryNature,
+    notes,
     barcode,
     customerCode,
     plannedUnloadDate,

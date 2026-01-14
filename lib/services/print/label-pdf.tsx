@@ -147,6 +147,11 @@ export function LabelPage({ label, barcodeImage, pageNumber }: LabelPDFProps) {
       {/* 第二行：仓点（居中，更大更粗，紧贴第一行，无空隙） */}
       <Text style={styles.row2}>
         {(() => {
+          // 如果性质是私仓，显示备注而不是仓点
+          if (label.deliveryNature === '私仓') {
+            return label.notes || ''
+          }
+          
           let location = label.deliveryLocation || ''
           // 如果性质是转仓，仓点后加+
           if (label.deliveryNature === '转仓') {

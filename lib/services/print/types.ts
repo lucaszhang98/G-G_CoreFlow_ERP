@@ -169,7 +169,10 @@ export interface LabelData {
   deliveryLocationCode?: string
   
   // 性质（用于在仓点后添加标识）
-  deliveryNature?: string // 转仓、扣货等
+  deliveryNature?: string // 转仓、扣货、私仓等
+  
+  // 备注（用于私仓时显示）
+  notes?: string
   
   // 条形码内容（第三行）：柜号+仓点的组合
   barcode: string // 格式：{containerNumber}-{deliveryLocationCode}
