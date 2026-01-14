@@ -60,6 +60,7 @@ export async function GET(
       const deliveryLocationCode = deliveryLocation
       const estimatedPallets = detail.estimated_pallets || detail.estimatedPallets || 1
       const deliveryNature = detail.delivery_nature || detail.deliveryNature || undefined
+      const notes = detail.notes || '' // 获取备注字段
 
       if (!deliveryLocationCode) {
         continue // 跳过没有仓点的明细
@@ -73,6 +74,7 @@ export async function GET(
         deliveryLocation,
         deliveryLocationCode,
         deliveryNature: deliveryNature || undefined,
+        notes: notes || undefined, // 添加备注字段
         barcode,
         customerCode,
         plannedUnloadDate,
