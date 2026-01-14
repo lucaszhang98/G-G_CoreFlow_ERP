@@ -26,45 +26,9 @@ export async function generateLabelDataFromOrderDetail(
   orderDetailId: bigint
 ): Promise<LabelData[]> {
   // 查询订单明细及相关数据
-  // 注意：使用 include 时，主表的所有字段（包括 notes）都会被返回
+  // 使用 include 时，主表的所有字段（包括 notes, delivery_nature, estimated_pallets 等）都会被返回
   const orderDetail = await prisma.order_detail.findUnique({
     where: { id: orderDetailId },
-    select: {
-      id: true,
-      order_id: true,
-      delivery_nature: true,
-      notes: true, // 明确包含 notes 字段
-      estimated_pallets: true,
-      locations_order_detail_delivery_location_idTolocations: {
-        select: {
-          location_id: true,
-          location_code: true,
-          name: true,
-        },
-      },
-      orders: {
-        select: {
-          order_number: true,
-          order_id: true,
-          customers: {
-            select: {
-              code: true,
-              name: true,
-            },
-          },
-        },
-      },
-      inventory_lots: {
-        take: 1,
-        select: {
-          inbound_receipt: {
-            select: {
-              planned_unload_at: true,
-            },
-          },
-        },
-      },
-    },
     include: {
       orders: {
         include: {
