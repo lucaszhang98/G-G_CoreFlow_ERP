@@ -11,7 +11,8 @@ export const locationImportRowSchema = z.object({
   // 必填字段
   location_code: z.string({ message: '位置代码为必填项' })
     .min(1, '位置代码不能为空')
-    .max(50, '位置代码不能超过50个字符'),
+    .max(50, '位置代码不能超过50个字符')
+    .regex(/^[a-zA-Z0-9\-_\.]+$/, '位置代码只能包含英文字母、数字和符号（-、_、.），不允许中文'),
   
   name: z.string({ message: '位置名称为必填项' })
     .min(1, '位置名称不能为空')
