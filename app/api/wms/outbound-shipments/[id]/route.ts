@@ -206,13 +206,6 @@ export async function PUT(
     // 检查 outbound_shipment 是否存在，如果不存在则创建
     let outboundShipment = await prisma.outbound_shipments.findUnique({
       where: { appointment_id: BigInt(appointmentId) },
-      include: {
-        trailers: {
-          select: {
-            trailer_code: true,
-          },
-        },
-      },
     });
 
     // 记录旧的 trailer_code，用于判断是否需要更新 delivery_management
@@ -257,12 +250,6 @@ export async function PUT(
           where: { appointment_id: BigInt(appointmentId) },
           data: finalUpdateData,
           include: {
-            trailers: {
-              select: {
-                trailer_id: true,
-                trailer_code: true,
-              },
-            },
             users_outbound_shipments_loaded_byTousers: {
               select: {
                 id: true,
