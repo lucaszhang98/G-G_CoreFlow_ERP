@@ -362,7 +362,12 @@ export async function PUT(
     // 重新查询以获取完整的关联数据用于返回
     const finalOutboundShipment = await prisma.outbound_shipments.findUnique({
       where: { appointment_id: BigInt(appointmentId) },
-      include: {
+      select: {
+        outbound_shipment_id: true,
+        trailer_id: true,
+        trailer_code: true,
+        loaded_by: true,
+        notes: true,
         users_outbound_shipments_loaded_byTousers: {
           select: {
             id: true,
@@ -370,8 +375,9 @@ export async function PUT(
             username: true,
           },
         },
-      },
+      } as any,
     });
+    console.log(`[OutboundShipments] 最终查询结果 - loaded_by:`, finalOutboundShipment?.loaded_by?.toString(), `loaded_by_name:`, finalOutboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name)
 
     if (!finalOutboundShipment) {
       return NextResponse.json(
