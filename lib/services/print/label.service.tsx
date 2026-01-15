@@ -127,8 +127,19 @@ export async function generateLabelDataFromOrderDetail(
     ? Number(orderDetail.estimated_pallets) 
     : 1
 
-  // 生成条形码内容：柜号+仓点代码（无分隔符）
-  const barcode = `${containerNumber}${deliveryLocationCode}`.replace(/\s+/g, '')
+  // 生成条形码内容：与label的第一行、第二行完全一致
+  // 第一行：柜号
+  // 第二行：如果是私仓或转仓，显示备注；否则显示仓点
+  // 条形码：柜号+（备注或仓点代码）
+  let barcodeSecondPart = ''
+  if (deliveryNature === '私仓' || deliveryNature === '转仓') {
+    // 私仓或转仓：使用备注（与第二行一致）
+    barcodeSecondPart = notes || ''
+  } else {
+    // 其他情况：使用仓点代码
+    barcodeSecondPart = deliveryLocationCode || ''
+  }
+  const barcode = `${containerNumber}${barcodeSecondPart}`.replace(/\s+/g, '')
 
   // 创建单个 Label 数据
   const labelData: LabelData = {
