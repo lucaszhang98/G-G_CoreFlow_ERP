@@ -146,6 +146,11 @@ export async function GET(request: NextRequest) {
       }
     }
     
+    // 如果有 loaded_by_name 筛选，需要在 where 条件中添加 outbound_shipments 关联筛选
+    if (outboundShipmentsWhere) {
+      appointmentWhere.outbound_shipments = outboundShipmentsWhere
+    }
+    
     try {
       [appointments, total] = await Promise.all([
         prisma.delivery_appointments.findMany({
