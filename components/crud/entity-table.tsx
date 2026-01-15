@@ -848,10 +848,15 @@ export function EntityTable<T = any>({
           let processedValue: string | number | null
           if (value === '' || value === null || value === undefined) {
             processedValue = null
-          } else if (key === 'unloaded_by' || key === 'received_by') {
-            // unloaded_by 和 received_by 存储的是 BigInt ID，下拉框返回的是用户ID字符串
+          } else if (key === 'unloaded_by' || key === 'received_by' || key === 'loaded_by_name') {
+            // unloaded_by, received_by, loaded_by_name 存储的是 BigInt ID，下拉框返回的是用户ID字符串
             // API 期望 string 类型，会转换为 BigInt
             processedValue = String(value)
+          } else if (key === 'trailer_code') {
+            // trailer_code 存储的是 trailer_id，下拉框返回的是 trailer_id 字符串
+            // API 期望 number 类型
+            const numValue = Number(value)
+            processedValue = (isNaN(numValue) || numValue === 0) ? null : numValue
           } else {
             const numValue = Number(value)
             // 如果转换后是 NaN，设置为 null；如果是 0，也设置为 null（0 通常不是有效的 ID）
@@ -1749,6 +1754,24 @@ export function EntityTable<T = any>({
               const idValue = (row.original as any)[idKey]
               if (idValue !== undefined && idValue !== null) {
                 initialValue = String(idValue)
+              }
+            } else if (fieldKey === 'loaded_by_name') {
+              // loaded_by_name 映射到 loaded_by
+              idKey = 'loaded_by'
+              const idValue = (row.original as any)[idKey]
+              if (idValue !== undefined && idValue !== null) {
+                initialValue = String(idValue)
+              } else {
+                initialValue = null
+              }
+            } else if (fieldKey === 'trailer_code') {
+              // trailer_code 映射到 trailer_id
+              idKey = 'trailer_id'
+              const idValue = (row.original as any)[idKey]
+              if (idValue !== undefined && idValue !== null) {
+                initialValue = String(idValue)
+              } else {
+                initialValue = null
               }
             } else {
               idKey = `${fieldKey}_id`
