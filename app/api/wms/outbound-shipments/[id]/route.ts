@@ -119,6 +119,10 @@ export async function GET(
       loaded_by: outboundShipment?.loaded_by ? outboundShipment.loaded_by.toString() : null,
       loaded_by_name: outboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
       notes: outboundShipment?.notes || null,
+      
+      // 关联对象（用于 relation 类型字段的显示）
+      trailers: outboundShipment?.trailers || null,
+      users_outbound_shipments_loaded_byTousers: outboundShipment?.users_outbound_shipments_loaded_byTousers || null,
     });
   } catch (error: any) {
     console.error('获取出库管理记录失败:', error);

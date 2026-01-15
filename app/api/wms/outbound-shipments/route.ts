@@ -226,6 +226,10 @@ export async function GET(request: NextRequest) {
         loaded_by_name: shipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
         notes: shipment?.notes || null,
         
+        // 关联对象（用于 relation 类型字段的显示）
+        trailers: shipment?.trailers || null,
+        users_outbound_shipments_loaded_byTousers: shipment?.users_outbound_shipments_loaded_byTousers || null,
+        
         // 审计字段
         created_at: serializedAppointment.created_at,
         updated_at: serializedAppointment.updated_at,

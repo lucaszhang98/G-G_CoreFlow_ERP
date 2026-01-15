@@ -1890,17 +1890,49 @@ export function EntityTable<T = any>({
           
           // value 是 ID（数字或字符串）或 null/undefined，从关联数据中获取显示值
           // 检查是否有关联数据（如 users_inbound_receipt_received_byTousers）
-          const relationKey = `users_inbound_receipt_${fieldKey}Tousers`
-          const relationData = (row.original as any)[relationKey]
+          // 支持多种关联数据命名模式
+          let relationData = null
+          
+          // 尝试多种可能的关联数据键名
+          const possibleKeys = [
+            `users_inbound_receipt_${fieldKey}Tousers`,
+            `users_outbound_shipments_${fieldKey}Tousers`,
+            `users_${fieldKey}Tousers`,
+            fieldConfig.relation?.model === 'users' ? `users_outbound_shipments_loaded_byTousers` : null,
+            fieldConfig.relation?.model === 'trailers' ? 'trailers' : null,
+            fieldConfig.relation?.model === 'drivers' ? 'drivers' : null,
+          ].filter(Boolean)
+          
+          for (const key of possibleKeys) {
+            if ((row.original as any)[key]) {
+              relationData = (row.original as any)[key]
+              break
+            }
+          }
+          
+          // 如果还是没找到，尝试直接使用 relation.model 作为键名
+          if (!relationData && fieldConfig.relation?.model) {
+            const modelKey = fieldConfig.relation.model === 'users' ? 'users_outbound_shipments_loaded_byTousers' :
+                            fieldConfig.relation.model === 'trailers' ? 'trailers' :
+                            fieldConfig.relation.model === 'drivers' ? 'drivers' : null
+            if (modelKey && (row.original as any)[modelKey]) {
+              relationData = (row.original as any)[modelKey]
+            }
+          }
           
           // 尝试从关联数据中获取显示值
           if (relationData) {
             // 优先使用配置的displayField（通常是full_name）
             const displayField = fieldConfig.relation?.displayField || 'full_name'
-            const displayValue = relationData[displayField] || relationData.full_name || relationData.username
+            const displayValue = relationData[displayField] || relationData.full_name || relationData.username || relationData.trailer_code || relationData.driver_code
             if (displayValue) {
               return <div>{displayValue}</div>
             }
+          }
+          
+          // 如果 value 是字符串（可能是显示值），直接显示
+          if (originalValue && typeof originalValue === 'string') {
+            return <div>{originalValue}</div>
           }
           
           // 如果 value 是 null 或 undefined，显示 "-"
