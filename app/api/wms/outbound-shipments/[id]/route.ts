@@ -50,12 +50,6 @@ export async function GET(
             location_code: true,
           },
         },
-        orders: {
-          select: {
-            order_id: true,
-            status: true,
-          },
-        },
         outbound_shipments: {
           select: {
             outbound_shipment_id: true,
