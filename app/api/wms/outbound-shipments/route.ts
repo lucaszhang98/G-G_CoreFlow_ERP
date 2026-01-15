@@ -61,31 +61,27 @@ export async function GET(request: NextRequest) {
           appointmentsConditions[fieldName] = condition[fieldName]
         } else if (fieldName === 'loaded_by_name') {
           // loaded_by_name 是 relation 字段，需要通过 outbound_shipments.loaded_by 筛选
-          // loaded_by 是 BigInt 类型
-          // buildRelationFilterCondition 已经处理了转换，这里需要提取值
+          // buildRelationFilterCondition 返回的格式是 { loaded_by: BigInt(...) }
+          // 因为 relationField 是 'loaded_by'，所以 dbFieldName 就是 'loaded_by'
           const loadedByValue = condition[fieldName]
-          console.log('[OutboundShipments] loaded_by_name 筛选条件:', loadedByValue)
+          console.log('[OutboundShipments] loaded_by_name 筛选条件:', loadedByValue, typeof loadedByValue)
           
-          // buildRelationFilterCondition 返回的格式可能是 { loaded_by: { equals: BigInt(...) } } 或 { loaded_by: BigInt(...) }
+          // buildRelationFilterCondition 返回的格式是 { loaded_by: BigInt(...) } 或 { loaded_by: string }
           if (loadedByValue && typeof loadedByValue === 'object') {
             if ('loaded_by' in loadedByValue) {
               // 如果已经是 { loaded_by: ... } 格式，直接使用
               outboundShipmentsWhere = loadedByValue
-            } else if ('equals' in loadedByValue) {
-              // 如果是 { equals: ... } 格式，需要转换为 { loaded_by: { equals: ... } }
-              try {
-                const idValue = (loadedByValue as any).equals
-                if (typeof idValue === 'string' && /^\d+$/.test(idValue)) {
-                  outboundShipmentsWhere = {
-                    loaded_by: BigInt(idValue)
-                  }
-                } else if (typeof idValue === 'bigint' || (typeof idValue === 'object' && idValue?.toString)) {
-                  outboundShipmentsWhere = {
-                    loaded_by: typeof idValue === 'bigint' ? idValue : BigInt(idValue.toString())
-                  }
-                }
-              } catch (e) {
-                console.error('[OutboundShipments] loaded_by_name 筛选值转换失败:', e, { loadedByValue })
+              console.log('[OutboundShipments] 使用 loaded_by 筛选条件:', outboundShipmentsWhere)
+            } else {
+              // 如果 condition[fieldName] 本身就是整个条件对象（buildRelationFilterCondition 的返回值）
+              // 那么 condition 本身可能就是 { loaded_by: BigInt(...) }
+              // 检查 condition 对象的所有键
+              const conditionKeys = Object.keys(condition)
+              if (conditionKeys.length === 1 && conditionKeys[0] === 'loaded_by') {
+                outboundShipmentsWhere = condition
+                console.log('[OutboundShipments] 从 condition 对象提取 loaded_by 筛选条件:', outboundShipmentsWhere)
+              } else {
+                console.warn('[OutboundShipments] loaded_by_name 筛选条件格式未知:', condition)
               }
             }
           }
