@@ -165,14 +165,14 @@ export async function PUT(
         if (typeof loadedById === 'string' && loadedById.trim() !== '') {
           try {
             updateData.loaded_by = BigInt(loadedById.trim())
-            console.log(`[OutboundShipments] 转换 loaded_by 成功: "${loadedById.trim()}" -> BigInt`)
+            console.log(`[OutboundShipments] 转换 loaded_by 成功: "${loadedById.trim()}" -> BigInt(${updateData.loaded_by.toString()})`)
           } catch (error: any) {
             console.error(`[OutboundShipments] 转换 loaded_by 失败:`, error, { loadedById })
             updateData.loaded_by = null
           }
         } else if (typeof loadedById === 'number' || typeof loadedById === 'bigint') {
           updateData.loaded_by = BigInt(loadedById)
-          console.log(`[OutboundShipments] 转换 loaded_by 成功: ${loadedById} -> BigInt`)
+          console.log(`[OutboundShipments] 转换 loaded_by 成功: ${loadedById} -> BigInt(${updateData.loaded_by.toString()})`)
         } else {
           console.warn(`[OutboundShipments] loaded_by 值格式不正确:`, typeof loadedById, loadedById)
           updateData.loaded_by = null
@@ -257,12 +257,15 @@ export async function PUT(
       });
     } else {
       // 更新现有记录
+      console.log(`[OutboundShipments] 更新前 updateData:`, JSON.stringify(updateData, null, 2))
       const finalUpdateData = await addSystemFields(updateData, user, false);
+      console.log(`[OutboundShipments] 更新前 finalUpdateData:`, JSON.stringify(finalUpdateData, null, 2))
       
       // 使用事务同时更新 outbound_shipments 和 delivery_appointments
       const result = await prisma.$transaction(async (tx) => {
         // 更新 outbound_shipments
         // 使用类型断言，因为 Prisma Client 可能还没有识别到 trailer_code 字段
+        console.log(`[OutboundShipments] 执行数据库更新，data:`, JSON.stringify(finalUpdateData, null, 2))
         const updated = await tx.outbound_shipments.update({
           where: { appointment_id: BigInt(appointmentId) },
           data: finalUpdateData as any,
@@ -276,6 +279,7 @@ export async function PUT(
             },
           },
         });
+        console.log(`[OutboundShipments] 数据库更新后，loaded_by:`, updated.loaded_by?.toString(), `loaded_by_name:`, updated.users_outbound_shipments_loaded_byTousers?.full_name)
 
         // 更新 delivery_appointments.rejected（如果有）
         if (Object.keys(appointmentUpdateData).length > 0) {
