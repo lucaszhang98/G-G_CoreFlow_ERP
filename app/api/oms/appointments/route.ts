@@ -375,7 +375,7 @@ export async function POST(request: NextRequest) {
             status: 'planned',
             created_by: user?.id ? BigInt(user.id) : null,
             updated_by: user?.id ? BigInt(user.id) : null,
-          },
+          } as any,
         });
       }
     } catch (deliveryError: any) {
