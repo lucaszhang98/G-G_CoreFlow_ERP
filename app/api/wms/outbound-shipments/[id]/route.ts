@@ -157,8 +157,20 @@ export async function PUT(
     }
     if (body.loaded_by !== undefined || body.loaded_by_name !== undefined) {
       // 支持 loaded_by 或 loaded_by_name（前端可能传 loaded_by_name，需要转换为 loaded_by）
+      // 前端发送的是字符串格式的用户ID，需要转换为 BigInt
       const loadedById = body.loaded_by || body.loaded_by_name
-      updateData.loaded_by = loadedById ? (typeof loadedById === 'bigint' ? loadedById : BigInt(loadedById)) : null;
+      if (loadedById) {
+        // 处理字符串或数字格式的ID
+        if (typeof loadedById === 'string' && loadedById.trim() !== '') {
+          updateData.loaded_by = BigInt(loadedById)
+        } else if (typeof loadedById === 'number' || typeof loadedById === 'bigint') {
+          updateData.loaded_by = BigInt(loadedById)
+        } else {
+          updateData.loaded_by = null
+        }
+      } else {
+        updateData.loaded_by = null
+      }
     }
     if (body.notes !== undefined) {
       updateData.notes = body.notes || null;
@@ -269,9 +281,11 @@ export async function PUT(
       outboundShipment = result;
 
       // 如果 trailer_code 发生变化，自动更新 delivery_management.container_number
-      if (body.trailer_code !== undefined && oldTrailerCode !== (outboundShipment as any).trailer_code) {
+      // 注意：需要在事务外重新查询以获取更新后的 trailer_code
+      if (body.trailer_code !== undefined) {
         const newTrailerCode = (outboundShipment as any).trailer_code
-        if (newTrailerCode) {
+        // 只有当新值不为空且与旧值不同时才更新
+        if (newTrailerCode && newTrailerCode !== oldTrailerCode) {
           try {
             // 查找对应的 delivery_management 记录
             const deliveryManagement = await prisma.delivery_management.findUnique({
@@ -280,13 +294,13 @@ export async function PUT(
 
             if (deliveryManagement) {
               // 获取 appointment 的 delivery_method，确认是卡派或自提
-              const appointment = await prisma.delivery_appointments.findUnique({
+              const appointmentForUpdate = await prisma.delivery_appointments.findUnique({
                 where: { appointment_id: BigInt(appointmentId) },
                 select: { delivery_method: true },
               })
 
               // 只有卡派或自提才更新 container_number
-              if (appointment?.delivery_method === '卡派' || appointment?.delivery_method === '自提') {
+              if (appointmentForUpdate?.delivery_method === '卡派' || appointmentForUpdate?.delivery_method === '自提') {
                 await prisma.delivery_management.update({
                   where: { delivery_id: deliveryManagement.delivery_id },
                   data: { container_number: newTrailerCode } as any,
@@ -295,8 +309,32 @@ export async function PUT(
               }
             }
           } catch (error: any) {
-            console.warn('[OutboundShipments] 自动更新送仓管理柜号失败:', error)
+            console.error('[OutboundShipments] 自动更新送仓管理柜号失败:', error)
             // 不抛出错误，因为主要操作（更新 outbound_shipments）已经成功
+          }
+        } else if (!newTrailerCode && oldTrailerCode) {
+          // 如果新值为空但旧值不为空，也需要更新（清空）
+          try {
+            const deliveryManagement = await prisma.delivery_management.findUnique({
+              where: { appointment_id: BigInt(appointmentId) },
+            })
+
+            if (deliveryManagement) {
+              const appointmentForUpdate = await prisma.delivery_appointments.findUnique({
+                where: { appointment_id: BigInt(appointmentId) },
+                select: { delivery_method: true },
+              })
+
+              if (appointmentForUpdate?.delivery_method === '卡派' || appointmentForUpdate?.delivery_method === '自提') {
+                await prisma.delivery_management.update({
+                  where: { delivery_id: deliveryManagement.delivery_id },
+                  data: { container_number: null } as any,
+                })
+                console.log(`[OutboundShipments] 清空送仓管理柜号: appointment_id=${appointmentId}`)
+              }
+            }
+          } catch (error: any) {
+            console.error('[OutboundShipments] 清空送仓管理柜号失败:', error)
           }
         }
       }
