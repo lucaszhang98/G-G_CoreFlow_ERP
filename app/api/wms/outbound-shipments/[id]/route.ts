@@ -151,17 +151,27 @@ export async function PUT(
     // 获取当前用户
     const user = authResult.user || null;
 
-    // 只允许修改 trailer_id, loaded_by, notes
+    // 允许修改 trailer_id, loaded_by, notes, rejected
     const updateData: any = {};
     
-    if (body.trailer_id !== undefined) {
-      updateData.trailer_id = body.trailer_id ? (typeof body.trailer_id === 'bigint' ? body.trailer_id : BigInt(body.trailer_id)) : null;
+    if (body.trailer_id !== undefined || body.trailer_code !== undefined) {
+      // 支持 trailer_id 或 trailer_code（前端可能传 trailer_code，需要转换为 trailer_id）
+      const trailerId = body.trailer_id || body.trailer_code
+      updateData.trailer_id = trailerId ? (typeof trailerId === 'bigint' ? trailerId : BigInt(trailerId)) : null;
     }
-    if (body.loaded_by !== undefined) {
-      updateData.loaded_by = body.loaded_by ? (typeof body.loaded_by === 'bigint' ? body.loaded_by : BigInt(body.loaded_by)) : null;
+    if (body.loaded_by !== undefined || body.loaded_by_name !== undefined) {
+      // 支持 loaded_by 或 loaded_by_name（前端可能传 loaded_by_name，需要转换为 loaded_by）
+      const loadedById = body.loaded_by || body.loaded_by_name
+      updateData.loaded_by = loadedById ? (typeof loadedById === 'bigint' ? loadedById : BigInt(loadedById)) : null;
     }
     if (body.notes !== undefined) {
       updateData.notes = body.notes || null;
+    }
+
+    // rejected 字段在 delivery_appointments 表中，需要单独更新
+    const appointmentUpdateData: any = {}
+    if (body.rejected !== undefined) {
+      appointmentUpdateData.rejected = Boolean(body.rejected)
     }
 
     // 检查 delivery_appointment 是否存在且非直送
@@ -228,17 +238,33 @@ export async function PUT(
       // 更新现有记录
       const finalUpdateData = await addSystemFields(updateData, user, false);
       
-      outboundShipment = await prisma.outbound_shipments.update({
-        where: { appointment_id: BigInt(appointmentId) },
-        data: finalUpdateData,
-        include: {
-          trailers: {
-            select: {
-              trailer_code: true,
+      // 使用事务同时更新 outbound_shipments 和 delivery_appointments
+      const result = await prisma.$transaction(async (tx) => {
+        // 更新 outbound_shipments
+        const updated = await tx.outbound_shipments.update({
+          where: { appointment_id: BigInt(appointmentId) },
+          data: finalUpdateData,
+          include: {
+            trailers: {
+              select: {
+                trailer_code: true,
+              },
             },
           },
-        },
+        });
+
+        // 更新 delivery_appointments.rejected（如果有）
+        if (Object.keys(appointmentUpdateData).length > 0) {
+          await tx.delivery_appointments.update({
+            where: { appointment_id: BigInt(appointmentId) },
+            data: appointmentUpdateData,
+          });
+        }
+
+        return updated;
       });
+
+      outboundShipment = result;
 
       // 如果 trailer_id 发生变化，自动更新 delivery_management.container_number
       if (body.trailer_id !== undefined && oldTrailerId !== outboundShipment.trailer_id) {

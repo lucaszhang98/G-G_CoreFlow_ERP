@@ -63,7 +63,13 @@ export const outboundShipmentConfig: EntityConfig = {
     loaded_by_name: {
       key: 'loaded_by_name',
       label: '装车人',
-      type: 'text',
+      type: 'relation',
+      relation: {
+        model: 'users',
+        displayField: 'full_name',
+        valueField: 'id',
+      },
+      relationField: 'loaded_by', // 指定数据库字段名
       sortable: true,
     },
     origin_location: {
@@ -74,7 +80,13 @@ export const outboundShipmentConfig: EntityConfig = {
     trailer_code: {
       key: 'trailer_code',
       label: 'Trailer',
-      type: 'text',
+      type: 'relation',
+      relation: {
+        model: 'trailers',
+        displayField: 'trailer_code',
+        valueField: 'trailer_id',
+      },
+      relationField: 'trailer_id', // 指定数据库字段名
       sortable: true,
     },
     confirmed_start: {
@@ -147,16 +159,16 @@ export const outboundShipmentConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['trailer_id', 'loaded_by', 'notes'],
+        fields: ['loaded_by_name', 'trailer_code', 'rejected', 'notes'],
       },
       delete: {
         enabled: false, // 不允许批量删除
       },
     },
-    // 行内编辑配置：只允许修改 trailer_id, loaded_by, notes
+    // 行内编辑配置：允许修改 loaded_by_name, trailer_code, rejected, notes
     inlineEdit: {
       enabled: true,
-      fields: ['trailer_id', 'loaded_by', 'notes'],
+      fields: ['loaded_by_name', 'trailer_code', 'rejected', 'notes'],
     },
   },
   
