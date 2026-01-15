@@ -207,6 +207,18 @@ export async function GET(request: NextRequest) {
                 },
               },
             },
+            outbound_shipments: {
+              select: {
+                outbound_shipment_id: true,
+                trailer_id: true,
+                trailers: {
+                  select: {
+                    trailer_id: true,
+                    trailer_code: true,
+                  },
+                },
+              },
+            },
           },
         },
         drivers: {
@@ -246,11 +258,21 @@ export async function GET(request: NextRequest) {
       // 送货日期：优先使用 confirmed_start，否则使用 requested_start
       const deliveryDate = appointment?.confirmed_start || appointment?.requested_start || null
 
+      // 根据派送方式自动获取柜号
+      let containerNumber: string | null = null
+      if (appointment?.delivery_method === '直送') {
+        // 直送：从 orders.order_number 获取
+        containerNumber = order?.order_number || null
+      } else if (appointment?.delivery_method === '卡派' || appointment?.delivery_method === '自提') {
+        // 卡派/自提：从 outbound_shipments.trailers.trailer_code 获取
+        containerNumber = appointment?.outbound_shipments?.trailers?.trailer_code || null
+      }
+
       return {
         delivery_id: String(serialized.delivery_id || ''),
         // ========== 送仓管理显示字段 ==========
         appointment_number: appointment?.reference_number || null,
-        container_number: serialized.container_number || order?.order_number || null, // 优先使用 delivery_management.container_number，否则使用 orders.order_number
+        container_number: containerNumber,
         delivery_date: deliveryDate,
         origin_location: appointment?.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
         origin_location_id: appointment?.origin_location_id ? String(appointment.origin_location_id) : null,

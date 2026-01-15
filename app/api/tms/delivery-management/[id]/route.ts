@@ -63,6 +63,18 @@ export async function GET(
                 },
               },
             },
+            outbound_shipments: {
+              select: {
+                outbound_shipment_id: true,
+                trailer_id: true,
+                trailers: {
+                  select: {
+                    trailer_id: true,
+                    trailer_code: true,
+                  },
+                },
+              },
+            },
           },
         },
         drivers: {
@@ -99,10 +111,20 @@ export async function GET(
     // 送货日期
     const deliveryDate = appointment?.confirmed_start || appointment?.requested_start || null
 
+    // 根据派送方式自动获取柜号
+    let containerNumber: string | null = null
+    if (appointment?.delivery_method === '直送') {
+      // 直送：从 orders.order_number 获取
+      containerNumber = order?.order_number || null
+    } else if (appointment?.delivery_method === '卡派' || appointment?.delivery_method === '自提') {
+      // 卡派/自提：从 outbound_shipments.trailers.trailer_code 获取
+      containerNumber = appointment?.outbound_shipments?.trailers?.trailer_code || null
+    }
+
     return NextResponse.json({
       delivery_id: String(serialized.delivery_id || ''),
       appointment_number: appointment?.reference_number || null,
-      container_number: serialized.container_number || order?.order_number || null, // 优先使用 delivery_management.container_number，否则使用 orders.order_number
+      container_number: containerNumber,
       delivery_date: deliveryDate,
       origin_location: appointment?.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
       origin_location_id: appointment?.origin_location_id ? String(appointment.origin_location_id) : null,
@@ -147,9 +169,10 @@ async function updateDeliveryManagement(
     // 构建更新数据
     const updateData: any = {}
 
-    if (body.container_number !== undefined) {
-      updateData.container_number = body.container_number || null
-    }
+    // container_number 不可手动编辑，由系统自动更新
+    // if (body.container_number !== undefined) {
+    //   updateData.container_number = body.container_number || null
+    // }
     if (body.driver_id !== undefined) {
       updateData.driver_id = body.driver_id ? BigInt(body.driver_id) : null
     }

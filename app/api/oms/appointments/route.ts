@@ -356,7 +356,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (!existingDelivery) {
-        // 如果是直送，自动填入柜号
+        // 如果是直送，自动填入柜号（从 orders.order_number）
         let containerNumber: string | null = null
         if (finalData.delivery_method === '直送' && finalData.order_id) {
           const order = await prisma.orders.findUnique({
@@ -365,6 +365,7 @@ export async function POST(request: NextRequest) {
           })
           containerNumber = order?.order_number || null
         }
+        // 卡派和自提的柜号会在 WMS 出库管理填写 trailer 时自动更新
 
         // 创建送仓管理记录
         await prisma.delivery_management.create({

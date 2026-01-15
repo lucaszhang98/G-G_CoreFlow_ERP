@@ -143,7 +143,6 @@ export const deliveryManagementConfig: EntityConfig = {
     inlineEdit: {
       enabled: true,
       fields: [
-        'container_number',
         'driver_name',
         'rejected',
         'status',

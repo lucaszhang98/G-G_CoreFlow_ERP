@@ -193,7 +193,17 @@ export async function PUT(
     // 检查 outbound_shipment 是否存在，如果不存在则创建
     let outboundShipment = await prisma.outbound_shipments.findUnique({
       where: { appointment_id: BigInt(appointmentId) },
+      include: {
+        trailers: {
+          select: {
+            trailer_code: true,
+          },
+        },
+      },
     });
+
+    // 记录旧的 trailer_id，用于判断是否需要更新 delivery_management
+    const oldTrailerId = outboundShipment?.trailer_id
 
     if (!outboundShipment) {
       // 自动创建 outbound_shipment
@@ -221,7 +231,47 @@ export async function PUT(
       outboundShipment = await prisma.outbound_shipments.update({
         where: { appointment_id: BigInt(appointmentId) },
         data: finalUpdateData,
+        include: {
+          trailers: {
+            select: {
+              trailer_code: true,
+            },
+          },
+        },
       });
+
+      // 如果 trailer_id 发生变化，自动更新 delivery_management.container_number
+      if (body.trailer_id !== undefined && oldTrailerId !== outboundShipment.trailer_id) {
+        const newTrailerCode = outboundShipment.trailers?.trailer_code || null
+        if (newTrailerCode) {
+          try {
+            // 查找对应的 delivery_management 记录
+            const deliveryManagement = await prisma.delivery_management.findUnique({
+              where: { appointment_id: BigInt(appointmentId) },
+            })
+
+            if (deliveryManagement) {
+              // 获取 appointment 的 delivery_method，确认是卡派或自提
+              const appointment = await prisma.delivery_appointments.findUnique({
+                where: { appointment_id: BigInt(appointmentId) },
+                select: { delivery_method: true },
+              })
+
+              // 只有卡派或自提才更新 container_number
+              if (appointment?.delivery_method === '卡派' || appointment?.delivery_method === '自提') {
+                await prisma.delivery_management.update({
+                  where: { delivery_id: deliveryManagement.delivery_id },
+                  data: { container_number: newTrailerCode },
+                })
+                console.log(`[OutboundShipments] 自动更新送仓管理柜号: appointment_id=${appointmentId}, container_number=${newTrailerCode}`)
+              }
+            }
+          } catch (error: any) {
+            console.warn('[OutboundShipments] 自动更新送仓管理柜号失败:', error)
+            // 不抛出错误，因为主要操作（更新 outbound_shipments）已经成功
+          }
+        }
+      }
     }
 
     const serialized = serializeBigInt(outboundShipment);
