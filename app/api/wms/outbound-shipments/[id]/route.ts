@@ -377,7 +377,7 @@ export async function PUT(
         },
       } as any,
     });
-    console.log(`[OutboundShipments] 最终查询结果 - loaded_by:`, finalOutboundShipment?.loaded_by?.toString(), `loaded_by_name:`, finalOutboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name)
+    console.log(`[OutboundShipments] 最终查询结果 - loaded_by:`, (finalOutboundShipment as any)?.loaded_by?.toString(), `loaded_by_name:`, (finalOutboundShipment as any)?.users_outbound_shipments_loaded_byTousers?.full_name)
 
     if (!finalOutboundShipment) {
       return NextResponse.json(
