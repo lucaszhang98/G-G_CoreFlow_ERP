@@ -159,17 +159,27 @@ export async function PUT(
       // 支持 loaded_by 或 loaded_by_name（前端可能传 loaded_by_name，需要转换为 loaded_by）
       // 前端发送的是字符串格式的用户ID，需要转换为 BigInt
       const loadedById = body.loaded_by || body.loaded_by_name
+      console.log(`[OutboundShipments] 接收 loaded_by 字段:`, { loaded_by: body.loaded_by, loaded_by_name: body.loaded_by_name, loadedById, type: typeof loadedById })
       if (loadedById) {
         // 处理字符串或数字格式的ID
         if (typeof loadedById === 'string' && loadedById.trim() !== '') {
-          updateData.loaded_by = BigInt(loadedById)
+          try {
+            updateData.loaded_by = BigInt(loadedById.trim())
+            console.log(`[OutboundShipments] 转换 loaded_by 成功: "${loadedById.trim()}" -> BigInt`)
+          } catch (error: any) {
+            console.error(`[OutboundShipments] 转换 loaded_by 失败:`, error, { loadedById })
+            updateData.loaded_by = null
+          }
         } else if (typeof loadedById === 'number' || typeof loadedById === 'bigint') {
           updateData.loaded_by = BigInt(loadedById)
+          console.log(`[OutboundShipments] 转换 loaded_by 成功: ${loadedById} -> BigInt`)
         } else {
+          console.warn(`[OutboundShipments] loaded_by 值格式不正确:`, typeof loadedById, loadedById)
           updateData.loaded_by = null
         }
       } else {
         updateData.loaded_by = null
+        console.log(`[OutboundShipments] loaded_by 为空，设置为 null`)
       }
     }
     if (body.notes !== undefined) {
