@@ -433,8 +433,8 @@ export async function PUT(
         outbound_shipment_id: finalOutboundShipment.outbound_shipment_id.toString(),
         trailer_id: finalOutboundShipment.trailer_id ? finalOutboundShipment.trailer_id.toString() : null,
         trailer_code: (finalOutboundShipment as any).trailer_code || null,
-        loaded_by: finalOutboundShipment.loaded_by ? finalOutboundShipment.loaded_by.toString() : null,
-        loaded_by_name: finalOutboundShipment.users_outbound_shipments_loaded_byTousers?.full_name || null,
+        loaded_by: (finalOutboundShipment as any).loaded_by ? (finalOutboundShipment as any).loaded_by.toString() : null,
+        loaded_by_name: (finalOutboundShipment as any).users_outbound_shipments_loaded_byTousers?.full_name || null,
         notes: finalOutboundShipment.notes || null,
         
         // 关联对象（用于 relation 类型字段的显示）
