@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
     // 分离主表字段和关联表字段的筛选条件
     const appointmentsConditions: any = {}
     const dateConditions: any[] = [] // 用于存储 delivery_date 和 appointment_time 的日期筛选条件
+    let outboundShipmentsWhere: any = null // 用于存储 outbound_shipments 的筛选条件
     
     filterConditions.forEach((condition) => {
       Object.keys(condition).forEach((fieldName) => {
@@ -60,35 +61,26 @@ export async function GET(request: NextRequest) {
           appointmentsConditions[fieldName] = condition[fieldName]
         } else if (fieldName === 'loaded_by_name') {
           // loaded_by_name 是 relation 字段，需要通过 outbound_shipments.loaded_by 筛选
-          // 需要在查询时通过 outbound_shipments 关联筛选
-          // 暂时跳过，稍后在查询时处理
-          // 注意：这里不能直接添加到 appointmentsConditions，因为需要通过 outbound_shipments 关联
+          // loaded_by 是 BigInt 类型
+          const loadedByValue = condition[fieldName]
+          if (loadedByValue && typeof loadedByValue === 'object' && 'equals' in loadedByValue) {
+            try {
+              const idValue = (loadedByValue as any).equals
+              if (typeof idValue === 'string' && /^\d+$/.test(idValue)) {
+                outboundShipmentsWhere = {
+                  loaded_by: BigInt(idValue)
+                }
+              }
+            } catch (e) {
+              console.error('[OutboundShipments] loaded_by_name 筛选值转换失败:', e)
+            }
+          }
         } else {
           // 其他字段直接映射
           appointmentsConditions[fieldName] = condition[fieldName]
         }
       })
     })
-    
-    // 处理 loaded_by_name 筛选（需要通过 outbound_shipments 关联）
-    const loadedByNameCondition = filterConditions.find(cond => cond.loaded_by_name)
-    let outboundShipmentsWhere: any = null
-    if (loadedByNameCondition?.loaded_by_name) {
-      const loadedByValue = loadedByNameCondition.loaded_by_name
-      // loaded_by 是 BigInt 类型
-      if (loadedByValue && typeof loadedByValue === 'object' && 'equals' in loadedByValue) {
-        try {
-          const idValue = (loadedByValue as any).equals
-          if (typeof idValue === 'string' && /^\d+$/.test(idValue)) {
-            outboundShipmentsWhere = {
-              loaded_by: BigInt(idValue)
-            }
-          }
-        } catch (e) {
-          console.error('[OutboundShipments] loaded_by_name 筛选值转换失败:', e)
-        }
-      }
-    }
 
     // 排序
     const orderBy: any = {};
