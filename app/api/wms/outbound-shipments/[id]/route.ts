@@ -220,8 +220,9 @@ export async function PUT(
       
       const finalCreateData = await addSystemFields(createData, user, true);
       
+      // 使用类型断言，因为 Prisma Client 可能还没有识别到 trailer_code 字段
       outboundShipment = await prisma.outbound_shipments.create({
-        data: finalCreateData,
+        data: finalCreateData as any,
         include: {
           users_outbound_shipments_loaded_byTousers: {
             select: {
