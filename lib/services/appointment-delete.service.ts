@@ -14,6 +14,9 @@ export class AppointmentDeleteService {
    * 删除单个预约（包含板数回退）
    */
   static async deleteAppointment(appointmentId: bigint): Promise<void> {
+    // 收集所有需要同步的订单ID
+    const orderIdsToSync = new Set<bigint>()
+    
     await prisma.$transaction(async (tx) => {
       // 1. 查询预约明细（获取所有需要回退的板数）
       const appointmentDetails = await tx.appointment_detail_lines.findMany({
@@ -22,6 +25,13 @@ export class AppointmentDeleteService {
           id: true,
           order_detail_id: true,
           estimated_pallets: true,
+        },
+        include: {
+          order_detail: {
+            select: {
+              order_id: true,
+            },
+          },
         },
       })
 
@@ -34,6 +44,11 @@ export class AppointmentDeleteService {
         if (palletCount === 0) {
           console.log(`[预约删除] 明细 ${detail.id} 的板数为0，跳过回退`)
           continue
+        }
+
+        // 收集订单ID用于后续同步
+        if (detail.order_detail?.order_id) {
+          orderIdsToSync.add(detail.order_detail.order_id)
         }
 
         // 2.1 查询订单明细信息
@@ -132,11 +147,32 @@ export class AppointmentDeleteService {
       console.log(`[预约删除] 删除 ${appointmentDetails.length} 条预约明细`)
 
       // 5. 删除预约主表
+      const appointment = await tx.delivery_appointments.findUnique({
+        where: { appointment_id: appointmentId },
+        select: { order_id: true },
+      })
+      
+      if (appointment?.order_id) {
+        orderIdsToSync.add(appointment.order_id)
+      }
+      
       await tx.delivery_appointments.delete({
         where: { appointment_id: appointmentId },
       })
       console.log(`[预约删除] 删除预约主表：${appointmentId}`)
     })
+
+    // 在事务外同步订单预约信息
+    if (orderIdsToSync.size > 0) {
+      try {
+        const { syncMultipleOrdersAppointmentInfo } = await import('./sync-order-appointment-info')
+        await syncMultipleOrdersAppointmentInfo(Array.from(orderIdsToSync))
+        console.log(`[预约删除] ✅ 已同步 ${orderIdsToSync.size} 个订单的预约信息`)
+      } catch (syncError: any) {
+        console.warn('[预约删除] 同步订单预约信息失败:', syncError)
+        // 不影响删除流程
+      }
+    }
 
     console.log(`[预约删除] ✅ 预约 ${appointmentId} 删除完成，所有板数已回退`)
   }
