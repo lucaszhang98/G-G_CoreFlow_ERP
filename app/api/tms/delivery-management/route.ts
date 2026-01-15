@@ -211,12 +211,7 @@ export async function GET(request: NextRequest) {
               select: {
                 outbound_shipment_id: true,
                 trailer_id: true,
-                trailers: {
-                  select: {
-                    trailer_id: true,
-                    trailer_code: true,
-                  },
-                },
+                trailer_code: true, // trailer_code 现在是直接存储在 outbound_shipments 表中的文本字段
               },
             },
           },
@@ -264,8 +259,8 @@ export async function GET(request: NextRequest) {
         // 直送：从 orders.order_number 获取
         containerNumber = order?.order_number || null
       } else if (appointment?.delivery_method === '卡派' || appointment?.delivery_method === '自提') {
-        // 卡派/自提：从 outbound_shipments.trailers.trailer_code 获取
-        containerNumber = appointment?.outbound_shipments?.trailers?.trailer_code || null
+        // 卡派/自提：从 outbound_shipments.trailer_code 获取（现在是直接存储在表中的文本字段）
+        containerNumber = appointment?.outbound_shipments?.trailer_code || null
       }
 
       return {
