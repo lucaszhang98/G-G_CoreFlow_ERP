@@ -95,45 +95,10 @@ export function OutboundShipmentTable() {
     }
   }, [getOutboundGroupDepartmentId])
 
-  // 加载 Trailer 选项
-  const loadTrailerOptions = React.useCallback(async (search: string = '') => {
-    try {
-      const params = new URLSearchParams({
-        limit: '1000',
-        sort: 'trailer_code',
-        order: 'asc',
-      })
-      if (search && search.trim()) {
-        params.append('search', search.trim())
-        params.append('unlimited', 'true')
-      }
-      
-      const response = await fetch(`/api/trailers?${params.toString()}`)
-      if (!response.ok) {
-        console.error('加载 Trailer 选项失败:', response.statusText)
-        return []
-      }
-      
-      const result = await response.json()
-      const trailers = result.data || []
-      
-      const options = trailers.map((trailer: any) => ({
-        label: trailer.trailer_code || `ID: ${trailer.trailer_id}`,
-        value: String(trailer.trailer_id),
-      }))
-      
-      return options
-    } catch (error) {
-      console.error('加载 Trailer 选项失败:', error)
-      return []
-    }
-  }, [])
-
-  // 字段加载选项配置
+  // 字段加载选项配置（trailer_code 现在是文本输入框，不需要加载选项）
   const fieldFuzzyLoadOptions = React.useMemo(() => ({
     loaded_by_name: loadLoadedByOptions,
-    trailer_code: loadTrailerOptions,
-  }), [loadLoadedByOptions, loadTrailerOptions])
+  }), [loadLoadedByOptions])
 
   // 可点击列配置：预约号码列可点击（跳转到预约管理页面并搜索该预约号码）
   const customClickableColumns: ClickableColumnConfig<any>[] = React.useMemo(() => [

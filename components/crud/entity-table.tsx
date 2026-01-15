@@ -1768,15 +1768,6 @@ export function EntityTable<T = any>({
               } else {
                 initialValue = null
               }
-            } else if (fieldKey === 'trailer_code') {
-              // trailer_code 映射到 trailer_id
-              idKey = 'trailer_id'
-              const idValue = (row.original as any)[idKey]
-              if (idValue !== undefined && idValue !== null) {
-                initialValue = String(idValue)
-              } else {
-                initialValue = null
-              }
             } else {
               idKey = `${fieldKey}_id`
               const idValue = (row.original as any)[idKey]

@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
         // 从 outbound_shipments 获取的字段（如果存在）
         outbound_shipment_id: shipment ? serializeBigInt(shipment).outbound_shipment_id?.toString() : null,
         trailer_id: shipment?.trailer_id ? shipment.trailer_id.toString() : null,
-        trailer_code: shipment?.trailers?.trailer_code || null,
+        trailer_code: shipment?.trailer_code || null, // 直接使用 outbound_shipments.trailer_code
         loaded_by: shipment?.loaded_by ? shipment.loaded_by.toString() : null,
         loaded_by_name: shipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
         notes: shipment?.notes || null,

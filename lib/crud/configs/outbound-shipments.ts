@@ -80,14 +80,9 @@ export const outboundShipmentConfig: EntityConfig = {
     trailer_code: {
       key: 'trailer_code',
       label: 'Trailer',
-      type: 'relation',
-      relation: {
-        model: 'trailers',
-        displayField: 'trailer_code',
-        valueField: 'trailer_id',
-      },
-      relationField: 'trailer_id', // 指定数据库字段名
+      type: 'text',
       sortable: true,
+      searchable: true,
     },
     confirmed_start: {
       key: 'confirmed_start',

@@ -155,13 +155,12 @@ export async function PUT(
     // 获取当前用户
     const user = authResult.user || null;
 
-    // 允许修改 trailer_id, loaded_by, notes, rejected
+    // 允许修改 trailer_code, loaded_by, notes, rejected
     const updateData: any = {};
     
-    if (body.trailer_id !== undefined || body.trailer_code !== undefined) {
-      // 支持 trailer_id 或 trailer_code（前端可能传 trailer_code，需要转换为 trailer_id）
-      const trailerId = body.trailer_id || body.trailer_code
-      updateData.trailer_id = trailerId ? (typeof trailerId === 'bigint' ? trailerId : BigInt(trailerId)) : null;
+    if (body.trailer_code !== undefined) {
+      // trailer_code 直接保存为文本
+      updateData.trailer_code = body.trailer_code || null;
     }
     if (body.loaded_by !== undefined || body.loaded_by_name !== undefined) {
       // 支持 loaded_by 或 loaded_by_name（前端可能传 loaded_by_name，需要转换为 loaded_by）
@@ -228,7 +227,7 @@ export async function PUT(
       const createData: any = {
         appointment_id: BigInt(appointmentId),
         warehouse_id: defaultWarehouseId,
-        trailer_id: updateData.trailer_id || null,
+        trailer_code: updateData.trailer_code || null,
         loaded_by: updateData.loaded_by || null,
         notes: updateData.notes || null,
       };
