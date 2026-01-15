@@ -389,7 +389,7 @@ export async function PUT(
     }
 
     // 获取 appointment 信息用于返回
-    const appointmentForResponse = await prisma.delivery_appointments.findUnique({
+    const appointmentForResponseRaw = await prisma.delivery_appointments.findUnique({
       where: { appointment_id: BigInt(appointmentId) },
       include: {
         appointment_detail_lines: {
@@ -410,6 +410,9 @@ export async function PUT(
       },
     });
     
+    // 序列化 BigInt 字段
+    const appointmentForResponse = appointmentForResponseRaw ? serializeBigInt(appointmentForResponseRaw) : null;
+    
     let totalPallets = 0;
     if (appointmentForResponse?.appointment_detail_lines && Array.isArray(appointmentForResponse.appointment_detail_lines)) {
       totalPallets = appointmentForResponse.appointment_detail_lines.reduce((sum: number, line: any) => {
@@ -419,8 +422,8 @@ export async function PUT(
 
     return NextResponse.json({
       data: {
-        // 从 delivery_appointments 获取的字段
-        appointment_id: appointmentForResponse?.appointment_id.toString() || appointmentId,
+        // 从 delivery_appointments 获取的字段（已序列化）
+        appointment_id: appointmentForResponse?.appointment_id?.toString() || appointmentId,
         reference_number: appointmentForResponse?.reference_number || null,
         delivery_method: appointmentForResponse?.delivery_method || null,
         rejected: appointmentForResponse?.rejected || false,
