@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
             estimated_pallets: true, // 总板数
             remaining_pallets: true, // 剩余板数
             delivery_nature: true,
-            delivery_location_id: true,
+            // delivery_location_id 通过关系获取，不需要在 select 中
             locations_order_detail_delivery_location_idTolocations: {
               select: {
                 location_id: true,
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-    })
+    }) as any[] // Type assertion to help TypeScript understand the include types
 
     // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
     // 不需要手动查询 locations 了
@@ -98,10 +98,14 @@ export async function GET(request: NextRequest) {
     })
 
     // 序列化并格式化数据
-    const serializedLines = appointmentDetailLines.map(line => {
+    const serializedLines = appointmentDetailLines.map((line: any) => {
       const serialized = serializeBigInt(line)
-      const orderDetail = serializeBigInt(line.order_detail)
-      const orderDetailOrders = line.order_detail.orders ? serializeBigInt(line.order_detail.orders) : null
+      // 类型断言：确保 include 的关系存在
+      const orderDetail = line.order_detail ? serializeBigInt(line.order_detail) : null
+      if (!orderDetail) {
+        throw new Error(`Order detail not found for appointment_detail_line ${line.id}`)
+      }
+      const orderDetailOrders = orderDetail.orders ? serializeBigInt(orderDetail.orders) : null
       // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
       const locationCode = orderDetail.locations_order_detail_delivery_location_idTolocations?.location_code || null
 
@@ -119,6 +123,12 @@ export async function GET(request: NextRequest) {
         console.log(`[appointment-detail-lines] 已入库仓点 order_detail_id=${line.order_detail_id}: pallet_count=${inventoryLot.pallet_count}, unbooked_pallet_count=${inventoryLot.unbooked_pallet_count}, totalPallets=${totalPallets}`)
       } else {
         console.log(`[appointment-detail-lines] 未入库仓点 order_detail_id=${line.order_detail_id}: remaining_pallets=${orderDetail.remaining_pallets}, estimated_pallets=${orderDetail.estimated_pallets}, totalPallets=${totalPallets}`)
+      }
+
+      // 类型断言：确保 delivery_appointments 关系存在
+      const deliveryAppointment = line.delivery_appointments
+      if (!deliveryAppointment) {
+        throw new Error(`Delivery appointment not found for appointment_detail_line ${line.id}`)
       }
 
       return {
@@ -144,7 +154,7 @@ export async function GET(request: NextRequest) {
         volume_percentage: orderDetail.volume_percentage,
         notes: orderDetail.notes,
         // 从 delivery_appointments 获取的数据
-        reference_number: line.delivery_appointments.reference_number,
+        reference_number: deliveryAppointment.reference_number,
         // 从 order_detail.orders 获取柜号（order_number）
         order_number: orderDetailOrders?.order_number || null,
         // SKU 明细
