@@ -374,6 +374,17 @@ export async function PUT(
     // 因为送仓管理的字段都是从 delivery_appointments 表读取的，会自动同步
     // 只有在预约创建和删除时才需要处理 delivery_management 记录
 
+    // 同步订单的预约信息（如果有 order_id）
+    if (updatedItem.orders?.order_id) {
+      try {
+        const { syncOrderAppointmentInfo } = await import('@/lib/services/sync-order-appointment-info')
+        await syncOrderAppointmentInfo(updatedItem.orders.order_id)
+      } catch (syncError: any) {
+        console.warn('同步订单预约信息失败:', syncError)
+        // 不影响预约更新，只记录警告
+      }
+    }
+
     // 处理 outbound_shipments 的自动同步
     const appointmentId = BigInt(id);
     

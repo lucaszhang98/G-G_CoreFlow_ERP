@@ -369,6 +369,17 @@ export async function POST(request: NextRequest) {
     } catch (deliveryError: any) {
       console.warn('自动创建送仓管理记录失败:', deliveryError);
     }
+
+    // 同步订单的预约信息（如果有 order_id）
+    if (finalData.order_id) {
+      try {
+        const { syncOrderAppointmentInfo } = await import('@/lib/services/sync-order-appointment-info')
+        await syncOrderAppointmentInfo(finalData.order_id)
+      } catch (syncError: any) {
+        console.warn('同步订单预约信息失败:', syncError)
+        // 不影响预约创建，只记录警告
+      }
+    }
     
     // 新建时，total_pallets默认为0（因为还没有outbound_shipment_lines）
     return NextResponse.json({

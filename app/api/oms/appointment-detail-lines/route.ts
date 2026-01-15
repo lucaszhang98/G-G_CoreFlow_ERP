@@ -316,6 +316,21 @@ export async function POST(request: NextRequest) {
       return appointmentDetailLine
     })
 
+    // 同步订单的预约信息
+    try {
+      const orderDetail = await prisma.order_detail.findUnique({
+        where: { id: orderDetailId },
+        select: { order_id: true },
+      })
+      if (orderDetail?.order_id) {
+        const { syncOrderAppointmentInfo } = await import('@/lib/services/sync-order-appointment-info')
+        await syncOrderAppointmentInfo(orderDetail.order_id)
+      }
+    } catch (syncError: any) {
+      console.warn('同步订单预约信息失败:', syncError)
+      // 不影响预约明细创建，只记录警告
+    }
+
     return NextResponse.json(
       { 
         success: true,
