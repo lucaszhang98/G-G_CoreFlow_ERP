@@ -60,7 +60,6 @@ export async function GET(
           select: {
             outbound_shipment_id: true,
             trailer_id: true,
-            trailer_code: true,
             loaded_by: true,
             notes: true,
             users_outbound_shipments_loaded_byTousers: {
