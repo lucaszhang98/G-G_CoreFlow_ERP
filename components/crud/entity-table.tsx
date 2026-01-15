@@ -853,10 +853,8 @@ export function EntityTable<T = any>({
             // API 期望 string 类型，会转换为 BigInt
             processedValue = String(value)
           } else if (key === 'trailer_code') {
-            // trailer_code 存储的是 trailer_id，下拉框返回的是 trailer_id 字符串
-            // API 期望 number 类型
-            const numValue = Number(value)
-            processedValue = (isNaN(numValue) || numValue === 0) ? null : numValue
+            // trailer_code 是文本字段，直接使用字符串值
+            processedValue = String(value)
           } else {
             const numValue = Number(value)
             // 如果转换后是 NaN，设置为 null；如果是 0，也设置为 null（0 通常不是有效的 ID）
@@ -870,9 +868,9 @@ export function EntityTable<T = any>({
             const originalIdValue = (row as any)[dbFieldName] || (row as any)[key]
             originalValue = originalIdValue !== undefined && originalIdValue !== null ? String(originalIdValue) : null
           } else if (key === 'trailer_code') {
-            // trailer_code 的原始值是 trailer_id
-            const originalIdValue = (row as any)[dbFieldName] || (row as any)['trailer_id']
-            originalValue = originalIdValue !== undefined && originalIdValue !== null ? Number(originalIdValue) : null
+            // trailer_code 是文本字段，直接使用字符串值
+            const originalTextValue = (row as any)[dbFieldName] || (row as any)['trailer_code']
+            originalValue = originalTextValue !== undefined && originalTextValue !== null ? String(originalTextValue) : null
           } else {
             originalValue = originalId ? Number(originalId) : null
           }
