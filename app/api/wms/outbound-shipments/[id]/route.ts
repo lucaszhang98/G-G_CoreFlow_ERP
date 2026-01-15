@@ -281,9 +281,14 @@ export async function PUT(
       outboundShipment = result;
 
       // 如果 trailer_code 发生变化，自动更新 delivery_management.container_number
-      // 注意：需要在事务外重新查询以获取更新后的 trailer_code
+      // 需要重新查询以获取更新后的 trailer_code（因为事务返回的数据可能不包含所有字段）
       if (body.trailer_code !== undefined) {
-        const newTrailerCode = (outboundShipment as any).trailer_code
+        // 重新查询以获取最新的 trailer_code
+        const refreshedOutboundShipment = await prisma.outbound_shipments.findUnique({
+          where: { appointment_id: BigInt(appointmentId) },
+          select: { trailer_code: true } as any,
+        });
+        const newTrailerCode = (refreshedOutboundShipment as any)?.trailer_code || body.trailer_code || null
         // 只有当新值不为空且与旧值不同时才更新
         if (newTrailerCode && newTrailerCode !== oldTrailerCode) {
           try {

@@ -836,7 +836,7 @@ export function EntityTable<T = any>({
           } else if (key === 'loaded_by_name') {
             dbFieldName = 'loaded_by' // loaded_by_name 映射到 loaded_by
           } else if (key === 'trailer_code') {
-            dbFieldName = 'trailer_id' // trailer_code 映射到 trailer_id
+            dbFieldName = 'trailer_code' // trailer_code 是文本字段，直接使用
           } else if (key.endsWith('_id')) {
             dbFieldName = key
           } else {
