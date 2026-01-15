@@ -62,17 +62,31 @@ export async function GET(request: NextRequest) {
         } else if (fieldName === 'loaded_by_name') {
           // loaded_by_name 是 relation 字段，需要通过 outbound_shipments.loaded_by 筛选
           // loaded_by 是 BigInt 类型
+          // buildRelationFilterCondition 已经处理了转换，这里需要提取值
           const loadedByValue = condition[fieldName]
-          if (loadedByValue && typeof loadedByValue === 'object' && 'equals' in loadedByValue) {
-            try {
-              const idValue = (loadedByValue as any).equals
-              if (typeof idValue === 'string' && /^\d+$/.test(idValue)) {
-                outboundShipmentsWhere = {
-                  loaded_by: BigInt(idValue)
+          console.log('[OutboundShipments] loaded_by_name 筛选条件:', loadedByValue)
+          
+          // buildRelationFilterCondition 返回的格式可能是 { loaded_by: { equals: BigInt(...) } } 或 { loaded_by: BigInt(...) }
+          if (loadedByValue && typeof loadedByValue === 'object') {
+            if ('loaded_by' in loadedByValue) {
+              // 如果已经是 { loaded_by: ... } 格式，直接使用
+              outboundShipmentsWhere = loadedByValue
+            } else if ('equals' in loadedByValue) {
+              // 如果是 { equals: ... } 格式，需要转换为 { loaded_by: { equals: ... } }
+              try {
+                const idValue = (loadedByValue as any).equals
+                if (typeof idValue === 'string' && /^\d+$/.test(idValue)) {
+                  outboundShipmentsWhere = {
+                    loaded_by: BigInt(idValue)
+                  }
+                } else if (typeof idValue === 'bigint' || (typeof idValue === 'object' && idValue?.toString)) {
+                  outboundShipmentsWhere = {
+                    loaded_by: typeof idValue === 'bigint' ? idValue : BigInt(idValue.toString())
+                  }
                 }
+              } catch (e) {
+                console.error('[OutboundShipments] loaded_by_name 筛选值转换失败:', e, { loadedByValue })
               }
-            } catch (e) {
-              console.error('[OutboundShipments] loaded_by_name 筛选值转换失败:', e)
             }
           }
         } else {
@@ -250,7 +264,9 @@ export async function GET(request: NextRequest) {
         notes: shipment?.notes || null,
         
         // 关联对象（用于 relation 类型字段的显示）
-        users_outbound_shipments_loaded_byTousers: shipment?.users_outbound_shipments_loaded_byTousers || null,
+        users_outbound_shipments_loaded_byTousers: shipment?.users_outbound_shipments_loaded_byTousers 
+          ? serializeBigInt(shipment.users_outbound_shipments_loaded_byTousers) 
+          : null,
         
         // 审计字段
         created_at: serializedAppointment.created_at,

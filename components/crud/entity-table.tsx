@@ -1072,6 +1072,17 @@ export function EntityTable<T = any>({
                     if (responseData.data.unloaded_by !== undefined) {
                       updatedItem.unloaded_by = responseData.data.unloaded_by // ID
                     }
+                    // 更新 loaded_by 和 loaded_by_name（API返回的是ID和关联对象）
+                    if (responseData.data.loaded_by !== undefined) {
+                      updatedItem.loaded_by = responseData.data.loaded_by // ID
+                    }
+                    if (responseData.data.loaded_by_name !== undefined) {
+                      updatedItem.loaded_by_name = responseData.data.loaded_by_name // 显示名称
+                    }
+                    // 更新关联对象（用于 relation 类型字段的显示）
+                    if (responseData.data.users_outbound_shipments_loaded_byTousers !== undefined) {
+                      updatedItem.users_outbound_shipments_loaded_byTousers = responseData.data.users_outbound_shipments_loaded_byTousers
+                    }
                     return updatedItem
                   }
                   return item
