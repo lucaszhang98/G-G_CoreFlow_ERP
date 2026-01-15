@@ -42,54 +42,39 @@ export async function GET(request: NextRequest) {
     let outboundShipmentsWhere: any = null // 用于存储 outbound_shipments 的筛选条件
     
     filterConditions.forEach((condition) => {
-      Object.keys(condition).forEach((fieldName) => {
-        // 所有字段都来自 delivery_appointments 表（因为实际查询的是 delivery_appointments）
-        // 需要映射字段名：
-        // - destination_location_id -> location_id
-        // - confirmed_start 和 requested_start 的日期筛选需要特殊处理
-        // - loaded_by_name -> 需要通过 outbound_shipments 关联筛选
-        let mappedFieldName = fieldName
-        
-        if (fieldName === 'destination_location_id') {
-          mappedFieldName = 'location_id'
-          appointmentsConditions[mappedFieldName] = condition[fieldName]
-        } else if (fieldName === 'confirmed_start') {
-          // confirmed_start 是 datetime 类型，直接使用
-          appointmentsConditions[fieldName] = condition[fieldName]
-        } else if (fieldName === 'origin_location_id') {
-          // origin_location_id 直接使用
-          appointmentsConditions[fieldName] = condition[fieldName]
-        } else if (fieldName === 'loaded_by_name') {
-          // loaded_by_name 是 relation 字段，需要通过 outbound_shipments.loaded_by 筛选
-          // buildRelationFilterCondition 返回的格式是 { loaded_by: BigInt(...) }
-          // 因为 relationField 是 'loaded_by'，所以 dbFieldName 就是 'loaded_by'
-          const loadedByValue = condition[fieldName]
-          console.log('[OutboundShipments] loaded_by_name 筛选条件:', loadedByValue, typeof loadedByValue)
+      // buildRelationFilterCondition 返回的格式是 { [dbFieldName]: convertedValue }
+      // 对于 loaded_by_name，dbFieldName 是 'loaded_by'（因为 relationField 是 'loaded_by'）
+      // 所以 condition 可能是 { loaded_by: BigInt(...) }
+      
+      // 检查 condition 是否包含 loaded_by（说明这是 loaded_by_name 的筛选条件）
+      if ('loaded_by' in condition) {
+        // 这是 loaded_by_name 的筛选条件，需要通过 outbound_shipments 关联筛选
+        outboundShipmentsWhere = condition
+        console.log('[OutboundShipments] 检测到 loaded_by_name 筛选条件:', outboundShipmentsWhere)
+      } else {
+        // 其他字段的筛选条件
+        Object.keys(condition).forEach((fieldName) => {
+          // 所有字段都来自 delivery_appointments 表（因为实际查询的是 delivery_appointments）
+          // 需要映射字段名：
+          // - destination_location_id -> location_id
+          // - confirmed_start 和 requested_start 的日期筛选需要特殊处理
+          let mappedFieldName = fieldName
           
-          // buildRelationFilterCondition 返回的格式是 { loaded_by: BigInt(...) } 或 { loaded_by: string }
-          if (loadedByValue && typeof loadedByValue === 'object') {
-            if ('loaded_by' in loadedByValue) {
-              // 如果已经是 { loaded_by: ... } 格式，直接使用
-              outboundShipmentsWhere = loadedByValue
-              console.log('[OutboundShipments] 使用 loaded_by 筛选条件:', outboundShipmentsWhere)
-            } else {
-              // 如果 condition[fieldName] 本身就是整个条件对象（buildRelationFilterCondition 的返回值）
-              // 那么 condition 本身可能就是 { loaded_by: BigInt(...) }
-              // 检查 condition 对象的所有键
-              const conditionKeys = Object.keys(condition)
-              if (conditionKeys.length === 1 && conditionKeys[0] === 'loaded_by') {
-                outboundShipmentsWhere = condition
-                console.log('[OutboundShipments] 从 condition 对象提取 loaded_by 筛选条件:', outboundShipmentsWhere)
-              } else {
-                console.warn('[OutboundShipments] loaded_by_name 筛选条件格式未知:', condition)
-              }
-            }
+          if (fieldName === 'destination_location_id') {
+            mappedFieldName = 'location_id'
+            appointmentsConditions[mappedFieldName] = condition[fieldName]
+          } else if (fieldName === 'confirmed_start') {
+            // confirmed_start 是 datetime 类型，直接使用
+            appointmentsConditions[fieldName] = condition[fieldName]
+          } else if (fieldName === 'origin_location_id') {
+            // origin_location_id 直接使用
+            appointmentsConditions[fieldName] = condition[fieldName]
+          } else {
+            // 其他字段直接映射
+            appointmentsConditions[fieldName] = condition[fieldName]
           }
-        } else {
-          // 其他字段直接映射
-          appointmentsConditions[fieldName] = condition[fieldName]
-        }
-      })
+        })
+      }
     })
 
     // 排序
