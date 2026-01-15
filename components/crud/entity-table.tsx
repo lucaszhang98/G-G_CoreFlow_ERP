@@ -1916,11 +1916,14 @@ export function EntityTable<T = any>({
           let relationData = null
           
           // 尝试多种可能的关联数据键名
+          // 特殊处理：loaded_by_name 字段对应的关联键是 users_outbound_shipments_loaded_byTousers
           const possibleKeys = [
+            fieldKey === 'loaded_by_name' ? 'users_outbound_shipments_loaded_byTousers' : null,
             `users_inbound_receipt_${fieldKey}Tousers`,
             `users_outbound_shipments_${fieldKey}Tousers`,
             `users_${fieldKey}Tousers`,
-            fieldConfig.relation?.model === 'users' ? `users_outbound_shipments_loaded_byTousers` : null,
+            fieldConfig.relation?.model === 'users' && fieldKey === 'loaded_by_name' ? `users_outbound_shipments_loaded_byTousers` : null,
+            fieldConfig.relation?.model === 'users' && fieldKey !== 'loaded_by_name' ? `users_outbound_shipments_${fieldKey}Tousers` : null,
             fieldConfig.relation?.model === 'trailers' ? 'trailers' : null,
             fieldConfig.relation?.model === 'drivers' ? 'drivers' : null,
           ].filter(Boolean)
@@ -1934,9 +1937,15 @@ export function EntityTable<T = any>({
           
           // 如果还是没找到，尝试直接使用 relation.model 作为键名
           if (!relationData && fieldConfig.relation?.model) {
-            const modelKey = fieldConfig.relation.model === 'users' ? 'users_outbound_shipments_loaded_byTousers' :
-                            fieldConfig.relation.model === 'trailers' ? 'trailers' :
-                            fieldConfig.relation.model === 'drivers' ? 'drivers' : null
+            let modelKey: string | null = null
+            if (fieldConfig.relation.model === 'users') {
+              // 特殊处理：loaded_by_name 字段对应的关联键是 users_outbound_shipments_loaded_byTousers
+              modelKey = fieldKey === 'loaded_by_name' ? 'users_outbound_shipments_loaded_byTousers' : null
+            } else if (fieldConfig.relation.model === 'trailers') {
+              modelKey = 'trailers'
+            } else if (fieldConfig.relation.model === 'drivers') {
+              modelKey = 'drivers'
+            }
             if (modelKey && (row.original as any)[modelKey]) {
               relationData = (row.original as any)[modelKey]
             }

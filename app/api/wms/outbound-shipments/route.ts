@@ -227,7 +227,6 @@ export async function GET(request: NextRequest) {
         notes: shipment?.notes || null,
         
         // 关联对象（用于 relation 类型字段的显示）
-        trailers: shipment?.trailers || null,
         users_outbound_shipments_loaded_byTousers: shipment?.users_outbound_shipments_loaded_byTousers || null,
         
         // 审计字段

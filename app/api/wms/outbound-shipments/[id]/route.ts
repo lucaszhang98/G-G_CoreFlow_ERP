@@ -302,8 +302,84 @@ export async function PUT(
       }
     }
 
-    const serialized = serializeBigInt(outboundShipment);
-    return NextResponse.json(serialized);
+    // 重新查询以获取完整的关联数据用于返回
+    const finalOutboundShipment = await prisma.outbound_shipments.findUnique({
+      where: { appointment_id: BigInt(appointmentId) },
+      include: {
+        users_outbound_shipments_loaded_byTousers: {
+          select: {
+            id: true,
+            full_name: true,
+            username: true,
+          },
+        },
+      },
+    });
+
+    if (!finalOutboundShipment) {
+      return NextResponse.json(
+        { error: '出库管理记录不存在' },
+        { status: 404 }
+      );
+    }
+
+    // 获取 appointment 信息用于返回
+    const appointment = await prisma.delivery_appointments.findUnique({
+      where: { appointment_id: BigInt(appointmentId) },
+      include: {
+        appointment_detail_lines: {
+          select: {
+            estimated_pallets: true,
+          },
+        },
+        locations: {
+          select: {
+            location_code: true,
+          },
+        },
+        locations_delivery_appointments_origin_location_idTolocations: {
+          select: {
+            location_code: true,
+          },
+        },
+      },
+    });
+    
+    let totalPallets = 0;
+    if (appointment?.appointment_detail_lines && Array.isArray(appointment.appointment_detail_lines)) {
+      totalPallets = appointment.appointment_detail_lines.reduce((sum: number, line: any) => {
+        return sum + (line.estimated_pallets || 0);
+      }, 0);
+    }
+
+    const serialized = serializeBigInt(finalOutboundShipment);
+    return NextResponse.json({
+      data: {
+        // 从 delivery_appointments 获取的字段
+        appointment_id: appointment?.appointment_id.toString() || appointmentId,
+        reference_number: appointment?.reference_number || null,
+        delivery_method: appointment?.delivery_method || null,
+        rejected: appointment?.rejected || false,
+        appointment_account: appointment?.appointment_account || null,
+        appointment_type: appointment?.appointment_type || null,
+        origin_location: appointment?.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
+        destination_location: appointment?.locations?.location_code || null,
+        confirmed_start: appointment?.confirmed_start || null,
+        total_pallets: totalPallets,
+        
+        // 从 outbound_shipments 获取的字段
+        outbound_shipment_id: finalOutboundShipment.outbound_shipment_id.toString(),
+        trailer_id: finalOutboundShipment.trailer_id ? finalOutboundShipment.trailer_id.toString() : null,
+        trailer_code: (finalOutboundShipment as any).trailer_code || null,
+        loaded_by: finalOutboundShipment.loaded_by ? finalOutboundShipment.loaded_by.toString() : null,
+        loaded_by_name: finalOutboundShipment.users_outbound_shipments_loaded_byTousers?.full_name || null,
+        notes: finalOutboundShipment.notes || null,
+        
+        // 关联对象（用于 relation 类型字段的显示）
+        users_outbound_shipments_loaded_byTousers: finalOutboundShipment.users_outbound_shipments_loaded_byTousers || null,
+      },
+      message: '更新成功',
+    });
   } catch (error: any) {
     console.error('更新出库管理记录失败:', error);
     return handleError(error);
