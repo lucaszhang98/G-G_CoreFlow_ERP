@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
                 location_code: true,
                 name: true,
               },
-            },
+            } as any, // TypeScript workaround for Prisma relation type inference
             fba: true,
             volume_percentage: true,
             notes: true,
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
                 description: true,
               },
             },
-          },
+          } as any, // TypeScript workaround for Prisma type inference
         },
         delivery_appointments: {
           select: {
