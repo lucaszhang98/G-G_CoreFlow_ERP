@@ -267,7 +267,7 @@ export async function PUT(
       outboundShipment = result;
 
       // 如果 trailer_id 发生变化，自动更新 delivery_management.container_number
-      if (body.trailer_id !== undefined && oldTrailerId !== outboundShipment.trailer_id) {
+      if ((body.trailer_id !== undefined || body.trailer_code !== undefined) && oldTrailerId !== outboundShipment.trailer_id) {
         const newTrailerCode = outboundShipment.trailers?.trailer_code || null
         if (newTrailerCode) {
           try {
