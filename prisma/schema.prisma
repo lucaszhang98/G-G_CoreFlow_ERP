@@ -702,6 +702,7 @@ model pickup_management {
 model delivery_management {
   delivery_id                                 BigInt                @id @default(autoincrement())
   appointment_id                              BigInt                @unique
+  container_number                            String?               @db.VarChar(100) // 柜号（可编辑，直送时自动填入）
   driver_id                                   BigInt?
   status                                      String?               @default("planned") @db.VarChar(50)
   notes                                       String?

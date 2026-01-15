@@ -102,7 +102,7 @@ export async function GET(
     return NextResponse.json({
       delivery_id: String(serialized.delivery_id || ''),
       appointment_number: appointment?.reference_number || null,
-      container_number: order?.order_number || null,
+      container_number: serialized.container_number || order?.order_number || null, // 优先使用 delivery_management.container_number，否则使用 orders.order_number
       delivery_date: deliveryDate,
       origin_location: appointment?.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
       origin_location_id: appointment?.origin_location_id ? String(appointment.origin_location_id) : null,
@@ -113,7 +113,7 @@ export async function GET(
       delivery_method: appointment?.delivery_method || null,
       warehouse_account: order?.warehouse_account || null,
       appointment_time: deliveryDate,
-      driver_name: driver?.contact_roles?.name || null,
+      driver_name: serialized.drivers?.contact_roles?.name || serialized.drivers?.driver_code || null,
       driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
       rejected: appointment?.rejected || false,
       status: serialized.status || null,
@@ -147,6 +147,9 @@ async function updateDeliveryManagement(
     // 构建更新数据
     const updateData: any = {}
 
+    if (body.container_number !== undefined) {
+      updateData.container_number = body.container_number || null
+    }
     if (body.driver_id !== undefined) {
       updateData.driver_id = body.driver_id ? BigInt(body.driver_id) : null
     }
@@ -157,18 +160,81 @@ async function updateDeliveryManagement(
       updateData.notes = body.notes
     }
 
+    // rejected 字段在 delivery_appointments 表中，需要单独更新
+    const appointmentUpdateData: any = {}
+    if (body.rejected !== undefined) {
+      appointmentUpdateData.rejected = Boolean(body.rejected)
+    }
+
     // 应用系统字段
     const user = authResult.user || null
     await addSystemFields(updateData, user, false)
 
-    const updated = await prisma.delivery_management.update({
+    // 获取 appointment_id，用于更新 delivery_appointments
+    const delivery = await prisma.delivery_management.findUnique({
       where: { delivery_id: BigInt(deliveryId) },
-      data: updateData,
+      select: { appointment_id: true },
+    })
+
+    if (!delivery) {
+      return NextResponse.json(
+        { error: '送仓管理记录不存在' },
+        { status: 404 }
+      )
+    }
+
+    // 使用事务同时更新 delivery_management 和 delivery_appointments
+    const result = await prisma.$transaction(async (tx) => {
+      // 更新 delivery_management
+      const updated = await tx.delivery_management.update({
+        where: { delivery_id: BigInt(deliveryId) },
+        data: updateData,
+        include: {
+          delivery_appointments: {
+            select: {
+              appointment_id: true,
+              reference_number: true,
+              order_id: true,
+              location_id: true,
+              origin_location_id: true,
+              appointment_type: true,
+              delivery_method: true,
+              appointment_account: true,
+              confirmed_start: true,
+              requested_start: true,
+              rejected: true,
+            },
+          },
+          drivers: {
+            select: {
+              driver_id: true,
+              driver_code: true,
+              contact_roles: {
+                select: {
+                  name: true,
+                  phone: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+      })
+
+      // 更新 delivery_appointments.rejected（如果有）
+      if (Object.keys(appointmentUpdateData).length > 0) {
+        await tx.delivery_appointments.update({
+          where: { appointment_id: delivery.appointment_id },
+          data: appointmentUpdateData,
+        })
+      }
+
+      return updated
     })
 
     return NextResponse.json({
       success: true,
-      data: serializeBigInt(updated),
+      data: serializeBigInt(result),
     })
   } catch (error: any) {
     console.error('更新送仓管理记录失败:', error)

@@ -250,7 +250,7 @@ export async function GET(request: NextRequest) {
         delivery_id: String(serialized.delivery_id || ''),
         // ========== 送仓管理显示字段 ==========
         appointment_number: appointment?.reference_number || null,
-        container_number: order?.order_number || null,
+        container_number: serialized.container_number || order?.order_number || null, // 优先使用 delivery_management.container_number，否则使用 orders.order_number
         delivery_date: deliveryDate,
         origin_location: appointment?.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
         origin_location_id: appointment?.origin_location_id ? String(appointment.origin_location_id) : null,
@@ -261,7 +261,7 @@ export async function GET(request: NextRequest) {
         delivery_method: appointment?.delivery_method || null, // 直送/卡派
         warehouse_account: order?.warehouse_account || null,
         appointment_time: deliveryDate,
-        driver_name: driver?.contact_roles?.name || null,
+        driver_name: serialized.drivers?.contact_roles?.name || serialized.drivers?.driver_code || null,
         driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
         rejected: appointment?.rejected || false,
         // ========== 送仓管理自有字段 ==========

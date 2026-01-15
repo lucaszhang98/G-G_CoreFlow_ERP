@@ -356,10 +356,21 @@ export async function POST(request: NextRequest) {
       });
 
       if (!existingDelivery) {
+        // 如果是直送，自动填入柜号
+        let containerNumber: string | null = null
+        if (finalData.delivery_method === '直送' && finalData.order_id) {
+          const order = await prisma.orders.findUnique({
+            where: { order_id: finalData.order_id },
+            select: { order_number: true },
+          })
+          containerNumber = order?.order_number || null
+        }
+
         // 创建送仓管理记录
         await prisma.delivery_management.create({
           data: {
             appointment_id: appointmentId,
+            container_number: containerNumber,
             status: 'planned',
             created_by: user?.id ? BigInt(user.id) : null,
             updated_by: user?.id ? BigInt(user.id) : null,

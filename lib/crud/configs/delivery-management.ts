@@ -32,6 +32,8 @@ export const deliveryManagementConfig: EntityConfig = {
       key: 'container_number',
       label: '柜号',
       type: 'text',
+      sortable: true,
+      searchable: true,
     },
     delivery_date: {
       key: 'delivery_date',
@@ -82,9 +84,10 @@ export const deliveryManagementConfig: EntityConfig = {
       type: 'relation',
       relation: {
         model: 'drivers',
-        displayField: 'name',
+        displayField: 'driver_code',
         valueField: 'driver_id',
       },
+      relationField: 'driver_id', // 指定数据库字段名
       // 关系字段不应该在 searchFields 中，应该通过筛选来搜索
     },
     driver_id: {
@@ -96,7 +99,7 @@ export const deliveryManagementConfig: EntityConfig = {
     rejected: {
       key: 'rejected',
       label: '拒收',
-      type: 'badge',
+      type: 'boolean',
     },
     status: {
       key: 'status',
@@ -140,7 +143,9 @@ export const deliveryManagementConfig: EntityConfig = {
     inlineEdit: {
       enabled: true,
       fields: [
+        'container_number',
         'driver_name',
+        'rejected',
         'status',
         'notes',
       ],
