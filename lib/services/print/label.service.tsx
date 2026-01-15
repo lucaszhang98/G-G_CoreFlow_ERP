@@ -129,8 +129,8 @@ export async function generateLabelDataFromOrderDetail(
 
   // 生成条形码内容：与label的第一行、第二行完全一致
   // 第一行：柜号
-  // 第二行：如果是私仓或转仓，显示备注；否则显示仓点
-  // 条形码：柜号+（备注或仓点代码）
+  // 第二行：如果是私仓或转仓，显示备注；如果是扣货，显示仓点+'-hold'；否则显示仓点
+  // 条形码：柜号+（备注或仓点代码，扣货时加'-hold'）
   let barcodeSecondPart = ''
   if (deliveryNature === '私仓' || deliveryNature === '转仓') {
     // 私仓或转仓：使用备注（与第二行一致）
@@ -138,6 +138,10 @@ export async function generateLabelDataFromOrderDetail(
   } else {
     // 其他情况：使用仓点代码
     barcodeSecondPart = deliveryLocationCode || ''
+    // 如果是扣货，仓点后加-hold（与第二行一致）
+    if (deliveryNature === '扣货') {
+      barcodeSecondPart += '-hold'
+    }
   }
   const barcode = `${containerNumber}${barcodeSecondPart}`.replace(/\s+/g, '')
 
