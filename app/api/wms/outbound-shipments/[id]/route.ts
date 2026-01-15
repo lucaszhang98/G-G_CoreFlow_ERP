@@ -50,18 +50,19 @@ export async function GET(
             location_code: true,
           },
         },
+        orders: {
+          select: {
+            order_id: true,
+            status: true,
+          },
+        },
         outbound_shipments: {
           select: {
             outbound_shipment_id: true,
             trailer_id: true,
+            trailer_code: true,
             loaded_by: true,
             notes: true,
-            trailers: {
-              select: {
-                trailer_id: true,
-                trailer_code: true,
-              },
-            },
             users_outbound_shipments_loaded_byTousers: {
               select: {
                 id: true,
@@ -115,13 +116,12 @@ export async function GET(
       // 从 outbound_shipments 获取的字段（如果存在）
       outbound_shipment_id: outboundShipment ? outboundShipment.outbound_shipment_id.toString() : null,
       trailer_id: outboundShipment?.trailer_id ? outboundShipment.trailer_id.toString() : null,
-      trailer_code: outboundShipment?.trailers?.trailer_code || null,
+      trailer_code: outboundShipment?.trailer_code || null, // 直接使用 outbound_shipments.trailer_code
       loaded_by: outboundShipment?.loaded_by ? outboundShipment.loaded_by.toString() : null,
       loaded_by_name: outboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
       notes: outboundShipment?.notes || null,
       
       // 关联对象（用于 relation 类型字段的显示）
-      trailers: outboundShipment?.trailers || null,
       users_outbound_shipments_loaded_byTousers: outboundShipment?.users_outbound_shipments_loaded_byTousers || null,
     });
   } catch (error: any) {
@@ -215,8 +215,8 @@ export async function PUT(
       },
     });
 
-    // 记录旧的 trailer_id，用于判断是否需要更新 delivery_management
-    const oldTrailerId = outboundShipment?.trailer_id
+    // 记录旧的 trailer_code，用于判断是否需要更新 delivery_management
+    const oldTrailerCode = outboundShipment?.trailer_code
 
     if (!outboundShipment) {
       // 自动创建 outbound_shipment
@@ -236,6 +236,15 @@ export async function PUT(
       
       outboundShipment = await prisma.outbound_shipments.create({
         data: finalCreateData,
+        include: {
+          users_outbound_shipments_loaded_byTousers: {
+            select: {
+              id: true,
+              full_name: true,
+              username: true,
+            },
+          },
+        },
       });
     } else {
       // 更新现有记录
@@ -277,9 +286,9 @@ export async function PUT(
 
       outboundShipment = result;
 
-      // 如果 trailer_id 发生变化，自动更新 delivery_management.container_number
-      if ((body.trailer_id !== undefined || body.trailer_code !== undefined) && oldTrailerId !== outboundShipment.trailer_id) {
-        const newTrailerCode = outboundShipment.trailers?.trailer_code || null
+      // 如果 trailer_code 发生变化，自动更新 delivery_management.container_number
+      if (body.trailer_code !== undefined && oldTrailerCode !== outboundShipment.trailer_code) {
+        const newTrailerCode = outboundShipment.trailer_code
         if (newTrailerCode) {
           try {
             // 查找对应的 delivery_management 记录
