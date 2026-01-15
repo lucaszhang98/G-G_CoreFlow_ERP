@@ -101,9 +101,16 @@ export async function GET(request: NextRequest) {
     let orderBy: any
     
     // 判断排序字段是来自主表还是 orders 表
-    const mainTableFields = ['pickup_id', 'status', 'notes', 'earliest_appointment_time', 'current_location', 'port_text', 'shipping_line', 'driver_id', 'created_at', 'updated_at']
+    const mainTableFields = ['pickup_id', 'status', 'notes', 'current_location', 'port_text', 'shipping_line', 'driver_id', 'created_at', 'updated_at']
     
-    if (mainTableFields.includes(sort)) {
+    // earliest_appointment_time 特殊处理：优先使用 orders.appointment_time 排序
+    if (sort === 'earliest_appointment_time') {
+      orderBy = {
+        orders: {
+          appointment_time: order
+        }
+      }
+    } else if (mainTableFields.includes(sort)) {
       // 主表字段直接排序
       orderBy = { [sort]: order }
     } else {
