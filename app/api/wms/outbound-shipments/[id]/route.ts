@@ -209,7 +209,7 @@ export async function PUT(
     });
 
     // 记录旧的 trailer_code，用于判断是否需要更新 delivery_management
-    const oldTrailerCode = outboundShipment?.trailer_code
+    const oldTrailerCode = (outboundShipment as any)?.trailer_code
 
     if (!outboundShipment) {
       // 自动创建 outbound_shipment
@@ -274,8 +274,8 @@ export async function PUT(
       outboundShipment = result;
 
       // 如果 trailer_code 发生变化，自动更新 delivery_management.container_number
-      if (body.trailer_code !== undefined && oldTrailerCode !== outboundShipment.trailer_code) {
-        const newTrailerCode = outboundShipment.trailer_code
+      if (body.trailer_code !== undefined && oldTrailerCode !== (outboundShipment as any).trailer_code) {
+        const newTrailerCode = (outboundShipment as any).trailer_code
         if (newTrailerCode) {
           try {
             // 查找对应的 delivery_management 记录
@@ -294,7 +294,7 @@ export async function PUT(
               if (appointment?.delivery_method === '卡派' || appointment?.delivery_method === '自提') {
                 await prisma.delivery_management.update({
                   where: { delivery_id: deliveryManagement.delivery_id },
-                  data: { container_number: newTrailerCode },
+                  data: { container_number: newTrailerCode } as any,
                 })
                 console.log(`[OutboundShipments] 自动更新送仓管理柜号: appointment_id=${appointmentId}, container_number=${newTrailerCode}`)
               }
