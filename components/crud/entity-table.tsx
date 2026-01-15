@@ -833,6 +833,10 @@ export function EntityTable<T = any>({
             dbFieldName = key // received_by 和 unloaded_by 直接使用原字段名（数据库字段都是 BigInt ID）
           } else if (key === 'carrier') {
             dbFieldName = 'carrier_id' // carrier 字段映射到 carrier_id
+          } else if (key === 'loaded_by_name') {
+            dbFieldName = 'loaded_by' // loaded_by_name 映射到 loaded_by
+          } else if (key === 'trailer_code') {
+            dbFieldName = 'trailer_id' // trailer_code 映射到 trailer_id
           } else if (key.endsWith('_id')) {
             dbFieldName = key
           } else {

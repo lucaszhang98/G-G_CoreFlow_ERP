@@ -251,7 +251,15 @@ export async function PUT(
           include: {
             trailers: {
               select: {
+                trailer_id: true,
                 trailer_code: true,
+              },
+            },
+            users_outbound_shipments_loaded_byTousers: {
+              select: {
+                id: true,
+                full_name: true,
+                username: true,
               },
             },
           },
