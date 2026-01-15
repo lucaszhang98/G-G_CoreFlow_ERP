@@ -324,7 +324,7 @@ export async function PUT(
     }
 
     // 获取 appointment 信息用于返回
-    const appointment = await prisma.delivery_appointments.findUnique({
+    const appointmentForResponse = await prisma.delivery_appointments.findUnique({
       where: { appointment_id: BigInt(appointmentId) },
       include: {
         appointment_detail_lines: {
@@ -346,25 +346,24 @@ export async function PUT(
     });
     
     let totalPallets = 0;
-    if (appointment?.appointment_detail_lines && Array.isArray(appointment.appointment_detail_lines)) {
-      totalPallets = appointment.appointment_detail_lines.reduce((sum: number, line: any) => {
+    if (appointmentForResponse?.appointment_detail_lines && Array.isArray(appointmentForResponse.appointment_detail_lines)) {
+      totalPallets = appointmentForResponse.appointment_detail_lines.reduce((sum: number, line: any) => {
         return sum + (line.estimated_pallets || 0);
       }, 0);
     }
 
-    const serialized = serializeBigInt(finalOutboundShipment);
     return NextResponse.json({
       data: {
         // 从 delivery_appointments 获取的字段
-        appointment_id: appointment?.appointment_id.toString() || appointmentId,
-        reference_number: appointment?.reference_number || null,
-        delivery_method: appointment?.delivery_method || null,
-        rejected: appointment?.rejected || false,
-        appointment_account: appointment?.appointment_account || null,
-        appointment_type: appointment?.appointment_type || null,
-        origin_location: appointment?.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
-        destination_location: appointment?.locations?.location_code || null,
-        confirmed_start: appointment?.confirmed_start || null,
+        appointment_id: appointmentForResponse?.appointment_id.toString() || appointmentId,
+        reference_number: appointmentForResponse?.reference_number || null,
+        delivery_method: appointmentForResponse?.delivery_method || null,
+        rejected: appointmentForResponse?.rejected || false,
+        appointment_account: appointmentForResponse?.appointment_account || null,
+        appointment_type: appointmentForResponse?.appointment_type || null,
+        origin_location: appointmentForResponse?.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
+        destination_location: appointmentForResponse?.locations?.location_code || null,
+        confirmed_start: appointmentForResponse?.confirmed_start || null,
         total_pallets: totalPallets,
         
         // 从 outbound_shipments 获取的字段
