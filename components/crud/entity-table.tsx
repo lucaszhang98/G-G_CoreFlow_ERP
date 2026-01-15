@@ -865,15 +865,19 @@ export function EntityTable<T = any>({
           
           // 比较处理后的值是否改变
           let originalValue: string | number | null = null
-          if (key === 'unloaded_by' || key === 'received_by') {
-            // unloaded_by 和 received_by 的原始值是 BigInt ID，API 返回的也是 ID
-            const originalIdValue = (row as any)[key]
+          if (key === 'unloaded_by' || key === 'received_by' || key === 'loaded_by_name') {
+            // unloaded_by, received_by, loaded_by_name 的原始值是 BigInt ID，API 返回的也是 ID
+            const originalIdValue = (row as any)[dbFieldName] || (row as any)[key]
             originalValue = originalIdValue !== undefined && originalIdValue !== null ? String(originalIdValue) : null
+          } else if (key === 'trailer_code') {
+            // trailer_code 的原始值是 trailer_id
+            const originalIdValue = (row as any)[dbFieldName] || (row as any)['trailer_id']
+            originalValue = originalIdValue !== undefined && originalIdValue !== null ? Number(originalIdValue) : null
           } else {
             originalValue = originalId ? Number(originalId) : null
           }
           
-          // 对于 unloaded_by 和 received_by，如果新值不为 null，或者原始值为 null 但新值不为 null，都需要更新
+          // 对于 unloaded_by, received_by, loaded_by_name，如果新值不为 null，或者原始值为 null 但新值不为 null，都需要更新
           const shouldUpdate = processedValue !== originalValue || 
             (processedValue !== null && originalValue === null) ||
             (processedValue === null && originalValue !== null)
