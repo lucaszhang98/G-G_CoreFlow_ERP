@@ -25,8 +25,6 @@ export class AppointmentDeleteService {
           id: true,
           order_detail_id: true,
           estimated_pallets: true,
-        },
-        include: {
           order_detail: {
             select: {
               order_id: true,
