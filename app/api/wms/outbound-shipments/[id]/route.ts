@@ -360,7 +360,7 @@ export async function PUT(
     }
 
     // 重新查询以获取完整的关联数据用于返回
-    const finalOutboundShipment = await prisma.outbound_shipments.findUnique({
+    const finalOutboundShipmentRaw = await prisma.outbound_shipments.findUnique({
       where: { appointment_id: BigInt(appointmentId) },
       select: {
         outbound_shipment_id: true,
@@ -377,7 +377,9 @@ export async function PUT(
         },
       } as any,
     });
-    console.log(`[OutboundShipments] 最终查询结果 - loaded_by:`, (finalOutboundShipment as any)?.loaded_by?.toString(), `loaded_by_name:`, (finalOutboundShipment as any)?.users_outbound_shipments_loaded_byTousers?.full_name)
+    // 序列化 BigInt 字段
+    const finalOutboundShipment = finalOutboundShipmentRaw ? serializeBigInt(finalOutboundShipmentRaw) : null;
+    console.log(`[OutboundShipments] 最终查询结果 - loaded_by:`, finalOutboundShipment?.loaded_by, `loaded_by_name:`, finalOutboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name)
 
     if (!finalOutboundShipment) {
       return NextResponse.json(
@@ -429,18 +431,16 @@ export async function PUT(
         confirmed_start: appointmentForResponse?.confirmed_start || null,
         total_pallets: totalPallets,
         
-        // 从 outbound_shipments 获取的字段
-        outbound_shipment_id: finalOutboundShipment.outbound_shipment_id.toString(),
-        trailer_id: finalOutboundShipment.trailer_id ? finalOutboundShipment.trailer_id.toString() : null,
-        trailer_code: (finalOutboundShipment as any).trailer_code || null,
-        loaded_by: (finalOutboundShipment as any).loaded_by ? (finalOutboundShipment as any).loaded_by.toString() : null,
-        loaded_by_name: (finalOutboundShipment as any).users_outbound_shipments_loaded_byTousers?.full_name || null,
-        notes: finalOutboundShipment.notes || null,
+        // 从 outbound_shipments 获取的字段（已序列化）
+        outbound_shipment_id: finalOutboundShipment?.outbound_shipment_id?.toString() || null,
+        trailer_id: finalOutboundShipment?.trailer_id?.toString() || null,
+        trailer_code: finalOutboundShipment?.trailer_code || null,
+        loaded_by: finalOutboundShipment?.loaded_by?.toString() || null,
+        loaded_by_name: finalOutboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
+        notes: finalOutboundShipment?.notes || null,
         
-        // 关联对象（用于 relation 类型字段的显示）
-        users_outbound_shipments_loaded_byTousers: finalOutboundShipment.users_outbound_shipments_loaded_byTousers 
-          ? serializeBigInt(finalOutboundShipment.users_outbound_shipments_loaded_byTousers) 
-          : null,
+        // 关联对象（用于 relation 类型字段的显示，已序列化）
+        users_outbound_shipments_loaded_byTousers: finalOutboundShipment?.users_outbound_shipments_loaded_byTousers || null,
       },
       message: '更新成功',
     });
