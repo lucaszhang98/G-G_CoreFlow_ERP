@@ -428,7 +428,9 @@ export async function PUT(
         notes: finalOutboundShipment.notes || null,
         
         // 关联对象（用于 relation 类型字段的显示）
-        users_outbound_shipments_loaded_byTousers: finalOutboundShipment.users_outbound_shipments_loaded_byTousers || null,
+        users_outbound_shipments_loaded_byTousers: finalOutboundShipment.users_outbound_shipments_loaded_byTousers 
+          ? serializeBigInt(finalOutboundShipment.users_outbound_shipments_loaded_byTousers) 
+          : null,
       },
       message: '更新成功',
     });
