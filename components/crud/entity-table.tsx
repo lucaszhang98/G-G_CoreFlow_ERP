@@ -1926,7 +1926,7 @@ export function EntityTable<T = any>({
           
           // 尝试多种可能的关联数据键名
           // 特殊处理：loaded_by_name 字段对应的关联键是 users_outbound_shipments_loaded_byTousers
-          const possibleKeys = [
+          const possibleKeys: string[] = [
             fieldKey === 'loaded_by_name' ? 'users_outbound_shipments_loaded_byTousers' : null,
             `users_inbound_receipt_${fieldKey}Tousers`,
             `users_outbound_shipments_${fieldKey}Tousers`,
@@ -1935,7 +1935,7 @@ export function EntityTable<T = any>({
             fieldConfig.relation?.model === 'users' && fieldKey !== 'loaded_by_name' ? `users_outbound_shipments_${fieldKey}Tousers` : null,
             fieldConfig.relation?.model === 'trailers' ? 'trailers' : null,
             fieldConfig.relation?.model === 'drivers' ? 'drivers' : null,
-          ].filter(Boolean)
+          ].filter((key): key is string => key !== null && typeof key === 'string')
           
           for (const key of possibleKeys) {
             if ((row.original as any)[key]) {
