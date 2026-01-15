@@ -239,9 +239,10 @@ export async function PUT(
       // 使用事务同时更新 outbound_shipments 和 delivery_appointments
       const result = await prisma.$transaction(async (tx) => {
         // 更新 outbound_shipments
+        // 使用类型断言，因为 Prisma Client 可能还没有识别到 trailer_code 字段
         const updated = await tx.outbound_shipments.update({
           where: { appointment_id: BigInt(appointmentId) },
-          data: finalUpdateData,
+          data: finalUpdateData as any,
           include: {
             users_outbound_shipments_loaded_byTousers: {
               select: {
