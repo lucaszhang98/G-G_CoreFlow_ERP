@@ -145,96 +145,126 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 检查邮件配置
+    // 检查邮件配置 - 优先使用 Resend API（更简单，不需要应用专用密码）
+    const resendApiKey = process.env.RESEND_API_KEY
+    
+    // 如果没有 Resend API Key，尝试使用 SMTP（需要应用专用密码）
     const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER
     const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS
-    const smtpHost = process.env.SMTP_HOST
-    const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : undefined
-    const smtpSecure = process.env.SMTP_SECURE === 'true'
-    const smtpService = process.env.SMTP_SERVICE
     
-    if (!smtpUser || !smtpPass) {
-      return NextResponse.json(
-        {
-          error: '邮件服务器未配置。请在环境变量中设置 SMTP_USER 和 SMTP_PASS。\n\n支持的邮件服务商配置示例：\n' +
-                 'Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_SECURE=false\n' +
-                 'Outlook: SMTP_HOST=smtp-mail.outlook.com, SMTP_PORT=587, SMTP_SECURE=false\n' +
-                 'QQ邮箱: SMTP_HOST=smtp.qq.com, SMTP_PORT=587, SMTP_SECURE=false\n' +
-                 '163邮箱: SMTP_HOST=smtp.163.com, SMTP_PORT=465, SMTP_SECURE=true',
-          email_data: process.env.NODE_ENV === 'development' ? emailData : undefined,
-        },
-        { status: 500 }
-      )
-    }
-
-    // 配置邮件传输器
-    // 支持多种邮件服务商
-    const transporterConfig: any = {
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-    }
-
-    // 如果指定了 service（如 'gmail'），使用 service 配置
-    if (smtpService) {
-      transporterConfig.service = smtpService
-    } else if (smtpHost) {
-      // 否则使用 host/port 配置
-      transporterConfig.host = smtpHost
-      if (smtpPort) {
-        transporterConfig.port = smtpPort
-      }
-      if (smtpSecure !== undefined) {
-        transporterConfig.secure = smtpSecure
-      }
-    } else {
-      // 默认使用 Gmail 配置（向后兼容）
-      transporterConfig.service = 'gmail'
-    }
-
-    const transporter = nodemailer.createTransport(transporterConfig)
-
-    // 发送邮件
     let sentCount = 0
     let failedCount = 0
     const errors: string[] = []
 
-    // 验证邮件传输器配置
-    try {
-      await transporter.verify()
-      console.log('[发送邮件] SMTP 服务器连接验证成功')
-    } catch (error: any) {
-      console.error('[发送邮件] SMTP 服务器连接验证失败:', error)
+    // 优先使用 Resend API
+    if (resendApiKey) {
+      const resend = new Resend(resendApiKey)
+      
+      for (const email of emailData) {
+        try {
+          // Resend 支持多个收件人（用数组或逗号分隔的字符串）
+          const toEmails = email.to.split(',').map((e: string) => e.trim())
+          
+          await resend.emails.send({
+            from: process.env.RESEND_FROM || process.env.EMAIL_FROM || 'ERP System <noreply@ggtransport.in>',
+            to: toEmails,
+            cc: [email.cc],
+            subject: email.subject,
+            text: email.message,
+          })
+          
+          sentCount++
+          console.log(`[发送邮件] ✅ 成功发送邮件 (Resend) - 柜号: ${email.containerNumber}, 收件人: ${email.to}`)
+        } catch (error: any) {
+          failedCount++
+          const errorMsg = `柜号 ${email.containerNumber}: ${error.message || '发送失败'}`
+          errors.push(errorMsg)
+          console.error(`[发送邮件] ❌ 发送失败 (Resend) - 柜号: ${email.containerNumber}:`, error)
+        }
+      }
+    } 
+    // 回退到 SMTP（如果配置了）
+    else if (smtpUser && smtpPass) {
+      const smtpHost = process.env.SMTP_HOST
+      const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : undefined
+      const smtpSecure = process.env.SMTP_SECURE === 'true'
+      const smtpService = process.env.SMTP_SERVICE
+
+      // 配置邮件传输器
+      const transporterConfig: any = {
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+      }
+
+      if (smtpService) {
+        transporterConfig.service = smtpService
+      } else if (smtpHost) {
+        transporterConfig.host = smtpHost
+        if (smtpPort) {
+          transporterConfig.port = smtpPort
+        }
+        if (smtpSecure !== undefined) {
+          transporterConfig.secure = smtpSecure
+        }
+      } else {
+        transporterConfig.service = 'gmail'
+      }
+
+      const transporter = nodemailer.createTransport(transporterConfig)
+
+      // 验证连接
+      try {
+        await transporter.verify()
+        console.log('[发送邮件] SMTP 服务器连接验证成功')
+      } catch (error: any) {
+        console.error('[发送邮件] SMTP 服务器连接验证失败:', error)
+        return NextResponse.json(
+          {
+            error: `SMTP 服务器连接失败: ${error.message || '未知错误'}`,
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+          },
+          { status: 500 }
+        )
+      }
+
+      // 发送邮件
+      for (const email of emailData) {
+        try {
+          await transporter.sendMail({
+            from: process.env.SMTP_FROM || process.env.EMAIL_FROM || smtpUser,
+            to: email.to,
+            cc: email.cc,
+            subject: email.subject,
+            text: email.message,
+          })
+          sentCount++
+          console.log(`[发送邮件] ✅ 成功发送邮件 (SMTP) - 柜号: ${email.containerNumber}, 收件人: ${email.to}`)
+        } catch (error: any) {
+          failedCount++
+          const errorMsg = `柜号 ${email.containerNumber}: ${error.message || '发送失败'}`
+          errors.push(errorMsg)
+          console.error(`[发送邮件] ❌ 发送失败 (SMTP) - 柜号: ${email.containerNumber}:`, error)
+        }
+      }
+    } 
+    // 都没有配置
+    else {
       return NextResponse.json(
         {
-          error: `SMTP 服务器连接失败: ${error.message || '未知错误'}`,
-          details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+          error: '邮件服务未配置。请选择以下方式之一：\n\n' +
+                 '方式1（推荐 - 无需应用专用密码）：\n' +
+                 '1. 访问 https://resend.com 注册账号（免费）\n' +
+                 '2. 获取 API Key\n' +
+                 '3. 在 .env.local 中添加: RESEND_API_KEY=你的API密钥\n' +
+                 '4. 可选: RESEND_FROM=ERP System <noreply@ggtransport.in>\n\n' +
+                 '方式2（需要应用专用密码）：\n' +
+                 '在 .env.local 中添加: SMTP_USER=你的邮箱, SMTP_PASS=应用专用密码',
+          email_data: process.env.NODE_ENV === 'development' ? emailData : undefined,
         },
         { status: 500 }
       )
-    }
-
-    // 发送邮件
-    for (const email of emailData) {
-      try {
-        const mailOptions = {
-          from: process.env.SMTP_FROM || process.env.EMAIL_FROM || smtpUser,
-          to: email.to, // nodemailer 支持逗号分隔的字符串格式
-          cc: email.cc,
-          subject: email.subject,
-          text: email.message,
-        }
-        
-        await transporter.sendMail(mailOptions)
-        sentCount++
-        console.log(`[发送邮件] ✅ 成功发送邮件 - 柜号: ${email.containerNumber}, 收件人: ${email.to}`)
-      } catch (error: any) {
-        failedCount++
-        const errorMsg = `柜号 ${email.containerNumber}: ${error.message || '发送失败'}`
-        errors.push(errorMsg)
-        console.error(`[发送邮件] ❌ 发送失败 - 柜号: ${email.containerNumber}:`, error)
-      }
     }
 
     return NextResponse.json({
