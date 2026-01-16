@@ -175,20 +175,19 @@ export async function GET(request: NextRequest) {
               },
             },
             outbound_shipments: {
-              include: {
-                trailers: {
-                  select: {
-                    trailer_id: true,
-                    trailer_code: true,
-                  },
-                },
+              select: {
+                outbound_shipment_id: true,
+                trailer_id: true,
+                trailer_code: true,
+                loaded_by: true,
+                notes: true,
                 users_outbound_shipments_loaded_byTousers: {
                   select: {
                     id: true,
                     full_name: true,
                   },
                 },
-              },
+              } as any,
             },
             appointment_detail_lines: {
               select: {
