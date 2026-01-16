@@ -59,6 +59,13 @@ export async function GET(
                 order_detail: {
                   select: {
                     po: true,
+                    order_id: true,
+                    orders: {
+                      select: {
+                        order_id: true,
+                        order_number: true,
+                      },
+                    },
                   },
                 },
               },

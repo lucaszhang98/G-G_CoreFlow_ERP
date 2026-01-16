@@ -203,6 +203,13 @@ export async function GET(request: NextRequest) {
                 order_detail: {
                   select: {
                     po: true,
+                    order_id: true,
+                    orders: {
+                      select: {
+                        order_id: true,
+                        order_number: true,
+                      },
+                    },
                   },
                 },
               },
@@ -265,12 +272,20 @@ export async function GET(request: NextRequest) {
       // 如果表中没有柜号，根据派送方式自动获取
       if (!containerNumber) {
         if (appointment?.delivery_method === '直送') {
-          // 直送：从 orders.order_number 获取
+          // 直送：优先从 appointment.orders.order_number 获取，如果没有则从 appointment_detail_lines 关联的 order_detail.orders.order_number 获取
           containerNumber = order?.order_number || null
+          
+          // 如果 appointment.order_id 为空，尝试从 appointment_detail_lines 获取
+          if (!containerNumber && appointment?.appointment_detail_lines && appointment.appointment_detail_lines.length > 0) {
+            // 从第一个 appointment_detail_line 的 order_detail.orders.order_number 获取
+            const firstLine = appointment.appointment_detail_lines[0]
+            containerNumber = firstLine?.order_detail?.orders?.order_number || null
+          }
+          
           if (containerNumber) {
             console.log(`[送仓管理] 直送记录自动获取柜号 - delivery_id: ${serialized.delivery_id}, container_number: ${containerNumber}`)
           } else {
-            console.warn(`[送仓管理] 直送记录无法获取柜号 - delivery_id: ${serialized.delivery_id}, order:`, order)
+            console.warn(`[送仓管理] 直送记录无法获取柜号 - delivery_id: ${serialized.delivery_id}, appointment.order_id: ${appointment?.order_id}, appointment_detail_lines:`, appointment?.appointment_detail_lines?.length || 0)
           }
         } else if (appointment?.delivery_method === '卡派' || appointment?.delivery_method === '自提') {
           // 卡派/自提：从 outbound_shipments.trailer_code 获取（现在是直接存储在表中的文本字段）
