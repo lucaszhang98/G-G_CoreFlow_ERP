@@ -269,12 +269,19 @@ export function PickupManagementClient() {
       }
 
       if (data.success) {
-        toast.success(`成功发送 ${data.sent_count} 封邮件`)
-        if (data.failed_count > 0) {
-          toast.warning(`${data.failed_count} 封邮件发送失败`)
+        if (data.failed_count === 0) {
+          toast.success(`成功发送 ${data.sent_count} 封邮件`)
+        } else {
+          toast.warning(`成功发送 ${data.sent_count} 封邮件，${data.failed_count} 封失败`)
+          if (data.errors && data.errors.length > 0) {
+            console.error('发送失败的邮件:', data.errors)
+          }
         }
       } else {
         toast.error(data.error || '发送邮件失败')
+        if (data.details) {
+          console.error('发送邮件错误详情:', data.details)
+        }
       }
     } catch (error: any) {
       console.error('批量发送邮件失败:', error)
