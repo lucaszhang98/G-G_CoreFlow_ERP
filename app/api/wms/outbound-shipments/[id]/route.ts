@@ -93,6 +93,11 @@ export async function GET(
       }, 0);
     }
 
+    // 调试：记录 loaded_by 相关数据
+    console.log(`[OutboundShipments GET] loaded_by:`, outboundShipment?.loaded_by?.toString(), 
+      `loaded_by_name:`, outboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name,
+      `关联对象:`, outboundShipment?.users_outbound_shipments_loaded_byTousers ? '存在' : '不存在')
+
     return NextResponse.json({
       // 从 delivery_appointments 获取的字段
       appointment_id: serialized.appointment_id.toString(),
