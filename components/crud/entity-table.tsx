@@ -625,16 +625,25 @@ export function EntityTable<T = any>({
         
         // 对于 relation 字段，优先使用 _id 字段的值
         if (fieldConfig?.type === 'relation') {
-          // 对于 parent_id、manager_id 和 department_id，直接使用 fieldKey 作为 idKey
-          const idKey = (fieldKey === 'parent_id' || fieldKey === 'manager_id' || fieldKey === 'department_id') 
-            ? fieldKey 
-            : `${fieldKey}_id`
+          // 确定 ID 字段名：优先使用 relationField，然后检查特殊字段名
+          let idKey: string
+          if (fieldConfig.relationField) {
+            // 如果配置了 relationField（如 loaded_by_name 的 relationField 是 loaded_by），使用它
+            idKey = fieldConfig.relationField
+          } else if (fieldKey === 'parent_id' || fieldKey === 'manager_id' || fieldKey === 'department_id') {
+            // 对于 parent_id、manager_id 和 department_id，直接使用 fieldKey 作为 idKey
+            idKey = fieldKey
+          } else {
+            // 默认：尝试使用 ${fieldKey}_id
+            idKey = `${fieldKey}_id`
+          }
+          
           const idValue = (row as any)[idKey]
           if (idValue !== undefined && idValue !== null) {
             initialValues[fieldKey] = String(idValue)
           } else {
             // 如果没有 _id 字段，使用原字段的值（可能是 ID 或显示值）
-            initialValues[fieldKey] = (row as any)[fieldKey]
+            initialValues[fieldKey] = (row as any)[fieldKey] || null
           }
         } else if (fieldConfig?.type === 'location') {
           // 对于location字段，使用对应的_id字段的值
