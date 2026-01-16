@@ -238,7 +238,7 @@ export async function GET(request: NextRequest) {
     })
 
     // 序列化数据并格式化
-    const serializedDeliveries = deliveries.map((delivery: any) => {
+    const serializedDeliveries = await Promise.all(deliveries.map(async (delivery: any) => {
       const serialized = serializeBigInt(delivery)
       const appointment = serialized.delivery_appointments
       const order = appointment?.orders
@@ -257,24 +257,37 @@ export async function GET(request: NextRequest) {
       // 如果没有存储，则根据派送方式自动计算并更新
       let containerNumber: string | null = serialized.container_number || null
       
+      // 调试日志：记录第一条直送记录的柜号获取情况
+      if (appointment?.delivery_method === '直送' && !containerNumber) {
+        console.log(`[送仓管理] 直送记录缺少柜号 - delivery_id: ${serialized.delivery_id}, appointment_id: ${appointment?.appointment_id}, order_id: ${appointment?.order_id}, order_number: ${order?.order_number}`)
+      }
+      
       // 如果表中没有柜号，根据派送方式自动获取
       if (!containerNumber) {
         if (appointment?.delivery_method === '直送') {
           // 直送：从 orders.order_number 获取
           containerNumber = order?.order_number || null
+          if (containerNumber) {
+            console.log(`[送仓管理] 直送记录自动获取柜号 - delivery_id: ${serialized.delivery_id}, container_number: ${containerNumber}`)
+          } else {
+            console.warn(`[送仓管理] 直送记录无法获取柜号 - delivery_id: ${serialized.delivery_id}, order:`, order)
+          }
         } else if (appointment?.delivery_method === '卡派' || appointment?.delivery_method === '自提') {
           // 卡派/自提：从 outbound_shipments.trailer_code 获取（现在是直接存储在表中的文本字段）
           containerNumber = appointment?.outbound_shipments?.trailer_code || null
         }
         
-        // 如果计算出了柜号但表中没有，自动更新到数据库（异步，不阻塞响应）
+        // 如果计算出了柜号但表中没有，自动更新到数据库（同步更新，确保数据一致性）
         if (containerNumber) {
-          prisma.delivery_management.update({
-            where: { delivery_id: BigInt(serialized.delivery_id) },
-            data: { container_number: containerNumber } as any,
-          }).catch(err => {
-            console.error(`[送仓管理] 自动更新柜号失败 (delivery_id: ${serialized.delivery_id}):`, err)
-          })
+          try {
+            await prisma.delivery_management.update({
+              where: { delivery_id: BigInt(serialized.delivery_id) },
+              data: { container_number: containerNumber } as any,
+            })
+            console.log(`[送仓管理] 成功更新柜号到数据库 - delivery_id: ${serialized.delivery_id}, container_number: ${containerNumber}`)
+          } catch (err: any) {
+            console.error(`[送仓管理] 自动更新柜号失败 (delivery_id: ${serialized.delivery_id}):`, err?.message || err)
+          }
         }
       }
 
@@ -304,7 +317,7 @@ export async function GET(request: NextRequest) {
         created_at: serialized.created_at || null,
         updated_at: serialized.updated_at || null,
       }
-    })
+    }))
 
     return NextResponse.json({
       data: serializedDeliveries,
