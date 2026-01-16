@@ -247,18 +247,16 @@ export async function GET(request: NextRequest) {
         confirmed_start: serializedAppointment.confirmed_start || null,
         total_pallets: totalPallets, // 从 appointment_detail_lines.estimated_pallets 累加
         
-        // 从 outbound_shipments 获取的字段（如果存在）
-        outbound_shipment_id: shipment ? serializeBigInt(shipment).outbound_shipment_id?.toString() : null,
-        trailer_id: shipment?.trailer_id ? shipment.trailer_id.toString() : null,
-        trailer_code: shipment?.trailer_code || null, // 直接使用 outbound_shipments.trailer_code
-        loaded_by: shipment?.loaded_by ? shipment.loaded_by.toString() : null,
+        // 从 outbound_shipments 获取的字段（已序列化）
+        outbound_shipment_id: shipment?.outbound_shipment_id?.toString() || null,
+        trailer_id: shipment?.trailer_id?.toString() || null,
+        trailer_code: shipment?.trailer_code || null,
+        loaded_by: shipment?.loaded_by?.toString() || null,
         loaded_by_name: shipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
         notes: shipment?.notes || null,
         
-        // 关联对象（用于 relation 类型字段的显示）
-        users_outbound_shipments_loaded_byTousers: shipment?.users_outbound_shipments_loaded_byTousers 
-          ? serializeBigInt(shipment.users_outbound_shipments_loaded_byTousers) 
-          : null,
+        // 关联对象（用于 relation 类型字段的显示，已序列化）
+        users_outbound_shipments_loaded_byTousers: shipment?.users_outbound_shipments_loaded_byTousers || null,
         
         // 审计字段
         created_at: serializedAppointment.created_at,
