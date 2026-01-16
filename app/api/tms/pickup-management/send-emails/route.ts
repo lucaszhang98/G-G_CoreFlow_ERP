@@ -146,12 +146,20 @@ export async function POST(request: NextRequest) {
 
     // 检查邮件配置
     const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER
-    const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD
+    const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS
+    const smtpHost = process.env.SMTP_HOST
+    const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : undefined
+    const smtpSecure = process.env.SMTP_SECURE === 'true'
+    const smtpService = process.env.SMTP_SERVICE
     
     if (!smtpUser || !smtpPass) {
       return NextResponse.json(
         {
-          error: '邮件服务器未配置。请在环境变量中设置 SMTP_USER 和 SMTP_PASS',
+          error: '邮件服务器未配置。请在环境变量中设置 SMTP_USER 和 SMTP_PASS。\n\n支持的邮件服务商配置示例：\n' +
+                 'Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_SECURE=false\n' +
+                 'Outlook: SMTP_HOST=smtp-mail.outlook.com, SMTP_PORT=587, SMTP_SECURE=false\n' +
+                 'QQ邮箱: SMTP_HOST=smtp.qq.com, SMTP_PORT=587, SMTP_SECURE=false\n' +
+                 '163邮箱: SMTP_HOST=smtp.163.com, SMTP_PORT=465, SMTP_SECURE=true',
           email_data: process.env.NODE_ENV === 'development' ? emailData : undefined,
         },
         { status: 500 }
@@ -159,17 +167,32 @@ export async function POST(request: NextRequest) {
     }
 
     // 配置邮件传输器
-    // 使用 Gmail SMTP 或环境变量配置的 SMTP 服务器
-    const transporter = nodemailer.createTransport({
-      service: process.env.SMTP_SERVICE || 'gmail',
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : undefined,
-      secure: process.env.SMTP_SECURE === 'true',
+    // 支持多种邮件服务商
+    const transporterConfig: any = {
       auth: {
         user: smtpUser,
         pass: smtpPass,
       },
-    })
+    }
+
+    // 如果指定了 service（如 'gmail'），使用 service 配置
+    if (smtpService) {
+      transporterConfig.service = smtpService
+    } else if (smtpHost) {
+      // 否则使用 host/port 配置
+      transporterConfig.host = smtpHost
+      if (smtpPort) {
+        transporterConfig.port = smtpPort
+      }
+      if (smtpSecure !== undefined) {
+        transporterConfig.secure = smtpSecure
+      }
+    } else {
+      // 默认使用 Gmail 配置（向后兼容）
+      transporterConfig.service = 'gmail'
+    }
+
+    const transporter = nodemailer.createTransport(transporterConfig)
 
     // 发送邮件
     let sentCount = 0
