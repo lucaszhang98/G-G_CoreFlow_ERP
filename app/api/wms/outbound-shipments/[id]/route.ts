@@ -257,9 +257,9 @@ export async function PUT(
       });
     } else {
       // 更新现有记录
-      console.log(`[OutboundShipments] 更新前 updateData:`, JSON.stringify(updateData, null, 2))
+      console.log(`[OutboundShipments] 更新前 updateData:`, JSON.stringify(serializeBigInt(updateData), null, 2))
       const finalUpdateData = await addSystemFields(updateData, user, false);
-      console.log(`[OutboundShipments] 更新前 finalUpdateData:`, JSON.stringify(finalUpdateData, null, 2))
+      console.log(`[OutboundShipments] 更新前 finalUpdateData:`, JSON.stringify(serializeBigInt(finalUpdateData), null, 2))
       
       // 使用事务同时更新 outbound_shipments 和 delivery_appointments
       const result = await prisma.$transaction(async (tx) => {
