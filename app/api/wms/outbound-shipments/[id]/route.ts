@@ -265,7 +265,7 @@ export async function PUT(
       const result = await prisma.$transaction(async (tx) => {
         // 更新 outbound_shipments
         // 使用类型断言，因为 Prisma Client 可能还没有识别到 trailer_code 字段
-        console.log(`[OutboundShipments] 执行数据库更新，data:`, JSON.stringify(finalUpdateData, null, 2))
+        console.log(`[OutboundShipments] 执行数据库更新，data:`, JSON.stringify(serializeBigInt(finalUpdateData), null, 2))
         const updated = await tx.outbound_shipments.update({
           where: { appointment_id: BigInt(appointmentId) },
           data: finalUpdateData as any,
