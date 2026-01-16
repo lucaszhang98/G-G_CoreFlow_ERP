@@ -67,12 +67,7 @@ export async function GET(
               select: {
                 outbound_shipment_id: true,
                 trailer_id: true,
-                trailers: {
-                  select: {
-                    trailer_id: true,
-                    trailer_code: true,
-                  },
-                },
+                trailer_code: true, // trailer_code 现在是直接存储在 outbound_shipments 表中的文本字段
               },
             },
           },
@@ -111,14 +106,29 @@ export async function GET(
     // 送货日期
     const deliveryDate = appointment?.confirmed_start || appointment?.requested_start || null
 
-    // 根据派送方式自动获取柜号
-    let containerNumber: string | null = null
-    if (appointment?.delivery_method === '直送') {
-      // 直送：从 orders.order_number 获取
-      containerNumber = order?.order_number || null
-    } else if (appointment?.delivery_method === '卡派' || appointment?.delivery_method === '自提') {
-      // 卡派/自提：从 outbound_shipments.trailers.trailer_code 获取
-      containerNumber = appointment?.outbound_shipments?.trailers?.trailer_code || null
+    // 优先从 delivery_management.container_number 获取柜号（如果已存储）
+    // 如果没有存储，则根据派送方式自动计算并更新
+    let containerNumber: string | null = serialized.container_number || null
+    
+    // 如果表中没有柜号，根据派送方式自动获取
+    if (!containerNumber) {
+      if (appointment?.delivery_method === '直送') {
+        // 直送：从 orders.order_number 获取
+        containerNumber = order?.order_number || null
+      } else if (appointment?.delivery_method === '卡派' || appointment?.delivery_method === '自提') {
+        // 卡派/自提：从 outbound_shipments.trailer_code 获取（现在是直接存储在表中的文本字段）
+        containerNumber = appointment?.outbound_shipments?.trailer_code || null
+      }
+      
+      // 如果计算出了柜号但表中没有，自动更新到数据库（异步，不阻塞响应）
+      if (containerNumber) {
+        prisma.delivery_management.update({
+          where: { delivery_id: BigInt(serialized.delivery_id) },
+          data: { container_number: containerNumber } as any,
+        }).catch(err => {
+          console.error(`[送仓管理] 自动更新柜号失败 (delivery_id: ${serialized.delivery_id}):`, err)
+        })
+      }
     }
 
     return NextResponse.json({
