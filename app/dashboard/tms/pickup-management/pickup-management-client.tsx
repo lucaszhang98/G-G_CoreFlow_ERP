@@ -10,7 +10,7 @@ import { EntityTable } from "@/components/crud/entity-table"
 import { pickupManagementConfig } from "@/lib/crud/configs/pickup-management"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Copy, FileText } from "lucide-react"
+import { RefreshCw, Copy, FileText, Mail } from "lucide-react"
 import type { FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
 import {
   DropdownMenu,
@@ -26,6 +26,7 @@ export function PickupManagementClient() {
   const [isInitializing, setIsInitializing] = React.useState(false)
   const [isSyncing, setIsSyncing] = React.useState(false)
   const [isSyncingAppointment, setIsSyncingAppointment] = React.useState(false)
+  const [isSendingEmails, setIsSendingEmails] = React.useState(false)
   const [hasInitialized, setHasInitialized] = React.useState(false)
   const [showInitButton, setShowInitButton] = React.useState(false)
   const [selectedRows, setSelectedRows] = React.useState<any[]>([])
@@ -240,6 +241,49 @@ export function PickupManagementClient() {
     }
   }, [])
 
+  // 批量发送邮件功能
+  const handleSendEmails = React.useCallback(async () => {
+    if (orderedSelectedRows.length === 0) {
+      toast.error('请先选择要发送邮件的记录')
+      return
+    }
+
+    setIsSendingEmails(true)
+    try {
+      const pickupIds = orderedSelectedRows.map((row: any) => String(row.pickup_id))
+      
+      const response = await fetch('/api/tms/pickup-management/send-emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pickup_ids: pickupIds,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || '发送邮件失败')
+      }
+
+      if (data.success) {
+        toast.success(`成功发送 ${data.sent_count} 封邮件`)
+        if (data.failed_count > 0) {
+          toast.warning(`${data.failed_count} 封邮件发送失败`)
+        }
+      } else {
+        toast.error(data.error || '发送邮件失败')
+      }
+    } catch (error: any) {
+      console.error('批量发送邮件失败:', error)
+      toast.error(error.message || '发送邮件失败，请稍后重试')
+    } finally {
+      setIsSendingEmails(false)
+    }
+  }, [orderedSelectedRows])
+
   // 复制柜号功能
   const handleCopyContainerNumbers = React.useCallback((format: 'line' | 'comma' | 'space') => {
     if (orderedSelectedRows.length === 0) {
@@ -349,6 +393,27 @@ export function PickupManagementClient() {
           汇总信息
         </Button>
 
+        {/* 发送邮件按钮 */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[100px] h-9"
+          onClick={handleSendEmails}
+          disabled={isSendingEmails}
+        >
+          {isSendingEmails ? (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              发送中...
+            </>
+          ) : (
+            <>
+              <Mail className="mr-2 h-4 w-4" />
+              发送邮件
+            </>
+          )}
+        </Button>
+
         {/* 复制柜号下拉菜单 */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -386,7 +451,7 @@ export function PickupManagementClient() {
         </DropdownMenu>
       </>
     )
-  }, [handleCopyContainerNumbers, orderedSelectedRows])
+  }, [handleCopyContainerNumbers, handleSendEmails, isSendingEmails, orderedSelectedRows])
 
   // 如果已经初始化或正在初始化，直接显示表格
   if (hasInitialized || !showInitButton) {
