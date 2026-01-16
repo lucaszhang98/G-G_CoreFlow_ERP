@@ -210,9 +210,17 @@ export async function GET(request: NextRequest) {
     }
 
     // 序列化并格式化数据
-    const serializedItems = appointments.map((appointment: any) => {
+    const serializedItems = appointments.map((appointment: any, index: number) => {
       const serializedAppointment = serializeBigInt(appointment);
       const shipment = serializedAppointment.outbound_shipments;
+      
+      // 调试：记录第一条记录的 loaded_by 相关数据
+      if (index === 0) {
+        console.log(`[OutboundShipments List] 第一条记录 - loaded_by:`, shipment?.loaded_by?.toString(), 
+          `loaded_by_name:`, shipment?.users_outbound_shipments_loaded_byTousers?.full_name,
+          `关联对象:`, shipment?.users_outbound_shipments_loaded_byTousers ? '存在' : '不存在',
+          `shipment:`, shipment ? '存在' : '不存在')
+      }
       
       // 计算总板数：从 appointment_detail_lines.estimated_pallets 累加
       let totalPallets = 0;
