@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
 import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 
 // 承运公司到邮箱的映射
 const CARRIER_EMAIL_MAP: Record<string, string> = {
