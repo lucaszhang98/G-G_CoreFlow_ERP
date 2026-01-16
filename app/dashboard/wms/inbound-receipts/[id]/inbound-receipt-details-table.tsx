@@ -78,7 +78,15 @@ export function InboundReceiptDetailsTable({
 }: InboundReceiptDetailsTableProps) {
   // 展开状态管理
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set())
-  // 编辑状态管理（按 detailId 管理）
+  // 批量编辑模式
+  const [isBatchEditMode, setIsBatchEditMode] = React.useState(false)
+  // 批量编辑值（按 detailId 管理所有行的编辑值）
+  const [batchEditValues, setBatchEditValues] = React.useState<Record<string, {
+    storage_location_code: string
+    pallet_count: number
+    notes: string
+  }>>({})
+  // 单行编辑状态管理（保留兼容性）
   const [editingDetailId, setEditingDetailId] = React.useState<string | null>(null)
   const [editingValues, setEditingValues] = React.useState<{
     storage_location_code: string
@@ -158,21 +166,182 @@ export function InboundReceiptDetailsTable({
     }
   }
 
-  // 开始编辑
+  // 初始化批量编辑值
+  const initializeBatchEditValues = () => {
+    const values: Record<string, {
+      storage_location_code: string
+      pallet_count: number
+      notes: string
+    }> = {}
+    
+    orderDetails.forEach(detail => {
+      const inventoryInfo = getInventoryInfo(detail.id)
+      const existingLots = lotsByDetailId.get(detail.id) || []
+      
+      let initialPalletCount = 0
+      let initialStorageLocation = inventoryInfo.storage_location_code || ''
+      let initialNotes = detail.notes || ''
+      
+      if (existingLots.length > 0) {
+        initialPalletCount = existingLots[0].pallet_count || 0
+        initialStorageLocation = existingLots[0].storage_location_code || ''
+      }
+      
+      values[detail.id] = {
+        storage_location_code: initialStorageLocation,
+        pallet_count: initialPalletCount,
+        notes: initialNotes,
+      }
+    })
+    
+    setBatchEditValues(values)
+  }
+
+  // 开启批量编辑模式
+  const handleStartBatchEdit = () => {
+    initializeBatchEditValues()
+    setIsBatchEditMode(true)
+    // 退出单行编辑模式
+    setEditingDetailId(null)
+    setEditingValues(null)
+  }
+
+  // 取消批量编辑
+  const handleCancelBatchEdit = () => {
+    setIsBatchEditMode(false)
+    setBatchEditValues({})
+  }
+
+  // 批量保存
+  const handleBatchSave = async () => {
+    try {
+      const savePromises: Promise<void>[] = []
+      
+      for (const detailId of Object.keys(batchEditValues)) {
+        const values = batchEditValues[detailId]
+        const orderDetail = orderDetails.find(d => d.id === detailId)
+        if (!orderDetail) continue
+        
+        // 创建保存promise
+        const savePromise = (async () => {
+          // 更新订单明细的备注
+          if (values.notes !== undefined) {
+            const notesResponse = await fetch(`/api/order-details/${detailId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                notes: values.notes || null,
+              }),
+            })
+            
+            if (!notesResponse.ok) {
+              const errorData = await notesResponse.json()
+              throw new Error(`更新备注失败: ${errorData.error || '未知错误'}`)
+            }
+          }
+          
+          // 处理库存批次
+          const existingLots = lotsByDetailId.get(detailId) || []
+          
+          if (existingLots.length > 0) {
+            if (existingLots.length === 1) {
+              // 只有一个记录，直接更新
+              const firstLot = existingLots[0]
+              const response = await fetch(`/api/wms/inventory-lots/${firstLot.inventory_lot_id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  storage_location_code: values.storage_location_code || null,
+                  pallet_count: values.pallet_count || 0,
+                }),
+              })
+              
+              if (!response.ok) {
+                const errorData = await response.json()
+                throw new Error(`更新失败: ${errorData.error || '未知错误'}`)
+              }
+            } else {
+              // 有多个记录，更新第一个，删除其他的
+              const firstLot = existingLots[0]
+              const response = await fetch(`/api/wms/inventory-lots/${firstLot.inventory_lot_id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  storage_location_code: values.storage_location_code || null,
+                  pallet_count: values.pallet_count || 0,
+                }),
+              })
+              
+              if (!response.ok) {
+                const errorData = await response.json()
+                throw new Error(`更新失败: ${errorData.error || '未知错误'}`)
+              }
+              
+              // 删除其他重复的记录
+              for (let i = 1; i < existingLots.length; i++) {
+                const lotToDelete = existingLots[i]
+                const deleteResponse = await fetch(`/api/wms/inventory-lots/${lotToDelete.inventory_lot_id}`, {
+                  method: 'DELETE',
+                })
+                if (!deleteResponse.ok) {
+                  console.warn(`删除重复库存批次 ${lotToDelete.inventory_lot_id} 失败`)
+                }
+              }
+            }
+          } else {
+            // 没有现有记录，创建新的
+            const response = await fetch('/api/wms/inventory-lots', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                order_id: orderDetail.order_id,
+                order_detail_id: detailId,
+                warehouse_id: warehouseId,
+                inbound_receipt_id: inboundReceiptId,
+                storage_location_code: values.storage_location_code || null,
+                pallet_count: values.pallet_count || 0,
+                remaining_pallet_count: 0,
+                unbooked_pallet_count: 0,
+              }),
+            })
+            
+            if (!response.ok) {
+              const errorData = await response.json()
+              throw new Error(`创建失败: ${errorData.error || '未知错误'}`)
+            }
+          }
+        })()
+        
+        savePromises.push(savePromise)
+      }
+      
+      // 等待所有保存完成
+      await Promise.all(savePromises)
+      
+      toast.success(`成功保存 ${Object.keys(batchEditValues).length} 条记录`)
+      setIsBatchEditMode(false)
+      setBatchEditValues({})
+      // 只刷新数据，不刷新整个页面
+      onRefresh()
+    } catch (error: any) {
+      console.error('批量保存失败:', error)
+      toast.error(error.message || '批量保存失败')
+    }
+  }
+
+  // 开始编辑（单行编辑模式，保留兼容性）
   const handleStartEdit = (detailId: string) => {
+    if (isBatchEditMode) return // 批量编辑模式下不允许单行编辑
+    
     const inventoryInfo = getInventoryInfo(detailId)
     const existingLots = lotsByDetailId.get(detailId) || []
     const orderDetail = orderDetails.find(d => d.id === detailId)
     
-    // 如果有多个记录，使用第一个记录的值（因为保存时会合并）
-    // 如果只有一个记录，使用它的值
-    // 如果没有记录，使用0
     let initialPalletCount = 0
     let initialStorageLocation = inventoryInfo.storage_location_code || ''
     let initialNotes = orderDetail?.notes || ''
     
     if (existingLots.length > 0) {
-      // 使用第一个记录的值，而不是累加值
       initialPalletCount = existingLots[0].pallet_count || 0
       initialStorageLocation = existingLots[0].storage_location_code || ''
     }
@@ -381,6 +550,44 @@ export function InboundReceiptDetailsTable({
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead colSpan={isBatchEditMode ? 12 : 13} className="h-12">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">仓点明细</span>
+                {isBatchEditMode ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleBatchSave}
+                      className="h-8"
+                    >
+                      <Check className="h-4 w-4 mr-1" />
+                      保存全部
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCancelBatchEdit}
+                      className="h-8"
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      取消
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleStartBatchEdit}
+                    className="h-8"
+                    title="批量编辑"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </TableHead>
+          </TableRow>
+          <TableRow>
             <TableHead className="w-12"></TableHead>
             <TableHead>性质</TableHead>
             <TableHead>送仓地点</TableHead>
@@ -393,7 +600,7 @@ export function InboundReceiptDetailsTable({
             <TableHead>送货进度</TableHead>
             <TableHead>FBA</TableHead>
             <TableHead>备注</TableHead>
-            <TableHead className="w-20">操作</TableHead>
+            {!isBatchEditMode && <TableHead className="w-20">操作</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -438,13 +645,36 @@ export function InboundReceiptDetailsTable({
                     {percentage !== null ? formatPercentage(percentage) : "-"}
                   </TableCell>
                   <TableCell>
-                    {editingDetailId === detail.id ? (
+                    {(isBatchEditMode || editingDetailId === detail.id) ? (
                       <Input
-                        value={editingValues?.storage_location_code || ''}
-                        onChange={(e) => setEditingValues(prev => prev ? {
-                          ...prev,
-                          storage_location_code: e.target.value
-                        } : null)}
+                        value={
+                          isBatchEditMode
+                            ? (batchEditValues[detail.id]?.storage_location_code || '')
+                            : (editingValues?.storage_location_code || '')
+                        }
+                        onChange={(e) => {
+                          if (isBatchEditMode) {
+                            setBatchEditValues(prev => {
+                              const currentValues = prev[detail.id] || {
+                                storage_location_code: '',
+                                pallet_count: 0,
+                                notes: '',
+                              }
+                              return {
+                                ...prev,
+                                [detail.id]: {
+                                  ...currentValues,
+                                  storage_location_code: e.target.value,
+                                }
+                              }
+                            })
+                          } else {
+                            setEditingValues(prev => prev ? {
+                              ...prev,
+                              storage_location_code: e.target.value
+                            } : null)
+                          }
+                        }}
                         placeholder="仓库位置"
                         className="w-full"
                       />
@@ -453,29 +683,65 @@ export function InboundReceiptDetailsTable({
                     )}
                   </TableCell>
                   <TableCell>
-                    {editingDetailId === detail.id ? (
+                    {(isBatchEditMode || editingDetailId === detail.id) ? (
                       <Input
                         type="number"
                         min="0"
                         step="1"
-                        value={editingValues?.pallet_count?.toString() ?? '0'}
+                        value={
+                          (isBatchEditMode
+                            ? (batchEditValues[detail.id]?.pallet_count?.toString() ?? '0')
+                            : (editingValues?.pallet_count?.toString() ?? '0'))
+                        }
                         onChange={(e) => {
                           const value = e.target.value
-                          // 处理空字符串或无效输入
                           if (value === '' || value === null || value === undefined) {
-                            setEditingValues(prev => prev ? {
-                              ...prev,
-                              pallet_count: 0
-                            } : null)
+                            if (isBatchEditMode) {
+                              setBatchEditValues(prev => {
+                                const currentValues = prev[detail.id] || {
+                                  storage_location_code: '',
+                                  pallet_count: 0,
+                                  notes: '',
+                                }
+                                return {
+                                  ...prev,
+                                  [detail.id]: {
+                                    ...currentValues,
+                                    pallet_count: 0,
+                                  }
+                                }
+                              })
+                            } else {
+                              setEditingValues(prev => prev ? {
+                                ...prev,
+                                pallet_count: 0
+                              } : null)
+                            }
                             return
                           }
-                          // 解析为整数
                           const numValue = parseInt(value, 10)
                           if (!isNaN(numValue) && numValue >= 0) {
-                            setEditingValues(prev => prev ? {
-                              ...prev,
-                              pallet_count: numValue
-                            } : null)
+                            if (isBatchEditMode) {
+                              setBatchEditValues(prev => {
+                                const currentValues = prev[detail.id] || {
+                                  storage_location_code: '',
+                                  pallet_count: 0,
+                                  notes: '',
+                                }
+                                return {
+                                  ...prev,
+                                  [detail.id]: {
+                                    ...currentValues,
+                                    pallet_count: numValue,
+                                  }
+                                }
+                              })
+                            } else {
+                              setEditingValues(prev => prev ? {
+                                ...prev,
+                                pallet_count: numValue
+                              } : null)
+                            }
                           }
                         }}
                         placeholder="实际板数"
@@ -495,13 +761,36 @@ export function InboundReceiptDetailsTable({
                     {inventoryInfo.unload_transfer_notes || "-"}
                   </TableCell>
                   <TableCell className="max-w-xs">
-                    {editingDetailId === detail.id ? (
+                    {(isBatchEditMode || editingDetailId === detail.id) ? (
                       <Input
-                        value={editingValues?.notes || ''}
-                        onChange={(e) => setEditingValues(prev => prev ? {
-                          ...prev,
-                          notes: e.target.value
-                        } : null)}
+                        value={
+                          isBatchEditMode
+                            ? (batchEditValues[detail.id]?.notes || '')
+                            : (editingValues?.notes || '')
+                        }
+                        onChange={(e) => {
+                          if (isBatchEditMode) {
+                            setBatchEditValues(prev => {
+                              const currentValues = prev[detail.id] || {
+                                storage_location_code: '',
+                                pallet_count: 0,
+                                notes: '',
+                              }
+                              return {
+                                ...prev,
+                                [detail.id]: {
+                                  ...currentValues,
+                                  notes: e.target.value,
+                                }
+                              }
+                            })
+                          } else {
+                            setEditingValues(prev => prev ? {
+                              ...prev,
+                              notes: e.target.value
+                            } : null)
+                          }
+                        }}
                         placeholder="备注"
                         className="w-full"
                       />
@@ -509,37 +798,39 @@ export function InboundReceiptDetailsTable({
                       detail.notes || "-"
                     )}
                   </TableCell>
-                  <TableCell>
-                    {editingDetailId === detail.id ? (
-                      <div className="flex items-center gap-1">
+                  {!isBatchEditMode && (
+                    <TableCell>
+                      {editingDetailId === detail.id ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleSaveEdit(detail.id)}
+                            title="保存"
+                          >
+                            <Check className="h-4 w-4 text-green-600" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleCancelEdit}
+                            title="取消"
+                          >
+                            <X className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
+                      ) : (
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleSaveEdit(detail.id)}
-                          title="保存"
+                          onClick={() => handleStartEdit(detail.id)}
+                          title="编辑"
                         >
-                          <Check className="h-4 w-4 text-green-600" />
+                          <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={handleCancelEdit}
-                          title="取消"
-                        >
-                          <X className="h-4 w-4 text-red-600" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleStartEdit(detail.id)}
-                        title="编辑"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </TableCell>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
 
                 {/* 展开行：送仓预约 */}
