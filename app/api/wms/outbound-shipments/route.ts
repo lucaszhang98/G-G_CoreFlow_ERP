@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
                 users_outbound_shipments_loaded_byTousers: {
                   select: {
                     id: true,
-                    full_name: true,
+                    username: true,
                   },
                 },
               } as any,
@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
       if (index === 0) {
         const serializedShipment = shipment ? serializeBigInt(shipment) : null
         console.log(`[OutboundShipments List] 第一条记录 - loaded_by:`, serializedShipment?.loaded_by, 
-          `loaded_by_name:`, serializedShipment?.users_outbound_shipments_loaded_byTousers?.full_name,
+          `loaded_by_name:`, serializedShipment?.users_outbound_shipments_loaded_byTousers?.username,
           `关联对象:`, serializedShipment?.users_outbound_shipments_loaded_byTousers ? JSON.stringify(serializedShipment.users_outbound_shipments_loaded_byTousers) : '不存在',
           `shipment:`, serializedShipment ? '存在' : '不存在')
       }
@@ -252,7 +252,7 @@ export async function GET(request: NextRequest) {
         trailer_id: shipment?.trailer_id?.toString() || null,
         trailer_code: shipment?.trailer_code || null,
         loaded_by: shipment?.loaded_by?.toString() || null,
-        loaded_by_name: shipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
+        loaded_by_name: shipment?.users_outbound_shipments_loaded_byTousers?.username || null,
         notes: shipment?.notes || null,
         
         // 关联对象（用于 relation 类型字段的显示，已序列化）

@@ -59,7 +59,7 @@ export async function GET(
             users_outbound_shipments_loaded_byTousers: {
               select: {
                 id: true,
-                full_name: true,
+                username: true,
               },
             },
           },
@@ -95,7 +95,7 @@ export async function GET(
 
     // 调试：记录 loaded_by 相关数据
     console.log(`[OutboundShipments GET] loaded_by:`, outboundShipment?.loaded_by?.toString(), 
-      `loaded_by_name:`, outboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name,
+      `loaded_by_name:`, outboundShipment?.users_outbound_shipments_loaded_byTousers?.username,
       `关联对象:`, outboundShipment?.users_outbound_shipments_loaded_byTousers ? '存在' : '不存在')
 
     return NextResponse.json({
@@ -116,7 +116,7 @@ export async function GET(
       trailer_id: outboundShipment?.trailer_id ? outboundShipment.trailer_id.toString() : null,
       trailer_code: outboundShipment?.trailer_code || null, // 直接使用 outbound_shipments.trailer_code
       loaded_by: outboundShipment?.loaded_by ? outboundShipment.loaded_by.toString() : null,
-      loaded_by_name: outboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
+      loaded_by_name: outboundShipment?.users_outbound_shipments_loaded_byTousers?.username || null,
       notes: outboundShipment?.notes || null,
       
       // 关联对象（用于 relation 类型字段的显示）
@@ -254,7 +254,6 @@ export async function PUT(
           users_outbound_shipments_loaded_byTousers: {
             select: {
               id: true,
-              full_name: true,
               username: true,
             },
           },
@@ -278,13 +277,12 @@ export async function PUT(
             users_outbound_shipments_loaded_byTousers: {
               select: {
                 id: true,
-                full_name: true,
                 username: true,
               },
             },
           },
         });
-        console.log(`[OutboundShipments] 数据库更新后，loaded_by:`, updated.loaded_by?.toString(), `loaded_by_name:`, updated.users_outbound_shipments_loaded_byTousers?.full_name)
+        console.log(`[OutboundShipments] 数据库更新后，loaded_by:`, updated.loaded_by?.toString(), `loaded_by_name:`, updated.users_outbound_shipments_loaded_byTousers?.username)
 
         // 更新 delivery_appointments.rejected（如果有）
         if (Object.keys(appointmentUpdateData).length > 0) {
@@ -376,7 +374,6 @@ export async function PUT(
         users_outbound_shipments_loaded_byTousers: {
           select: {
             id: true,
-            full_name: true,
             username: true,
           },
         },
@@ -384,7 +381,7 @@ export async function PUT(
     });
     // 序列化 BigInt 字段
     const finalOutboundShipment = finalOutboundShipmentRaw ? serializeBigInt(finalOutboundShipmentRaw) : null;
-    console.log(`[OutboundShipments] 最终查询结果 - loaded_by:`, finalOutboundShipment?.loaded_by, `loaded_by_name:`, finalOutboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name)
+    console.log(`[OutboundShipments] 最终查询结果 - loaded_by:`, finalOutboundShipment?.loaded_by, `loaded_by_name:`, finalOutboundShipment?.users_outbound_shipments_loaded_byTousers?.username)
 
     if (!finalOutboundShipment) {
       return NextResponse.json(
@@ -444,7 +441,7 @@ export async function PUT(
         trailer_id: finalOutboundShipment?.trailer_id?.toString() || null,
         trailer_code: finalOutboundShipment?.trailer_code || null,
         loaded_by: finalOutboundShipment?.loaded_by?.toString() || null,
-        loaded_by_name: finalOutboundShipment?.users_outbound_shipments_loaded_byTousers?.full_name || null,
+        loaded_by_name: finalOutboundShipment?.users_outbound_shipments_loaded_byTousers?.username || null,
         notes: finalOutboundShipment?.notes || null,
         
         // 关联对象（用于 relation 类型字段的显示，已序列化）
