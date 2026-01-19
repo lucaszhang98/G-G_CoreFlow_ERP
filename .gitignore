@@ -33,6 +33,7 @@ yarn-error.log*
 # documentation (auto-generated)
 *.md
 !README.md
+!scripts/README-EXE.md
 docs/
 schemaspy/
 
@@ -54,3 +55,11 @@ next-env.d.ts
 # build logs
 build-check.log
 type-errors.log
+
+# Excel transfer tool
+*.exe
+dist/
+scripts/excel-transfer-standalone.js
+scripts/data/
+scripts/output/
+scripts/templates/*.xlsx

@@ -1,0 +1,16 @@
+{
+  "pkg": {
+    "scripts": [
+      "scripts/excel-transfer-standalone.ts"
+    ],
+    "assets": [
+      "scripts/data",
+      "scripts/templates",
+      "scripts/output"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ],
+    "outputPath": "dist"
+  }
+}

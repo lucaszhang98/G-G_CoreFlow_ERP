@@ -13,7 +13,9 @@
     "postinstall": "prisma generate",
     "prebuild": "prisma generate",
     "create-user": "tsx scripts/create-test-user.ts",
-    "schemaspy": "node scripts/generate_schemaspy.js"
+    "schemaspy": "node scripts/generate_schemaspy.js",
+    "build:exe": "node scripts/build-exe.js",
+    "package:exe": "pkg scripts/excel-transfer-standalone.ts --targets node18-win-x64 --output-path dist"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
@@ -36,7 +38,6 @@
     "@tailwindcss/postcss": "^4",
     "@tanstack/react-table": "^8.21.3",
     "@types/jsbarcode": "^3.11.4",
-    "@types/node": "^20.19.25",
     "@types/nodemailer": "^7.0.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -70,8 +71,11 @@
     "@fontsource/noto-sans-sc": "^5.2.8",
     "@mermaid-js/mermaid-cli": "^11.12.0",
     "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^25.0.9",
+    "esbuild": "^0.27.2",
     "eslint": "^9",
     "eslint-config-next": "^16.0.7",
+    "pkg": "^5.8.1",
     "prisma-erd-generator": "^2.1.0",
     "tsx": "^4.20.6"
   }
