@@ -148,6 +148,8 @@ export async function GET(
         ready_date: orderData?.ready_date || null,
         lfd_date: orderData?.lfd_date || null,
         pickup_date: orderData?.pickup_date || null,
+        carrier: orderData?.carriers || null, // 承运公司对象
+        carrier_id: orderData?.carrier_id ? String(orderData.carrier_id) : null, // 承运公司ID
         received_by: serialized.received_by || null, // 入库人员ID
         unloaded_by: serialized.unloaded_by || null, // 拆柜人员ID
         warehouse_name: serialized.warehouses?.name || null,
