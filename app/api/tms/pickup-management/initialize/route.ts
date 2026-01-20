@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       try {
         const pickupData: any = {
           order_id: order.order_id,
-          status: 'planned', // 默认状态：计划中
+          // status 不设置默认值，保持为空
         }
 
         // 添加系统字段

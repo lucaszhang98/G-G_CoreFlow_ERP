@@ -372,7 +372,7 @@ export async function POST(request: NextRequest) {
           data: {
             appointment_id: appointmentId,
             container_number: containerNumber,
-            status: 'planned',
+            // status 不设置默认值，保持为空
             created_by: user?.id ? BigInt(user.id) : null,
             updated_by: user?.id ? BigInt(user.id) : null,
           } as any,
