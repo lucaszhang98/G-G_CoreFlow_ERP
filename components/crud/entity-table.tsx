@@ -1751,7 +1751,14 @@ export function EntityTable<T = any>({
             // 对于 unloaded_by 和 received_by，直接使用原字段名
             let idKey: string
             if (fieldConfig.relationField) {
+              // 如果配置了 relationField（如 driver_name 的 relationField 是 driver_id），使用它
               idKey = fieldConfig.relationField
+              const idValue = (row.original as any)[idKey]
+              if (idValue !== undefined && idValue !== null) {
+                initialValue = String(idValue)
+              } else {
+                initialValue = null
+              }
             } else if (fieldKey === 'unloaded_by') {
               // unloaded_by 在数据库中存储的是 BigInt ID，API 返回的也是 ID
               idKey = 'unloaded_by'
