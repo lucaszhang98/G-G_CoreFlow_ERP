@@ -118,6 +118,9 @@ export async function GET(request: NextRequest) {
     if (sort === 'container_number') {
       // container_number 实际对应 order_number
       orderBy = { orders: { order_number: order } };
+    } else if (sort === 'carrier') {
+      // 承运公司排序
+      orderBy = { orders: { carriers: { name: order } } };
     } else if (mainTableFields.includes(sort)) {
       // 主表字段直接排序
       orderBy = { [sort]: order };
@@ -149,11 +152,19 @@ export async function GET(request: NextRequest) {
             ready_date: true,
             lfd_date: true,
             pickup_date: true,
+            carrier_id: true,
             customers: {
               select: {
                 id: true,
                 name: true,
                 code: true,
+              },
+            },
+            carriers: {
+              select: {
+                carrier_id: true,
+                name: true,
+                carrier_code: true,
               },
             },
           },
@@ -238,11 +249,19 @@ export async function GET(request: NextRequest) {
                 ready_date: true,
                 lfd_date: true,
                 pickup_date: true,
+                carrier_id: true,
                 customers: {
                   select: {
                     id: true,
                     name: true,
                     code: true,
+                  },
+                },
+                carriers: {
+                  select: {
+                    carrier_id: true,
+                    name: true,
+                    carrier_code: true,
                   },
                 },
               },
@@ -336,6 +355,8 @@ export async function GET(request: NextRequest) {
           ready_date: order?.ready_date || null,
           lfd_date: order?.lfd_date || null,
           pickup_date: order?.pickup_date || null,
+          carrier: order?.carriers || null, // 承运公司对象
+          carrier_id: order?.carrier_id ? String(order.carrier_id) : null, // 承运公司ID
           unloaded_by: serialized.unloaded_by || null, // 拆柜人员ID
           received_by: serialized.received_by || null, // 入库人员ID
           // 保留关联数据，供前端显示用户名

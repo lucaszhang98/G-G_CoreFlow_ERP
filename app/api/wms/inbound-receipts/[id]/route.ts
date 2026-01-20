@@ -32,11 +32,19 @@ export async function GET(
             ready_date: true,
             lfd_date: true,
             pickup_date: true,
+            carrier_id: true,
             customers: {
               select: {
                 id: true,
                 name: true,
                 code: true,
+              },
+            },
+            carriers: {
+              select: {
+                carrier_id: true,
+                name: true,
+                carrier_code: true,
               },
             },
             order_detail: {

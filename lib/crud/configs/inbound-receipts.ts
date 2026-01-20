@@ -64,6 +64,24 @@ export const inboundReceiptConfig: EntityConfig = {
       type: 'date',
       sortable: true,
     },
+    carrier: {
+      key: 'carrier',
+      label: '承运公司',
+      type: 'relation',
+      relation: {
+        model: 'carriers',
+        displayField: 'name',
+        valueField: 'carrier_id',
+      },
+      relationField: 'carrier_id', // 指定数据库字段名
+      sortable: true,
+    },
+    carrier_id: {
+      key: 'carrier_id',
+      label: '承运公司ID',
+      type: 'text',
+      hidden: true,
+    },
     status: {
       key: 'status',
       label: '状态',
@@ -152,6 +170,7 @@ export const inboundReceiptConfig: EntityConfig = {
       'ready_date',
       'lfd_date',
       'pickup_date',
+      'carrier',
       'status',
       'planned_unload_at',
       'unloaded_by',
@@ -292,11 +311,19 @@ export const inboundReceiptConfig: EntityConfig = {
           ready_date: true,
           lfd_date: true,
           pickup_date: true,
+          carrier_id: true,
           customers: {
             select: {
               id: true,
               name: true,
               code: true,
+            },
+          },
+          carriers: {
+            select: {
+              carrier_id: true,
+              name: true,
+              carrier_code: true,
             },
           },
         },
