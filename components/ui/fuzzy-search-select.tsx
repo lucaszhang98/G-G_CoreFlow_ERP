@@ -296,8 +296,7 @@ export function FuzzySearchSelect({
           </span>
           <div className="flex items-center gap-1 ml-2 shrink-0">
             {value && (
-              <button
-                type="button"
+              <span
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
@@ -305,14 +304,16 @@ export function FuzzySearchSelect({
                   setSelectedOptionCache(null)
                 }}
                 className={cn(
-                  "inline-flex items-center justify-center w-4 h-4 rounded-full",
+                  "inline-flex items-center justify-center w-4 h-4 rounded-full cursor-pointer",
                   "text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50",
                   "transition-colors"
                 )}
                 title="清空"
+                role="button"
+                tabIndex={-1}
               >
                 <X className="h-3 w-3" />
-              </button>
+              </span>
             )}
             <ChevronsUpDown className={cn(
               "h-4 w-4 shrink-0 transition-all duration-200 text-muted-foreground/60",
