@@ -503,8 +503,14 @@ export function InlineEditCell({
             <Select
               value={internalValue || ''}
               onValueChange={(val) => {
-                handleInternalChange(val || null)
-                onChange(val || null) // 立即同步到外部
+                // 处理清空选项
+                if (val === '__clear__') {
+                  handleInternalChange(null)
+                  onChange(null)
+                } else {
+                  handleInternalChange(val || null)
+                  onChange(val || null) // 立即同步到外部
+                }
               }}
               disabled={loadingOptions}
             >
@@ -513,11 +519,11 @@ export function InlineEditCell({
               </SelectTrigger>
               <SelectContent>
                 {selectOptions.length === 0 && !loadingOptions ? (
-                  <SelectItem value="" disabled>暂无选项</SelectItem>
+                  <SelectItem value="__disabled__" disabled>暂无选项</SelectItem>
                 ) : (
                   <>
                     {internalValue && (
-                      <SelectItem value="" key="__clear__">
+                      <SelectItem value="__clear__" key="__clear__">
                         <span className="text-muted-foreground italic">（清空）</span>
                       </SelectItem>
                     )}
