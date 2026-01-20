@@ -176,6 +176,8 @@ export function InboundReceiptTable() {
     received_by: loadReceivedByOptions,
   }), [loadUnloadedByOptions, loadReceivedByOptions])
 
+  const [isFixingDates, setIsFixingDates] = React.useState(false)
+
   // 同步缺失的入库管理记录
   const handleSyncMissingRecords = React.useCallback(async () => {
     setIsSyncing(true)
@@ -214,19 +216,73 @@ export function InboundReceiptTable() {
     }
   }, [])
 
+  // 批量修复拆柜日期
+  const handleFixPlannedUnloadDates = React.useCallback(async () => {
+    setIsFixingDates(true)
+    try {
+      const response = await fetch('/api/wms/inbound-receipts/fix-planned-unload-dates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '修复失败')
+      }
+
+      const result = await response.json()
+      
+      if (result.success) {
+        const fixed = result.fixed || 0
+        const failed = result.failed || 0
+        if (fixed > 0) {
+          toast.success(`成功修复 ${fixed} 条记录的拆柜日期${failed > 0 ? `，${failed} 条无法修复` : ''}`)
+          // 刷新表格
+          setRefreshKey(prev => prev + 1)
+        } else {
+          toast.info(result.message || '没有需要修复的记录')
+        }
+        if (result.errors && result.errors.length > 0) {
+          console.warn('修复失败的记录:', result.errors)
+        }
+      } else {
+        toast.error(result.message || '修复失败')
+      }
+    } catch (error: any) {
+      console.error('修复失败:', error)
+      toast.error(error.message || '修复失败，请重试')
+    } finally {
+      setIsFixingDates(false)
+    }
+  }, [])
+
   // 自定义工具栏按钮
   const customToolbarButtons = React.useMemo(() => (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={handleSyncMissingRecords}
-      disabled={isSyncing}
-      className="gap-2"
-    >
-      <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-      {isSyncing ? '同步中...' : '同步缺失记录'}
-    </Button>
-  ), [handleSyncMissingRecords, isSyncing])
+    <div className="flex gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleSyncMissingRecords}
+        disabled={isSyncing || isFixingDates}
+        className="gap-2"
+      >
+        <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+        {isSyncing ? '同步中...' : '同步缺失记录'}
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleFixPlannedUnloadDates}
+        disabled={isSyncing || isFixingDates}
+        className="gap-2"
+      >
+        <RefreshCw className={`h-4 w-4 ${isFixingDates ? 'animate-spin' : ''}`} />
+        {isFixingDates ? '修复中...' : '修复拆柜日期'}
+      </Button>
+    </div>
+  ), [handleSyncMissingRecords, handleFixPlannedUnloadDates, isSyncing, isFixingDates])
 
   return (
     <EntityTable 
