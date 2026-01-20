@@ -20,8 +20,9 @@ import { formatDateDisplay, formatDateTimeDisplay } from "@/lib/utils/date-forma
 import { cn } from "@/lib/utils"
 import { LocationSelect } from "@/components/ui/location-select"
 import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
-import { ChevronDown, Check } from "lucide-react"
+import { ChevronDown, Check, X } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Button } from "@/components/ui/button"
 
 interface InlineEditCellProps {
   fieldKey: string
@@ -157,14 +158,31 @@ export function InlineEditCell({
           : internalValue)
         : ''
       return (
-        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell flex items-center gap-1">
           <Input
             type="date"
             value={dateValue}
             onChange={(e) => handleInternalChange(e.target.value || null)}
             onBlur={handleBlur}
-            className={cn("h-9 text-sm min-w-[140px] w-full bg-white", className)}
+            className={cn("h-9 text-sm min-w-[140px] flex-1 bg-white", className)}
           />
+          {internalValue && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0 text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                handleInternalChange(null)
+                onChange(null)
+              }}
+              title="清空日期"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       )
 
@@ -343,6 +361,11 @@ export function InlineEditCell({
               <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
             </SelectTrigger>
             <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+              {internalValue && (
+                <SelectItem value="" key="__clear__">
+                  <span className="text-muted-foreground italic">（清空）</span>
+                </SelectItem>
+              )}
               {selectOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
@@ -486,11 +509,18 @@ export function InlineEditCell({
                 {selectOptions.length === 0 && !loadingOptions ? (
                   <SelectItem value="" disabled>暂无选项</SelectItem>
                 ) : (
-                  selectOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))
+                  <>
+                    {internalValue && (
+                      <SelectItem value="" key="__clear__">
+                        <span className="text-muted-foreground italic">（清空）</span>
+                      </SelectItem>
+                    )}
+                    {selectOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </>
                 )}
               </SelectContent>
             </Select>
