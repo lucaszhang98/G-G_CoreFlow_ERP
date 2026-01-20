@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
     const authResult = await checkAuth()
     if (authResult.error) return authResult.error
 
-    // 查找所有拆柜日期为空的入库管理记录
+    // 查找所有拆柜日期为空的入库管理记录（只修复空值，不覆盖已有值）
     const inboundReceipts = await prisma.inbound_receipt.findMany({
       where: {
-        planned_unload_at: null,
+        planned_unload_at: null, // 只修复空值，不会覆盖已有值
       },
       include: {
         orders: {

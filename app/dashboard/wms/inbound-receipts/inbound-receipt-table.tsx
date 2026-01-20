@@ -216,8 +216,22 @@ export function InboundReceiptTable() {
     }
   }, [])
 
-  // 批量修复拆柜日期
+  // 批量修复拆柜日期（只修复空值，不覆盖已有值）
   const handleFixPlannedUnloadDates = React.useCallback(async () => {
+    // 确认对话框
+    const confirmed = window.confirm(
+      '批量修复拆柜日期\n\n' +
+      '此操作将：\n' +
+      '• 只修复拆柜日期为空的记录\n' +
+      '• 不会覆盖已有拆柜日期的记录\n' +
+      '• 根据订单的提柜日期和到港日期自动计算\n\n' +
+      '确定要继续吗？'
+    )
+    
+    if (!confirmed) {
+      return
+    }
+
     setIsFixingDates(true)
     try {
       const response = await fetch('/api/wms/inbound-receipts/fix-planned-unload-dates', {
@@ -238,11 +252,11 @@ export function InboundReceiptTable() {
         const fixed = result.fixed || 0
         const failed = result.failed || 0
         if (fixed > 0) {
-          toast.success(`成功修复 ${fixed} 条记录的拆柜日期${failed > 0 ? `，${failed} 条无法修复` : ''}`)
+          toast.success(`成功修复 ${fixed} 条空记录的拆柜日期${failed > 0 ? `，${failed} 条无法修复` : ''}`)
           // 刷新表格
           setRefreshKey(prev => prev + 1)
         } else {
-          toast.info(result.message || '没有需要修复的记录')
+          toast.info(result.message || '没有需要修复的记录（所有记录都有拆柜日期）')
         }
         if (result.errors && result.errors.length > 0) {
           console.warn('修复失败的记录:', result.errors)
