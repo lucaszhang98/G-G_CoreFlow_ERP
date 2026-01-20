@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth, serializeBigInt, addSystemFields } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
+import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 
 // GET - 获取单个提柜管理记录
 export async function GET(
