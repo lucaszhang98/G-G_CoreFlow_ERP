@@ -351,9 +351,15 @@ export function InlineEditCell({
           <Select
             value={internalValue || ''}
             onValueChange={(val) => {
-              handleInternalChange(val || null)
-              // Select 组件在值改变时立即同步到外部
-              onChange(val || null)
+              // 处理清空选项
+              if (val === '__clear__') {
+                handleInternalChange(null)
+                onChange(null)
+              } else {
+                handleInternalChange(val || null)
+                // Select 组件在值改变时立即同步到外部
+                onChange(val || null)
+              }
             }}
             disabled={loadingOptions}
           >
@@ -362,7 +368,7 @@ export function InlineEditCell({
             </SelectTrigger>
             <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
               {internalValue && (
-                <SelectItem value="" key="__clear__">
+                <SelectItem value="__clear__" key="__clear__">
                   <span className="text-muted-foreground italic">（清空）</span>
                 </SelectItem>
               )}
