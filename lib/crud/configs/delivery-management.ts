@@ -107,9 +107,10 @@ export const deliveryManagementConfig: EntityConfig = {
       type: 'badge',
       sortable: true,
       options: [
-        { label: '计划中', value: 'planned' },
-        { label: '运输中', value: 'in_transit' },
-        { label: '已送达', value: 'delivered' },
+        { label: '跳约', value: 'skipped' },
+        { label: '迟到', value: 'late' },
+        { label: '取消', value: 'cancelled' },
+        { label: '完成', value: 'completed' },
       ],
     },
     notes: {
