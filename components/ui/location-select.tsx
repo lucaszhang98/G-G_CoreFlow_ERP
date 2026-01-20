@@ -6,7 +6,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronsUpDown, Search, MapPin } from "lucide-react"
+import { Check, ChevronsUpDown, Search, MapPin, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -240,10 +240,31 @@ export function LocationSelect({
               {displayValue}
             </span>
           </span>
-          <ChevronsUpDown className={cn(
-            "ml-2 h-4 w-4 shrink-0 transition-all duration-200 flex-shrink-0 text-muted-foreground/60",
-            open && "rotate-180"
-          )} />
+          <div className="flex items-center gap-1 ml-2 shrink-0">
+            {value && (
+              <span
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onChange?.(null)
+                }}
+                className={cn(
+                  "inline-flex items-center justify-center w-4 h-4 rounded-full cursor-pointer",
+                  "text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50",
+                  "transition-colors"
+                )}
+                title="清空"
+                role="button"
+                tabIndex={-1}
+              >
+                <X className="h-3 w-3" />
+              </span>
+            )}
+            <ChevronsUpDown className={cn(
+              "h-4 w-4 shrink-0 transition-all duration-200 text-muted-foreground/60",
+              open && "rotate-180"
+            )} />
+          </div>
         </Button>
       </PopoverTrigger>
       <PopoverContent 

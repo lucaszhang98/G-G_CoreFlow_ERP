@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { SelectWithClear } from "@/components/ui/select-with-clear"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
@@ -100,10 +101,11 @@ function RelationSelectField({
         {fieldConfig.label}
         {fieldConfig.required && <span className="text-red-500">*</span>}
       </Label>
-      <Select
-        value={fieldValue || ''}
+      <SelectWithClear
+        value={fieldValue || null}
         onValueChange={(value) => setValue(fieldKey, value)}
         disabled={loadingOptions}
+        allowClear={!fieldConfig.required} // 必填字段不允许清空
       >
         <SelectTrigger id={fieldKey}>
           <SelectValue placeholder={loadingOptions ? '加载中...' : (fieldConfig.placeholder || `请选择${fieldConfig.label}`)} />
@@ -115,7 +117,7 @@ function RelationSelectField({
             </SelectItem>
           ))}
         </SelectContent>
-      </Select>
+      </SelectWithClear>
       {errors[fieldKey] && (
         <p className="text-sm text-red-500">{(errors[fieldKey] as any)?.message}</p>
       )}
@@ -411,9 +413,10 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
               {fieldConfig.label}
               {fieldConfig.required && <span className="text-red-500">*</span>}
             </Label>
-            <Select
-              value={fieldValue || ''}
+            <SelectWithClear
+              value={fieldValue || null}
               onValueChange={(value) => setValue(fieldKey, value)}
+              allowClear={!fieldConfig.required} // 必填字段不允许清空
             >
               <SelectTrigger id={fieldKey}>
                 <SelectValue placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`} />
@@ -425,7 +428,7 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
                   </SelectItem>
                 ))}
               </SelectContent>
-            </Select>
+            </SelectWithClear>
             {errors[fieldKey] && (
               <p className="text-sm text-red-500">{(errors[fieldKey] as any)?.message}</p>
             )}
