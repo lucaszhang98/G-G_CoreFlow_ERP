@@ -1373,6 +1373,8 @@ function AddDetailDialog({
     total_pallets_at_time?: number | null // 总板数快照
     matches_appointment_destination?: boolean // 送仓地点是否与预约目的地一致
     appointment_destination_location_code?: string | null // 预约目的地编码
+    notes?: string | null // 备注字段
+    po?: string | null // PO字段
   }>>([])
   const [selectedDetailId, setSelectedDetailId] = React.useState<string | null>(null)
   const [selectedDetail, setSelectedDetail] = React.useState<any>(null)
@@ -1853,6 +1855,7 @@ function AddDetailDialog({
                           <th className="text-left p-3 font-semibold text-sm text-foreground">仓点类型</th>
                           <th className="text-left p-3 font-semibold text-sm text-foreground">总方数</th>
                           <th className="text-left p-3 font-semibold text-sm text-foreground">总板数</th>
+                          <th className="text-left p-3 font-semibold text-sm text-foreground">备注</th>
                           <th className="text-left p-3 font-semibold text-sm w-24">操作</th>
                         </tr>
                       </thead>
@@ -1907,6 +1910,9 @@ function AddDetailDialog({
                                     <Badge variant="secondary" className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">库存</Badge>
                                   )}
                                 </div>
+                              </td>
+                              <td className="p-3 text-sm text-muted-foreground">
+                                {detail.notes || '-'}
                               </td>
                               <td className="p-3 text-sm">
                                 <Button
