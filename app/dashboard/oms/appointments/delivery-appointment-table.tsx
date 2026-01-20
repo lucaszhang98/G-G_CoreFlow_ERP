@@ -264,6 +264,7 @@ export function DeliveryAppointmentTable() {
       // totalPallets: false, // 总板数不需要显示
       estimatedPallets: true,
       po: true,
+      notes: true, // 显示备注字段
     },
     getLocationName: (detail, context) => {
       return detail.order_detail_item_order_detail_item_detail_idToorder_detail?.[0]?.detail_name 
