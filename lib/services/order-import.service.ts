@@ -14,6 +14,7 @@ import {
   orderImportRowSchema,
   OrderImportRow,
 } from '@/lib/validations/order-import'
+import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 
 /**
  * 主数据（用于验证和关联）
@@ -301,12 +302,18 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
 
         // 如果 operation_mode = 'unload'（拆柜），自动创建入库管理记录
         if (firstRow.operation_mode === 'unload' && defaultWarehouse) {
+          // 计算拆柜日期（根据订单的 pickup_date 和 eta_date）
+          const calculatedUnloadDate = calculateUnloadDate(
+            order.pickup_date,
+            order.eta_date
+          )
+          
           await tx.inbound_receipt.create({
             data: {
               order_id: order.order_id,
               warehouse_id: defaultWarehouse.warehouse_id,
               status: 'pending',
-              planned_unload_at: null,
+              planned_unload_at: calculatedUnloadDate,
               unload_method_code: null,
               created_by: userId,
               updated_by: userId,

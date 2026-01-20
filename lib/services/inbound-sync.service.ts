@@ -7,6 +7,7 @@
  */
 
 import prisma from '@/lib/prisma'
+import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 
 export interface InboundSyncResult {
   success: boolean
@@ -79,13 +80,27 @@ export async function syncInboundReceiptForOrder(
       }
     }
 
-    // 5. 创建 inbound_receipt
+    // 5. 获取订单的 pickup_date 和 eta_date 用于计算拆柜日期
+    const orderForCalculation = await prisma.orders.findUnique({
+      where: { order_id: orderId },
+      select: {
+        pickup_date: true,
+        eta_date: true,
+      },
+    })
+
+    // 6. 计算拆柜日期
+    const calculatedUnloadDate = orderForCalculation
+      ? calculateUnloadDate(orderForCalculation.pickup_date, orderForCalculation.eta_date)
+      : null
+
+    // 7. 创建 inbound_receipt
     const inboundReceipt = await prisma.inbound_receipt.create({
       data: {
         order_id: orderId,
         warehouse_id: defaultWarehouse.warehouse_id,
         status: 'pending',
-        planned_unload_at: null,
+        planned_unload_at: calculatedUnloadDate,
         unload_method_code: null,
         created_by: userId || undefined,
         updated_by: userId || undefined,
