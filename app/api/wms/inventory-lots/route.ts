@@ -103,8 +103,14 @@ export async function GET(request: NextRequest) {
     const orderBy: any = {};
     if (sort === 'container_number') {
       orderBy.orders = { order_number: order };
-    } else if (sort === 'customer_name' || sort === 'planned_unload_at' || sort === 'delivery_location' || sort === 'delivery_nature') {
-      orderBy.created_at = 'desc';
+    } else if (sort === 'customer_name') {
+      orderBy.orders = { customers: { name: order } };
+    } else if (sort === 'planned_unload_at') {
+      orderBy.inbound_receipt = { planned_unload_at: order };
+    } else if (sort === 'delivery_location') {
+      orderBy.order_detail = { locations_order_detail_delivery_location_idTolocations: { location_code: order } };
+    } else if (sort === 'delivery_nature') {
+      orderBy.order_detail = { delivery_nature: order };
     } else {
       orderBy[sort] = order;
     }

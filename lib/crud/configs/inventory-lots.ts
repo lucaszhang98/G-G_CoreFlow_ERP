@@ -39,6 +39,7 @@ export const inventoryLotConfig: EntityConfig = {
       key: 'planned_unload_at',
       label: '预计拆柜日期',
       type: 'date',
+      sortable: true,
     },
     // 从orders_detail继承的字段（需要确认字段名）
     delivery_nature: {

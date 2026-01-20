@@ -51,6 +51,7 @@ export const orderDetailConfig: EntityConfig = {
       key: 'planned_unload_at',
       label: '预计拆柜日期',
       type: 'date',
+      sortable: true,
     },
     delivery_location_code: {
       key: 'delivery_location_code',
