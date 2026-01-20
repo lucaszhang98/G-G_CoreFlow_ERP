@@ -232,6 +232,14 @@ async function updateDeliveryManagement(
 
     // 使用事务同时更新 delivery_management 和 delivery_appointments
     const result = await prisma.$transaction(async (tx) => {
+      // 更新 delivery_appointments.rejected（如果有，需要先更新，因为后面查询需要最新的数据）
+      if (Object.keys(appointmentUpdateData).length > 0) {
+        await tx.delivery_appointments.update({
+          where: { appointment_id: delivery.appointment_id },
+          data: appointmentUpdateData,
+        })
+      }
+
       // 更新 delivery_management
       const updated = await tx.delivery_management.update({
         where: { delivery_id: BigInt(deliveryId) },
@@ -250,6 +258,46 @@ async function updateDeliveryManagement(
               confirmed_start: true,
               requested_start: true,
               rejected: true,
+              locations: {
+                select: {
+                  location_id: true,
+                  name: true,
+                  location_code: true,
+                  location_type: true,
+                },
+              },
+              locations_delivery_appointments_origin_location_idTolocations: {
+                select: {
+                  location_id: true,
+                  name: true,
+                  location_code: true,
+                  location_type: true,
+                },
+              },
+              orders: {
+                select: {
+                  order_id: true,
+                  order_number: true,
+                  warehouse_account: true,
+                },
+              },
+              appointment_detail_lines: {
+                select: {
+                  order_detail_id: true,
+                  order_detail: {
+                    select: {
+                      po: true,
+                      order_id: true,
+                      orders: {
+                        select: {
+                          order_id: true,
+                          order_number: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
           drivers: {
@@ -268,20 +316,52 @@ async function updateDeliveryManagement(
         },
       })
 
-      // 更新 delivery_appointments.rejected（如果有）
-      if (Object.keys(appointmentUpdateData).length > 0) {
-        await tx.delivery_appointments.update({
-          where: { appointment_id: delivery.appointment_id },
-          data: appointmentUpdateData,
-        })
-      }
-
       return updated
     })
 
+    // 格式化返回数据，与GET接口保持一致
+    const serialized = serializeBigInt(result)
+    const appointment = serialized.delivery_appointments
+    const order = appointment?.orders
+    const driver = serialized.drivers
+
+    // 聚合 PO
+    const poList = appointment?.appointment_detail_lines
+      ?.map((line: any) => line.order_detail?.po)
+      .filter((po: any) => po) || []
+    const po = poList.length > 0 ? poList.join(', ') : null
+
+    // 送货日期
+    const deliveryDate = appointment?.confirmed_start || appointment?.requested_start || null
+
+    // 柜号
+    const containerNumber = serialized.container_number || null
+
     return NextResponse.json({
       success: true,
-      data: serializeBigInt(result),
+      data: {
+        delivery_id: String(serialized.delivery_id || ''),
+        appointment_number: appointment?.reference_number || null,
+        container_number: containerNumber,
+        delivery_date: deliveryDate,
+        origin_location: appointment?.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
+        origin_location_id: appointment?.origin_location_id ? String(appointment.origin_location_id) : null,
+        destination_location: appointment?.locations?.location_code || null,
+        destination_location_id: appointment?.location_id ? String(appointment.location_id) : null,
+        po: po,
+        pallet_type: appointment?.appointment_type || null,
+        delivery_method: appointment?.delivery_method || null,
+        warehouse_account: order?.warehouse_account || null,
+        appointment_time: deliveryDate,
+        driver_name: serialized.drivers?.contact_roles?.name || serialized.drivers?.driver_code || null,
+        driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
+        rejected: appointment?.rejected || false, // 确保返回更新后的 rejected 值
+        status: serialized.status || null,
+        notes: serialized.notes || null,
+        appointment_id: appointment ? String(appointment.appointment_id || '') : null,
+        created_at: serialized.created_at || null,
+        updated_at: serialized.updated_at || null,
+      },
     })
   } catch (error: any) {
     console.error('更新送仓管理记录失败:', error)

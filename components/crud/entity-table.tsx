@@ -1092,6 +1092,17 @@ export function EntityTable<T = any>({
                     if (responseData.data.users_outbound_shipments_loaded_byTousers !== undefined) {
                       updatedItem.users_outbound_shipments_loaded_byTousers = responseData.data.users_outbound_shipments_loaded_byTousers
                     }
+                    // 更新 driver_name 和 driver_id（送仓司机）
+                    if (responseData.data.driver_id !== undefined) {
+                      updatedItem.driver_id = responseData.data.driver_id // ID
+                    }
+                    if (responseData.data.driver_name !== undefined) {
+                      updatedItem.driver_name = responseData.data.driver_name // 显示名称
+                    }
+                    // 更新 rejected（拒收字段）
+                    if (responseData.data.rejected !== undefined) {
+                      updatedItem.rejected = responseData.data.rejected
+                    }
                     return updatedItem
                   }
                   return item
