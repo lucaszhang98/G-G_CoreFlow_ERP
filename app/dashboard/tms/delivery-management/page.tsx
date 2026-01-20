@@ -5,8 +5,7 @@
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { EntityTable } from "@/components/crud/entity-table"
-import { deliveryManagementConfig } from "@/lib/crud/configs/delivery-management"
+import { DeliveryManagementClient } from "./delivery-management-client"
 
 export default async function DeliveryManagementPage() {
   const session = await auth()
@@ -17,7 +16,7 @@ export default async function DeliveryManagementPage() {
 
   return (
     <DashboardLayout user={session.user || {}}>
-      <EntityTable config={deliveryManagementConfig} />
+      <DeliveryManagementClient />
     </DashboardLayout>
   )
 }
