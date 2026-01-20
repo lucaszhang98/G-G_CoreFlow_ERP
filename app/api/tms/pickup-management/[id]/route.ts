@@ -255,6 +255,50 @@ async function updatePickupManagement(
         where: { order_id: pickup.order_id },
         data: orderUpdateData,
       })
+
+      // 如果更新了 pickup_date，同步更新入库管理的拆柜日期
+      if (body.pickup_date !== undefined && body.pickup_date) {
+        try {
+          // 获取更新后的订单信息（包括 eta_date，用于计算）
+          const updatedOrder = await prisma.orders.findUnique({
+            where: { order_id: pickup.order_id },
+            select: {
+              pickup_date: true,
+              eta_date: true,
+            },
+          })
+
+          if (updatedOrder) {
+            // 重新计算拆柜日期（提柜日期优先）
+            const calculatedUnloadDate = calculateUnloadDate(
+              updatedOrder.pickup_date,
+              updatedOrder.eta_date
+            )
+
+            // 查找对应的入库管理记录
+            const inboundReceipt = await prisma.inbound_receipt.findUnique({
+              where: { order_id: pickup.order_id },
+              select: { inbound_receipt_id: true },
+            })
+
+            if (inboundReceipt && calculatedUnloadDate) {
+              // 更新入库管理的拆柜日期
+              await prisma.inbound_receipt.update({
+                where: { inbound_receipt_id: inboundReceipt.inbound_receipt_id },
+                data: {
+                  planned_unload_at: calculatedUnloadDate,
+                  updated_by: user?.id ? BigInt(user.id) : null,
+                  updated_at: new Date(),
+                },
+              })
+              console.log(`[提柜管理更新] 已同步更新入库管理拆柜日期: ${calculatedUnloadDate.toISOString().split('T')[0]}`)
+            }
+          }
+        } catch (syncError: any) {
+          // 如果同步更新失败，记录错误但不影响提柜管理的更新
+          console.warn('[提柜管理更新] 同步更新入库管理拆柜日期失败:', syncError)
+        }
+      }
     }
 
     // 重新获取更新后的数据
