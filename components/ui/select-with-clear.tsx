@@ -91,7 +91,8 @@ export function SelectWithClear({
           (childType?.$$typeof && String(childType).includes('SelectContent'))
         
         if (isSelectContent) {
-          const contentChildren = React.Children.toArray(child.props.children)
+          const childElement = child as React.ReactElement<{ children?: React.ReactNode }>
+          const contentChildren = React.Children.toArray(childElement.props.children)
           const clearOption =
             allowClear && hasValue ? (
               <SelectItem key={CLEAR_VALUE} value={CLEAR_VALUE}>
@@ -100,7 +101,7 @@ export function SelectWithClear({
             ) : null
 
           return React.cloneElement(
-            child as React.ReactElement,
+            childElement,
             {},
             clearOption ? [clearOption, ...contentChildren] : contentChildren
           )
