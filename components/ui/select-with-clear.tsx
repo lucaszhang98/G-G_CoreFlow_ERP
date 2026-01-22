@@ -6,17 +6,20 @@
 "use client"
 
 import * as React from "react"
+import * as SelectPrimitive from "@radix-ui/react-select"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  type SelectProps,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 const CLEAR_VALUE = "__clear__"
+
+// 使用 SelectPrimitive.Root 的 props 类型
+type SelectProps = React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>
 
 interface SelectWithClearProps extends Omit<SelectProps, 'value' | 'onValueChange'> {
   value?: string | number | null
