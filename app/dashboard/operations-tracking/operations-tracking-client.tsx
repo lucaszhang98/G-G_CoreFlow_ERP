@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { DataTable } from "@/components/data-table"
-import { ColumnDef } from "@tanstack/react-table"
+import { ColumnDef, Row } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { toast } from "sonner"
@@ -414,7 +414,7 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
     ...(showUnloadFields ? [{
       accessorKey: "unload_date",
       header: "拆柜日期",
-      cell: ({ row }) => <div>{formatDate(row.original.unload_date)}</div>,
+      cell: ({ row }: { row: Row<OperationsTrackingItem> }) => <div>{formatDate(row.original.unload_date)}</div>,
     }] : []),
     {
       accessorKey: "return_deadline",
@@ -430,7 +430,7 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
     ...(showUnloadFields ? [{
       accessorKey: "unload_lead_time",
       header: "拆柜时效",
-      cell: ({ row }) => <div>{formatLeadTime(row.original.unload_lead_time)}</div>,
+      cell: ({ row }: { row: Row<OperationsTrackingItem> }) => <div>{formatLeadTime(row.original.unload_lead_time)}</div>,
     }] : []),
     {
       accessorKey: "chassis_days",
