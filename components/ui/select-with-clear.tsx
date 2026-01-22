@@ -113,7 +113,7 @@ export function SelectWithClear({
 
   return (
     <Select
-      value={value || ""}
+      value={value != null ? String(value) : ""}
       onValueChange={handleValueChange}
       {...props}
     >
