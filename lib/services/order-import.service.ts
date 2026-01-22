@@ -57,6 +57,7 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
     'FBA': 'fba',
     '明细备注': 'detail_notes',
     'PO': 'po',
+    '窗口期': 'window_period',
   },
 
   // 2. 验证Schema
@@ -339,6 +340,7 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
               fba: row.fba || null,
               notes: row.detail_notes || null,
               po: row.po || null,
+              window_period: row.window_period || null,
               created_by: userId,
               updated_by: userId,
             },

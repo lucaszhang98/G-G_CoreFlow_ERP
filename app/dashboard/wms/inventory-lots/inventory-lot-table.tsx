@@ -16,9 +16,13 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { formatDate, formatDateTime } from '@/lib/utils'
+import { Button } from "@/components/ui/button"
+import { RefreshCw } from "lucide-react"
+import { toast } from "sonner"
 
 export function InventoryLotTable() {
   const router = useRouter();
+  const [isRecalculating, setIsRecalculating] = React.useState(false);
   
   const customClickableColumns: ClickableColumnConfig<any>[] = React.useMemo(() => [
     {
@@ -118,11 +122,70 @@ export function InventoryLotTable() {
     onAdd: undefined, // 隐藏新建按钮
   }), [])
 
+  // 批量重新计算未约板数和剩余板数
+  const handleRecalculatePallets = React.useCallback(async () => {
+    // 确认对话框
+    const confirmed = window.confirm(
+      '批量重新计算未约板数和剩余板数\n\n' +
+      '此操作将：\n' +
+      '• 重新计算所有库存记录的未约板数（实际板数 - 所有预约板数之和）\n' +
+      '• 重新计算所有库存记录的剩余板数（实际板数 - 已过期预约板数之和）\n' +
+      '• 修复因手动修改导致的数据不一致问题\n\n' +
+      '确定要继续吗？'
+    )
+    
+    if (!confirmed) {
+      return
+    }
+
+    setIsRecalculating(true)
+    try {
+      const response = await fetch('/api/wms/inventory-lots/recalculate-pallets', {
+        method: 'POST',
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || '批量修复失败')
+      }
+
+      if (result.success) {
+        toast.success(
+          `批量修复完成：成功更新 ${result.successCount} 条记录${result.errorCount > 0 ? `，失败 ${result.errorCount} 条` : ''}`
+        )
+        // 刷新表格
+        window.location.reload()
+      } else {
+        throw new Error(result.error || '批量修复失败')
+      }
+    } catch (error: any) {
+      console.error('批量修复失败:', error)
+      toast.error(`批量修复失败: ${error.message || '未知错误'}`)
+    } finally {
+      setIsRecalculating(false)
+    }
+  }, [])
+
+  // 自定义工具栏按钮
+  const customToolbarButtons = React.useMemo(() => (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleRecalculatePallets}
+      disabled={isRecalculating}
+    >
+      <RefreshCw className={`mr-2 h-4 w-4 ${isRecalculating ? "animate-spin" : ""}`} />
+      {isRecalculating ? "计算中..." : "重新计算板数"}
+    </Button>
+  ), [handleRecalculatePallets, isRecalculating])
+
   return (
     <EntityTable
       config={inventoryLotConfig}
       customClickableColumns={customClickableColumns}
       customActions={customActions}
+      customToolbarButtons={customToolbarButtons}
       expandableRows={{
         enabled: true,
         getExpandedContent: (row: any) => {

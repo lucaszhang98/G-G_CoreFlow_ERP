@@ -108,6 +108,12 @@ export const orderDetailConfig: EntityConfig = {
       label: '备注',
       type: 'textarea',
     },
+    window_period: {
+      key: 'window_period',
+      label: '窗口期',
+      type: 'text',
+      searchable: false,
+    },
     delivery_progress: {
       key: 'delivery_progress',
       label: '送货进度',

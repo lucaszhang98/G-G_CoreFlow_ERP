@@ -145,6 +145,10 @@ export function OrderBasicInfoCard({
             <h4 className="text-sm font-medium text-muted-foreground">其他信息</h4>
             <div className="space-y-1">
               <p className="text-sm">
+                <span className="text-muted-foreground">操作方式:</span>{" "}
+                {order.operation_mode === 'unload' ? '拆柜' : order.operation_mode === 'direct_delivery' ? '直送' : (order.operation_mode || "-")}
+              </p>
+              <p className="text-sm">
                 <span className="text-muted-foreground">仓库账户:</span>{" "}
                 {order.warehouse_account || "-"}
               </p>

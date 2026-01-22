@@ -104,6 +104,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             volume_percentage: true,
             notes: true,
             po: true, // PO字段
+            window_period: true, // 窗口期字段
             created_at: true,
             updated_at: true,
             created_by: true,

@@ -4,9 +4,9 @@ import React from 'react'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Plus, ChevronDown, ChevronRight, Pencil, Trash2, Check, ChevronsUpDown, X, Search } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
 import { LocationSelect } from "@/components/ui/location-select"
 import { FuzzySearchSelect } from "@/components/ui/fuzzy-search-select"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -54,6 +54,7 @@ export interface DetailData {
   volume_percentage?: number | string | null
   notes?: string | null
   po?: string | null // PO字段
+  window_period?: string | null // 窗口期字段
   total_pallets?: number | null // 总板数（用于验证，已废弃，使用 remaining_pallets）
   total_pallets_at_time?: number | null // 总板数快照（预约明细创建/更新时的总板数）
   has_inventory?: boolean // 是否有库存
@@ -92,8 +93,9 @@ export interface DetailTableConfig {
     volumePercentage?: boolean // 分仓占比
     unloadType?: boolean // FBA
     notes?: boolean // 备注
-    po?: boolean // PO
-    detailId?: boolean // 仓点ID（隐藏）
+        po?: boolean // PO
+        windowPeriod?: boolean // 窗口期
+        detailId?: boolean // 仓点ID（隐藏）
     quantity?: boolean // 数量
     volume?: boolean // 体积
     createdAt?: boolean // 创建时间（隐藏）
@@ -188,6 +190,9 @@ export function DetailTable({
   const [editingSku, setEditingSku] = React.useState<any | null>(null)
   const [addSkuDialogOpen, setAddSkuDialogOpen] = React.useState(false)
   const [addSkuDetailId, setAddSkuDetailId] = React.useState<string | number | null>(null)
+  // 批量编辑模式（仅用于订单明细，不用于预约明细）
+  const [isBatchEditMode, setIsBatchEditMode] = React.useState(false)
+  const [batchEditValues, setBatchEditValues] = React.useState<Record<string | number, Partial<DetailData>>>({})
 
   // 同步外部数据（如果直接提供了 orderDetails）
   React.useEffect(() => {
@@ -241,7 +246,86 @@ export function DetailTable({
     })
   }
 
+  // 初始化批量编辑值（仅用于订单明细，不用于预约明细）
+  const initializeBatchEditValues = () => {
+    if (appointmentId) return // 预约明细不支持批量编辑
+    
+    const values: Record<string | number, Partial<DetailData>> = {}
+    orderDetails.forEach(detail => {
+      values[detail.id] = {
+        quantity: detail.quantity,
+        estimated_pallets: detail.estimated_pallets,
+        po: detail.po || null,
+        window_period: detail.window_period || null,
+        delivery_location: detail.delivery_location,
+        delivery_nature: detail.delivery_nature,
+        volume: detail.volume,
+        fba: detail.fba,
+        notes: detail.notes,
+      }
+    })
+    setBatchEditValues(values)
+  }
+
+  // 开启批量编辑模式（仅用于订单明细）
+  const handleStartBatchEdit = () => {
+    if (appointmentId) return // 预约明细不支持批量编辑
+    initializeBatchEditValues()
+    setIsBatchEditMode(true)
+    // 退出单行编辑模式
+    setEditingRowId(null)
+    setEditingData(null)
+  }
+
+  // 取消批量编辑
+  const handleCancelBatchEdit = () => {
+    setIsBatchEditMode(false)
+    setBatchEditValues({})
+  }
+
+  // 批量保存（仅用于订单明细）
+  const handleBatchSave = async () => {
+    if (appointmentId) return // 预约明细不支持批量编辑
+    
+    try {
+      const savePromises: Promise<void>[] = []
+      
+      for (const detailId of Object.keys(batchEditValues)) {
+        const values = batchEditValues[detailId]
+        const detail = orderDetails.find(d => String(d.id) === String(detailId))
+        if (!detail) continue
+        
+        const savePromise = (async () => {
+          const response = await fetch(`/api/order-details/${detailId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(values),
+          })
+          
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new Error(`更新明细 ${detailId} 失败: ${errorData.error || errorData.message || '未知错误'}`)
+          }
+        })()
+        
+        savePromises.push(savePromise)
+      }
+      
+      await Promise.all(savePromises)
+      
+      toast.success(`成功保存 ${Object.keys(batchEditValues).length} 条记录`)
+      setIsBatchEditMode(false)
+      setBatchEditValues({})
+      onRefresh()
+    } catch (error: any) {
+      console.error('批量保存失败:', error)
+      toast.error(error.message || '批量保存失败')
+    }
+  }
+
   const handleEditDetail = (detail: DetailData) => {
+    if (isBatchEditMode) return // 批量编辑模式下不允许单行编辑
+    
     setEditingRowId(detail.id)
     // 预约明细：只允许编辑预计板数（estimated_pallets），PO 从 order_detail.po 读取，不可编辑
     // 订单明细：允许编辑其他字段
@@ -583,6 +667,7 @@ export function DetailTable({
           fba: data.fba,
           notes: data.notes,
           po: data.po,
+          window_period: (data as any).window_period || null,
         }),
       })
 
@@ -620,10 +705,14 @@ export function DetailTable({
     if (config.showColumns?.totalVolume) cols.push('totalVolume')
     if (config.showColumns?.totalPallets) cols.push('totalPallets')
     if (config.showColumns?.po) cols.push('po')
+    if (config.showColumns?.windowPeriod) cols.push('windowPeriod')
     if (config.showColumns?.detailId) cols.push('detailId')
     if (config.showColumns?.createdAt) cols.push('createdAt')
     if (config.showColumns?.updatedAt) cols.push('updatedAt')
-    cols.push('actions')
+    // 批量编辑模式下不显示操作列
+    if (!isBatchEditMode) {
+      cols.push('actions')
+    }
     return cols
   }
 
@@ -656,10 +745,46 @@ export function DetailTable({
     <div className="p-4 bg-muted/30">
       <div className="flex items-center justify-between mb-3">
         <h4 className="font-semibold text-sm text-foreground">{config.title}</h4>
-        <Button size="sm" onClick={() => setAddDetailDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          添加
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* 批量编辑按钮（仅订单明细显示，预约明细不显示） */}
+          {!appointmentId && (
+            isBatchEditMode ? (
+              <>
+                <Button
+                  size="sm"
+                  onClick={handleBatchSave}
+                  className="h-8"
+                >
+                  <Check className="h-4 w-4 mr-1" />
+                  保存全部
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCancelBatchEdit}
+                  className="h-8"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  取消
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleStartBatchEdit}
+                className="h-8"
+                title="批量编辑"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )
+          )}
+          <Button size="sm" onClick={() => setAddDetailDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            添加
+          </Button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
@@ -686,11 +811,13 @@ export function DetailTable({
                   case 'volumePercentage':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">分仓占比</th>
                   case 'unloadType':
-                    return <th key={col} className="text-left p-2 font-semibold text-sm">FBA</th>
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[200px]">FBA</th>
                   case 'notes':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">备注</th>
                   case 'po':
-                    return <th key={col} className="text-left p-2 font-semibold text-sm">PO</th>
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[200px]">PO</th>
+                  case 'windowPeriod':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm">窗口期</th>
                   case 'detailId':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">仓点ID</th>
                   case 'quantity':
@@ -702,6 +829,10 @@ export function DetailTable({
                   case 'updatedAt':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">更新时间</th>
                   case 'actions':
+                    // 批量编辑模式下隐藏操作列
+                    if (isBatchEditMode) {
+                      return null
+                    }
                     return <th key={col} className="text-left p-2 font-semibold text-sm w-24">操作</th>
                   default:
                     return null
@@ -755,12 +886,27 @@ export function DetailTable({
                           return <td key={col} className="p-2 text-sm">{locationCode}</td>
                         case 'deliveryLocation':
                           // 订单明细可以编辑送仓地点，预约明细不允许编辑，直接显示 location_code（API 已转换）
-                          if (editingRowId === detailId && editingData && !appointmentId) {
+                          if ((isBatchEditMode || editingRowId === detailId) && !appointmentId) {
+                            const currentValue = isBatchEditMode 
+                              ? (batchEditValues[detailId]?.delivery_location || detail.delivery_location)
+                              : (editingData?.delivery_location || detail.delivery_location)
                             return (
                               <td key={col} className="p-2 text-sm">
                                 <LocationSelect
-                                  value={editingData.delivery_location || null}
-                                  onChange={(value: string | number | null) => setEditingData({ ...editingData, delivery_location: value ? String(value) : null })}
+                                  value={currentValue || null}
+                                  onChange={(value: string | number | null) => {
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: {
+                                          ...prev[detailId],
+                                          delivery_location: value ? String(value) : null,
+                                        }
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData, delivery_location: value ? String(value) : null })
+                                    }
+                                  }}
                                   placeholder="选择送仓地点"
                                 />
                               </td>
@@ -769,12 +915,27 @@ export function DetailTable({
                           return <td key={col} className="p-2 text-sm">{(detail as any).delivery_location_code || detail.delivery_location || '-'}</td>
                         case 'locationType':
                           // 订单明细可以编辑仓点类型，预约明细不允许编辑，显示时如果是"亚马逊"改为"AMZ"
-                          if (editingRowId === detailId && editingData && !appointmentId) {
+                          if ((isBatchEditMode || editingRowId === detailId) && !appointmentId) {
+                            const currentValue = isBatchEditMode
+                              ? (batchEditValues[detailId]?.delivery_nature || detail.delivery_nature)
+                              : (editingData?.delivery_nature || detail.delivery_nature)
                             return (
                               <td key={col} className="p-2 text-sm">
                                 <Select
-                                  value={editingData.delivery_nature || ''}
-                                  onValueChange={(value) => setEditingData({ ...editingData, delivery_nature: value || null })}
+                                  value={currentValue || ''}
+                                  onValueChange={(value) => {
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: {
+                                          ...prev[detailId],
+                                          delivery_nature: value || null,
+                                        }
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData, delivery_nature: value || null })
+                                    }
+                                  }}
                                 >
                                   <SelectTrigger className="h-9 min-w-[120px]">
                                     <SelectValue placeholder="请选择" />
@@ -793,24 +954,47 @@ export function DetailTable({
                           return <td key={col} className="p-2 text-sm">{detail.delivery_nature === '亚马逊' ? 'AMZ' : (detail.delivery_nature || '-')}</td>
                       case 'quantity':
                         // 订单明细可以编辑数量，预约明细不允许编辑
-                        if (editingRowId === detailId && editingData && !appointmentId) {
+                        if ((isBatchEditMode || editingRowId === detailId) && !appointmentId) {
+                          const currentValue = isBatchEditMode
+                            ? (batchEditValues[detailId]?.quantity ?? detail.quantity)
+                            : (editingData?.quantity ?? detail.quantity)
                           return (
                             <td key={col} className="p-2 text-sm">
                               <Input
                                 type="number"
                                 min="1"
                                 step="1"
-                                value={editingData.quantity ?? ''}
+                                value={currentValue ?? ''}
                                 onChange={(e) => {
                                   const inputValue = e.target.value
                                   if (inputValue === '') {
-                                    // 允许清空，后续保存时会验证
-                                    setEditingData({ ...editingData, quantity: 1 })
+                                    const newValue = 1
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: {
+                                          ...prev[detailId],
+                                          quantity: newValue,
+                                        }
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData, quantity: newValue })
+                                    }
                                   } else {
                                     const value = parseInt(inputValue)
                                     // 只允许正整数
                                     if (!isNaN(value) && value > 0 && Number.isInteger(value)) {
-                                      setEditingData({ ...editingData, quantity: value })
+                                      if (isBatchEditMode) {
+                                        setBatchEditValues(prev => ({
+                                          ...prev,
+                                          [detailId]: {
+                                            ...prev[detailId],
+                                            quantity: value,
+                                          }
+                                        }))
+                                      } else {
+                                        setEditingData({ ...editingData, quantity: value })
+                                      }
                                     }
                                   }
                                 }}
@@ -823,16 +1007,29 @@ export function DetailTable({
                         return <td key={col} className="p-2 text-sm">{formatNumber(detail.quantity)}</td>
                       case 'volume':
                         // 订单明细可以编辑体积，预约明细不允许编辑
-                        if (editingRowId === detailId && editingData && !appointmentId) {
+                        if ((isBatchEditMode || editingRowId === detailId) && !appointmentId) {
+                          const currentValue = isBatchEditMode
+                            ? (batchEditValues[detailId]?.volume ?? detail.volume)
+                            : (editingData?.volume ?? detail.volume)
                           return (
                             <td key={col} className="p-2 text-sm">
                               <Input
                                 type="number"
                                 step="0.01"
-                                value={editingData.volume !== null && editingData.volume !== undefined ? editingData.volume : ''}
+                                value={currentValue !== null && currentValue !== undefined ? currentValue : ''}
                                 onChange={(e) => {
                                   const value = e.target.value === '' ? null : parseFloat(e.target.value)
-                                  setEditingData({ ...editingData, volume: value })
+                                  if (isBatchEditMode) {
+                                    setBatchEditValues(prev => ({
+                                      ...prev,
+                                      [detailId]: {
+                                        ...prev[detailId],
+                                        volume: value,
+                                      }
+                                    }))
+                                  } else {
+                                    setEditingData({ ...editingData, volume: value })
+                                  }
                                 }}
                                 className="w-full min-w-[100px] max-w-[120px] h-9"
                                 placeholder="体积"
@@ -868,29 +1065,64 @@ export function DetailTable({
                           return <td key={col} className="p-2 text-sm">{detail.volume_percentage ? `${formatNumber(detail.volume_percentage)}%` : '-'}</td>
                         case 'unloadType':
                           // 订单明细可以编辑FBA，预约明细不允许编辑
-                          if (editingRowId === detailId && editingData && !appointmentId) {
+                          if ((isBatchEditMode || editingRowId === detailId) && !appointmentId) {
+                            const currentValue = isBatchEditMode
+                              ? (batchEditValues[detailId]?.fba ?? detail.fba)
+                              : (editingData?.fba ?? detail.fba)
+                            // 根据内容长度计算行数（每行约50个字符）
+                            const textLines = (currentValue || '').split('\n')
+                            const estimatedRows = Math.max(2, Math.min(10, textLines.reduce((max: number, line: string) => {
+                              return Math.max(max, Math.ceil(line.length / 50) || 1)
+                            }, textLines.length)))
                             return (
-                              <td key={col} className="p-2 text-sm">
-                                <Input
-                                  type="text"
-                                  value={editingData.fba || ''}
-                                  onChange={(e) => setEditingData({ ...editingData, fba: e.target.value || null })}
-                                  className="w-full"
+                              <td key={col} className="p-2 text-sm min-w-[200px]">
+                                <Textarea
+                                  value={currentValue || ''}
+                                  onChange={(e) => {
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: {
+                                          ...prev[detailId],
+                                          fba: e.target.value || null,
+                                        }
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData, fba: e.target.value || null })
+                                    }
+                                  }}
+                                  className="w-full min-w-[200px] min-h-[60px] resize-both"
                                   placeholder="FBA"
+                                  rows={estimatedRows}
                                 />
                               </td>
                             )
                           }
-                          return <td key={col} className="p-2 text-sm">{detail.fba || '-'}</td>
+                          return <td key={col} className="p-2 text-sm whitespace-pre-wrap break-words">{detail.fba || '-'}</td>
                         case 'notes':
                           // 订单明细可以编辑备注，预约明细不允许编辑
-                          if (editingRowId === detailId && editingData && !appointmentId) {
+                          if ((isBatchEditMode || editingRowId === detailId) && !appointmentId) {
+                            const currentValue = isBatchEditMode
+                              ? (batchEditValues[detailId]?.notes ?? detail.notes)
+                              : (editingData?.notes ?? detail.notes)
                             return (
                               <td key={col} className="p-2 text-sm">
                                 <Input
                                   type="text"
-                                  value={editingData.notes || ''}
-                                  onChange={(e) => setEditingData({ ...editingData, notes: e.target.value || null })}
+                                  value={currentValue || ''}
+                                  onChange={(e) => {
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: {
+                                          ...prev[detailId],
+                                          notes: e.target.value || null,
+                                        }
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData, notes: e.target.value || null })
+                                    }
+                                  }}
                                   className="w-full"
                                   placeholder="备注"
                                 />
@@ -911,20 +1143,71 @@ export function DetailTable({
                           return <td key={col} className="p-2 text-sm">{formatInteger(totalPallets)}</td>
                         case 'po':
                           // 订单明细可以编辑PO，预约明细中PO从order_detail.po读取，不可编辑
-                          if (editingRowId === detailId && editingData && !appointmentId) {
+                          if ((isBatchEditMode || editingRowId === detailId) && !appointmentId) {
+                            const currentValue = isBatchEditMode
+                              ? (batchEditValues[detailId]?.po ?? (detail as any).po)
+                              : (editingData?.po ?? (detail as any).po)
+                            // 根据内容长度计算行数（每行约50个字符）
+                            const textLines = (currentValue || '').split('\n')
+                            const estimatedRows = Math.max(2, Math.min(10, textLines.reduce((max: number, line: string) => {
+                              return Math.max(max, Math.ceil(line.length / 50) || 1)
+                            }, textLines.length)))
                             return (
-                              <td key={col} className="p-2 text-sm">
-                                <Input
-                                  type="text"
-                                  value={editingData.po || ''}
-                                  onChange={(e) => setEditingData({ ...editingData, po: e.target.value || null })}
-                                  className="w-full"
+                              <td key={col} className="p-2 text-sm min-w-[200px]">
+                                <Textarea
+                                  value={currentValue || ''}
+                                  onChange={(e) => {
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: {
+                                          ...prev[detailId],
+                                          po: e.target.value || null,
+                                        }
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData, po: e.target.value || null })
+                                    }
+                                  }}
+                                  className="w-full min-w-[200px] min-h-[60px] resize-both"
                                   placeholder="PO"
+                                  rows={estimatedRows}
                                 />
                               </td>
                             )
                           }
-                          return <td key={col} className="p-2 text-sm">{(detail as any).po || '-'}</td>
+                          return <td key={col} className="p-2 text-sm whitespace-pre-wrap break-words">{(detail as any).po || '-'}</td>
+                        case 'windowPeriod':
+                          // 订单明细可以编辑窗口期，预约明细不允许编辑
+                          if ((isBatchEditMode || editingRowId === detailId) && !appointmentId) {
+                            const currentValue = isBatchEditMode
+                              ? (batchEditValues[detailId]?.window_period ?? detail.window_period)
+                              : (editingData?.window_period ?? detail.window_period)
+                            return (
+                              <td key={col} className="p-2 text-sm">
+                                <Input
+                                  type="text"
+                                  value={currentValue || ''}
+                                  onChange={(e) => {
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: {
+                                          ...prev[detailId],
+                                          window_period: e.target.value || null,
+                                        }
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData, window_period: e.target.value || null })
+                                    }
+                                  }}
+                                  className="w-full"
+                                  placeholder="窗口期"
+                                />
+                              </td>
+                            )
+                          }
+                          return <td key={col} className="p-2 text-sm">{detail.window_period || '-'}</td>
                         case 'detailId':
                           return <td key={col} className="p-2 text-sm font-medium">{detailId}</td>
                         case 'createdAt':
@@ -932,6 +1215,10 @@ export function DetailTable({
                         case 'updatedAt':
                           return <td key={col} className="p-2 text-sm">{formatDate(detail.updated_at)}</td>
                         case 'actions':
+                          // 批量编辑模式下隐藏操作列
+                          if (isBatchEditMode) {
+                            return null
+                          }
                           if (editingRowId === detailId) {
                             return (
                               <td key={col} className="p-2 text-sm">
@@ -1589,6 +1876,7 @@ function AddDetailDialog({
       fba: '',
       notes: '',
       po: '',
+      window_period: '',
     })
 
     React.useEffect(() => {
@@ -1601,6 +1889,7 @@ function AddDetailDialog({
           fba: '',
           notes: '',
           po: '',
+          window_period: '',
         })
       }
     }, [open])
@@ -1621,8 +1910,9 @@ function AddDetailDialog({
           fba: formData.fba || null,
           notes: formData.notes || null,
           po: formData.po || null,
+          window_period: formData.window_period || null,
           order_id: orderId,
-        })
+        } as any)
       } catch (error) {
         // 错误已在onSave中处理
       } finally {
@@ -1724,6 +2014,17 @@ function AddDetailDialog({
                 value={formData.po}
                 onChange={(e) => setFormData({ ...formData, po: e.target.value })}
                 placeholder="请输入PO（可选）"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="window_period">窗口期</Label>
+              <Input
+                id="window_period"
+                type="text"
+                value={formData.window_period}
+                onChange={(e) => setFormData({ ...formData, window_period: e.target.value })}
+                placeholder="请输入窗口期（可选）"
               />
             </div>
           </div>
@@ -1856,6 +2157,7 @@ function AddDetailDialog({
                           <th className="text-left p-3 font-semibold text-sm text-foreground">总方数</th>
                           <th className="text-left p-3 font-semibold text-sm text-foreground">总板数</th>
                           <th className="text-left p-3 font-semibold text-sm text-foreground">备注</th>
+                          <th className="text-left p-3 font-semibold text-sm text-foreground">窗口期</th>
                           <th className="text-left p-3 font-semibold text-sm w-24">操作</th>
                         </tr>
                       </thead>
@@ -1913,6 +2215,9 @@ function AddDetailDialog({
                               </td>
                               <td className="p-3 text-sm text-muted-foreground">
                                 {detail.notes || '-'}
+                              </td>
+                              <td className="p-3 text-sm text-muted-foreground">
+                                {(detail as any).window_period || '-'}
                               </td>
                               <td className="p-3 text-sm">
                                 <Button
@@ -1973,6 +2278,10 @@ function AddDetailDialog({
                   <div>
                     <span className="text-muted-foreground">PO：</span>
                     <span className="font-medium text-foreground ml-2">{selectedDetail.po || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">窗口期：</span>
+                    <span className="font-medium text-foreground ml-2">{selectedDetail.window_period || '-'}</span>
                   </div>
                 </div>
               </div>

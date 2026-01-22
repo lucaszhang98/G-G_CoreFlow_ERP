@@ -374,6 +374,7 @@ model order_detail {
   fba                                                         String?                    @db.VarChar(1000)
   notes                                                       String?
   po                                                          String?                    @db.VarChar(1000)
+  window_period                                               String?                    @db.VarChar(100) // 窗口期
   users_order_detail_created_byTousers                        users?                     @relation("order_detail_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   order_detail_item_order_detail_detail_idToorder_detail_item order_detail_item?         @relation("order_detail_detail_idToorder_detail_item", fields: [detail_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   orders                                                      orders?                    @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)

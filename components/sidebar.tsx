@@ -34,6 +34,7 @@ import {
   ClipboardCheck,
   UserCog,
   FileCheck,
+  Activity,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -179,6 +180,23 @@ const menuItems: MenuItem[] = [
         title: "出库管理",
         icon: PackageCheck,
         href: "/dashboard/wms/outbound-shipments",
+      },
+    ],
+  },
+  {
+    title: "运营追踪",
+    icon: Activity,
+    roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user"],
+    children: [
+      {
+        title: "拆柜",
+        icon: Activity,
+        href: "/dashboard/operations-tracking-unload",
+      },
+      {
+        title: "直送",
+        icon: Activity,
+        href: "/dashboard/operations-tracking-delivery",
       },
     ],
   },

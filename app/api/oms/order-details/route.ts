@@ -212,10 +212,10 @@ export async function GET(request: NextRequest) {
       const totalAppointmentPallets = appointments.reduce((sum: number, appt: any) => sum + (appt.estimated_pallets || 0), 0)
 
       // 计算未约板数
-      // 已入库：使用 inventory_lots.unbooked_pallet_count（如果为null则视为0）
+      // 已入库：实时计算 = pallet_count - 所有预约板数之和（不依赖数据库字段，确保一致性）
       // 未入库：实时计算 = 预计板数 - 所有预约板数之和（允许负数，负数表示多约）
       const unbooked_pallets: number = il
-        ? (il.unbooked_pallet_count ?? 0) // 已入库，使用 inventory_lots 的 unbooked_pallet_count，null时视为0
+        ? (il.pallet_count || 0) - totalAppointmentPallets // 已入库，实时计算（不依赖 unbooked_pallet_count 字段）
         : (item.estimated_pallets || 0) - totalAppointmentPallets // 未入库，实时计算（允许负数）
 
       // 获取 location_code（从关联数据中获取）
@@ -236,7 +236,8 @@ export async function GET(request: NextRequest) {
         remaining_pallets: il?.remaining_pallet_count || null,
         unbooked_pallets, // 已入库用 inventory_lots.unbooked_pallet_count，未入库实时计算
         storage_location_code: il?.storage_location_code || null,
-        notes: il?.notes || item.notes || null,
+        notes: item.notes || null, // 备注应该关联订单明细的备注（order_detail.notes）
+        window_period: item.window_period || null,
         delivery_progress,
         appointments,
         created_at: item.created_at,

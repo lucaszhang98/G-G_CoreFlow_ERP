@@ -43,8 +43,8 @@ const styles = StyleSheet.create({
     height: 22,
   },
   row2: {
-    // 第二行：仓点（居中，更大更粗，与第一行有适当间距）
-    fontSize: 20,
+    // 第二行：仓点（居中，更大更粗，与第一行有适当间距，字体小两个字号以确保显示完整）
+    fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
     margin: 0,

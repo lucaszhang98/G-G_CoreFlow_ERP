@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
         volume_percentage: true,
         notes: true,
         po: true,
+        window_period: true,
         created_at: true,
         updated_at: true,
         created_by: true,
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { order_id, quantity, volume, delivery_nature, delivery_location, fba, notes, po, estimated_pallets } = body
+    const { order_id, quantity, volume, delivery_nature, delivery_location, fba, notes, po, window_period, estimated_pallets } = body
 
     // 验证和转换 delivery_location：如果是 location_code，转换为 location_id
     // delivery_location 现在应该是 location_id（BigInt）或 location_code（string）
@@ -169,6 +170,7 @@ export async function POST(request: NextRequest) {
         volume_percentage: calculatedVolumePercentage ? parseFloat(calculatedVolumePercentage.toFixed(2)) : null, // 自动计算，保留2位小数
         notes: notes || null,
         po: po || null,
+        window_period: window_period || null,
         created_by: session.user.id ? BigInt(session.user.id) : null,
         updated_by: session.user.id ? BigInt(session.user.id) : null,
       },

@@ -264,17 +264,10 @@ export const inventoryLotConfig: EntityConfig = {
         enabled: true,
       },
     },
-    // 行内编辑配置
+    // 行内编辑配置（已禁用，隐藏编辑按钮）
     inlineEdit: {
-      enabled: true,
-      fields: [
-        'storage_location_code',
-        'pallet_count',
-        'remaining_pallet_count',
-        'unbooked_pallet_count',
-        // 'delivery_progress', // 送货进度是计算字段，不可编辑
-        'notes',
-      ],
+      enabled: false, // 禁用行内编辑，隐藏铅笔图标
+      fields: [],
     },
   },
   

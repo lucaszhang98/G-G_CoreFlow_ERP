@@ -28,6 +28,7 @@ export function OrderDetailsTable({
       unloadType: true, // FBA
       notes: true, // 备注
       po: true, // PO字段
+      windowPeriod: true, // 窗口期
       // 隐藏字段
       detailId: false, // 仓点ID隐藏
       createdAt: false, // 创建时间隐藏

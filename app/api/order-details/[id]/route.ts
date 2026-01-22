@@ -16,7 +16,7 @@ export async function PUT(
 
     const resolvedParams = params instanceof Promise ? await params : params
     const body = await request.json()
-    const { quantity, volume, delivery_nature, delivery_location, fba, notes, po } = body
+    const { quantity, volume, delivery_nature, delivery_location, fba, notes, po, window_period } = body
 
     // 验证和转换 delivery_location：如果是 location_code，转换为 location_id
     // delivery_location 现在应该是 location_id（BigInt）或 location_code（string）
@@ -91,6 +91,7 @@ export async function PUT(
       volume_percentage: calculatedVolumePercentage ? parseFloat(calculatedVolumePercentage.toFixed(2)) : null, // 自动计算，不允许用户修改
       notes: notes !== undefined ? notes : undefined,
       po: po !== undefined ? (po || null) : undefined, // PO 字段
+      window_period: window_period !== undefined ? (window_period || null) : undefined, // 窗口期字段
       updated_at: new Date(),
     }
     

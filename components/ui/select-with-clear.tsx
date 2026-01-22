@@ -18,13 +18,14 @@ import { cn } from "@/lib/utils"
 
 const CLEAR_VALUE = "__clear__"
 
-interface SelectWithClearProps extends SelectProps {
+interface SelectWithClearProps extends Omit<SelectProps, 'value' | 'onValueChange'> {
   value?: string | number | null
   onValueChange?: (value: string | null) => void
   children: React.ReactNode
   allowClear?: boolean // 是否允许清空，默认为 true（当有值时自动显示清空选项）
   clearLabel?: string // 清空选项的标签，默认为 "（清空）"
   className?: string
+  disabled?: boolean // 是否禁用
 }
 
 /**
