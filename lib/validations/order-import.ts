@@ -319,6 +319,12 @@ export const orderImportRowSchema = z.object({
     .optional()
     .transform(val => val === '' ? undefined : val)
     .refine(val => !val || val.length <= 1000, 'PO长度不能超过1000个字符'),
+  
+  window_period: z
+    .string()
+    .optional()
+    .transform(val => val === '' ? undefined : val)
+    .refine(val => !val || val.length <= 100, '窗口期长度不能超过100个字符'),
 })
 
 export type OrderImportRow = z.infer<typeof orderImportRowSchema>
