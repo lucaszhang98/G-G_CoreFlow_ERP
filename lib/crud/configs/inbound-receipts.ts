@@ -91,6 +91,7 @@ export const inboundReceiptConfig: EntityConfig = {
         { label: '待处理', value: 'pending' },
         { label: '已到仓', value: 'arrived' },
         { label: '已入库', value: 'received' },
+        { label: '已打印', value: 'printed' },
       ],
     },
     planned_unload_at: {
@@ -191,6 +192,7 @@ export const inboundReceiptConfig: EntityConfig = {
           { label: '待处理', value: 'pending' },
           { label: '已到仓', value: 'arrived' },
           { label: '已入库', value: 'received' },
+          { label: '已打印', value: 'printed' },
         ],
       },
       // 拆柜人员筛选
