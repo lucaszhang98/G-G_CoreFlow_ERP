@@ -57,6 +57,7 @@ export async function generateOrderImportTemplate(
     { key: 'fba', header: 'FBA', width: 15, required: false, hidden: true },
     { key: 'po', header: 'PO', width: 15, required: false, hidden: true },
     { key: 'detail_notes', header: '明细备注', width: 20, required: false, hidden: true },
+    { key: 'window_period', header: '窗口期', width: 12, required: false, hidden: true },
   ]
 
   // 第1行：表头
