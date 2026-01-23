@@ -160,8 +160,15 @@ export class BaseImportService<T> {
             
             // 将所有值转换为字符串（除了已经是字符串的）
             if (typeof cellValue === 'number') {
-              // 检查是否是Excel日期序列号（大于1000的数字可能是日期）
-              if (cellValue > 1000 && cellValue < 100000) {
+              // 定义日期字段列表（只对这些字段进行日期转换）
+              const dateFields = [
+                'order_date', 'eta_date', 'lfd_date', 'pickup_date', 
+                'ready_date', 'return_deadline', 'received_date', 
+                'created_at', 'updated_at', 'planned_unload_at'
+              ]
+              
+              // 只对日期字段进行日期序列号检测和转换
+              if (dateFields.includes(fieldName) && cellValue > 1000 && cellValue < 100000) {
                 // 可能是Excel日期，转换为日期字符串
                 // 注意：Excel序列号是基于本地时间的，我们需要保持原样，不做时区转换
                 const excelEpoch = new Date(1899, 11, 30) // Excel的起始日期
@@ -184,7 +191,7 @@ export class BaseImportService<T> {
                   obj[fieldName] = `${year}-${month}-${day}`
                 }
               } else {
-                // 普通数字，转换为字符串
+                // 普通数字（包括数量、体积、金额等），直接转换为字符串
                 obj[fieldName] = String(cellValue)
               }
             } else {
