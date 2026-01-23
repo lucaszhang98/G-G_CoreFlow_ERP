@@ -273,6 +273,7 @@ export async function generateOrderImportTemplate(
   exampleRow.getCell(25).value = 'FBA123' // FBA
   exampleRow.getCell(26).value = 'PO123456' // PO
   exampleRow.getCell(27).value = '测试明细' // 明细备注
+  exampleRow.getCell(28).value = '2024-12-20至2024-12-25' // 窗口期
 
   // ===== Sheet 2: 字段说明 =====
   const instructionSheet = workbook.addWorksheet('字段说明')
@@ -318,6 +319,7 @@ export async function generateOrderImportTemplate(
     ['FBA', '否', '文本', '可留空'],
     ['PO', '否', '文本（最长1000字符）', '采购订单号'],
     ['明细备注', '否', '文本', '订单明细备注'],
+    ['窗口期', '否', '文本（最长100字符）', '送仓窗口期，可留空'],
     ['', '', '', ''],
     ['重要说明', '', '', ''],
     ['1. 下拉框', '', '', '所有带下拉的字段点击即可看到选项，防止数据错误'],
