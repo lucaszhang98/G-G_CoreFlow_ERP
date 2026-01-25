@@ -153,6 +153,10 @@ export async function GET(request: NextRequest) {
               storage_location_code: true,
               notes: true,
             },
+            orderBy: [
+              { pallet_count: 'desc' }, // 优先取板数最大的
+              { created_at: 'desc' }, // 其次取最新的
+            ],
             take: 1, // 只取第一个（一个 order_detail 可能对应多个 inventory_lots）
           },
           appointment_detail_lines: {
@@ -188,17 +192,14 @@ export async function GET(request: NextRequest) {
 
     // 转换数据格式
     const transformedItems = items.map((item: any) => {
-      const il = item.inventory_lots?.[0] || null
+      // 获取 inventory_lots 记录：优先取 pallet_count > 0 的记录，如果没有则取第一个
+      const inventoryLots = item.inventory_lots || []
+      const ilWithPallets = inventoryLots.find((lot: any) => lot.pallet_count > 0)
+      const il = ilWithPallets || inventoryLots[0] || null
+      
       const ir = item.orders?.inbound_receipt || null
       const customer = item.orders?.customers || null
       
-      // 计算送货进度
-      let delivery_progress = 0
-      if (il?.pallet_count && il.pallet_count > 0) {
-        const shipped = il.pallet_count - (il.remaining_pallet_count || 0)
-        delivery_progress = Math.round((shipped / il.pallet_count) * 100)
-      }
-
       // 聚合预约信息
       const appointments = item.appointment_detail_lines?.map((adl: any) => ({
         appointment_id: adl.delivery_appointments?.appointment_id ? String(adl.delivery_appointments.appointment_id) : null,
@@ -210,6 +211,32 @@ export async function GET(request: NextRequest) {
 
       // 计算所有预约的预计板数之和
       const totalAppointmentPallets = appointments.reduce((sum: number, appt: any) => sum + (appt.estimated_pallets || 0), 0)
+
+      // 计算已过期预约的预计板数之和（用于计算剩余板数）
+      // 判断过期：confirmed_start < 当前日期（只比较日期，不考虑时间）
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const expiredAppointments = appointments.filter((appt: any) => {
+        if (!appt.confirmed_start) return false
+        const confirmedDate = new Date(appt.confirmed_start)
+        confirmedDate.setHours(0, 0, 0, 0)
+        return confirmedDate < today
+      })
+      const totalExpiredAppointmentPallets = expiredAppointments.reduce((sum: number, appt: any) => sum + (appt.estimated_pallets || 0), 0)
+
+      // 计算剩余板数（实时计算，不依赖数据库字段，确保准确性）
+      // 已入库：实时计算 = 实际板数 - 已过期预约板数之和
+      // 未入库：返回 null（对于未入库的数据，我们不关心他的剩余板数）
+      const remaining_pallets: number | null = il
+        ? Math.max(0, (il.pallet_count || 0) - totalExpiredAppointmentPallets) // 已入库，实时计算（不依赖 remaining_pallet_count 字段），确保不为负数
+        : null // 未入库，返回 null
+
+      // 计算送货进度（使用实时计算的剩余板数）
+      let delivery_progress = 0
+      if (il?.pallet_count && il.pallet_count > 0) {
+        const shipped = il.pallet_count - (remaining_pallets || 0)
+        delivery_progress = Math.round((shipped / il.pallet_count) * 100)
+      }
 
       // 计算未约板数
       // 已入库：实时计算 = pallet_count - 所有预约板数之和（不依赖数据库字段，确保一致性）
@@ -233,7 +260,7 @@ export async function GET(request: NextRequest) {
         delivery_nature: item.delivery_nature,
         estimated_pallets: item.estimated_pallets || 0,
         actual_pallets: il?.pallet_count || null,
-        remaining_pallets: il?.remaining_pallet_count || null,
+        remaining_pallets, // 已入库用 inventory_lots.remaining_pallet_count，未入库实时计算
         unbooked_pallets, // 已入库用 inventory_lots.unbooked_pallet_count，未入库实时计算
         storage_location_code: il?.storage_location_code || null,
         notes: item.notes || null, // 备注应该关联订单明细的备注（order_detail.notes）

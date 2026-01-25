@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '缺少 orderId 参数' }, { status: 400 })
     }
 
-    // 获取订单的所有明细
+    // 获取订单的所有明细（包含 inventory_lots 和 appointment_detail_lines）
     const orderDetails = await prisma.order_detail.findMany({
       where: {
         order_id: BigInt(orderId),
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
         quantity: true,
         volume: true,
         estimated_pallets: true,
-        remaining_pallets: true, // 剩余板数
+        remaining_pallets: true, // 未约板数（预计板数 - 所有预约板数之和，仅未入库时使用）
         delivery_nature: true,
         delivery_location_id: true,
         locations_order_detail_delivery_location_idTolocations: {
@@ -49,6 +49,37 @@ export async function GET(request: NextRequest) {
         updated_at: true,
         created_by: true,
         updated_by: true,
+        inventory_lots: {
+          select: {
+            inventory_lot_id: true,
+            pallet_count: true,
+            remaining_pallet_count: true,
+            unbooked_pallet_count: true,
+            storage_location_code: true,
+            notes: true,
+          },
+          orderBy: [
+            { pallet_count: 'desc' }, // 优先取板数最大的
+            { created_at: 'desc' }, // 其次取最新的
+          ],
+          take: 1, // 只取第一个（一个 order_detail 可能对应多个 inventory_lots）
+        },
+        appointment_detail_lines: {
+          select: {
+            id: true,
+            appointment_id: true,
+            order_detail_id: true,
+            estimated_pallets: true,
+            delivery_appointments: {
+              select: {
+                appointment_id: true,
+                reference_number: true,
+                confirmed_start: true,
+                status: true,
+              },
+            },
+          },
+        },
         order_detail_item_order_detail_item_detail_idToorder_detail: {
           select: {
             id: true,
@@ -67,16 +98,68 @@ export async function GET(request: NextRequest) {
     // 不需要手动查询 locations 了
 
     // 序列化并格式化数据
-    const serializedDetails = orderDetails.map(detail => {
+    const serializedDetails = orderDetails.map((detail: any) => {
       const serialized = serializeBigInt(detail)
       // 从关联数据中获取 location_code
       const locationCode = serialized.locations_order_detail_delivery_location_idTolocations?.location_code || null
+
+      // 获取 inventory_lots 记录：优先取 pallet_count > 0 的记录，如果没有则取第一个
+      const inventoryLots = serialized.inventory_lots || []
+      const ilWithPallets = inventoryLots.find((lot: any) => lot.pallet_count > 0)
+      const il = ilWithPallets || inventoryLots[0] || null
+
+      // 聚合预约信息
+      const appointments = serialized.appointment_detail_lines?.map((adl: any) => ({
+        appointment_id: adl.delivery_appointments?.appointment_id ? String(adl.delivery_appointments.appointment_id) : null,
+        reference_number: adl.delivery_appointments?.reference_number || null,
+        confirmed_start: adl.delivery_appointments?.confirmed_start || null,
+        estimated_pallets: adl.estimated_pallets || 0,
+        status: adl.delivery_appointments?.status || null,
+      })) || []
+
+      // 计算所有预约的预计板数之和
+      const totalAppointmentPallets = appointments.reduce((sum: number, appt: any) => sum + (appt.estimated_pallets || 0), 0)
+
+      // 计算已过期预约的预计板数之和（用于计算剩余板数）
+      // 判断过期：confirmed_start < 当前日期（只比较日期，不考虑时间）
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const expiredAppointments = appointments.filter((appt: any) => {
+        if (!appt.confirmed_start) return false
+        const confirmedDate = new Date(appt.confirmed_start)
+        confirmedDate.setHours(0, 0, 0, 0)
+        return confirmedDate < today
+      })
+      const totalExpiredAppointmentPallets = expiredAppointments.reduce((sum: number, appt: any) => sum + (appt.estimated_pallets || 0), 0)
+
+      // 计算剩余板数（实时计算，不依赖数据库字段，确保准确性）
+      // 已入库：实时计算 = 实际板数 - 已过期预约板数之和
+      // 未入库：返回 null（对于未入库的数据，我们不关心他的剩余板数）
+      const remaining_pallets: number | null = il
+        ? Math.max(0, (il.pallet_count || 0) - totalExpiredAppointmentPallets) // 已入库，实时计算（不依赖 remaining_pallet_count 字段），确保不为负数
+        : null // 未入库，返回 null
+
+      // 计算实际板数
+      const actual_pallets: number | null = il?.pallet_count || null
+
+      // 计算未约板数
+      // 已入库：实时计算 = pallet_count - 所有预约板数之和（不依赖数据库字段，确保一致性）
+      // 未入库：实时计算 = 预计板数 - 所有预约板数之和（允许负数，负数表示多约）
+      const unbooked_pallets: number = il
+        ? (il.pallet_count || 0) - totalAppointmentPallets // 已入库，实时计算（不依赖 unbooked_pallet_count 字段）
+        : (serialized.estimated_pallets || 0) - totalAppointmentPallets // 未入库，实时计算（允许负数）
 
       return {
         ...serialized,
         // 使用 location_code 作为 delivery_location（用于显示）
         delivery_location: locationCode,
         delivery_location_code: locationCode, // 添加 location_code 字段（备用）
+        // 实时计算的板数字段
+        actual_pallets, // 实际板数（已入库时显示）
+        remaining_pallets, // 剩余板数（已入库时实时计算，未入库时返回 null）
+        unbooked_pallets, // 未约板数（实时计算）
+        // 保留原有的 remaining_pallets 字段（用于兼容，但实际使用上面实时计算的值）
+        // remaining_pallets: remaining_pallets, // 已被上面的实时计算值覆盖
       }
     })
 
