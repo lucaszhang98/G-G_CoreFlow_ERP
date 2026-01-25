@@ -378,6 +378,8 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
       case 'datetime':
         // 处理日期时间字段：使用 datetime-local 输入类型
         // 格式：YYYY-MM-DDTHH:mm
+        // 对于 confirmed_start 字段，使用日期+小时选择器（分钟固定为00）
+        const isConfirmedStart = fieldKey === 'confirmed_start'
         const datetimeValue = fieldValue 
           ? (fieldValue instanceof Date 
             ? fieldValue.toISOString().slice(0, 16) 
@@ -385,6 +387,71 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
             ? fieldValue.slice(0, 16) 
             : fieldValue)
           : ''
+        
+        // 如果是 confirmed_start，使用日期+小时选择器
+        if (isConfirmedStart) {
+          // 解析日期和小时
+          let datePart = ''
+          let hourPart = '00'
+          if (datetimeValue) {
+            const parts = datetimeValue.split('T')
+            datePart = parts[0] || ''
+            if (parts[1]) {
+              hourPart = parts[1].split(':')[0] || '00'
+            }
+          }
+          
+          // 生成0-23小时选项
+          const hourOptions = Array.from({ length: 24 }, (_, i) => {
+            const hour = String(i).padStart(2, '0')
+            return { label: `${hour}:00`, value: hour }
+          })
+          
+          return (
+            <div key={fieldKey} className="space-y-2">
+              <Label htmlFor={fieldKey}>
+                {fieldConfig.label}
+                {fieldConfig.required && <span className="text-red-500">*</span>}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id={`${fieldKey}_date`}
+                  type="date"
+                  value={datePart}
+                  onChange={(e) => {
+                    const newDate = e.target.value
+                    const newValue = newDate ? `${newDate}T${hourPart}:00` : null
+                    setValue(fieldKey, newValue, { shouldValidate: true, shouldDirty: true, shouldTouch: true })
+                  }}
+                  className="flex-1"
+                />
+                <Select
+                  value={hourPart}
+                  onValueChange={(newHour) => {
+                    const newValue = datePart ? `${datePart}T${newHour}:00` : null
+                    setValue(fieldKey, newValue, { shouldValidate: true, shouldDirty: true, shouldTouch: true })
+                  }}
+                >
+                  <SelectTrigger id={`${fieldKey}_hour`} className="w-32">
+                    <SelectValue placeholder="选择小时" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hourOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {errors[fieldKey] && (
+                <p className="text-sm text-red-500">{(errors[fieldKey] as any)?.message}</p>
+              )}
+            </div>
+          )
+        }
+        
+        // 其他日期时间字段使用标准的 datetime-local 输入
         return (
           <div key={fieldKey} className="space-y-2">
             <Label htmlFor={fieldKey}>
