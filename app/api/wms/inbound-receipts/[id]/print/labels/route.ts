@@ -66,8 +66,26 @@ export async function GET(
         continue // 跳过没有仓点的明细
       }
 
-      // 生成条形码内容：柜号+仓点代码（无分隔符）
-      const barcode = `${containerNumber}${deliveryLocationCode}`.replace(/\s+/g, '')
+      // 生成条形码内容：使用第一行和第二行的实际显示内容
+      // 第一行：柜号
+      const row1Content = containerNumber || ''
+      
+      // 第二行：根据性质确定显示内容（与 label-pdf.tsx 中的逻辑完全一致）
+      let row2Content = ''
+      if (deliveryNature === '私仓' || deliveryNature === '转仓') {
+        // 私仓或转仓：显示备注（无论备注是否为空）
+        row2Content = notes || ''
+      } else {
+        // 其他情况显示仓点
+        row2Content = deliveryLocation || ''
+        // 如果性质是扣货，仓点后加-hold
+        if (deliveryNature === '扣货') {
+          row2Content += '-hold'
+        }
+      }
+      
+      // 条形码 = 第一行 + 第二行（去除所有空格）
+      const barcode = `${row1Content}${row2Content}`.replace(/\s+/g, '')
 
       const labelData: LabelData = {
         containerNumber,

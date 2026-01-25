@@ -79,6 +79,7 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     fontFamily: 'Courier',
     lineHeight: 1,
+    textAlign: 'center',
   },
   barcodeImage: {
     width: '100%', // 使用 100% 宽度

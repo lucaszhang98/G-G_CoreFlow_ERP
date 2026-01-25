@@ -11,6 +11,7 @@
 export interface UnloadSheetData {
   // 主数据
   containerNumber: string // 柜号
+  customerCode?: string // 客户代码
   unloadedBy?: string // 拆柜人员
   receivedBy?: string // 入库人员
   unloadDate?: Date | string // 拆柜日期

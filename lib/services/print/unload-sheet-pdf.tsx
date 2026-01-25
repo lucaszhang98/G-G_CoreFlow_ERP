@@ -304,6 +304,10 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
             )}
           </View>
           <View style={styles.headerItem}>
+            <Text style={styles.headerLabel}>客户代码：</Text>
+            <Text style={styles.headerValue}>{data.customerCode || '-'}</Text>
+          </View>
+          <View style={styles.headerItem}>
             <Text style={styles.headerLabel}>拆柜人员：</Text>
             <Text style={styles.headerValue}>{data.unloadedBy || '-'}</Text>
           </View>

@@ -38,6 +38,7 @@ export async function GET(
     // 从查询参数获取数据（前端传递）
     const searchParams = request.nextUrl.searchParams
     containerNumber = searchParams.get('containerNumber')
+    const customerCode = searchParams.get('customerCode')
     unloadedBy = searchParams.get('unloadedBy')
     receivedBy = searchParams.get('receivedBy')
     unloadDate = searchParams.get('unloadDate')
@@ -69,6 +70,7 @@ export async function GET(
     // 构建拆柜单据数据
     const unloadSheetData: UnloadSheetData = {
       containerNumber,
+      customerCode: customerCode || undefined,
       unloadedBy: unloadedBy || undefined,
       receivedBy: receivedBy || undefined,
       unloadDate: unloadDate || undefined,

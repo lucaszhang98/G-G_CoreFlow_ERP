@@ -131,6 +131,9 @@ export function InboundReceiptDetailPageClient({
     })
 
     // 可选参数
+    if (customerCode) {
+      params.append('customerCode', customerCode)
+    }
     if (unloadedBy) {
       params.append('unloadedBy', unloadedBy)
     }
