@@ -159,16 +159,44 @@ export class BaseImportService<T> {
             }
             
             // 将所有值转换为字符串（除了已经是字符串的）
-            if (typeof cellValue === 'number') {
-              // 定义日期字段列表（只对这些字段进行日期转换）
-              const dateFields = [
-                'order_date', 'eta_date', 'lfd_date', 'pickup_date', 
-                'ready_date', 'return_deadline', 'received_date', 
-                'created_at', 'updated_at', 'planned_unload_at'
-              ]
-              
-              // 只对日期字段进行日期序列号检测和转换
-              if (dateFields.includes(fieldName) && cellValue > 1000 && cellValue < 100000) {
+            // 定义日期字段列表（只对这些字段进行日期转换）
+            const dateFields = [
+              'order_date', 'eta_date', 'lfd_date', 'pickup_date', 
+              'ready_date', 'return_deadline', 'received_date', 
+              'created_at', 'updated_at', 'planned_unload_at'
+            ]
+            
+            // 定义日期时间字段列表（需要包含时间部分）
+            const dateTimeFields = [
+              'confirmed_start', 'confirmed_end', 'requested_start', 'requested_end'
+            ]
+            
+            // 处理Date对象（Excel正确读取的日期时间）
+            if (cellValue instanceof Date) {
+              if (isNaN(cellValue.getTime())) {
+                obj[fieldName] = String(cellValue) // 无效日期，保持原样
+              } else {
+                const year = cellValue.getFullYear()
+                const month = String(cellValue.getMonth() + 1).padStart(2, '0')
+                const day = String(cellValue.getDate()).padStart(2, '0')
+                
+                if (dateTimeFields.includes(fieldName)) {
+                  // 日期时间字段，包含时间部分
+                  const hours = String(cellValue.getHours()).padStart(2, '0')
+                  const minutes = String(cellValue.getMinutes()).padStart(2, '0')
+                  obj[fieldName] = `${year}-${month}-${day} ${hours}:${minutes}`
+                } else if (dateFields.includes(fieldName)) {
+                  // 日期字段，只有日期部分
+                  obj[fieldName] = `${year}-${month}-${day}`
+                } else {
+                  obj[fieldName] = String(cellValue)
+                }
+              }
+            } else if (typeof cellValue === 'number') {
+              // 处理数字（可能是Excel日期序列号）
+              // 只对日期/日期时间字段进行日期序列号检测和转换
+              if ((dateFields.includes(fieldName) || dateTimeFields.includes(fieldName)) 
+                  && cellValue > 1000 && cellValue < 100000) {
                 // 可能是Excel日期，转换为日期字符串
                 // 注意：Excel序列号是基于本地时间的，我们需要保持原样，不做时区转换
                 const excelEpoch = new Date(1899, 11, 30) // Excel的起始日期
@@ -180,8 +208,8 @@ export class BaseImportService<T> {
                 const month = String(date.getMonth() + 1).padStart(2, '0')
                 const day = String(date.getDate()).padStart(2, '0')
                 
-                // 如果有小数部分，表示有时间
-                if (cellValue % 1 !== 0) {
+                // 如果有小数部分，表示有时间；或者如果是日期时间字段，总是包含时间
+                if (dateTimeFields.includes(fieldName) || cellValue % 1 !== 0) {
                   const hours = String(date.getHours()).padStart(2, '0')
                   const minutes = String(date.getMinutes()).padStart(2, '0')
                   // 格式化为 YYYY-MM-DD HH:mm

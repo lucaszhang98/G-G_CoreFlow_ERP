@@ -68,7 +68,6 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
           select: {
             id: true,
             order_id: true,
-            delivery_location_id: true,
             locations_order_detail_delivery_location_idTolocations: {
               select: {
                 location_id: true,
@@ -195,7 +194,7 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
       
       const orderDetail = order.order_detail.find(
         (od: any) =>
-          od.delivery_location_id?.toString() === detailLocationId.toString() &&
+          od.locations_order_detail_delivery_location_idTolocations?.location_id?.toString() === detailLocationId.toString() &&
           od.delivery_nature === row.delivery_nature
       )
 
@@ -454,7 +453,7 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
           // 从当前行的订单中查找订单明细
           const orderDetail = rowOrder.order_detail.find(
             (od: any) =>
-              od.delivery_location_id?.toString() === detailLocationId.toString() &&
+              od.locations_order_detail_delivery_location_idTolocations?.location_id?.toString() === detailLocationId.toString() &&
               od.delivery_nature === row.delivery_nature
           )
 
