@@ -76,6 +76,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       label: '起始地',
       type: 'location',
       required: false, // 起始地改为非必填
+      locationType: 'warehouse', // 默认位置类型为仓库（GG 是仓库类型）
     },
     destination_location: {
       key: 'destination_location',

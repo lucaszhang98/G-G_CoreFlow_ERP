@@ -605,7 +605,7 @@ export function EntityTable<T = any>({
       // 初始化编辑值（只包含可编辑字段）
       const initialValues: Record<string, any> = {}
       editableFields.forEach(fieldKey => {
-        // 处理字段名映射：parent_id -> parent, manager_id -> manager
+        // 处理字段名映射：parent_id -> parent, manager_id -> manager, location_id -> destination_location
         let actualFieldKey = fieldKey
         let fieldConfig = config.fields[fieldKey]
         
@@ -620,6 +620,14 @@ export function EntityTable<T = any>({
           } else if (fieldKey === 'department_id') {
             fieldConfig = config.fields['department']
             actualFieldKey = 'department'
+          } else if (fieldKey === 'location_id') {
+            // location_id 映射到 destination_location 字段配置
+            fieldConfig = config.fields['destination_location']
+            actualFieldKey = 'destination_location'
+          } else if (fieldKey === 'origin_location_id') {
+            // origin_location_id 映射到 origin_location 字段配置
+            fieldConfig = config.fields['origin_location']
+            actualFieldKey = 'origin_location'
           }
         }
         
@@ -647,7 +655,13 @@ export function EntityTable<T = any>({
           }
         } else if (fieldConfig?.type === 'location') {
           // 对于location字段，使用对应的_id字段的值
-          const idKey = `${fieldKey}_id`
+          // 特殊处理：location_id 和 origin_location_id 直接使用 fieldKey 作为 idKey
+          let idKey: string
+          if (fieldKey === 'location_id' || fieldKey === 'origin_location_id') {
+            idKey = fieldKey
+          } else {
+            idKey = `${fieldKey}_id`
+          }
           const idValue = (row as any)[idKey]
           if (idValue !== undefined && idValue !== null) {
             initialValues[fieldKey] = String(idValue)
@@ -795,10 +809,13 @@ export function EntityTable<T = any>({
         if (fieldConfig?.type === 'location') {
           // 对于location字段，确定数据库字段名
           // location类型字段的数据库字段名通常是 {fieldKey}_id
-          // 例外：destination_location -> location_id
+          // 例外：destination_location -> location_id, location_id -> location_id, origin_location_id -> origin_location_id
           let dbFieldName: string
           if (key === 'destination_location') {
             dbFieldName = 'location_id'
+          } else if (key === 'location_id' || key === 'origin_location_id') {
+            // 如果 key 本身就是 _id 字段，直接使用
+            dbFieldName = key
           } else {
             dbFieldName = `${key}_id`
           }
@@ -1103,6 +1120,26 @@ export function EntityTable<T = any>({
                     if (responseData.data.rejected !== undefined) {
                       updatedItem.rejected = responseData.data.rejected
                     }
+                    // 更新 location 字段（预约管理）
+                    if (responseData.data.location_id !== undefined) {
+                      updatedItem.location_id = responseData.data.location_id // ID
+                    }
+                    if (responseData.data.destination_location !== undefined) {
+                      updatedItem.destination_location = responseData.data.destination_location // location_code 显示值
+                    }
+                    if (responseData.data.origin_location_id !== undefined) {
+                      updatedItem.origin_location_id = responseData.data.origin_location_id // ID
+                    }
+                    if (responseData.data.origin_location !== undefined) {
+                      updatedItem.origin_location = responseData.data.origin_location // location_code 显示值
+                    }
+                    // 更新关联对象（用于 location 类型字段的显示）
+                    if (responseData.data.locations !== undefined) {
+                      updatedItem.locations = responseData.data.locations
+                    }
+                    if (responseData.data.locations_delivery_appointments_origin_location_idTolocations !== undefined) {
+                      updatedItem.locations_delivery_appointments_origin_location_idTolocations = responseData.data.locations_delivery_appointments_origin_location_idTolocations
+                    }
                     return updatedItem
                   }
                   return item
@@ -1354,9 +1391,13 @@ export function EntityTable<T = any>({
           const numValue = Number(value)
           if (!isNaN(numValue)) {
             // location 类型字段的数据库字段名通常是 {fieldKey}_id
+            // 例外：destination_location -> location_id, location_id -> location_id, origin_location_id -> origin_location_id
             let finalDbFieldKey: string
             if (key === 'destination_location') {
               finalDbFieldKey = 'location_id'
+            } else if (key === 'location_id' || key === 'origin_location_id') {
+              // 如果 key 本身就是 _id 字段，直接使用
+              finalDbFieldKey = key
             } else {
               finalDbFieldKey = `${key}_id`
             }
@@ -1667,6 +1708,14 @@ export function EntityTable<T = any>({
       } else if (fieldKey === 'department_id') {
         fieldConfig = config.fields['department']
         actualFieldKey = 'department'
+      } else if (fieldKey === 'location_id') {
+        // location_id 映射到 destination_location 字段配置
+        fieldConfig = config.fields['destination_location']
+        actualFieldKey = 'destination_location'
+      } else if (fieldKey === 'origin_location_id') {
+        // origin_location_id 映射到 origin_location 字段配置
+        fieldConfig = config.fields['origin_location']
+        actualFieldKey = 'origin_location'
       }
     }
     
@@ -1688,16 +1737,20 @@ export function EntityTable<T = any>({
     // actualFieldKey 已经在上面定义过了，这里直接使用
     
     // 检查字段是否可编辑（需要检查原始字段名和映射后的字段名）
-    // 对于 parent/manager/department，需要同时检查 parent/manager/department 和 parent_id/manager_id/department_id
+    // 对于 parent/manager/department/location，需要同时检查原始字段名和 _id 字段名
     const isEditable = inlineEditEnabled && (
       editableFields.includes(fieldKey) || 
       editableFields.includes(actualFieldKey) ||
       (fieldKey === 'parent' && editableFields.includes('parent_id')) ||
       (fieldKey === 'manager' && editableFields.includes('manager_id')) ||
       (fieldKey === 'department' && editableFields.includes('department_id')) ||
+      (fieldKey === 'destination_location' && editableFields.includes('location_id')) ||
+      (fieldKey === 'origin_location' && editableFields.includes('origin_location_id')) ||
       (actualFieldKey === 'parent' && editableFields.includes('parent_id')) ||
       (actualFieldKey === 'manager' && editableFields.includes('manager_id')) ||
-      (actualFieldKey === 'department' && editableFields.includes('department_id'))
+      (actualFieldKey === 'department' && editableFields.includes('department_id')) ||
+      (actualFieldKey === 'destination_location' && editableFields.includes('location_id')) ||
+      (actualFieldKey === 'origin_location' && editableFields.includes('origin_location_id'))
     )
     
     // 确定编辑时使用的字段名（用于 onChange）
@@ -1713,7 +1766,11 @@ export function EntityTable<T = any>({
               ? 'department_id'
               : (fieldKey === 'department' && editableFields.includes('department'))
                 ? 'department'
-                : fieldKey
+                : (fieldKey === 'destination_location' && editableFields.includes('location_id'))
+                  ? 'location_id'
+                  : (fieldKey === 'origin_location' && editableFields.includes('origin_location_id'))
+                    ? 'origin_location_id'
+                    : fieldKey
     
     // 创建 cell 渲染函数
     const createCellRenderer = () => {
@@ -1731,10 +1788,13 @@ export function EntityTable<T = any>({
           // 对于location字段，从 _id 字段读取ID值
           if (fieldConfig.type === 'location') {
             // location类型字段的数据库字段名通常是 {fieldKey}_id
-            // 例外：destination_location -> location_id
+            // 例外：destination_location -> location_id, location_id -> location_id, origin_location_id -> origin_location_id
             let idKey: string
             if (fieldKey === 'destination_location') {
               idKey = 'location_id'
+            } else if (fieldKey === 'location_id' || fieldKey === 'origin_location_id') {
+              // 如果 fieldKey 本身就是 _id 字段，直接使用
+              idKey = fieldKey
             } else {
               idKey = `${fieldKey}_id`
             }

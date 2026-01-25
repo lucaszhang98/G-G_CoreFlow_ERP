@@ -348,6 +348,20 @@ export async function PUT(
             operation_mode: true,
           },
         },
+        locations: {
+          select: {
+            location_id: true,
+            name: true,
+            location_code: true,
+          },
+        },
+        locations_delivery_appointments_origin_location_idTolocations: {
+          select: {
+            location_id: true,
+            name: true,
+            location_code: true,
+          },
+        },
       },
     });
 
@@ -355,6 +369,12 @@ export async function PUT(
     
     // 导入时间格式化函数（直接显示 UTC 时间，不做时区转换）
     const { formatUTCDateTimeString } = await import('@/lib/utils/datetime-pst')
+    
+    // 格式化 location 字段
+    const originLocationId = serialized.origin_location_id || null;
+    const originLocationCode = serialized.locations_delivery_appointments_origin_location_idTolocations?.location_code || null;
+    const destinationLocationId = serialized.location_id || null;
+    const destinationLocationCode = serialized.locations?.location_code || null;
     
     // 时间字段：直接格式化 UTC 时间，不做时区转换
     const requestedStart = serialized.requested_start 
@@ -468,6 +488,12 @@ export async function PUT(
       success: true,
       data: {
         ...serialized,
+        // 返回location_id用于表单字段绑定
+        origin_location_id: originLocationId,
+        location_id: destinationLocationId,
+        // 返回location_code用于列表显示（而不是name）
+        origin_location: originLocationCode,
+        destination_location: destinationLocationCode,
         // 时间字段：转换为 PST/PDT 显示
         requested_start: requestedStart,
         requested_end: requestedEnd,

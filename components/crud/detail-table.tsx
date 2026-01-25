@@ -721,8 +721,9 @@ export function DetailTable({
   if (orderDetails.length === 0) {
     return (
       <div className="p-4 bg-muted/30">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 mb-3">
           <h4 className="font-semibold text-sm text-foreground">{config.title}</h4>
+          {/* 添加按钮放在标题右边 */}
           <Button size="sm" onClick={() => setAddDetailDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             添加
@@ -744,7 +745,14 @@ export function DetailTable({
   return (
     <div className="p-4 bg-muted/30">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="font-semibold text-sm text-foreground">{config.title}</h4>
+        <div className="flex items-center gap-2">
+          <h4 className="font-semibold text-sm text-foreground">{config.title}</h4>
+          {/* 添加按钮放在标题右边 */}
+          <Button size="sm" onClick={() => setAddDetailDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            添加
+          </Button>
+        </div>
         <div className="flex items-center gap-2">
           {/* 批量编辑按钮（仅订单明细显示，预约明细不显示） */}
           {!appointmentId && (
@@ -780,10 +788,6 @@ export function DetailTable({
               </Button>
             )
           )}
-          <Button size="sm" onClick={() => setAddDetailDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            添加
-          </Button>
         </div>
       </div>
       <div className="overflow-x-auto">
