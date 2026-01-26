@@ -29,7 +29,7 @@ export function AppointmentDetailClient({ appointmentId, appointment }: Appointm
     getLocationName: (detail, context) => {
       return detail.order_detail_item_order_detail_item_detail_idToorder_detail?.[0]?.detail_name 
         || context.deliveryLocation 
-        || detail.delivery_location_code
+        || (detail as any).delivery_location_code
         || detail.delivery_location
         || '-'
     },
