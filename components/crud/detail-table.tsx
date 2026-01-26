@@ -790,7 +790,7 @@ export function DetailTable({
           )}
         </div>
       </div>
-      <div className="overflow-x-auto">
+      <div>
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-muted/50 border-b">
@@ -837,7 +837,17 @@ export function DetailTable({
                     if (isBatchEditMode) {
                       return null
                     }
-                    return <th key={col} className="text-left p-2 font-semibold text-sm w-24">操作</th>
+                    return (
+                      <th 
+                        key={col} 
+                        className="text-left p-2 font-semibold text-sm w-24 sticky right-0 z-30 bg-muted/50"
+                        style={{ 
+                          boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
+                        }}
+                      >
+                        操作
+                      </th>
+                    )
                   default:
                     return null
                 }
@@ -1225,7 +1235,14 @@ export function DetailTable({
                           }
                           if (editingRowId === detailId) {
                             return (
-                              <td key={col} className="p-2 text-sm">
+                              <td 
+                                key={col} 
+                                className="p-2 text-sm sticky right-0 z-30"
+                                style={{
+                                  backgroundColor: 'transparent',
+                                  boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)'
+                                }}
+                              >
                                 <div className="flex gap-1">
                                   <Button
                                     size="sm"
@@ -1248,7 +1265,14 @@ export function DetailTable({
                             )
                           }
                           return (
-                            <td key={col} className="p-2 text-sm">
+                            <td 
+                              key={col} 
+                              className="p-2 text-sm sticky right-0 z-30"
+                              style={{
+                                backgroundColor: 'transparent',
+                                boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)'
+                              }}
+                            >
                               <div className="flex gap-1">
                                 <Button
                                   size="sm"
@@ -2152,7 +2176,7 @@ function AddDetailDialog({
                 </div>
               ) : (
                 <div className="border border-border/50 rounded-lg overflow-hidden shadow-sm bg-white dark:bg-gray-900/80">
-                  <div className="max-h-[400px] overflow-y-auto">
+                  <div className="max-h-[400px] overflow-y-auto overflow-x-auto">
                     <table className="w-full">
                       <thead className="bg-gradient-to-br from-blue-50 via-indigo-50/80 to-purple-50/50 dark:from-blue-950/30 dark:via-indigo-950/20 dark:to-purple-950/20 sticky top-0 z-10 border-b border-border/50">
                         <tr>
@@ -2162,7 +2186,14 @@ function AddDetailDialog({
                           <th className="text-left p-3 font-semibold text-sm text-foreground">总板数</th>
                           <th className="text-left p-3 font-semibold text-sm text-foreground">备注</th>
                           <th className="text-left p-3 font-semibold text-sm text-foreground">窗口期</th>
-                          <th className="text-left p-3 font-semibold text-sm w-24">操作</th>
+                          <th 
+                            className="text-left p-3 font-semibold text-sm w-24 sticky right-0 z-20 bg-gradient-to-br from-blue-50 via-indigo-50/80 to-purple-50/50 dark:from-blue-950/30 dark:via-indigo-950/20 dark:to-purple-950/20"
+                            style={{ 
+                              boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
+                            }}
+                          >
+                            操作
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2223,7 +2254,12 @@ function AddDetailDialog({
                               <td className="p-3 text-sm text-muted-foreground">
                                 {(detail as any).window_period || '-'}
                               </td>
-                              <td className="p-3 text-sm">
+                              <td 
+                                className="p-3 text-sm sticky right-0 z-30 bg-white dark:bg-gray-900/80"
+                                style={{
+                                  boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)'
+                                }}
+                              >
                                 <Button
                                   size="sm"
                                   variant={isSelected ? "default" : "outline"}

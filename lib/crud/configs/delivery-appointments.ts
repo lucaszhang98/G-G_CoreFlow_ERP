@@ -141,7 +141,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'po', 'notes'],
+        fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'po', 'notes'],
       },
       delete: {
         enabled: true,
@@ -150,7 +150,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'po', 'notes'],
+      fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'po', 'notes'],
     },
   },
   

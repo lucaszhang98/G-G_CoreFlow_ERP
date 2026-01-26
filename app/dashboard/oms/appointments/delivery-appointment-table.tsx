@@ -60,11 +60,15 @@ export function DeliveryAppointmentTable() {
     setFilteredCount(newFilteredTotal)
   }, [])
 
-  // 隐藏查看详情按钮，但保留删除功能
+  // 启用查看详情按钮，跳转到预约详情页
   const customActions = React.useMemo(() => ({
-    onView: null as any, // 设置为 null 以隐藏查看详情按钮
+    onView: (row: any) => {
+      if (row.appointment_id) {
+        router.push(`/dashboard/oms/appointments/${row.appointment_id}`)
+      }
+    },
     // onDelete 不设置（undefined），使用配置中的默认删除功能（单个删除）
-  }), [])
+  }), [router])
 
   const handleRefresh = React.useCallback(() => {
     setRefreshKey(prev => prev + 1)
