@@ -58,6 +58,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
         { label: 'OLPN', value: 'OLPN' },
         { label: 'DATONG', value: 'DATONG' },
         { label: 'GG', value: 'GG' },
+        { label: 'WGUY', value: 'WGUY' },
         { label: 'Other', value: 'other' },
       ],
     },
