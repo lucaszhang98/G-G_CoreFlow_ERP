@@ -67,9 +67,10 @@ export async function GET(request: NextRequest) {
 
     const delivery_location = searchParams.get('filter_delivery_location_code')
     if (delivery_location && delivery_location !== '__all__') {
-      // 通过关联的 locations 表筛选 location_code
+      // 通过关联的 locations 表筛选 location_id
+      // 注意：前端传的是 location_id（因为配置中 valueField 是 location_id）
       where.locations_order_detail_delivery_location_idTolocations = {
-        location_code: delivery_location,
+        location_id: BigInt(delivery_location),
       }
     }
 

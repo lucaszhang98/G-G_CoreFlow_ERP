@@ -63,6 +63,7 @@ export const inventoryLotConfig: EntityConfig = {
         displayField: 'location_code',
         valueField: 'location_id',
       },
+      relationField: 'delivery_location_id', // 指向 order_detail 表中的实际字段名
       searchable: true,
     },
     // 表内自己的字段

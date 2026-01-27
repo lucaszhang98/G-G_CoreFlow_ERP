@@ -9,6 +9,9 @@ import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generato
 // GET - 获取库存管理列表
 export async function GET(request: NextRequest) {
   try {
+    const permissionResult = await checkPermission(inventoryLotConfig.permissions.list);
+    if (permissionResult.error) return permissionResult.error;
+
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)));
@@ -41,23 +44,86 @@ export async function GET(request: NextRequest) {
     const mainTableConditions: any[] = []
     const ordersConditions: any = {}
     const orderDetailConditions: any = {}
+    const inboundReceiptConditions: any = {}
     
     filterConditions.forEach((condition) => {
-      Object.keys(condition).forEach((fieldName) => {
-        // 判断字段是否来自 order_detail 表
-        // order_detail 字段：delivery_nature, delivery_location_id
-        if (fieldName === 'delivery_nature' || fieldName === 'delivery_location' || fieldName === 'delivery_location_id') {
-          Object.assign(orderDetailConditions, condition)
+      // 检查条件是否包含 OR 或 AND（复合条件）
+      // 如果是复合条件，需要检查内部字段来判断属于哪个表
+      if (condition.OR || condition.AND) {
+        // 复合条件：需要检查内部字段
+        const nestedConditions = condition.OR || condition.AND || []
+        let belongsToMainTable = false
+        let belongsToOrderDetail = false
+        let belongsToInboundReceipt = false
+        
+        // 递归检查嵌套条件中的字段
+        const checkNestedCondition = (cond: any) => {
+          if (!cond || typeof cond !== 'object') return
+          Object.keys(cond).forEach((fieldName) => {
+            if (fieldName === 'delivery_nature' || fieldName === 'delivery_location_id') {
+              belongsToOrderDetail = true
+            } else if (fieldName === 'planned_unload_at') {
+              belongsToInboundReceipt = true
+            } else if (['lot_id', 'inbound_receipt_id', 'order_detail_id', 'storage_location_code', 'pallet_count', 'notes', 'remaining_pallet_count', 'unbooked_pallet_count'].includes(fieldName)) {
+              belongsToMainTable = true
+            } else if (fieldName === 'delivery_progress') {
+              // delivery_progress 是实时计算的，不在数据库筛选，稍后在内存中筛选
+              // 跳过这个条件，不添加到任何表
+            } else if (cond[fieldName] && typeof cond[fieldName] === 'object') {
+              // 递归检查嵌套对象（如 { not: { equals: 100 } }）
+              checkNestedCondition(cond[fieldName])
+            }
+          })
         }
-        // 判断字段是否来自主表
-        // 主表字段：lot_id, inbound_receipt_id, order_detail_id, storage_location_code, pallet_count, notes, remaining_pallet_count, unbooked_pallet_count, delivery_progress
-        else if (['lot_id', 'inbound_receipt_id', 'order_detail_id', 'storage_location_code', 'pallet_count', 'notes', 'remaining_pallet_count', 'unbooked_pallet_count', 'delivery_progress'].includes(fieldName)) {
+        
+        nestedConditions.forEach((nestedCond: any) => {
+          checkNestedCondition(nestedCond)
+        })
+        
+        // 根据字段归属决定将条件添加到哪个表
+        if (belongsToMainTable) {
           mainTableConditions.push(condition)
+        } else if (belongsToOrderDetail) {
+          // 对于复合条件，不能直接 Object.assign，需要特殊处理
+          // 但 delivery_nature 和 delivery_location_id 通常不会出现在复合条件中
+          Object.assign(orderDetailConditions, condition)
+        } else if (belongsToInboundReceipt) {
+          Object.assign(inboundReceiptConditions, condition)
         } else {
-          // 字段来自 orders 表
-          Object.assign(ordersConditions, condition)
+          // 默认作为主表条件（可能是 delivery_progress 的 OR 条件）
+          mainTableConditions.push(condition)
         }
-      })
+      } else {
+        // 普通条件：按字段名分类
+        Object.keys(condition).forEach((fieldName) => {
+          // 跳过 OR 和 AND 关键字（这些不应该出现在普通条件中，但为了安全起见）
+          if (fieldName === 'OR' || fieldName === 'AND') {
+            return
+          }
+          // 判断字段是否来自 order_detail 表
+          // order_detail 字段：delivery_nature, delivery_location_id（relation 筛选会返回 delivery_location_id，因为配置了 relationField）
+          if (fieldName === 'delivery_nature' || fieldName === 'delivery_location_id') {
+            Object.assign(orderDetailConditions, condition)
+          }
+          // 判断字段是否来自 inbound_receipt 表
+          // inbound_receipt 字段：planned_unload_at
+          else if (fieldName === 'planned_unload_at') {
+            Object.assign(inboundReceiptConditions, condition)
+          }
+          // 判断字段是否来自主表
+          // 主表字段：lot_id, inbound_receipt_id, order_detail_id, storage_location_code, pallet_count, notes, remaining_pallet_count, unbooked_pallet_count
+          // 注意：delivery_progress 是实时计算的，不在数据库筛选，稍后在内存中筛选
+          else if (fieldName === 'delivery_progress') {
+            // delivery_progress 是实时计算的，不在数据库筛选，稍后在内存中筛选
+            // 跳过这个条件，不添加到任何表
+          } else if (['lot_id', 'inbound_receipt_id', 'order_detail_id', 'storage_location_code', 'pallet_count', 'notes', 'remaining_pallet_count', 'unbooked_pallet_count'].includes(fieldName)) {
+            mainTableConditions.push(condition)
+          } else {
+            // 字段来自 orders 表
+            Object.assign(ordersConditions, condition)
+          }
+        })
+      }
     })
     
     // 合并主表筛选条件
@@ -81,6 +147,17 @@ export async function GET(request: NextRequest) {
     if (Object.keys(orderDetailConditions).length > 0) {
       where.order_detail = {
         is: orderDetailConditions
+      }
+    }
+    
+    // 合并 inbound_receipt 表的筛选条件
+    if (Object.keys(inboundReceiptConditions).length > 0) {
+      // 需要与默认的 status: 'received' 条件合并，而不是覆盖
+      where.inbound_receipt = {
+        is: {
+          status: 'received',
+          ...inboundReceiptConditions,
+        }
       }
     }
 
@@ -111,9 +188,18 @@ export async function GET(request: NextRequest) {
       orderBy.order_detail = { locations_order_detail_delivery_location_idTolocations: { location_code: order } };
     } else if (sort === 'delivery_nature') {
       orderBy.order_detail = { delivery_nature: order };
-    } else {
+    } else if (sort) {
+      // 确保 sort 字段存在且有效
       orderBy[sort] = order;
+    } else {
+      // 默认排序
+      orderBy.created_at = 'desc';
     }
+
+    // 检查是否有 delivery_progress 筛选（需要内存筛选）
+    // 需要在查询之前定义，以便在后续代码中使用
+    const deliveryProgressFilter = searchParams.get('filter_delivery_progress');
+    const needsMemoryFilter = deliveryProgressFilter && deliveryProgressFilter !== '__all__';
 
     // 查询数据
     let items: any[];
@@ -198,14 +284,13 @@ export async function GET(request: NextRequest) {
           },
         },
       };
-
-      [items, total] = await Promise.all([
-        prisma.inventory_lots.findMany({
-          where,
-          orderBy,
-          skip: (page - 1) * limit,
-          take: limit,
-          select: {
+      
+      // 如果有 delivery_progress 筛选，需要先查询所有数据，然后在内存中筛选和分页
+      // 否则，正常查询并分页
+      const queryOptions: any = {
+        where,
+        orderBy,
+        select: {
             inventory_lot_id: true,
             warehouse_id: true,
             storage_location_code: true,
@@ -251,7 +336,17 @@ export async function GET(request: NextRequest) {
             inbound_receipt: includeConfig.inbound_receipt,
             warehouses: includeConfig.warehouses,
           },
-        }),
+      };
+      
+      if (!needsMemoryFilter) {
+        // 没有 delivery_progress 筛选，正常分页查询
+        queryOptions.skip = (page - 1) * limit;
+        queryOptions.take = limit;
+      }
+      // 如果有 delivery_progress 筛选，不应用分页，稍后在内存中筛选和分页
+      
+      [items, total] = await Promise.all([
+        prisma.inventory_lots.findMany(queryOptions),
         prisma.inventory_lots.count({ where }),
       ]);
     } catch (dbError: any) {
@@ -261,6 +356,10 @@ export async function GET(request: NextRequest) {
       }
       if (dbError.stack) {
         console.error('错误堆栈:', dbError.stack);
+      }
+      if (process.env.NODE_ENV === 'development') {
+        console.error('查询选项:', JSON.stringify(queryOptions, null, 2));
+        console.error('Where 条件:', JSON.stringify(where, null, 2));
       }
       throw new Error(`数据库查询失败: ${dbError.message || '未知错误'}`);
     }
@@ -291,10 +390,21 @@ export async function GET(request: NextRequest) {
         // 送仓性质
         const deliveryNature = orderDetail?.delivery_nature || null;
         
-        // 送货进度（优先使用inventory_lots表的，如果没有则从inbound_receipt获取）
-        const deliveryProgress = serialized.delivery_progress !== null && serialized.delivery_progress !== undefined
-          ? serialized.delivery_progress
-          : inboundReceipt?.delivery_progress || null;
+        // 送货进度：对于库存管理，需要实时计算（基于 pallet_count 和 remaining_pallet_count）
+        // 公式：delivery_progress = (pallet_count - remaining_pallet_count) / pallet_count * 100
+        let deliveryProgress = null;
+        const palletCount = serialized.pallet_count ?? 0;
+        const remainingCount = serialized.remaining_pallet_count ?? 0;
+        
+        if (palletCount > 0) {
+          const deliveredCount = palletCount - remainingCount;
+          deliveryProgress = (deliveredCount / palletCount) * 100;
+          deliveryProgress = Math.round(deliveryProgress * 100) / 100; // 保留两位小数
+          deliveryProgress = Math.max(0, Math.min(100, deliveryProgress)); // 确保在 0-100 之间
+        } else if (palletCount === 0) {
+          // 如果实际板数为0，视为已送完（100%）
+          deliveryProgress = 100;
+        }
 
         return {
           ...serialized,
@@ -321,13 +431,41 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // 在内存中根据 delivery_progress 筛选（因为 delivery_progress 是实时计算的，不能基于数据库字段筛选）
+    let filteredItems = serializedItems;
+    let filteredTotal = total;
+    
+    if (needsMemoryFilter) {
+      if (deliveryProgressFilter === 'complete') {
+        // 已完成：delivery_progress >= 100
+        filteredItems = serializedItems.filter((item: any) => {
+          const progress = item.delivery_progress;
+          return progress !== null && progress !== undefined && progress >= 100;
+        });
+        filteredTotal = filteredItems.length;
+      } else if (deliveryProgressFilter === 'incomplete') {
+        // 未完成：delivery_progress < 100 或为 null
+        filteredItems = serializedItems.filter((item: any) => {
+          const progress = item.delivery_progress;
+          return progress === null || progress === undefined || progress < 100;
+        });
+        filteredTotal = filteredItems.length;
+      }
+      
+      // 应用分页（在内存筛选后）
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      filteredItems = filteredItems.slice(startIndex, endIndex);
+    }
+    // 如果没有 delivery_progress 筛选，serializedItems 已经是分页后的数据，直接使用
+
     return NextResponse.json({
-      data: serializedItems,
+      data: filteredItems,
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+        total: needsMemoryFilter ? filteredTotal : total,
+        totalPages: Math.ceil((needsMemoryFilter ? filteredTotal : total) / limit),
       },
     });
   } catch (error: any) {

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import {
   Table,
   TableBody,
@@ -76,6 +77,7 @@ export function InboundReceiptDetailsTable({
   warehouseId,
   onRefresh,
 }: InboundReceiptDetailsTableProps) {
+  const router = useRouter()
   // 展开状态管理
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set())
   // 批量编辑模式
@@ -864,7 +866,9 @@ export function InboundReceiptDetailsTable({
                                         className="text-blue-600 hover:underline"
                                         onClick={(e) => {
                                           e.preventDefault()
-                                          // TODO: 后续添加链接目标
+                                          if (appt.appointment_id) {
+                                            router.push(`/dashboard/oms/appointments/${appt.appointment_id}`)
+                                          }
                                         }}
                                       >
                                         {appt.reference_number}

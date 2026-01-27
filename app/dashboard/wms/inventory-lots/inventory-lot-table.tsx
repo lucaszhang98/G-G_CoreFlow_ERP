@@ -228,7 +228,9 @@ export function InventoryLotTable() {
                             className="text-blue-600 hover:underline"
                             onClick={(e) => {
                               e.preventDefault()
-                              // TODO: 后续添加链接目标
+                              if (appt.appointment_id) {
+                                router.push(`/dashboard/oms/appointments/${appt.appointment_id}`)
+                              }
                             }}
                           >
                             {appt.reference_number}

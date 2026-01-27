@@ -52,9 +52,9 @@ export function buildFilterConditions(
         // 获取字段配置，判断字段类型
         const fieldConfig = config.fields[filterField.field]
         
-        // 特殊处理：delivery_location 在 order_detail 表中是字符串类型，存储 location_id 的字符串形式
-        // 即使使用 relation 筛选，也需要确保值被转换为字符串，而不是 BigInt
-        if (filterField.field === 'delivery_location') {
+        // 特殊处理：delivery_location 在某些表中是字符串类型（如 order_detail），但在其他表中是通过 ID 关联的（如 inventory_lots）
+        // 只有在字段类型不是 relation 时才使用字符串筛选
+        if (filterField.field === 'delivery_location' && fieldConfig?.type !== 'relation') {
           if (filterField.relation) {
             // 使用 relation 筛选，但值需要转换为字符串（因为 delivery_location 是字符串字段）
             // 直接使用字符串值，不转换为 BigInt
@@ -100,14 +100,25 @@ export function buildFilterConditions(
             }
           }
           // 特殊处理：100%/非100%筛选（用于 delivery_progress）
+          // 注意：delivery_progress 是 Decimal 类型，数据库中存储的是小数形式（0.00 到 1.00），而不是百分比（0 到 100）
+          // 已完成 = 1.00（表示 100%），未完成 = 非 1.00（包括 null 和小于 1.00 的值）
           else if (filterValue === 'complete' || filterValue === 'incomplete') {
             if (filterValue === 'complete') {
-              filterConditions.push({ [dbFieldName]: { equals: 100 } })
+              // 已完成：等于 1.00（表示 100%）
+              filterConditions.push({ [dbFieldName]: { equals: 1 } })
             } else {
-              filterConditions.push({ [dbFieldName]: { not: 100 } })
+              // 未完成：不等于 1.00（包括 null 和小于 1.00 的值）
+              // 在 Prisma 中，not: 1 不会匹配 null，所以需要明确处理 null
+              // 使用 OR 条件：要么不等于 1，要么为 null
+              filterConditions.push({
+                OR: [
+                  { [dbFieldName]: { not: { equals: 1 } } },
+                  { [dbFieldName]: null }
+                ]
+              })
             }
             if (process.env.NODE_ENV === 'development') {
-              console.log(`[buildFilterConditions] 添加100%/非100%筛选: ${dbFieldName} ${filterValue === 'complete' ? '= 100' : '!= 100'}`)
+              console.log(`[buildFilterConditions] 添加100%/非100%筛选: ${dbFieldName} ${filterValue === 'complete' ? '= 1.00 (100%)' : '!= 1.00 (包括 null)'}`)
             }
           }
           // 普通 select 筛选
