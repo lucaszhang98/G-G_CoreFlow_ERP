@@ -205,13 +205,29 @@ export async function GET(request: NextRequest) {
     let items: any[];
     let total: number;
     
-    try {
-      // 检查 Prisma 客户端是否有 inventory_lots 模型
-      if (!prisma.inventory_lots) {
-        throw new Error('Prisma 客户端未找到 inventory_lots 模型，请运行 npx prisma generate');
-      }
-
-      const includeConfig = {
+    // 构建查询选项（需要在 try 块外部定义，以便在 catch 块中访问）
+    const queryOptions: any = {
+      where,
+      orderBy,
+      select: {
+        inventory_lot_id: true,
+        warehouse_id: true,
+        storage_location_code: true,
+        status: true,
+        // notes 字段在数据库中不存在，所以不查询
+        order_id: true,
+        order_detail_id: true,
+        created_at: true,
+        updated_at: true,
+        created_by: true,
+        updated_by: true,
+        inbound_receipt_id: true,
+        lot_number: true,
+        received_date: true,
+        pallet_count: true,
+        remaining_pallet_count: true,
+        unbooked_pallet_count: true,
+        delivery_progress: true,
         orders: {
           select: {
             order_id: true,
@@ -241,16 +257,16 @@ export async function GET(request: NextRequest) {
             quantity: true,
             volume: true,
             estimated_pallets: true,
-          delivery_nature: true,
-          delivery_location_id: true,
-          locations_order_detail_delivery_location_idTolocations: {
-            select: {
-              location_id: true,
-              location_code: true,
-              name: true,
+            delivery_nature: true,
+            delivery_location_id: true,
+            locations_order_detail_delivery_location_idTolocations: {
+              select: {
+                location_id: true,
+                location_code: true,
+                name: true,
+              },
             },
-          },
-          appointment_detail_lines: {
+            appointment_detail_lines: {
               select: {
                 id: true,
                 estimated_pallets: true,
@@ -283,67 +299,21 @@ export async function GET(request: NextRequest) {
             warehouse_code: true,
           },
         },
-      };
-      
-      // 如果有 delivery_progress 筛选，需要先查询所有数据，然后在内存中筛选和分页
-      // 否则，正常查询并分页
-      const queryOptions: any = {
-        where,
-        orderBy,
-        select: {
-            inventory_lot_id: true,
-            warehouse_id: true,
-            storage_location_code: true,
-            status: true,
-            // notes 字段在数据库中不存在，所以不查询
-            order_id: true,
-            order_detail_id: true,
-            created_at: true,
-            updated_at: true,
-            created_by: true,
-            updated_by: true,
-            inbound_receipt_id: true,
-            lot_number: true,
-            received_date: true,
-            pallet_count: true,
-            remaining_pallet_count: true,
-            unbooked_pallet_count: true,
-            delivery_progress: true,
-            orders: {
-              select: {
-                order_id: true,
-                order_number: true,
-                order_date: true,
-                delivery_appointments: {
-                  select: {
-                    appointment_id: true,
-                    reference_number: true,
-                    confirmed_start: true,
-                    location_id: true,
-                    status: true,
-                  },
-                },
-                customers: {
-                  select: {
-                    id: true,
-                    name: true,
-                    code: true,
-                  },
-                },
-              },
-            },
-            order_detail: includeConfig.order_detail,
-            inbound_receipt: includeConfig.inbound_receipt,
-            warehouses: includeConfig.warehouses,
-          },
-      };
-      
-      if (!needsMemoryFilter) {
-        // 没有 delivery_progress 筛选，正常分页查询
-        queryOptions.skip = (page - 1) * limit;
-        queryOptions.take = limit;
+      },
+    };
+    
+    if (!needsMemoryFilter) {
+      // 没有 delivery_progress 筛选，正常分页查询
+      queryOptions.skip = (page - 1) * limit;
+      queryOptions.take = limit;
+    }
+    // 如果有 delivery_progress 筛选，不应用分页，稍后在内存中筛选和分页
+    
+    try {
+      // 检查 Prisma 客户端是否有 inventory_lots 模型
+      if (!prisma.inventory_lots) {
+        throw new Error('Prisma 客户端未找到 inventory_lots 模型，请运行 npx prisma generate');
       }
-      // 如果有 delivery_progress 筛选，不应用分页，稍后在内存中筛选和分页
       
       [items, total] = await Promise.all([
         prisma.inventory_lots.findMany(queryOptions),
