@@ -26,8 +26,8 @@ export const appointmentImportRowSchema = z.object({
   }),
   
   // 预约账号（必填）
-  appointment_account: z.enum(['AA', 'YTAQ', 'AYIE', 'KP', 'OLPN', 'DATONG', 'GG', 'other'], {
-    message: '预约账号必须是：AA、YTAQ、AYIE、KP、OLPN、DATONG、GG、other之一',
+  appointment_account: z.enum(['AA', 'YTAQ', 'AYIE', 'KP', 'OLPN', 'DATONG', 'GG', 'WGUY', 'other'], {
+    message: '预约账号必须是：AA、YTAQ、AYIE、KP、OLPN、DATONG、GG、WGUY、other之一',
   }),
   
   // 预约类型（必填）

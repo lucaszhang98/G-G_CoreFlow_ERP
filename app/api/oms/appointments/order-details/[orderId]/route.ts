@@ -45,13 +45,18 @@ export async function GET(
       }
     }
 
-    // 获取订单信息
+    // 获取订单信息（包含入库管理记录ID）
     const order = await prisma.orders.findUnique({
       where: { order_id: orderId },
       select: {
         order_id: true,
         order_number: true,
         delivery_location: true,
+        inbound_receipt: {
+          select: {
+            inbound_receipt_id: true,
+          },
+        },
       },
     })
 
@@ -94,10 +99,21 @@ export async function GET(
       },
     })
 
+    console.log(`[预约明细API] 订单 ${orderId} 查询到的明细数量: ${orderDetails.length}`)
+    if (orderDetails.length > 0) {
+      console.log(`[预约明细API] 明细示例:`, {
+        id: orderDetails[0].id,
+        delivery_location_id: orderDetails[0].delivery_location_id,
+        location_code: orderDetails[0].locations_order_detail_delivery_location_idTolocations?.location_code,
+        delivery_nature: orderDetails[0].delivery_nature,
+      })
+    }
+
     // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
     // 不需要手动查询 locations 了
 
     // 检查每个明细是否在库存中，并获取库存板数
+    console.log(`[预约明细API] 开始处理 ${orderDetails.length} 个明细`)
     const detailsWithInventory = await Promise.all(
       orderDetails.map(async (detail) => {
         // 查询该明细的库存
@@ -147,7 +163,7 @@ export async function GET(
           }
         }
 
-        return {
+        const result = {
           id: detail.id.toString(),
           quantity: detail.quantity,
           volume: detail.volume ? Number(detail.volume) : null,
@@ -167,8 +183,17 @@ export async function GET(
           matches_appointment_destination: matchesAppointmentDestination,
           appointment_destination_location_code: appointmentDestinationLocationCode,
         }
+        
+        // 调试：如果 location_code 为空，记录警告
+        if (!locationCode) {
+          console.warn(`[预约明细API] 订单明细 ${detail.id} 的 location_code 为空，delivery_location_id: ${detail.delivery_location_id}`)
+        }
+        
+        return result
       })
     )
+
+    console.log(`[预约明细API] 处理完成，返回 ${detailsWithInventory.length} 个明细`)
 
     return NextResponse.json({
       success: true,
@@ -177,6 +202,7 @@ export async function GET(
           order_id: order.order_id.toString(),
           order_number: order.order_number,
           delivery_location: order.delivery_location,
+          inbound_receipt_id: order.inbound_receipt?.inbound_receipt_id?.toString() || null,
         },
         details: detailsWithInventory,
         // 新增：预约目的地信息（如果提供了 appointmentId）

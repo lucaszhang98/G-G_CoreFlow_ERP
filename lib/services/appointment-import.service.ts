@@ -25,6 +25,7 @@ interface AppointmentMasterData {
   ordersMap: Map<string, any>  // order_number -> order (with details)
   locationsMap: Map<string, bigint>  // location_code -> location_id
   inventoryMap: Map<bigint, any>  // order_detail_id -> inventory_lot
+  bookedPalletsMap: Map<bigint, number>  // order_detail_id -> 已预约的板数总和
 }
 
 /**
@@ -123,9 +124,40 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
       inventoryLots.map(inv => [inv.order_detail_id, inv])
     )
 
-    console.log(`[预约导入] 已加载 ${orders.length} 个订单，${locations.length} 个位置，${inventoryLots.length} 个库存记录`)
+    // 查询所有已存在的预约明细，计算每个订单明细已预约的板数
+    const existingAppointmentDetails = await prisma.appointment_detail_lines.findMany({
+      where: {
+        order_detail_id: {
+          in: allOrderDetailIds,
+        },
+      },
+      select: {
+        order_detail_id: true,
+        estimated_pallets: true,
+      },
+    })
 
-    return { ordersMap, locationsMap, inventoryMap }
+    // 按 order_detail_id 分组，累加已预约的板数
+    const bookedPalletsMap = new Map<bigint, number>()
+    existingAppointmentDetails.forEach((detail) => {
+      const orderDetailId = detail.order_detail_id
+      const currentBooked = bookedPalletsMap.get(orderDetailId) || 0
+      bookedPalletsMap.set(orderDetailId, currentBooked + (detail.estimated_pallets || 0))
+    })
+
+    // 诊断：检查一些订单明细的已预约板数
+    const sampleOrderDetailIds = Array.from(bookedPalletsMap.keys()).slice(0, 5)
+    sampleOrderDetailIds.forEach(id => {
+      const booked = bookedPalletsMap.get(id) || 0
+      const inventory = inventoryMap.get(id)
+      if (inventory) {
+        console.log(`[预约导入诊断] 订单明细${id}：已预约${booked}板，库存pallet_count=${inventory.pallet_count}，unbooked=${inventory.unbooked_pallet_count}`)
+      }
+    })
+
+    console.log(`[预约导入] 已加载 ${orders.length} 个订单，${locations.length} 个位置，${inventoryLots.length} 个库存记录，${existingAppointmentDetails.length} 个已存在的预约明细`)
+
+    return { ordersMap, locationsMap, inventoryMap, bookedPalletsMap }
   },
 
   // 5. 检查重复和业务校验
@@ -144,7 +176,7 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
       return errors
     }
 
-    const { ordersMap, locationsMap, inventoryMap } = masterData
+    const { ordersMap, locationsMap, inventoryMap, bookedPalletsMap } = masterData
 
     // 第1步：验证每一行的基础数据
     const validatedRows: any[] = []
@@ -238,9 +270,18 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
         const order = ordersMap.get(row.order_number)
         const orderDetail = order.order_detail.find((od: any) => od.id === orderDetailId)
         
-        const availablePallets = hasInventory
-          ? (inventory.unbooked_pallet_count ?? inventory.pallet_count)
-          : (orderDetail.remaining_pallets ?? orderDetail.estimated_pallets ?? 0)
+        // 计算可用板数（实时计算，与订单明细管理保持一致）
+        // 注意：不依赖数据库字段 unbooked_pallet_count 和 remaining_pallets，因为它们可能没有正确更新
+        // 使用实时计算：pallet_count - 已预约板数之和（已入库）或 estimated_pallets - 已预约板数之和（未入库）
+        const alreadyBooked = bookedPalletsMap.get(orderDetailId) || 0
+        let availablePallets: number
+        if (hasInventory) {
+          // 已入库：实时计算 = pallet_count - 已预约板数之和（与订单明细管理逻辑一致）
+          availablePallets = Math.max(0, (inventory.pallet_count || 0) - alreadyBooked)
+        } else {
+          // 未入库：实时计算 = estimated_pallets - 已预约板数之和（允许负数，表示多约）
+          availablePallets = (orderDetail.estimated_pallets || 0) - alreadyBooked
+        }
 
         detailPalletsMap.set(orderDetailId, {
           totalBooked: 0,
@@ -248,6 +289,20 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
           rows: [],
           detailKey: `${row.order_number}-${row.detail_location_code}-${row.delivery_nature}`
         })
+        
+        // 详细调试信息（只在可用板数为0时输出，避免日志过多）
+        if (availablePallets === 0) {
+          if (hasInventory) {
+            console.log(`[预约导入警告] 订单明细${orderDetailId}（已入库）：pallet_count=${inventory.pallet_count}, 已预约=${alreadyBooked}板, 实时计算可用=${availablePallets}板`)
+            // 检查数据一致性：数据库字段 unbooked_pallet_count 应该等于实时计算值
+            const expectedUnbooked = inventory.pallet_count - alreadyBooked
+            if (inventory.unbooked_pallet_count !== null && inventory.unbooked_pallet_count !== expectedUnbooked) {
+              console.warn(`[预约导入数据不一致] 订单明细${orderDetailId}：数据库unbooked_pallet_count(${inventory.unbooked_pallet_count}) 不等于实时计算值(${expectedUnbooked})，已使用实时计算值`)
+            }
+          } else {
+            console.log(`[预约导入警告] 订单明细${orderDetailId}（未入库）：estimated_pallets=${orderDetail.estimated_pallets}, 已预约=${alreadyBooked}板, 实时计算可用=${availablePallets}板`)
+          }
+        }
       }
 
       // 累加预约板数
@@ -362,7 +417,7 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
       throw new Error('主数据未加载')
     }
 
-    const { ordersMap, locationsMap, inventoryMap } = masterData
+    const { ordersMap, locationsMap, inventoryMap, bookedPalletsMap } = masterData
 
     // 按预约号码分组（支持一个预约多个明细）
     const appointmentGroups = new Map<string, any[]>()
@@ -375,173 +430,219 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
 
     console.log(`[预约导入] 共 ${appointmentGroups.size} 个预约，${data.length} 个明细`)
 
-    let successCount = 0 // 记录成功创建的预约数量
-
-    // 使用事务批量导入（全部成功或全部失败）
-    await prisma.$transaction(async (tx) => {
-      for (const [referenceNumber, rows] of appointmentGroups) {
-        const firstRow = rows[0]
-
-        // 获取位置ID（起始地为可选字段）
-        const originLocationId = firstRow.origin_location_code 
-          ? locationsMap.get(firstRow.origin_location_code) 
-          : null
-        
-        // 如果提供了起始地但不存在，则报错
-        if (firstRow.origin_location_code && !originLocationId) {
-          throw new Error(`起始地"${firstRow.origin_location_code}"不存在`)
-        }
-        
-        const destinationLocationId = locationsMap.get(firstRow.destination_location_code)
-        if (!destinationLocationId) {
-          throw new Error(`目的地"${firstRow.destination_location_code}"不存在`)
-        }
-
-        // 解析送货时间（使用系统的 UTC 解析函数，保持原始时间不做时区转换）
-        if (!firstRow.confirmed_start) {
-          throw new Error(`预约"${referenceNumber}"的送货时间为空`)
-        }
-        
-        let confirmedStart: Date
-        try {
-          // 将 "YYYY-MM-DD HH:mm" 格式转换为 "YYYY-MM-DDTHH:mm"
-          const timeString = String(firstRow.confirmed_start).replace(' ', 'T')
-          confirmedStart = parseDateTimeAsUTC(timeString)
-        } catch (error) {
-          throw new Error(`预约"${referenceNumber}"的送货时间格式错误：${firstRow.confirmed_start}`)
-        }
-
-        // 创建预约主表（order_id 设置为 null，通过明细表关联订单）
-        const appointment = await tx.delivery_appointments.create({
-          data: {
-            reference_number: firstRow.reference_number,
-            order_id: null,  // ← 预约主表不直接关联订单
-            origin_location_id: originLocationId,
-            location_id: destinationLocationId,
-            delivery_method: firstRow.delivery_method,
-            appointment_account: firstRow.appointment_account,
-            appointment_type: firstRow.appointment_type,
-            confirmed_start: confirmedStart,
-            requested_start: confirmedStart,  // 与confirmed_start相同
-            status: 'requested',  // 默认状态
-            rejected: firstRow.rejected,
-            po: firstRow.po,
-            notes: firstRow.notes,
-            created_by: userId,
-            updated_by: userId,
-          },
-        })
-
-        console.log(`[预约导入] 创建预约：${referenceNumber}，共${rows.length}个明细`)
-        successCount++ // 预约创建成功，计数+1
-
-        // 创建预约明细
-        for (const row of rows) {
-          console.log(`[预约导入] 准备创建明细：预约=${referenceNumber}，订单=${row.order_number}，仓点=${row.detail_location_code}，性质=${row.delivery_nature}`)
-          
-          // 每个明细行需要从自己的订单中查找订单明细
-          const rowOrder = ordersMap.get(row.order_number)
-          if (!rowOrder) {
-            throw new Error(`订单号"${row.order_number}"不存在`)
-          }
-          
-          const detailLocationId = locationsMap.get(row.detail_location_code)
-          if (!detailLocationId) {
-            throw new Error(`仓点"${row.detail_location_code}"不存在`)
-          }
-
-          // 从当前行的订单中查找订单明细
-          const orderDetail = rowOrder.order_detail.find(
-            (od: any) =>
-              od.locations_order_detail_delivery_location_idTolocations?.location_id?.toString() === detailLocationId.toString() &&
-              od.delivery_nature === row.delivery_nature
-          )
-
-          if (!orderDetail) {
-            throw new Error(
-              `订单"${row.order_number}"中不存在仓点"${row.detail_location_code}"、性质"${row.delivery_nature}"的明细`
-            )
-          }
-          
-          console.log(`[预约导入] 找到订单明细：order=${row.order_number}, order_detail_id=${orderDetail.id}`)
-
-          // 计算可用板数（用于快照）
-          const inventory = inventoryMap.get(orderDetail.id)
-          const hasInventory = inventory && inventory.pallet_count > 0
-          const availablePallets = hasInventory
-            ? (inventory.unbooked_pallet_count ?? inventory.pallet_count)
-            : (orderDetail.remaining_pallets ?? orderDetail.estimated_pallets ?? 0)
-
-          // 创建预约明细
-          console.log(`[预约导入] 创建明细记录：appointment_id=${appointment.appointment_id}，order_detail_id=${orderDetail.id}`)
-          await tx.appointment_detail_lines.create({
-            data: {
-              appointment_id: appointment.appointment_id,
-              order_detail_id: orderDetail.id,
-              estimated_pallets: row.estimated_pallets,
-              total_pallets_at_time: availablePallets,  // 快照
-            },
-          })
-          console.log(`[预约导入] 明细创建成功`)
-
-          // 扣减板数
-          if (hasInventory) {
-            // 已入库：扣减库存的 unbooked_pallet_count
-            await tx.inventory_lots.update({
-              where: { inventory_lot_id: inventory.inventory_lot_id },
-              data: {
-                unbooked_pallet_count: {
-                  decrement: row.estimated_pallets,
-                },
-              },
-            })
-            console.log(`[预约导入] 扣减库存：order=${row.order_number}, order_detail_id=${orderDetail.id}，扣减${row.estimated_pallets}板（unbooked_pallet_count）`)
-          } else {
-            // 未入库：扣减订单明细的 remaining_pallets
-            await tx.order_detail.update({
-              where: { id: orderDetail.id },
-              data: {
-                remaining_pallets: {
-                  decrement: row.estimated_pallets,
-                },
-              },
-            })
-            console.log(`[预约导入] 扣减订单明细：order=${row.order_number}, order_detail_id=${orderDetail.id}，扣减${row.estimated_pallets}板（remaining_pallets）`)
-          }
-        }
-
-        // 自动创建关联记录（与前端逻辑一致）
-        // 如果是非直送，创建 outbound_shipments
-        if (firstRow.delivery_method !== '直送') {
-          try {
-            const defaultWarehouseId = BigInt(1000)
-            await tx.$executeRaw`
-              INSERT INTO wms.outbound_shipments (warehouse_id, appointment_id, status, created_at, updated_at, created_by, updated_by)
-              VALUES (${defaultWarehouseId}, ${appointment.appointment_id}, 'planned', NOW(), NOW(), ${userId}, ${userId})
-              ON CONFLICT (appointment_id) DO NOTHING
-            `
-          } catch (error) {
-            console.warn('[预约导入] 创建 outbound_shipments 失败（可能已存在）:', error)
-          }
-        }
-
-        // 所有预约都创建 delivery_management
-        try {
-          await tx.$executeRaw`
-            INSERT INTO tms.delivery_management (appointment_id, status, created_at, updated_at, created_by, updated_by)
-            VALUES (${appointment.appointment_id}, 'pending', NOW(), NOW(), ${userId}, ${userId})
-            ON CONFLICT (appointment_id) DO NOTHING
-          `
-        } catch (error) {
-          console.warn('[预约导入] 创建 delivery_management 失败（可能已存在）:', error)
-        }
+    // 批次导入配置
+    const BATCH_APPOINTMENT_COUNT = 20 // 每批最多处理20个预约（确保一个预约的所有明细不分开）
+    const TRANSACTION_TIMEOUT = 120000 // 事务超时：120秒（2分钟）
+    
+    // 将预约组转换为数组，便于分批处理
+    const appointmentGroupsArray = Array.from(appointmentGroups.entries())
+    
+    // 按预约数量分组（确保一个预约的所有明细都在同一批次）
+    const batches: Array<Array<[string, any[]]>> = []
+    let currentBatch: Array<[string, any[]]> = []
+    
+    for (const [referenceNumber, rows] of appointmentGroupsArray) {
+      // 如果当前批次加上这个预约会超过批次大小，开始新批次
+      if (currentBatch.length >= BATCH_APPOINTMENT_COUNT && currentBatch.length > 0) {
+        batches.push(currentBatch)
+        currentBatch = []
       }
+      
+      // 一个预约的所有明细必须放在同一批次（不能拆分）
+      currentBatch.push([referenceNumber, rows])
+    }
+    
+    // 添加最后一个批次
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch)
+    }
+    
+    const totalRows = batches.reduce((sum, batch) => 
+      sum + batch.reduce((s, [, rows]) => s + rows.length, 0), 0
+    )
+    console.log(`[预约导入] 数据已分成 ${batches.length} 个批次，每批最多 ${BATCH_APPOINTMENT_COUNT} 个预约`)
+
+    let totalSuccessCount = 0 // 记录成功创建的预约总数
+
+    // 使用外层事务包裹所有批次：任何一个批次失败，全部回滚
+    await prisma.$transaction(async (outerTx) => {
+      // 批次导入：每个批次在同一个外层事务中处理
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex]
+        const batchRows = batch.reduce((sum, [, rows]) => sum + rows.length, 0)
+        
+        console.log(`[预约导入] 开始处理第 ${batchIndex + 1}/${batches.length} 批次，包含 ${batch.length} 个预约，${batchRows} 行数据`)
+        
+        // 处理当前批次的所有预约（使用外层事务）
+        for (const [referenceNumber, rows] of batch) {
+            const firstRow = rows[0]
+
+            // 获取位置ID（起始地为可选字段）
+            const originLocationId = firstRow.origin_location_code 
+              ? locationsMap.get(firstRow.origin_location_code) 
+              : null
+            
+            // 如果提供了起始地但不存在，则报错
+            if (firstRow.origin_location_code && !originLocationId) {
+              throw new Error(`起始地"${firstRow.origin_location_code}"不存在`)
+            }
+            
+            const destinationLocationId = locationsMap.get(firstRow.destination_location_code)
+            if (!destinationLocationId) {
+              throw new Error(`目的地"${firstRow.destination_location_code}"不存在`)
+            }
+
+            // 解析送货时间（使用系统的 UTC 解析函数，保持原始时间不做时区转换）
+            if (!firstRow.confirmed_start) {
+              throw new Error(`预约"${referenceNumber}"的送货时间为空`)
+            }
+            
+            let confirmedStart: Date
+            try {
+              // 将 "YYYY-MM-DD HH:mm" 格式转换为 "YYYY-MM-DDTHH:mm"
+              const timeString = String(firstRow.confirmed_start).replace(' ', 'T')
+              confirmedStart = parseDateTimeAsUTC(timeString)
+            } catch (error) {
+              throw new Error(`预约"${referenceNumber}"的送货时间格式错误：${firstRow.confirmed_start}`)
+            }
+
+            // 创建预约主表（order_id 设置为 null，通过明细表关联订单）
+            const appointment = await outerTx.delivery_appointments.create({
+              data: {
+                reference_number: firstRow.reference_number,
+                order_id: null,  // ← 预约主表不直接关联订单
+                origin_location_id: originLocationId,
+                location_id: destinationLocationId,
+                delivery_method: firstRow.delivery_method,
+                appointment_account: firstRow.appointment_account,
+                appointment_type: firstRow.appointment_type,
+                confirmed_start: confirmedStart,
+                requested_start: confirmedStart,  // 与confirmed_start相同
+                status: 'requested',  // 默认状态
+                rejected: firstRow.rejected,
+                po: firstRow.po,
+                notes: firstRow.notes,
+                created_by: userId,
+                updated_by: userId,
+              },
+            })
+
+            console.log(`[预约导入] 创建预约：${referenceNumber}，共${rows.length}个明细`)
+            totalSuccessCount++ // 预约创建成功，计数+1
+
+            // 创建预约明细
+            for (const row of rows) {
+              console.log(`[预约导入] 准备创建明细：预约=${referenceNumber}，订单=${row.order_number}，仓点=${row.detail_location_code}，性质=${row.delivery_nature}`)
+              
+              // 每个明细行需要从自己的订单中查找订单明细
+              const rowOrder = ordersMap.get(row.order_number)
+              if (!rowOrder) {
+                throw new Error(`订单号"${row.order_number}"不存在`)
+              }
+              
+              const detailLocationId = locationsMap.get(row.detail_location_code)
+              if (!detailLocationId) {
+                throw new Error(`仓点"${row.detail_location_code}"不存在`)
+              }
+
+              // 从当前行的订单中查找订单明细
+              const orderDetail = rowOrder.order_detail.find(
+                (od: any) =>
+                  od.locations_order_detail_delivery_location_idTolocations?.location_id?.toString() === detailLocationId.toString() &&
+                  od.delivery_nature === row.delivery_nature
+              )
+
+              if (!orderDetail) {
+                throw new Error(
+                  `订单"${row.order_number}"中不存在仓点"${row.detail_location_code}"、性质"${row.delivery_nature}"的明细`
+                )
+              }
+              
+              console.log(`[预约导入] 找到订单明细：order=${row.order_number}, order_detail_id=${orderDetail.id}`)
+
+              // 计算可用板数（用于快照）
+              const inventory = inventoryMap.get(orderDetail.id)
+              const hasInventory = inventory && inventory.pallet_count > 0
+              const availablePallets = hasInventory
+                ? (inventory.unbooked_pallet_count ?? inventory.pallet_count)
+                : (orderDetail.remaining_pallets ?? orderDetail.estimated_pallets ?? 0)
+
+              // 创建预约明细
+              console.log(`[预约导入] 创建明细记录：appointment_id=${appointment.appointment_id}，order_detail_id=${orderDetail.id}`)
+              await outerTx.appointment_detail_lines.create({
+                data: {
+                  appointment_id: appointment.appointment_id,
+                  order_detail_id: orderDetail.id,
+                  estimated_pallets: row.estimated_pallets,
+                  total_pallets_at_time: availablePallets,  // 快照
+                },
+              })
+              console.log(`[预约导入] 明细创建成功`)
+
+              // 扣减板数
+              if (hasInventory) {
+                // 已入库：扣减库存的 unbooked_pallet_count
+                await outerTx.inventory_lots.update({
+                  where: { inventory_lot_id: inventory.inventory_lot_id },
+                  data: {
+                    unbooked_pallet_count: {
+                      decrement: row.estimated_pallets,
+                    },
+                  },
+                })
+                console.log(`[预约导入] 扣减库存：order=${row.order_number}, order_detail_id=${orderDetail.id}，扣减${row.estimated_pallets}板（unbooked_pallet_count）`)
+              } else {
+                // 未入库：扣减订单明细的 remaining_pallets
+                await outerTx.order_detail.update({
+                  where: { id: orderDetail.id },
+                  data: {
+                    remaining_pallets: {
+                      decrement: row.estimated_pallets,
+                    },
+                  },
+                })
+                console.log(`[预约导入] 扣减订单明细：order=${row.order_number}, order_detail_id=${orderDetail.id}，扣减${row.estimated_pallets}板（remaining_pallets）`)
+              }
+            }
+
+            // 自动创建关联记录（与前端逻辑一致）
+            // 如果是非直送，创建 outbound_shipments
+            if (firstRow.delivery_method !== '直送') {
+              try {
+                const defaultWarehouseId = BigInt(1000)
+                await outerTx.$executeRaw`
+                  INSERT INTO wms.outbound_shipments (warehouse_id, appointment_id, status, created_at, updated_at, created_by, updated_by)
+                  VALUES (${defaultWarehouseId}, ${appointment.appointment_id}, 'planned', NOW(), NOW(), ${userId}, ${userId})
+                  ON CONFLICT (appointment_id) DO NOTHING
+                `
+              } catch (error) {
+                console.warn('[预约导入] 创建 outbound_shipments 失败（可能已存在）:', error)
+              }
+            }
+
+            // 所有预约都创建 delivery_management
+            try {
+              await outerTx.$executeRaw`
+                INSERT INTO tms.delivery_management (appointment_id, status, created_at, updated_at, created_by, updated_by)
+                VALUES (${appointment.appointment_id}, 'pending', NOW(), NOW(), ${userId}, ${userId})
+                ON CONFLICT (appointment_id) DO NOTHING
+              `
+            } catch (error) {
+              console.warn('[预约导入] 创建 delivery_management 失败（可能已存在）:', error)
+            }
+        }
+        
+        console.log(`[预约导入] 第 ${batchIndex + 1} 批次处理成功：${batch.length} 个预约，${batchRows} 行数据`)
+      }
+    }, {
+      maxWait: 10000, // 最大等待获取连接时间：10 秒
+      timeout: TRANSACTION_TIMEOUT, // 最大事务执行时间：120秒（适应大批量导入）
     })
 
-    console.log(`[预约导入] 导入完成：${successCount} 个预约，${data.length} 个明细`)
+    console.log(`[预约导入] 所有批次处理完成：成功 ${totalSuccessCount} 个预约，${data.length} 个明细`)
     
     // 返回成功计数（通过抛出特殊对象传递给base-import-service）
-    return { successCount }
+    return { successCount: totalSuccessCount }
   },
 }
 

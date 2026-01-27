@@ -99,7 +99,7 @@ export async function generateAppointmentImportTemplate(
     dataSheet.getCell(`C${rowNum}`).dataValidation = {
       type: 'list',
       allowBlank: false,
-      formulae: ['"AA,YTAQ,AYIE,KP,OLPN,DATONG,GG,other"'],
+      formulae: ['"AA,YTAQ,AYIE,KP,OLPN,DATONG,GG,WGUY,other"'],
       showErrorMessage: true,
       errorTitle: '输入错误',
       errorStyle: 'error',
@@ -276,7 +276,7 @@ export async function generateAppointmentImportTemplate(
     ['=== 主表必填字段 ===', '', '', ''],
     ['预约号码', '是', '字符串', '必须唯一，如：AP-2025001'],
     ['派送方式', '是', '下拉：私仓/自提/直送/卡派', '从下拉列表选择'],
-    ['预约账号', '是', '下拉：AA/YTAQ/AYIE/KP/OLPN/DATONG/GG/other', '从下拉列表选择'],
+    ['预约账号', '是', '下拉：AA/YTAQ/AYIE/KP/OLPN/DATONG/GG/WGUY/other', '从下拉列表选择'],
     ['预约类型', '是', '下拉：卡板/地板', '从下拉列表选择'],
     ['目的地', '是', '下拉选择', '从下拉列表选择位置代码，必须存在于位置管理中'],
     ['送货时间', '是', '日期时间格式', '格式 YYYY-MM-DD HH:MM，如：2025-12-20 14:30'],

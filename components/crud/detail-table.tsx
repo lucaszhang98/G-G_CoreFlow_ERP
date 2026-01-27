@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import Link from "next/link"
 
 export interface DetailData {
   id: string | number
@@ -1673,6 +1674,7 @@ function AddDetailDialog({
   const [orders, setOrders] = React.useState<Array<{ order_id: string; order_number: string }>>([])
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null)
   const [selectedOrderNumber, setSelectedOrderNumber] = React.useState<string>('')
+  const [inboundReceiptId, setInboundReceiptId] = React.useState<string | null>(null) // 入库管理记录ID
   
   // 第二步：选择明细行
   const [orderDetails, setOrderDetails] = React.useState<Array<{
@@ -1745,19 +1747,52 @@ function AddDetailDialog({
         ? `/api/oms/appointments/order-details/${selectedOrderId}?appointmentId=${encodeURIComponent(appointmentId)}`
         : `/api/oms/appointments/order-details/${selectedOrderId}`
       fetch(url)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`)
+          }
+          return res.json()
+        })
         .then(data => {
-          if (data.success && data.data.details) {
-            setOrderDetails(data.data.details)
+          console.log('[添加预约明细] API返回数据:', data)
+          console.log('[添加预约明细] API返回的success:', data.success)
+          console.log('[添加预约明细] API返回的data:', data.data)
+          console.log('[添加预约明细] API返回的details:', data.data?.details)
+          
+          if (data.success && data.data) {
+            const details = Array.isArray(data.data.details) ? data.data.details : []
+            console.log(`[添加预约明细] 订单 ${selectedOrderId} 的明细数量:`, details.length)
+            if (details.length > 0) {
+              console.log('[添加预约明细] 明细示例:', details[0])
+              console.log('[添加预约明细] 所有明细的location_code:', details.map((d: any) => d.location_code))
+            } else {
+              console.warn(`[添加预约明细] 警告：订单 ${selectedOrderId} 没有返回任何明细`)
+            }
+            setOrderDetails(details)
             // 保存预约目的地信息（如果提供了）
             if (data.data.appointment_destination) {
               setAppointmentDestination(data.data.appointment_destination)
             }
+            // 保存入库管理记录ID（如果存在）
+            if (data.data.order?.inbound_receipt_id) {
+              setInboundReceiptId(data.data.order.inbound_receipt_id)
+            } else {
+              setInboundReceiptId(null)
+            }
+          } else {
+            console.error('[添加预约明细] API返回失败:', data)
+            if (data.error) {
+              toast.error(`获取订单明细失败: ${data.error}`)
+            } else {
+              toast.error('获取订单明细失败: 未知错误')
+            }
+            setOrderDetails([])
           }
         })
         .catch(error => {
-          console.error('获取订单明细失败:', error)
-          toast.error('获取订单明细失败')
+          console.error('[添加预约明细] 获取订单明细失败:', error)
+          toast.error(`获取订单明细失败: ${error.message || '网络错误'}`)
+          setOrderDetails([])
         })
         .finally(() => {
           setIsLoadingDetails(false)
@@ -1773,6 +1808,7 @@ function AddDetailDialog({
       setSelectedOrderId(null)
       setSelectedOrderNumber('')
       setOrderDetails([])
+      setInboundReceiptId(null)
       setSelectedDetailId(null)
       setSelectedDetail(null)
       setEstimatedPallets('')
@@ -2144,7 +2180,21 @@ function AddDetailDialog({
           {step === 2 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-base font-semibold">已选择柜号：<span className="text-blue-600 dark:text-blue-400">{selectedOrderNumber}</span></Label>
+                <Label className="text-base font-semibold">
+                  已选择柜号：
+                  {inboundReceiptId ? (
+                    <Link 
+                      href={`/dashboard/wms/inbound-receipts/${inboundReceiptId}`}
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline ml-1"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {selectedOrderNumber}
+                    </Link>
+                  ) : (
+                    <span className="text-blue-600 dark:text-blue-400">{selectedOrderNumber}</span>
+                  )}
+                </Label>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -2153,6 +2203,7 @@ function AddDetailDialog({
                     setSelectedOrderId(null)
                     setSelectedOrderNumber('')
                     setOrderDetails([])
+                    setInboundReceiptId(null)
                   }}
                   className="text-xs"
                 >
@@ -2291,7 +2342,18 @@ function AddDetailDialog({
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-muted-foreground">柜号：</span>
-                    <span className="font-medium text-foreground ml-2">{selectedOrderNumber}</span>
+                    {inboundReceiptId ? (
+                      <Link 
+                        href={`/dashboard/wms/inbound-receipts/${inboundReceiptId}`}
+                        className="font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline ml-2"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {selectedOrderNumber}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-foreground ml-2">{selectedOrderNumber}</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-muted-foreground">仓点：</span>
