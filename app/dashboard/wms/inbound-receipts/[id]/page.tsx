@@ -158,7 +158,154 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
     if (error?.code === 'P2025') {
       notFound()
     }
-    throw new Error(`获取入库管理详情失败: ${error?.message || '未知错误'}`)
+    
+    // 处理 "cached plan must not change result type" 错误（schema 变更后的缓存问题）
+    if (error?.message?.includes('cached plan must not change result type')) {
+      console.warn('[入库管理详情] 检测到查询计划缓存错误，尝试重新连接并重试...');
+      try {
+        // 断开并重新连接，清除旧的 prepared statements
+        await prisma.$disconnect();
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 等待 1 秒
+        await prisma.$connect();
+        await new Promise(resolve => setTimeout(resolve, 500)); // 再等待 0.5 秒
+        
+        // 重试查询
+        inboundReceipt = await prisma.inbound_receipt.findUnique({
+          where: { inbound_receipt_id: BigInt(resolvedParams.id) },
+          include: {
+            orders: {
+              select: {
+                order_id: true,
+                order_number: true,
+                order_date: true,
+                eta_date: true,
+                ready_date: true,
+                lfd_date: true,
+                pickup_date: true,
+                customers: {
+                  select: {
+                    id: true,
+                    code: true,
+                    name: true,
+                    company_name: true,
+                  },
+                },
+                order_detail: {
+                  select: {
+                    id: true,
+                    quantity: true,
+                    volume: true,
+                    estimated_pallets: true,
+                    delivery_nature: true,
+                    delivery_location_id: true,
+                    locations_order_detail_delivery_location_idTolocations: {
+                      select: {
+                        location_id: true,
+                        location_code: true,
+                        name: true,
+                      },
+                    },
+                    fba: true,
+                    volume_percentage: true,
+                    notes: true,
+                    order_id: true,
+                    appointment_detail_lines: {
+                      select: {
+                        id: true,
+                        estimated_pallets: true,
+                        appointment_id: true,
+                        delivery_appointments: {
+                          select: {
+                            appointment_id: true,
+                            reference_number: true,
+                            confirmed_start: true,
+                            location_id: true,
+                            status: true,
+                            order_id: true,
+                          },
+                        },
+                      },
+                      // 不添加 where 条件，查询所有关联的预约明细
+                    },
+                  },
+                  orderBy: {
+                    volume_percentage: 'desc', // 按分仓占比降序排列
+                  },
+                },
+              },
+            },
+            users_inbound_receipt_received_byTousers: {
+              select: {
+                id: true,
+                full_name: true,
+                username: true,
+              },
+            },
+            users_inbound_receipt_unloaded_byTousers: {
+              select: {
+                id: true,
+                full_name: true,
+                username: true,
+              },
+            },
+            warehouses: {
+              select: {
+                warehouse_id: true,
+                name: true,
+                warehouse_code: true,
+              },
+            },
+            unload_methods: {
+              select: {
+                method_code: true,
+                description: true,
+              },
+            },
+            inventory_lots: {
+              select: {
+                inventory_lot_id: true,
+                order_detail_id: true,
+                storage_location_code: true,
+                pallet_count: true,
+                remaining_pallet_count: true,
+                unbooked_pallet_count: true,
+                delivery_progress: true,
+                order_detail: {
+                  select: {
+                    id: true,
+                    delivery_nature: true,
+                    delivery_location_id: true,
+                    locations_order_detail_delivery_location_idTolocations: {
+                      select: {
+                        location_id: true,
+                        location_code: true,
+                        name: true,
+                      },
+                    },
+                    fba: true,
+                    volume: true,
+                    estimated_pallets: true,
+                    volume_percentage: true,
+                    notes: true,
+                  },
+                },
+                orders: {
+                  select: {
+                    delivery_location: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+        console.log('[入库管理详情] 重新连接后重试成功');
+      } catch (retryError: any) {
+        console.error('[入库管理详情] 重新连接后重试失败:', retryError);
+        throw new Error(`获取入库管理详情失败: ${error?.message || '未知错误'}`);
+      }
+    } else {
+      throw new Error(`获取入库管理详情失败: ${error?.message || '未知错误'}`)
+    }
   }
 
   if (!inboundReceipt) {

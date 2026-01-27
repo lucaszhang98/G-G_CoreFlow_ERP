@@ -109,8 +109,35 @@ export async function GET(request: NextRequest) {
         meta: queryError.meta,
       });
       
+      // 处理 "cached plan must not change result type" 错误（schema 变更后的缓存问题）
+      if (queryError.message?.includes('cached plan must not change result type')) {
+        console.warn('[预约管理] 检测到查询计划缓存错误，尝试重新连接并重试...');
+        try {
+          // 断开并重新连接，清除旧的 prepared statements
+          await prisma.$disconnect();
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 等待 1 秒
+          await prisma.$connect();
+          await new Promise(resolve => setTimeout(resolve, 500)); // 再等待 0.5 秒
+          
+          // 重试查询
+          [items, total] = await Promise.all([
+            prisma.delivery_appointments.findMany({
+              where,
+              orderBy,
+              skip: (page - 1) * limit,
+              take: limit,
+              include: includeConfig,
+            }),
+            prisma.delivery_appointments.count({ where }),
+          ]);
+          console.log('[预约管理] 重新连接后重试成功');
+        } catch (retryError: any) {
+          console.error('[预约管理] 重新连接后重试失败:', retryError);
+          throw queryError; // 如果重试也失败，抛出原始错误
+        }
+      }
       // 如果是因为关联不存在，尝试简化查询
-      if (queryError.message?.includes('Unknown field') || queryError.message?.includes('Available options')) {
+      else if (queryError.message?.includes('Unknown field') || queryError.message?.includes('Available options')) {
         console.log('尝试简化查询（移除可能不存在的关联）');
         // 移除可能有问题的关联，但保留 appointment_detail_lines
         const simplifiedInclude: any = {
