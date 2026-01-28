@@ -2440,7 +2440,24 @@ function AddDetailDialog({
             onClick={() => {
               if (isSaving) return // 保存中不允许操作
               if (step > 1) {
-                setStep((step - 1) as 1 | 2 | 3)
+                // 返回到上一步时，清除当前步骤及后续步骤的状态
+                if (step === 2) {
+                  // 从第二步返回到第一步：清空所有选择，与"重新选择"按钮逻辑一致
+                  setStep(1)
+                  setSelectedOrderId(null)
+                  setSelectedOrderNumber('')
+                  setOrderDetails([])
+                  setInboundReceiptId(null)
+                  setSelectedDetailId(null)
+                  setSelectedDetail(null)
+                  setEstimatedPallets('')
+                  setPo('')
+                } else if (step === 3) {
+                  // 从第三步返回到第二步：清除预计板数输入，但保留明细选择
+                  setEstimatedPallets('')
+                  setPo('')
+                  setStep(2)
+                }
               } else {
                 onOpenChange(false)
               }
