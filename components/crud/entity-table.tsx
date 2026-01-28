@@ -32,6 +32,13 @@ import { InlineEditCell } from "./inline-edit-cell"
 import { LocationSelect } from "@/components/ui/location-select"
 import { enhanceConfigWithSearchFields } from "@/lib/crud/search-config-generator"
 import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 // 关系字段批量编辑组件（用于处理异步选项加载）
 function RelationFieldBatchEdit({
@@ -2444,6 +2451,17 @@ export function EntityTable<T = any>({
         expandableRows={expandableRows}
         enableViewManager={true}
         viewManagerTableName={config.name}
+        getRowClassName={
+          config.name === 'pickup_management'
+            ? (row: any) => {
+                // 如果提柜时间字段有值，返回绿色背景（符合系统风格）
+                if (row.pickup_date != null && row.pickup_date !== '') {
+                  return "bg-gradient-to-r from-green-100 via-emerald-50/80 to-green-100 dark:from-green-900/40 dark:via-emerald-900/30 dark:to-green-900/40 hover:from-green-200 hover:via-emerald-100/80 hover:to-green-200 dark:hover:from-green-800/50 dark:hover:via-emerald-800/40 dark:hover:to-green-800/50"
+                }
+                return undefined
+              }
+            : undefined
+        }
       />
         </CardContent>
       </Card>
@@ -2768,7 +2786,71 @@ export function EntityTable<T = any>({
                     </div>
                   )
 
-                case 'datetime':
+                case 'datetime': {
+                  // 对于 pickup_date 字段，使用日期+小时选择器（分钟固定为00）
+                  if (fieldKey === 'pickup_date') {
+                    // 解析日期和小时
+                    let datePart = ''
+                    let hourPart = '00'
+                    if (fieldValue) {
+                      const datetimeStr = typeof fieldValue === 'string' 
+                        ? fieldValue.slice(0, 16) 
+                        : fieldValue instanceof Date
+                        ? fieldValue.toISOString().slice(0, 16)
+                        : String(fieldValue)
+                      const parts = datetimeStr.split('T')
+                      datePart = parts[0] || ''
+                      if (parts[1]) {
+                        hourPart = parts[1].split(':')[0] || '00'
+                      }
+                    }
+                    
+                    // 生成0-23小时选项
+                    const hourOptions = Array.from({ length: 24 }, (_, i) => {
+                      const hour = String(i).padStart(2, '0')
+                      return { label: `${hour}:00`, value: hour }
+                    })
+                    
+                    return (
+                      <div key={fieldKey} className="space-y-2">
+                        <label className="text-sm font-medium">
+                          {fieldConfig.label}
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="date"
+                            value={datePart}
+                            onChange={(e) => {
+                              const newDate = e.target.value
+                              const newValue = newDate ? `${newDate}T${hourPart}:00` : null
+                              handleBatchEditValueChange(fieldKey, newValue)
+                            }}
+                            className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          />
+                          <Select
+                            value={hourPart}
+                            onValueChange={(newHour: string) => {
+                              const newValue = datePart ? `${datePart}T${newHour}:00` : null
+                              handleBatchEditValueChange(fieldKey, newValue)
+                            }}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue placeholder="选择小时" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {hourOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )
+                  }
+                  
+                  // 其他日期时间字段使用标准的 datetime-local 输入
                   return (
                     <div key={fieldKey} className="space-y-2">
                       <label className="text-sm font-medium">
@@ -2782,6 +2864,7 @@ export function EntityTable<T = any>({
                       />
                     </div>
                   )
+                }
 
                 case 'location':
                   // 位置选择字段：使用 LocationSelect 组件（支持 locationType 过滤）

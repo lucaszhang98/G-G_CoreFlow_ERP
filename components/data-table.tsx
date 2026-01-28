@@ -83,6 +83,8 @@ interface DataTableProps<TData, TValue> {
     enabled: boolean
     getExpandedContent?: (row: TData) => React.ReactNode | null // 获取展开内容
   }
+  // 行样式相关
+  getRowClassName?: (row: TData) => string | undefined // 根据行数据返回自定义 className
 }
 
 export function DataTable<TData, TValue>({
@@ -113,6 +115,7 @@ export function DataTable<TData, TValue>({
   isRowEditing,
   onCancelEdit,
   expandableRows,
+  getRowClassName,
 }: DataTableProps<TData, TValue>) {
   // 防止 hydration 错误：只在客户端渲染 DropdownMenu
   const [mounted, setMounted] = React.useState(false)
@@ -1065,7 +1068,7 @@ export function DataTable<TData, TValue>({
                           ? "bg-gradient-to-r from-amber-50 via-yellow-50/80 to-amber-50 dark:from-amber-950/40 dark:via-yellow-950/30 dark:to-amber-950/40 shadow-md shadow-amber-500/20 border-amber-300 dark:border-amber-700"
                           : isSelected
                           ? "bg-gradient-to-r from-blue-50 via-indigo-50/80 to-blue-50 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-blue-950/40 shadow-sm shadow-blue-500/10"
-                          : "hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-blue-950/20 dark:hover:to-indigo-950/20"
+                          : getRowClassName?.(row.original) || "hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-blue-950/20 dark:hover:to-indigo-950/20"
                       )}
                       onClick={(e) => {
                         // 完全禁用行点击展开，只允许通过展开图标展开

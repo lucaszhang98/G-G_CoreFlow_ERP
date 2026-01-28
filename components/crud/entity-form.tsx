@@ -509,8 +509,9 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
       case 'datetime':
         // 处理日期时间字段：使用 datetime-local 输入类型
         // 格式：YYYY-MM-DDTHH:mm
-        // 对于 confirmed_start 字段，使用日期+小时选择器（分钟固定为00）
+        // 对于 confirmed_start 和 pickup_date 字段，使用日期+小时选择器（分钟固定为00）
         const isConfirmedStart = fieldKey === 'confirmed_start'
+        const isPickupDate = fieldKey === 'pickup_date'
         const datetimeValue = fieldValue 
           ? (fieldValue instanceof Date 
             ? fieldValue.toISOString().slice(0, 16) 
@@ -519,8 +520,8 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
             : fieldValue)
           : ''
         
-        // 如果是 confirmed_start，使用日期+小时选择器
-        if (isConfirmedStart) {
+        // 如果是 confirmed_start 或 pickup_date，使用日期+小时选择器
+        if (isConfirmedStart || isPickupDate) {
           // 解析日期和小时
           let datePart = ''
           let hourPart = '00'

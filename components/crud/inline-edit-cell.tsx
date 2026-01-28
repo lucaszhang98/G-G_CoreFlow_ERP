@@ -187,7 +187,76 @@ export function InlineEditCell({
       )
 
     case 'datetime': {
-      // 处理日期时间：显示和编辑都使用 YYYY-MM-DDTHH:mm 格式
+      // 对于 pickup_date 字段，使用日期+小时选择器（分钟固定为00）
+      if (fieldKey === 'pickup_date') {
+        // 解析日期和小时
+        let datePart = ''
+        let hourPart = '00'
+        if (internalValue) {
+          let datetimeStr = ''
+          if (internalValue instanceof Date) {
+            // 使用 UTC 时间，避免时区问题
+            const year = internalValue.getUTCFullYear()
+            const month = String(internalValue.getUTCMonth() + 1).padStart(2, '0')
+            const day = String(internalValue.getUTCDate()).padStart(2, '0')
+            const hours = String(internalValue.getUTCHours()).padStart(2, '0')
+            datetimeStr = `${year}-${month}-${day}T${hours}:00`
+          } else if (typeof internalValue === 'string') {
+            datetimeStr = internalValue.slice(0, 16)
+          } else {
+            datetimeStr = String(internalValue)
+          }
+          const parts = datetimeStr.split('T')
+          datePart = parts[0] || ''
+          if (parts[1]) {
+            hourPart = parts[1].split(':')[0] || '00'
+          }
+        }
+        
+        // 生成0-23小时选项
+        const hourOptions = Array.from({ length: 24 }, (_, i) => {
+          const hour = String(i).padStart(2, '0')
+          return { label: `${hour}:00`, value: hour }
+        })
+        
+        return (
+          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell flex items-center gap-2">
+            <Input
+              type="date"
+              value={datePart}
+              onChange={(e) => {
+                const newDate = e.target.value
+                const newValue = newDate ? `${newDate}T${hourPart}:00` : null
+                handleInternalChange(newValue)
+              }}
+              onBlur={handleBlur}
+              className={cn("h-9 text-sm min-w-[140px] flex-1 bg-white", className)}
+            />
+            <Select
+              value={hourPart}
+              onValueChange={(newHour) => {
+                const newValue = datePart ? `${datePart}T${newHour}:00` : null
+                handleInternalChange(newValue)
+                // Select 组件值改变时立即同步到外部
+                onChange(newValue)
+              }}
+            >
+              <SelectTrigger className="w-24 h-9 text-sm bg-white">
+                <SelectValue placeholder="小时" />
+              </SelectTrigger>
+              <SelectContent>
+                {hourOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )
+      }
+      
+      // 其他日期时间字段：显示和编辑都使用 YYYY-MM-DDTHH:mm 格式
       // 避免使用 getTimezoneOffset() 以防止 hydration 错误
       let datetimeValue = ''
       if (internalValue) {
