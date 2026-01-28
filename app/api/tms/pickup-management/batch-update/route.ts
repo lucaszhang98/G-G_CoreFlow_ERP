@@ -68,6 +68,19 @@ export async function POST(request: NextRequest) {
       orderUpdateData.container_type = updates.container_type || null
     }
     // 日期字段 - 使用UTC处理避免时区转换
+    if (updates.eta_date !== undefined) {
+      if (updates.eta_date && typeof updates.eta_date === 'string') {
+        // YYYY-MM-DD 格式，转换为 UTC Date
+        const [year, month, day] = updates.eta_date.split('-').map(Number)
+        if (year && month && day) {
+          orderUpdateData.eta_date = new Date(Date.UTC(year, month - 1, day))
+        } else {
+          orderUpdateData.eta_date = null
+        }
+      } else {
+        orderUpdateData.eta_date = null
+      }
+    }
     if (updates.lfd_date !== undefined) {
       if (updates.lfd_date && typeof updates.lfd_date === 'string') {
         // YYYY-MM-DD 格式，转换为 UTC Date

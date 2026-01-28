@@ -200,6 +200,11 @@ async function updatePickupManagement(
       orderUpdateData.container_type = body.container_type || null
     }
     // 日期字段
+    if (body.eta_date !== undefined) {
+      orderUpdateData.eta_date = body.eta_date 
+        ? new Date(body.eta_date) 
+        : null
+    }
     if (body.lfd_date !== undefined) {
       orderUpdateData.lfd_date = body.lfd_date 
         ? new Date(body.lfd_date) 
@@ -256,10 +261,10 @@ async function updatePickupManagement(
         data: orderUpdateData,
       })
 
-      // 如果更新了 pickup_date，同步更新入库管理的拆柜日期
-      if (body.pickup_date !== undefined && body.pickup_date) {
+      // 如果更新了 pickup_date 或 eta_date，同步更新入库管理的拆柜日期
+      if (body.pickup_date !== undefined || body.eta_date !== undefined) {
         try {
-          // 获取更新后的订单信息（包括 eta_date，用于计算）
+          // 获取更新后的订单信息（包括 eta_date 和 pickup_date，用于计算）
           const updatedOrder = await prisma.orders.findUnique({
             where: { order_id: pickup.order_id },
             select: {
@@ -269,7 +274,7 @@ async function updatePickupManagement(
           })
 
           if (updatedOrder) {
-            // 重新计算拆柜日期（提柜日期优先）
+            // 重新计算拆柜日期（提柜日期优先，如果没有提柜日期则使用ETA日期）
             const calculatedUnloadDate = calculateUnloadDate(
               updatedOrder.pickup_date,
               updatedOrder.eta_date
@@ -311,6 +316,7 @@ async function updatePickupManagement(
             container_type: true,
             port_location_id: true,
             carrier_id: true,
+            eta_date: true,
             lfd_date: true,
             pickup_date: true,
             ready_date: true,
@@ -370,6 +376,7 @@ async function updatePickupManagement(
         carrier_code: updatedOrder.carriers.carrier_code || null,
       } : null,
       carrier_id: updatedOrder?.carrier_id ? String(updatedOrder.carrier_id) : null,
+      eta_date: updatedOrder?.eta_date || null,
       lfd_date: updatedOrder?.lfd_date || null,
       pickup_date: updatedOrder?.pickup_date || null,
       ready_date: updatedOrder?.ready_date || null,
