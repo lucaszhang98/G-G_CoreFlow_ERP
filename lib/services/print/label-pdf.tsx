@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
   },
   row1: {
     // 第一行：柜号（居中，更大更粗）
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     textAlign: 'center',
     margin: 0,
