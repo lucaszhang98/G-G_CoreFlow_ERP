@@ -1803,6 +1803,8 @@ function AddDetailDialog({
   // 重置状态
   React.useEffect(() => {
     if (!open) {
+      // 确保所有状态都被重置，包括保存状态
+      setIsSaving(false)
       setStep(1)
       setOrders([])
       setSelectedOrderId(null)
@@ -1813,7 +1815,6 @@ function AddDetailDialog({
       setSelectedDetail(null)
       setEstimatedPallets('')
       setPo('')
-      setIsSaving(false)
       setAppointmentDestination(null)
       setShowDestinationMismatchDialog(false)
       setPendingDetailSelection(null)
@@ -1898,8 +1899,12 @@ function AddDetailDialog({
           order_detail_id: selectedDetailId,
           po: po || null,
         })
-      } catch (error) {
-        // 错误已在onSave中处理
+        // 保存成功后关闭对话框
+        onOpenChange(false)
+      } catch (error: any) {
+        // 错误已在onSave中处理，但确保状态被重置
+        console.error('保存预约明细失败:', error)
+        // 不关闭对话框，让用户修改后重试
       } finally {
         setIsSaving(false)
       }
@@ -1923,8 +1928,12 @@ function AddDetailDialog({
         order_id: selectedOrderId || orderId,
         po: null,
       })
-    } catch (error) {
-      // 错误已在onSave中处理
+      // 保存成功后关闭对话框
+      onOpenChange(false)
+    } catch (error: any) {
+      // 错误已在onSave中处理，但确保状态被重置
+      console.error('保存订单明细失败:', error)
+      // 不关闭对话框，让用户修改后重试
     } finally {
       setIsSaving(false)
     }
@@ -2424,6 +2433,7 @@ function AddDetailDialog({
           <Button 
             variant="outline" 
             onClick={() => {
+              if (isSaving) return // 保存中不允许操作
               if (step > 1) {
                 setStep((step - 1) as 1 | 2 | 3)
               } else {
@@ -2437,13 +2447,14 @@ function AddDetailDialog({
           {step < 3 ? (
             <Button 
               onClick={() => {
+                if (isSaving) return // 保存中不允许操作
                 if (step === 1 && selectedOrderId) {
                   // 已经在handleSelectOrder中处理
                 } else if (step === 2 && selectedDetailId) {
                   // 已经在handleSelectDetail中处理
                 }
               }}
-              disabled={!selectedOrderId || (step === 2 && !selectedDetailId)}
+              disabled={isSaving || !selectedOrderId || (step === 2 && !selectedDetailId)}
             >
               下一步
             </Button>

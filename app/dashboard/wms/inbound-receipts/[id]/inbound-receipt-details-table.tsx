@@ -141,15 +141,47 @@ export function InboundReceiptDetailsTable({
 
     // 合并多个库存批次的信息
     const totalPalletCount = lots.reduce((sum, lot) => sum + (lot.pallet_count || 0), 0)
-    const totalRemainingPalletCount = lots.reduce((sum, lot) => sum + (lot.remaining_pallet_count || 0), 0)
-    const totalUnbookedPalletCount = lots.reduce((sum, lot) => sum + (lot.unbooked_pallet_count || 0), 0)
     
-    // 计算平均送货进度
-    const progressValues = lots.filter(lot => lot.delivery_progress !== null).map(lot => Number(lot.delivery_progress))
-    const avgDeliveryProgress = progressValues.length > 0
-      ? progressValues.reduce((sum, val) => sum + val, 0) / progressValues.length
-      : null
-
+    // 实时计算剩余板数（与订单明细管理保持一致）
+    // 获取该订单明细的预约信息
+    const detail = orderDetails.find(d => d.id === detailId)
+    const appointments = detail?.appointments || []
+    
+    // 计算已过期预约的板数之和（用于计算剩余板数）
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const expiredAppointments = appointments.filter((appt: DeliveryAppointment) => {
+      if (!appt.confirmed_start) return false
+      const confirmedDate = new Date(appt.confirmed_start)
+      confirmedDate.setHours(0, 0, 0, 0)
+      return confirmedDate < today
+    })
+    const totalExpiredAppointmentPallets = expiredAppointments.reduce((sum: number, appt: DeliveryAppointment) => {
+      return sum + (appt.estimated_pallets || 0)
+    }, 0)
+    
+    // 实时计算剩余板数 = 实际板数 - 已过期预约板数之和（确保不为负数）
+    const totalRemainingPalletCount = Math.max(0, totalPalletCount - totalExpiredAppointmentPallets)
+    
+    // 计算所有预约的板数之和（用于计算未约板数）
+    const totalAppointmentPallets = appointments.reduce((sum: number, appt: DeliveryAppointment) => {
+      return sum + (appt.estimated_pallets || 0)
+    }, 0)
+    
+    // 实时计算未约板数 = 实际板数 - 所有预约板数之和
+    const totalUnbookedPalletCount = totalPalletCount - totalAppointmentPallets
+    
+    // 计算送货进度（使用实时计算的剩余板数）
+    let avgDeliveryProgress: number | null = null
+    if (totalPalletCount > 0) {
+      const shipped = totalPalletCount - totalRemainingPalletCount
+      avgDeliveryProgress = Math.round((shipped / totalPalletCount) * 100 * 100) / 100 // 保留两位小数
+      avgDeliveryProgress = Math.max(0, Math.min(100, avgDeliveryProgress)) // 确保在 0-100 之间
+    } else if (totalPalletCount === 0) {
+      // 如果实际板数为0，视为已送完（100%）
+      avgDeliveryProgress = 100
+    }
+    
     // 合并备注（取第一个非空的）
     const unloadTransferNotes = lots.find(lot => lot.unload_transfer_notes)?.unload_transfer_notes || null
     const notes = lots.find(lot => lot.notes)?.notes || null
@@ -160,9 +192,9 @@ export function InboundReceiptDetailsTable({
     return {
       storage_location_code: storageLocationCode,
       total_pallet_count: totalPalletCount,
-      total_remaining_pallet_count: totalRemainingPalletCount,
-      total_unbooked_pallet_count: totalUnbookedPalletCount,
-      delivery_progress: avgDeliveryProgress,
+      total_remaining_pallet_count: totalRemainingPalletCount, // 实时计算
+      total_unbooked_pallet_count: totalUnbookedPalletCount, // 实时计算
+      delivery_progress: avgDeliveryProgress, // 基于实时计算的剩余板数
       unload_transfer_notes: unloadTransferNotes,
       notes: notes,
     }

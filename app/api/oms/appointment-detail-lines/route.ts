@@ -230,18 +230,33 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 确定总板数（用于保存快照）
+    // 实时计算总板数（用于验证和保存快照，不依赖数据库字段，确保准确性）
     let totalPalletsAtTime: number
     if (inventoryLot && inventoryLot.pallet_count > 0) {
-      // 已入库：使用未约板数
-      totalPalletsAtTime = inventoryLot.unbooked_pallet_count ?? inventoryLot.pallet_count ?? 0
+      // 已入库：实时计算未约板数 = 实际板数 - 所有预约板数之和
+      const existingAppointmentLines = await prisma.appointment_detail_lines.findMany({
+        where: { order_detail_id: orderDetailId },
+        select: { estimated_pallets: true },
+      })
+      const totalAppointmentPallets = existingAppointmentLines.reduce((sum, line) => {
+        return sum + (line.estimated_pallets || 0)
+      }, 0)
+      totalPalletsAtTime = inventoryLot.pallet_count - totalAppointmentPallets
     } else {
-      // 未入库：使用 order_detail 的剩余板数
+      // 未入库：实时计算未约板数 = 预计板数 - 所有预约板数之和
       const orderDetail = await prisma.order_detail.findUnique({
         where: { id: orderDetailId },
-        select: { remaining_pallets: true, estimated_pallets: true },
+        select: { estimated_pallets: true },
       })
-      totalPalletsAtTime = orderDetail?.remaining_pallets ?? orderDetail?.estimated_pallets ?? 0
+      const existingAppointmentLines = await prisma.appointment_detail_lines.findMany({
+        where: { order_detail_id: orderDetailId },
+        select: { estimated_pallets: true },
+      })
+      const totalAppointmentPallets = existingAppointmentLines.reduce((sum, line) => {
+        return sum + (line.estimated_pallets || 0)
+      }, 0)
+      const estimatedPallets = orderDetail?.estimated_pallets ?? 0
+      totalPalletsAtTime = estimatedPallets - totalAppointmentPallets
     }
 
     // 验证预计板数不能超过总板数

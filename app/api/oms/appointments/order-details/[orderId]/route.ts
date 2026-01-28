@@ -137,11 +137,20 @@ export async function GET(
 
         const hasInventory = inventoryLots.length > 0 && totalInventoryPallets > 0
 
-        // 确定未约板数：已入库使用 inventory_lots.unbooked_pallet_count，未入库使用 order_detail.remaining_pallets
-        // 如果有多个库存记录，使用第一个的 unbooked_pallet_count（通常一个明细只有一个库存记录）
-        const unbookedPallets = hasInventory && inventoryLots.length > 0
-          ? (inventoryLots[0].unbooked_pallet_count ?? inventoryLots[0].pallet_count ?? 0)
-          : (detail.remaining_pallets ?? detail.estimated_pallets ?? 0)
+        // 实时计算未约板数（不依赖数据库字段，确保准确性）
+        // 获取所有预约的预计板数之和
+        const appointmentLines = await prisma.appointment_detail_lines.findMany({
+          where: { order_detail_id: detail.id },
+          select: { estimated_pallets: true },
+        })
+        const totalAppointmentPallets = appointmentLines.reduce((sum, line) => {
+          return sum + (line.estimated_pallets || 0)
+        }, 0)
+
+        // 确定未约板数：已入库实时计算 = 实际板数 - 所有预约板数之和，未入库实时计算 = 预计板数 - 所有预约板数之和
+        const unbookedPallets = hasInventory
+          ? (totalInventoryPallets - totalAppointmentPallets) // 已入库：实时计算（不依赖 unbooked_pallet_count 字段）
+          : ((detail.estimated_pallets || 0) - totalAppointmentPallets) // 未入库：实时计算（允许负数，表示多约）
 
         // 获取 location_code（从关联数据中获取）
         const locationCode = detail.locations_order_detail_delivery_location_idTolocations?.location_code || null
