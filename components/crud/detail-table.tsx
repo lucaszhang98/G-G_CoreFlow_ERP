@@ -791,8 +791,8 @@ export function DetailTable({
           )}
         </div>
       </div>
-      <div>
-        <table className="w-full border-collapse">
+      <div className="overflow-x-auto -mx-4 px-4" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(156, 163, 175, 0.5) transparent' }}>
+        <table className="w-full border-collapse min-w-full">
           <thead>
             <tr className="bg-muted/50 border-b">
               {visibleColumns.map((col) => {
@@ -818,11 +818,11 @@ export function DetailTable({
                   case 'unloadType':
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[200px]">FBA</th>
                   case 'notes':
-                    return <th key={col} className="text-left p-2 font-semibold text-sm">备注</th>
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[180px]">备注</th>
                   case 'po':
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[200px]">PO</th>
                   case 'windowPeriod':
-                    return <th key={col} className="text-left p-2 font-semibold text-sm">窗口期</th>
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[150px]">窗口期</th>
                   case 'detailId':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">仓点ID</th>
                   case 'quantity':
@@ -1120,10 +1120,14 @@ export function DetailTable({
                             const currentValue = isBatchEditMode
                               ? (batchEditValues[detailId]?.notes ?? detail.notes)
                               : (editingData?.notes ?? detail.notes)
+                            // 根据内容长度计算行数（每行约50个字符）
+                            const textLines = (currentValue || '').split('\n')
+                            const estimatedRows = Math.max(2, Math.min(6, textLines.reduce((max: number, line: string) => {
+                              return Math.max(max, Math.ceil(line.length / 50) || 1)
+                            }, textLines.length)))
                             return (
-                              <td key={col} className="p-2 text-sm">
-                                <Input
-                                  type="text"
+                              <td key={col} className="p-2 text-sm min-w-[180px]">
+                                <Textarea
                                   value={currentValue || ''}
                                   onChange={(e) => {
                                     if (isBatchEditMode) {
@@ -1138,13 +1142,14 @@ export function DetailTable({
                                       setEditingData({ ...editingData, notes: e.target.value || null })
                                     }
                                   }}
-                                  className="w-full"
+                                  className="w-full min-w-[180px] min-h-[60px] resize-both"
                                   placeholder="备注"
+                                  rows={estimatedRows}
                                 />
                               </td>
                             )
                           }
-                          return <td key={col} className="p-2 text-sm">{detail.notes || '-'}</td>
+                          return <td key={col} className="p-2 text-sm min-w-[180px] whitespace-pre-wrap break-words">{detail.notes || '-'}</td>
                         case 'totalVolume':
                           return <td key={col} className="p-2 text-sm">{formatVolume(detail.volume)}</td>
                         case 'totalPallets':
@@ -1199,7 +1204,7 @@ export function DetailTable({
                               ? (batchEditValues[detailId]?.window_period ?? detail.window_period)
                               : (editingData?.window_period ?? detail.window_period)
                             return (
-                              <td key={col} className="p-2 text-sm">
+                              <td key={col} className="p-2 text-sm min-w-[150px]">
                                 <Input
                                   type="text"
                                   value={currentValue || ''}
@@ -1216,13 +1221,13 @@ export function DetailTable({
                                       setEditingData({ ...editingData, window_period: e.target.value || null })
                                     }
                                   }}
-                                  className="w-full"
+                                  className="w-full min-w-[150px]"
                                   placeholder="窗口期"
                                 />
                               </td>
                             )
                           }
-                          return <td key={col} className="p-2 text-sm">{detail.window_period || '-'}</td>
+                          return <td key={col} className="p-2 text-sm min-w-[150px] whitespace-pre-wrap break-words">{detail.window_period || '-'}</td>
                         case 'detailId':
                           return <td key={col} className="p-2 text-sm font-medium">{detailId}</td>
                         case 'createdAt':
