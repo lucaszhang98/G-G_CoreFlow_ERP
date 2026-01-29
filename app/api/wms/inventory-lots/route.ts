@@ -270,6 +270,7 @@ export async function GET(request: NextRequest) {
               select: {
                 id: true,
                 estimated_pallets: true,
+                rejected_pallets: true,
                 appointment_id: true,
                 delivery_appointments: {
                   select: {
@@ -281,7 +282,7 @@ export async function GET(request: NextRequest) {
                     order_id: true,
                   },
                 },
-              },
+              } as import('@prisma/client').Prisma.appointment_detail_linesSelect,
             },
           },
         },
@@ -483,37 +484,23 @@ export async function POST(request: NextRequest) {
     const orderDetailId = BigInt(data.order_detail_id);
     const palletCount = data.pallet_count || 1;
 
-    // 获取所有预约的预计板数之和（用于计算未约板数）
     const appointmentLines = await prisma.appointment_detail_lines.findMany({
       where: { order_detail_id: orderDetailId },
-      select: { estimated_pallets: true },
+      select: { estimated_pallets: true, rejected_pallets: true, delivery_appointments: { select: { confirmed_start: true } } },
     });
-    const totalAppointmentPallets = appointmentLines.reduce((sum, line) => {
-      return sum + (line.estimated_pallets || 0);
-    }, 0);
-
-    // 获取所有未过期预约的预计板数之和（用于计算剩余板数）
-    // 判断过期：confirmed_start < 当前日期
+    const effective = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0);
+    const totalEffectivePallets = appointmentLines.reduce((sum, line) => sum + effective(line.estimated_pallets, line.rejected_pallets), 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const expiredAppointmentLines = await prisma.appointment_detail_lines.findMany({
-      where: {
-        order_detail_id: orderDetailId,
-        delivery_appointments: {
-          confirmed_start: {
-            lt: today,
-          },
-        },
-      },
-      select: { estimated_pallets: true },
-    });
-    const totalExpiredAppointmentPallets = expiredAppointmentLines.reduce((sum, line) => {
-      return sum + (line.estimated_pallets || 0);
+    const totalExpiredEffectivePallets = appointmentLines.reduce((sum, line) => {
+      const start = line.delivery_appointments?.confirmed_start;
+      if (!start) return sum;
+      const d = new Date(start);
+      d.setHours(0, 0, 0, 0);
+      return d < today ? sum + effective(line.estimated_pallets, line.rejected_pallets) : sum;
     }, 0);
-
-    // 计算未约板数和剩余板数
-    const unbookedPalletCount = palletCount - totalAppointmentPallets; // 实际板数 - 所有预约的板数
-    const remainingPalletCount = palletCount - totalExpiredAppointmentPallets; // 实际板数 - 已过期预约的板数
+    const unbookedPalletCount = palletCount - totalEffectivePallets;
+    const remainingPalletCount = palletCount - totalExpiredEffectivePallets;
 
     // 构建创建数据
     const createData: any = {

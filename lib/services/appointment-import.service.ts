@@ -126,23 +126,15 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
 
     // 查询所有已存在的预约明细，计算每个订单明细已预约的板数
     const existingAppointmentDetails = await prisma.appointment_detail_lines.findMany({
-      where: {
-        order_detail_id: {
-          in: allOrderDetailIds,
-        },
-      },
-      select: {
-        order_detail_id: true,
-        estimated_pallets: true,
-      },
+      where: { order_detail_id: { in: allOrderDetailIds } },
+      select: { order_detail_id: true, estimated_pallets: true, rejected_pallets: true },
     })
-
-    // 按 order_detail_id 分组，累加已预约的板数
+    const effective = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
     const bookedPalletsMap = new Map<bigint, number>()
     existingAppointmentDetails.forEach((detail) => {
       const orderDetailId = detail.order_detail_id
       const currentBooked = bookedPalletsMap.get(orderDetailId) || 0
-      bookedPalletsMap.set(orderDetailId, currentBooked + (detail.estimated_pallets || 0))
+      bookedPalletsMap.set(orderDetailId, currentBooked + effective(detail.estimated_pallets, detail.rejected_pallets))
     })
 
     // 诊断：检查一些订单明细的已预约板数
@@ -567,42 +559,17 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
                 ? (inventory.unbooked_pallet_count ?? inventory.pallet_count)
                 : (orderDetail.remaining_pallets ?? orderDetail.estimated_pallets ?? 0)
 
-              // 创建预约明细
-              console.log(`[预约导入] 创建明细记录：appointment_id=${appointment.appointment_id}，order_detail_id=${orderDetail.id}`)
+              const { recalcUnbookedRemainingForOrderDetail } = await import('./recalc-unbooked-remaining.service')
               await outerTx.appointment_detail_lines.create({
                 data: {
                   appointment_id: appointment.appointment_id,
                   order_detail_id: orderDetail.id,
                   estimated_pallets: row.estimated_pallets,
-                  total_pallets_at_time: availablePallets,  // 快照
+                  rejected_pallets: 0,
+                  total_pallets_at_time: availablePallets,
                 },
               })
-              console.log(`[预约导入] 明细创建成功`)
-
-              // 扣减板数
-              if (hasInventory) {
-                // 已入库：扣减库存的 unbooked_pallet_count
-                await outerTx.inventory_lots.update({
-                  where: { inventory_lot_id: inventory.inventory_lot_id },
-                  data: {
-                    unbooked_pallet_count: {
-                      decrement: row.estimated_pallets,
-                    },
-                  },
-                })
-                console.log(`[预约导入] 扣减库存：order=${row.order_number}, order_detail_id=${orderDetail.id}，扣减${row.estimated_pallets}板（unbooked_pallet_count）`)
-              } else {
-                // 未入库：扣减订单明细的 remaining_pallets
-                await outerTx.order_detail.update({
-                  where: { id: orderDetail.id },
-                  data: {
-                    remaining_pallets: {
-                      decrement: row.estimated_pallets,
-                    },
-                  },
-                })
-                console.log(`[预约导入] 扣减订单明细：order=${row.order_number}, order_detail_id=${orderDetail.id}，扣减${row.estimated_pallets}板（remaining_pallets）`)
-              }
+              await recalcUnbookedRemainingForOrderDetail(orderDetail.id, outerTx)
             }
 
             // 自动创建关联记录（与前端逻辑一致）

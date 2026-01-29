@@ -116,15 +116,16 @@ export async function PUT(
 
     // 如果更新了 estimated_pallets，需要重新计算 remaining_pallets（未约板数）
     if (calculatedEstimatedPallets !== undefined && calculatedEstimatedPallets !== null) {
-      // 获取所有预约的板数之和
       const allAppointmentLines = await prisma.appointment_detail_lines.findMany({
         where: { order_detail_id: BigInt(resolvedParams.id) },
-        select: { estimated_pallets: true },
+        select: { estimated_pallets: true, rejected_pallets: true } as { estimated_pallets: true; rejected_pallets: true },
       })
-      const totalAppointmentPallets = allAppointmentLines.reduce((sum, line) => sum + (line.estimated_pallets || 0), 0)
-      
-      // 计算未约板数：estimated_pallets - 所有预约板数之和
-      const newRemaining = Math.max(0, calculatedEstimatedPallets - totalAppointmentPallets)
+      const effective = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
+      const totalEffectivePallets = allAppointmentLines.reduce(
+        (sum, line) => sum + effective(line.estimated_pallets ?? 0, (line as { rejected_pallets?: number | null }).rejected_pallets),
+        0
+      )
+      const newRemaining = Math.max(0, calculatedEstimatedPallets - totalEffectivePallets)
       updateData.remaining_pallets = newRemaining
     }
 

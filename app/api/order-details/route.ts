@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
             appointment_id: true,
             order_detail_id: true,
             estimated_pallets: true,
+            rejected_pallets: true,
             delivery_appointments: {
               select: {
                 appointment_id: true,
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest) {
                 status: true,
               },
             },
-          },
+          } as import('@prisma/client').Prisma.appointment_detail_linesSelect,
         },
         order_detail_item_order_detail_item_detail_idToorder_detail: {
           select: {
@@ -108,20 +109,17 @@ export async function GET(request: NextRequest) {
       const ilWithPallets = inventoryLots.find((lot: any) => lot.pallet_count > 0)
       const il = ilWithPallets || inventoryLots[0] || null
 
-      // 聚合预约信息
+      const effective = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
       const appointments = serialized.appointment_detail_lines?.map((adl: any) => ({
         appointment_id: adl.delivery_appointments?.appointment_id ? String(adl.delivery_appointments.appointment_id) : null,
         reference_number: adl.delivery_appointments?.reference_number || null,
         confirmed_start: adl.delivery_appointments?.confirmed_start || null,
         estimated_pallets: adl.estimated_pallets || 0,
+        rejected_pallets: adl.rejected_pallets ?? 0,
         status: adl.delivery_appointments?.status || null,
       })) || []
 
-      // 计算所有预约的预计板数之和
-      const totalAppointmentPallets = appointments.reduce((sum: number, appt: any) => sum + (appt.estimated_pallets || 0), 0)
-
-      // 计算已过期预约的预计板数之和（用于计算剩余板数）
-      // 判断过期：confirmed_start < 当前日期（只比较日期，不考虑时间）
+      const totalEffectivePallets = appointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
       const today = new Date()
       today.setHours(0, 0, 0, 0)
       const expiredAppointments = appointments.filter((appt: any) => {
@@ -130,24 +128,17 @@ export async function GET(request: NextRequest) {
         confirmedDate.setHours(0, 0, 0, 0)
         return confirmedDate < today
       })
-      const totalExpiredAppointmentPallets = expiredAppointments.reduce((sum: number, appt: any) => sum + (appt.estimated_pallets || 0), 0)
+      const totalExpiredEffectivePallets = expiredAppointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
 
-      // 计算剩余板数（实时计算，不依赖数据库字段，确保准确性）
-      // 已入库：实时计算 = 实际板数 - 已过期预约板数之和
-      // 未入库：返回 null（对于未入库的数据，我们不关心他的剩余板数）
       const remaining_pallets: number | null = il
-        ? Math.max(0, (il.pallet_count || 0) - totalExpiredAppointmentPallets) // 已入库，实时计算（不依赖 remaining_pallet_count 字段），确保不为负数
-        : null // 未入库，返回 null
+        ? Math.max(0, (il.pallet_count || 0) - totalExpiredEffectivePallets)
+        : null
 
-      // 计算实际板数
       const actual_pallets: number | null = il?.pallet_count || null
 
-      // 计算未约板数
-      // 已入库：实时计算 = pallet_count - 所有预约板数之和（不依赖数据库字段，确保一致性）
-      // 未入库：实时计算 = 预计板数 - 所有预约板数之和（允许负数，负数表示多约）
       const unbooked_pallets: number = il
-        ? (il.pallet_count || 0) - totalAppointmentPallets // 已入库，实时计算（不依赖 unbooked_pallet_count 字段）
-        : (serialized.estimated_pallets || 0) - totalAppointmentPallets // 未入库，实时计算（允许负数）
+        ? (il.pallet_count || 0) - totalEffectivePallets
+        : (serialized.estimated_pallets || 0) - totalEffectivePallets
 
       return {
         ...serialized,

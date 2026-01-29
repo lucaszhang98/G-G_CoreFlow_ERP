@@ -107,43 +107,50 @@ export function OrderDetailTable() {
                     <TableHead>序号</TableHead>
                     <TableHead>预约号码</TableHead>
                     <TableHead>送仓日</TableHead>
-                    <TableHead>板数</TableHead>
+                    <TableHead>预计板数</TableHead>
+                    <TableHead>拒收板数</TableHead>
+                    <TableHead>有效板数</TableHead>
                     <TableHead>状态</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {appointments.map((appt: any, index: number) => (
-                    <TableRow key={appt.appointment_id || index}>
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell>
-                        {appt.reference_number ? (
-                          <a 
-                            href="#" 
-                            className="text-blue-600 hover:underline"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              if (appt.appointment_id) {
-                                router.push(`/dashboard/oms/appointments/${appt.appointment_id}`);
-                              }
-                            }}
-                          >
-                            {appt.reference_number}
-                          </a>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell>{formatDate(appt.confirmed_start)}</TableCell>
-                      <TableCell>
-                        {formatInteger(appt.estimated_pallets)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={appt.status === 'confirmed' ? 'default' : 'secondary'}>
-                          {appt.status === 'confirmed' ? '已确认' : appt.status || '待确认'}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {appointments.map((appt: any, index: number) => {
+                    const rej = appt.rejected_pallets ?? 0
+                    const est = appt.estimated_pallets ?? 0
+                    const effective = Math.max(0, est - rej)
+                    return (
+                      <TableRow key={appt.appointment_id || index}>
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell>
+                          {appt.reference_number ? (
+                            <a 
+                              href="#" 
+                              className="text-blue-600 hover:underline"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                if (appt.appointment_id) {
+                                  router.push(`/dashboard/oms/appointments/${appt.appointment_id}`);
+                                }
+                              }}
+                            >
+                              {appt.reference_number}
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell>{formatDate(appt.confirmed_start)}</TableCell>
+                        <TableCell>{formatInteger(est)}</TableCell>
+                        <TableCell>{formatInteger(rej)}</TableCell>
+                        <TableCell>{formatInteger(effective)}</TableCell>
+                        <TableCell>
+                          <Badge variant={appt.status === 'confirmed' ? 'default' : 'secondary'}>
+                            {appt.status === 'confirmed' ? '已确认' : appt.status || '待确认'}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>

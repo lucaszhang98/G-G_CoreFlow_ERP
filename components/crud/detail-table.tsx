@@ -48,6 +48,7 @@ export interface DetailData {
   quantity: number
   volume: number | string | null
   estimated_pallets: number | null // 预计板数（对于预约明细，这是这个预约送了多少板）
+  rejected_pallets?: number | null // 拒收板数（仅预约明细），有效占用 = estimated_pallets - rejected_pallets
   remaining_pallets?: number | null // 剩余板数（用于显示总板数）
   delivery_nature?: string | null
   delivery_location?: string | null
@@ -91,6 +92,7 @@ export interface DetailTableConfig {
     totalVolume?: boolean // 总方数
     totalPallets?: boolean // 总板数
     estimatedPallets?: boolean // 预计板数
+    rejectedPallets?: boolean // 拒收板数（预约明细）
     volumePercentage?: boolean // 分仓占比
     unloadType?: boolean // FBA
     notes?: boolean // 备注
@@ -328,12 +330,12 @@ export function DetailTable({
     if (isBatchEditMode) return // 批量编辑模式下不允许单行编辑
     
     setEditingRowId(detail.id)
-    // 预约明细：只允许编辑预计板数（estimated_pallets），PO 从 order_detail.po 读取，不可编辑
+    // 预约明细：可编辑预计板数、拒收板数，PO 从 order_detail.po 读取，不可编辑
     // 订单明细：允许编辑其他字段
     if (appointmentId) {
       setEditingData({
         estimated_pallets: detail.estimated_pallets,
-        // po 不再编辑，从 order_detail.po 读取
+        rejected_pallets: (detail as any).rejected_pallets ?? 0,
       })
     } else {
       setEditingData({
@@ -369,7 +371,7 @@ export function DetailTable({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               estimated_pallets: editingData.estimated_pallets,
-              // po 不再发送，从 order_detail.po 读取
+              rejected_pallets: editingData.rejected_pallets,
             }),
           })
 
@@ -699,6 +701,7 @@ export function DetailTable({
     if (config.showColumns?.quantity) cols.push('quantity') // 数量
     if (config.showColumns?.volume) cols.push('volume') // 体积
     if (config.showColumns?.estimatedPallets) cols.push('estimatedPallets') // 预计板数
+    if (appointmentId && config.showColumns?.estimatedPallets) cols.push('rejectedPallets') // 预约明细：拒收板数
     if (config.showColumns?.volumePercentage) cols.push('volumePercentage') // 分仓占比
     if (config.showColumns?.unloadType) cols.push('unloadType') // FBA
     if (config.showColumns?.notes) cols.push('notes') // 备注
@@ -813,6 +816,8 @@ export function DetailTable({
                     return <th key={col} className="text-left p-2 font-semibold text-sm">总板数</th>
                   case 'estimatedPallets':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">预计板数</th>
+                  case 'rejectedPallets':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm">拒收板数</th>
                   case 'volumePercentage':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">分仓占比</th>
                   case 'unloadType':
@@ -1056,7 +1061,6 @@ export function DetailTable({
                         case 'estimatedPallets':
                           // 预计板数：显示这个预约送了多少板（可编辑）
                           if (editingRowId === detailId && editingData && appointmentId) {
-                            // 获取最大板数（剩余板数）
                             const maxPallets = detail.remaining_pallets ?? detail.estimated_pallets ?? 0
                             return (
                               <td key={col} className="p-2 text-sm">
@@ -1076,6 +1080,29 @@ export function DetailTable({
                             )
                           }
                           return <td key={col} className="p-2 text-sm">{formatInteger(detail.estimated_pallets)}</td>
+                        case 'rejectedPallets':
+                          // 拒收板数（仅预约明细）：可编辑，且不能超过预计板数
+                          if (editingRowId === detailId && editingData && appointmentId) {
+                            const maxRejected = detail.estimated_pallets ?? 0
+                            const val = editingData.rejected_pallets ?? 0
+                            return (
+                              <td key={col} className="p-2 text-sm">
+                                <Input
+                                  type="number"
+                                  value={val}
+                                  onChange={(e) => {
+                                    const value = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0)
+                                    setEditingData({ ...editingData, rejected_pallets: Math.min(value, maxRejected) })
+                                  }}
+                                  className="w-full"
+                                  min={0}
+                                  max={maxRejected}
+                                  placeholder={`0-${maxRejected}`}
+                                />
+                              </td>
+                            )
+                          }
+                          return <td key={col} className="p-2 text-sm">{formatInteger((detail as any).rejected_pallets ?? 0)}</td>
                         case 'volumePercentage':
                           return <td key={col} className="p-2 text-sm">{detail.volume_percentage ? `${formatNumber(detail.volume_percentage)}%` : '-'}</td>
                         case 'unloadType':

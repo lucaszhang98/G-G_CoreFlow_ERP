@@ -1,9 +1,8 @@
 /**
  * 批量重新计算所有库存记录的未约板数和剩余板数
- * 
- * 计算逻辑：
- * - unbooked_pallet_count = pallet_count - 所有预约板数之和
- * - remaining_pallet_count = pallet_count - 所有已过期预约板数之和
+ * 有效占用 = estimated_pallets - rejected_pallets
+ * - unbooked_pallet_count = pallet_count - 所有有效占用之和
+ * - remaining_pallet_count = pallet_count - 所有已过期预约的有效占用之和
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -41,43 +40,28 @@ export async function POST(request: NextRequest) {
     // 批量处理
     for (const lot of inventoryLots) {
       try {
-        // 获取该明细的所有预约板数之和
         const allAppointmentLines = await prisma.appointment_detail_lines.findMany({
-          where: {
-            order_detail_id: lot.order_detail_id,
-          },
+          where: { order_detail_id: lot.order_detail_id },
           select: {
             estimated_pallets: true,
-            delivery_appointments: {
-              select: {
-                confirmed_start: true,
-              },
-            },
-          },
+            rejected_pallets: true,
+            delivery_appointments: { select: { confirmed_start: true } },
+          } as import('@prisma/client').Prisma.appointment_detail_linesSelect,
         })
-
-        // 计算所有预约板数之和（用于未约板数）
-        const totalAppointmentPallets = allAppointmentLines.reduce((sum, line) => {
-          return sum + (line.estimated_pallets || 0)
-        }, 0)
-
-        // 计算已过期预约板数之和（用于剩余板数）
-        const totalExpiredAppointmentPallets = allAppointmentLines.reduce((sum, line) => {
-          const confirmedStart = line.delivery_appointments?.confirmed_start
-          if (confirmedStart) {
-            const startDate = new Date(confirmedStart)
-            startDate.setHours(0, 0, 0, 0)
-            if (startDate < today) {
-              // 已过期
-              return sum + (line.estimated_pallets || 0)
-            }
-          }
+        type LineWithRej = { estimated_pallets: number; rejected_pallets?: number | null; delivery_appointments?: { confirmed_start: Date | null } | null }
+        const effective = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
+        const totalEffectivePallets = allAppointmentLines.reduce((sum, line) => sum + effective(line.estimated_pallets, (line as LineWithRej).rejected_pallets), 0)
+        const totalExpiredEffectivePallets = allAppointmentLines.reduce((sum, line) => {
+          const start = (line as LineWithRej).delivery_appointments?.confirmed_start
+          if (!start) return sum
+          const d = new Date(start)
+          d.setHours(0, 0, 0, 0)
+          if (d < today) return sum + effective(line.estimated_pallets, (line as LineWithRej).rejected_pallets)
           return sum
         }, 0)
 
-        // 计算新的未约板数和剩余板数
-        const newUnbookedCount = lot.pallet_count - totalAppointmentPallets
-        const newRemainingCount = lot.pallet_count - totalExpiredAppointmentPallets
+        const newUnbookedCount = lot.pallet_count - totalEffectivePallets
+        const newRemainingCount = lot.pallet_count - totalExpiredEffectivePallets
 
         // 更新记录
         await prisma.inventory_lots.update({

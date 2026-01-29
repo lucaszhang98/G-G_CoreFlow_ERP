@@ -332,6 +332,7 @@ export const inventoryLotConfig: EntityConfig = {
             select: {
               id: true,
               estimated_pallets: true,
+              rejected_pallets: true,
               appointment_id: true,
               delivery_appointments: {
                 select: {

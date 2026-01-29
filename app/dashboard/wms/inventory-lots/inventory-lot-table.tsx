@@ -80,6 +80,7 @@ export function InventoryLotTable() {
           status: line.delivery_appointments?.status || null,
           order_id: line.delivery_appointments?.order_id?.toString() || null,
           estimated_pallets: line.estimated_pallets || 0,
+          rejected_pallets: line.rejected_pallets ?? 0,
         }
       })
       .filter((appt: any) => appt.appointment_id !== null) // 过滤掉无效的预约
@@ -214,37 +215,44 @@ export function InventoryLotTable() {
                     <TableHead>送仓预约</TableHead>
                     <TableHead>预约号码</TableHead>
                     <TableHead>送仓日</TableHead>
-                    <TableHead>板数</TableHead>
+                    <TableHead>预计板数</TableHead>
+                    <TableHead>拒收板数</TableHead>
+                    <TableHead>有效板数</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {appointments.map((appt: any, index: number) => (
-                    <TableRow key={appt.appointment_id || `appt-${index}`}>
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell>
-                        {appt.reference_number ? (
-                          <a 
-                            href="#" 
-                            className="text-blue-600 hover:underline"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              if (appt.appointment_id) {
-                                router.push(`/dashboard/oms/appointments/${appt.appointment_id}`)
-                              }
-                            }}
-                          >
-                            {appt.reference_number}
-                          </a>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell>{formatDate(appt.confirmed_start)}</TableCell>
-                      <TableCell>
-                        {formatInteger(appt.estimated_pallets)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {appointments.map((appt: any, index: number) => {
+                    const rej = appt.rejected_pallets ?? 0
+                    const est = appt.estimated_pallets ?? 0
+                    const effective = Math.max(0, est - rej)
+                    return (
+                      <TableRow key={appt.appointment_id || `appt-${index}`}>
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell>
+                          {appt.reference_number ? (
+                            <a 
+                              href="#" 
+                              className="text-blue-600 hover:underline"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                if (appt.appointment_id) {
+                                  router.push(`/dashboard/oms/appointments/${appt.appointment_id}`)
+                                }
+                              }}
+                            >
+                              {appt.reference_number}
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell>{formatDate(appt.confirmed_start)}</TableCell>
+                        <TableCell>{formatInteger(est)}</TableCell>
+                        <TableCell>{formatInteger(rej)}</TableCell>
+                        <TableCell>{formatInteger(effective)}</TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>

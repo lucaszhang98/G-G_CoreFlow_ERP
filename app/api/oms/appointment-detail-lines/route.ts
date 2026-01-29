@@ -97,45 +97,37 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // 序列化并格式化数据
-    const serializedLines = appointmentDetailLines.map((line: any) => {
-      const serialized = serializeBigInt(line)
-      // 类型断言：确保 include 的关系存在
+    // 序列化并格式化数据（跳过关联缺失的行，避免单条异常导致整表不显示）
+    const serializedLines: any[] = []
+    for (const line of appointmentDetailLines) {
       const orderDetail = line.order_detail ? serializeBigInt(line.order_detail) : null
-      if (!orderDetail) {
-        throw new Error(`Order detail not found for appointment_detail_line ${line.id}`)
+      const deliveryAppointment = line.delivery_appointments
+      if (!orderDetail || !deliveryAppointment) {
+        console.warn(`[appointment-detail-lines] 跳过明细 id=${line.id}: order_detail=${!!orderDetail}, delivery_appointments=${!!deliveryAppointment}`)
+        continue
       }
+      const serialized = serializeBigInt(line)
       const orderDetailOrders = orderDetail.orders ? serializeBigInt(orderDetail.orders) : null
-      // delivery_location_id 现在有外键约束，关联数据通过 Prisma include 自动加载
       const locationCode = orderDetail.locations_order_detail_delivery_location_idTolocations?.location_code || null
 
-      // 检查是否已入库
       const inventoryLot = inventoryMap.get(line.order_detail_id)
       const hasInventory = inventoryLot && inventoryLot.pallet_count > 0
-      
-      // 确定总板数：已入库使用 unbooked_pallet_count，未入库使用 remaining_pallets
-      const totalPallets = hasInventory 
+      const totalPallets = hasInventory
         ? (inventoryLot.unbooked_pallet_count ?? inventoryLot.pallet_count)
         : (orderDetail.remaining_pallets ?? orderDetail.estimated_pallets ?? 0)
 
-      // 调试日志
       if (hasInventory) {
         console.log(`[appointment-detail-lines] 已入库仓点 order_detail_id=${line.order_detail_id}: pallet_count=${inventoryLot.pallet_count}, unbooked_pallet_count=${inventoryLot.unbooked_pallet_count}, totalPallets=${totalPallets}`)
       } else {
         console.log(`[appointment-detail-lines] 未入库仓点 order_detail_id=${line.order_detail_id}: remaining_pallets=${orderDetail.remaining_pallets}, estimated_pallets=${orderDetail.estimated_pallets}, totalPallets=${totalPallets}`)
       }
 
-      // 类型断言：确保 delivery_appointments 关系存在
-      const deliveryAppointment = line.delivery_appointments
-      if (!deliveryAppointment) {
-        throw new Error(`Delivery appointment not found for appointment_detail_line ${line.id}`)
-      }
-
-      return {
+      serializedLines.push({
         id: serialized.id,
         appointment_id: serialized.appointment_id,
         order_detail_id: serialized.order_detail_id,
-        estimated_pallets: serialized.estimated_pallets, // 这个预约送了多少板
+        estimated_pallets: serialized.estimated_pallets,
+        rejected_pallets: (serialized as any).rejected_pallets ?? 0, // 兼容 DB 尚未加列时
         total_pallets_at_time: serialized.total_pallets_at_time, // 总板数快照（历史值，仅用于审计）
         // PO 从 order_detail 读取（不再使用 appointment_detail_lines.po）
         po: orderDetail.po || null,
@@ -159,8 +151,8 @@ export async function GET(request: NextRequest) {
         order_number: orderDetailOrders?.order_number || null,
         // SKU 明细
         order_detail_item_order_detail_item_detail_idToorder_detail: orderDetail.order_detail_item_order_detail_item_detail_idToorder_detail,
-      }
-    })
+      })
+    }
 
     return NextResponse.json({
       success: true,
@@ -230,33 +222,23 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 实时计算总板数（用于验证和保存快照，不依赖数据库字段，确保准确性）
+    // 实时计算总板数（用于验证和保存快照）：未约板数 = 预计/实际板数 - 有效占用（有效占用 = estimated_pallets - rejected_pallets）
+    const effectiveBooked = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
     let totalPalletsAtTime: number
+    const existingAppointmentLines = await prisma.appointment_detail_lines.findMany({
+      where: { order_detail_id: orderDetailId },
+      select: { estimated_pallets: true, rejected_pallets: true } as { estimated_pallets: true; rejected_pallets: true },
+    })
+    const totalEffectiveBooked = existingAppointmentLines.reduce((sum, line) => sum + effectiveBooked(line.estimated_pallets, (line as { rejected_pallets?: number | null }).rejected_pallets), 0)
     if (inventoryLot && inventoryLot.pallet_count > 0) {
-      // 已入库：实时计算未约板数 = 实际板数 - 所有预约板数之和
-      const existingAppointmentLines = await prisma.appointment_detail_lines.findMany({
-        where: { order_detail_id: orderDetailId },
-        select: { estimated_pallets: true },
-      })
-      const totalAppointmentPallets = existingAppointmentLines.reduce((sum, line) => {
-        return sum + (line.estimated_pallets || 0)
-      }, 0)
-      totalPalletsAtTime = inventoryLot.pallet_count - totalAppointmentPallets
+      totalPalletsAtTime = inventoryLot.pallet_count - totalEffectiveBooked
     } else {
-      // 未入库：实时计算未约板数 = 预计板数 - 所有预约板数之和
       const orderDetail = await prisma.order_detail.findUnique({
         where: { id: orderDetailId },
         select: { estimated_pallets: true },
       })
-      const existingAppointmentLines = await prisma.appointment_detail_lines.findMany({
-        where: { order_detail_id: orderDetailId },
-        select: { estimated_pallets: true },
-      })
-      const totalAppointmentPallets = existingAppointmentLines.reduce((sum, line) => {
-        return sum + (line.estimated_pallets || 0)
-      }, 0)
       const estimatedPallets = orderDetail?.estimated_pallets ?? 0
-      totalPalletsAtTime = estimatedPallets - totalAppointmentPallets
+      totalPalletsAtTime = estimatedPallets - totalEffectiveBooked
     }
 
     // 验证预计板数不能超过总板数
@@ -266,57 +248,27 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    const { recalcUnbookedRemainingForOrderDetail } = await import('@/lib/services/recalc-unbooked-remaining.service')
+
     // 使用事务确保数据一致性
     const result = await prisma.$transaction(async (tx) => {
-      // 创建预约明细（PO 不再存储，从 order_detail.po 读取）
+      // 创建预约明细（rejected_pallets 新建默认为 0）
       const appointmentDetailLine = await tx.appointment_detail_lines.create({
         data: {
           appointment_id: appointmentId,
           order_detail_id: orderDetailId,
           estimated_pallets: estimatedPalletsValue,
-          total_pallets_at_time: totalPalletsAtTime, // 保存总板数快照
-          // po 字段已移除，PO 从 order_detail.po 读取
+          rejected_pallets: 0,
+          total_pallets_at_time: totalPalletsAtTime,
           created_by: session.user.id ? BigInt(session.user.id) : null,
           updated_by: session.user.id ? BigInt(session.user.id) : null,
-        },
+        } as import('@prisma/client').Prisma.appointment_detail_linesUncheckedCreateInput,
       })
 
-      // 更新相关板数字段
-      if (inventoryLot && inventoryLot.pallet_count > 0) {
-        // 已入库：更新 inventory_lots.unbooked_pallet_count
-        const newUnbookedCount = (inventoryLot.unbooked_pallet_count ?? inventoryLot.pallet_count) - estimatedPalletsValue
-        await tx.inventory_lots.update({
-          where: { inventory_lot_id: inventoryLot.inventory_lot_id },
-          data: { unbooked_pallet_count: newUnbookedCount },
-        })
-      } else {
-        // 未入库：更新 order_detail.remaining_pallets（未约板数 = 预计板数 - 所有预约板数之和）
-        const orderDetail = await tx.order_detail.findUnique({
-          where: { id: orderDetailId },
-          select: { remaining_pallets: true, estimated_pallets: true },
-        })
-        if (orderDetail) {
-          // 获取所有预约的板数之和（包括刚创建的）
-          const allAppointmentLines = await tx.appointment_detail_lines.findMany({
-            where: { order_detail_id: orderDetailId },
-            select: { estimated_pallets: true },
-          })
-          const totalAppointmentPallets = allAppointmentLines.reduce((sum, line) => sum + (line.estimated_pallets || 0), 0)
-          
-          // 计算未约板数：estimated_pallets - 所有预约板数之和
-          const estimatedPallets = orderDetail.estimated_pallets ?? 0
-          const newRemaining = Math.max(0, estimatedPallets - totalAppointmentPallets)
-          
-          await tx.order_detail.update({
-            where: { id: orderDetailId },
-            data: {
-              remaining_pallets: newRemaining,
-            },
-          })
-        }
-      }
+      // 重算并写回未约板数/剩余板数（含拒收板数公式）
+      await recalcUnbookedRemainingForOrderDetail(orderDetailId, tx)
 
-      // 更新 delivery_appointments.total_pallets（累加）
+      // 更新 delivery_appointments.total_pallets（累加预计板数，用于展示）
       const appointment = await tx.delivery_appointments.findUnique({
         where: { appointment_id: appointmentId },
         select: { total_pallets: true },

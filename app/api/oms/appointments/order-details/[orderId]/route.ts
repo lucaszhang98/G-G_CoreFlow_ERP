@@ -137,20 +137,21 @@ export async function GET(
 
         const hasInventory = inventoryLots.length > 0 && totalInventoryPallets > 0
 
-        // 实时计算未约板数（不依赖数据库字段，确保准确性）
-        // 获取所有预约的预计板数之和
+        // 实时计算未约板数：有效占用 = estimated_pallets - rejected_pallets
         const appointmentLines = await prisma.appointment_detail_lines.findMany({
           where: { order_detail_id: detail.id },
-          select: { estimated_pallets: true },
+          select: { estimated_pallets: true, rejected_pallets: true },
         })
-        const totalAppointmentPallets = appointmentLines.reduce((sum, line) => {
-          return sum + (line.estimated_pallets || 0)
-        }, 0)
+        const effective = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
+        const totalEffectivePallets = appointmentLines.reduce(
+          (sum, line) => sum + effective(line.estimated_pallets, line.rejected_pallets),
+          0
+        )
 
-        // 确定未约板数：已入库实时计算 = 实际板数 - 所有预约板数之和，未入库实时计算 = 预计板数 - 所有预约板数之和
+        // 未约板数 = 预计/实际板数 - 有效占用
         const unbookedPallets = hasInventory
-          ? (totalInventoryPallets - totalAppointmentPallets) // 已入库：实时计算（不依赖 unbooked_pallet_count 字段）
-          : ((detail.estimated_pallets || 0) - totalAppointmentPallets) // 未入库：实时计算（允许负数，表示多约）
+          ? (totalInventoryPallets - totalEffectivePallets)
+          : ((detail.estimated_pallets || 0) - totalEffectivePallets)
 
         // 获取 location_code（从关联数据中获取）
         const locationCode = detail.locations_order_detail_delivery_location_idTolocations?.location_code || null

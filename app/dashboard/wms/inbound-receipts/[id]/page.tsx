@@ -69,6 +69,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                   select: {
                     id: true,
                     estimated_pallets: true,
+                    rejected_pallets: true,
                     appointment_id: true,
                     delivery_appointments: {
                       select: {
@@ -213,6 +214,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                       select: {
                         id: true,
                         estimated_pallets: true,
+                        rejected_pallets: true,
                         appointment_id: true,
                         delivery_appointments: {
                           select: {
@@ -441,6 +443,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
                     status: line.delivery_appointments?.status || null,
                     order_id: line.delivery_appointments?.order_id?.toString() || null,
                     estimated_pallets: line.estimated_pallets || 0,
+                    rejected_pallets: line.rejected_pallets ?? 0,
                   }
                 })
                 
