@@ -68,6 +68,7 @@ export function CreateOrderDialog({
     mbl_number: '',
     status: 'pending' as 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'archived',
     operation_mode: null as 'unload' | 'direct_delivery' | null,
+    delivery_location_id: null as string | number | null,
   })
   
   // 第二步：仓点明细
@@ -89,6 +90,7 @@ export function CreateOrderDialog({
       mbl_number: '',
       status: 'pending',
       operation_mode: null,
+      delivery_location_id: null,
     })
     setOrderDetails([])
     setEditingRowId(null)
@@ -115,6 +117,10 @@ export function CreateOrderDialog({
     }
     if (!orderData.order_date) {
       toast.error('请选择订单日期')
+      return false
+    }
+    if (!orderData.delivery_location_id) {
+      toast.error('请选择目的地')
       return false
     }
     return true
@@ -225,6 +231,7 @@ export function CreateOrderDialog({
           mbl_number: orderData.mbl_number || null,
           status: orderData.status || 'pending',
           operation_mode: orderData.operation_mode || null,
+          delivery_location_id: orderData.delivery_location_id ? Number(orderData.delivery_location_id) : null,
           total_amount: 0, // 默认值
           discount_amount: 0,
           tax_amount: 0,
@@ -435,6 +442,17 @@ export function CreateOrderDialog({
                   value={orderData.mbl_number}
                   onChange={(e) => setOrderData({ ...orderData, mbl_number: e.target.value })}
                   placeholder="请输入MBL号码"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="delivery_location_id">目的地 *</Label>
+                <LocationSelect
+                  value={orderData.delivery_location_id}
+                  onChange={(value: string | number | null) => {
+                    setOrderData({ ...orderData, delivery_location_id: value })
+                  }}
+                  placeholder="请选择目的地"
                 />
               </div>
 
