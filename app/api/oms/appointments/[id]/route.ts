@@ -254,7 +254,11 @@ export async function PUT(
     
     const parseDateTimeWithoutTimezone = (value: string): Date => {
       // 用户输入的时间直接当作 UTC 时间处理，不做任何时区转换
-      // 格式：YYYY-MM-DDTHH:mm 或 YYYY-MM-DDTHH:mm:ss
+      // 格式：YYYY-MM-DDTHH:mm 或 YYYY-MM-DDTHH:mm:ss 或 YYYY-MM-DD（只有日期时自动添加时间 00:00）
+      if (value.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // 如果只有日期（YYYY-MM-DD），自动添加时间 00:00
+        return parseDateTimeAsUTC(`${value}T00:00`)
+      }
       return parseDateTimeAsUTC(value)
     }
     
