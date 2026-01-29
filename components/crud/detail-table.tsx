@@ -791,8 +791,8 @@ export function DetailTable({
           )}
         </div>
       </div>
-      <div className="overflow-x-auto -mx-4 px-4" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(156, 163, 175, 0.5) transparent' }}>
-        <table className="w-full border-collapse min-w-full">
+      <div>
+        <table className="w-full border-collapse">
           <thead>
             <tr className="bg-muted/50 border-b">
               {visibleColumns.map((col) => {
@@ -841,9 +841,9 @@ export function DetailTable({
                     return (
                       <th 
                         key={col} 
-                        className="text-left p-2 font-semibold text-sm w-24 sticky right-0 z-30 bg-muted/50"
+                        className="text-left p-2 font-semibold text-sm w-24 sticky right-0 z-50 bg-muted/50"
                         style={{ 
-                          boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
+                          boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)'
                         }}
                       >
                         操作
@@ -1243,7 +1243,7 @@ export function DetailTable({
                             return (
                               <td 
                                 key={col} 
-                                className="p-2 text-sm sticky right-0 z-30"
+                                className="p-2 text-sm sticky right-0 z-50"
                                 style={{
                                   backgroundColor: 'transparent',
                                   boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)'
@@ -1273,7 +1273,7 @@ export function DetailTable({
                           return (
                             <td 
                               key={col} 
-                              className="p-2 text-sm sticky right-0 z-30"
+                              className="p-2 text-sm sticky right-0 z-50"
                               style={{
                                 backgroundColor: 'transparent',
                                 boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)'
