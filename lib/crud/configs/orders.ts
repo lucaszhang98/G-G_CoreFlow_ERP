@@ -131,16 +131,19 @@ export const orderConfig: EntityConfig = {
       key: 'eta_date',
       label: 'ETA日期',
       type: 'date',
+      sortable: true,
     },
     lfd_date: {
       key: 'lfd_date',
       label: 'LFD日期',
       type: 'date',
+      sortable: true,
     },
     pickup_date: {
       key: 'pickup_date',
       label: '提柜日期',
       type: 'date',
+      sortable: true,
       readonly: true, // 订单管理中只能看不能改
     },
     ready_date: {
