@@ -9,6 +9,22 @@ import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 
+/** 获取当前工作周（周一至周日）的起止日期，格式 YYYY-MM-DD */
+function getThisWeekDateRange(): { planned_unload_at_from: string; planned_unload_at_to: string } {
+  const now = new Date()
+  const day = now.getDay() // 0=周日, 1=周一, ..., 6=周六
+  const mondayOffset = day === 0 ? -6 : 1 - day
+  const monday = new Date(now)
+  monday.setDate(now.getDate() + mondayOffset)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  const fmt = (d: Date) => d.toISOString().slice(0, 10)
+  return {
+    planned_unload_at_from: fmt(monday),
+    planned_unload_at_to: fmt(sunday),
+  }
+}
+
 export function InboundReceiptTable() {
   const router = useRouter()
   const [isSyncing, setIsSyncing] = React.useState(false)
@@ -298,6 +314,9 @@ export function InboundReceiptTable() {
     </div>
   ), [handleSyncMissingRecords, handleFixPlannedUnloadDates, isSyncing, isFixingDates])
 
+  // 默认筛选：本周拆柜（周一至周日），仅当 URL 无任何筛选时生效
+  const defaultWeekFilter = React.useMemo(() => getThisWeekDateRange(), [])
+
   return (
     <EntityTable 
       refreshKey={refreshKey}
@@ -305,6 +324,7 @@ export function InboundReceiptTable() {
       customClickableColumns={customClickableColumns}
       fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}
       customToolbarButtons={customToolbarButtons}
+      initialFilterValues={defaultWeekFilter}
     />
   )
 }

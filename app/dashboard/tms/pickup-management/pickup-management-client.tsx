@@ -10,7 +10,7 @@ import { EntityTable } from "@/components/crud/entity-table"
 import { pickupManagementConfig } from "@/lib/crud/configs/pickup-management"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Copy, FileText, Mail } from "lucide-react"
+import { RefreshCw, Copy, FileText, Mail, Download, FileSpreadsheet, Database, Upload } from "lucide-react"
 import type { FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
 import {
   DropdownMenu,
@@ -21,6 +21,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { PickupSummaryDialog } from "@/components/pickup-management/pickup-summary-dialog"
+import { PickupImportDialog } from "./pickup-import-dialog"
+import {
+  generatePickupManagementExportExcel,
+  type PickupManagementExportData,
+} from "@/lib/utils/pickup-management-export-excel"
 
 export function PickupManagementClient() {
   const [isInitializing, setIsInitializing] = React.useState(false)
@@ -32,9 +37,156 @@ export function PickupManagementClient() {
   const [selectedRows, setSelectedRows] = React.useState<any[]>([])
   const [summaryDialogOpen, setSummaryDialogOpen] = React.useState(false)
   const [refreshKey, setRefreshKey] = React.useState(0) // 用于强制刷新表格
+  const [currentSearchParams, setCurrentSearchParams] = React.useState<URLSearchParams>(new URLSearchParams())
+  const [totalCount, setTotalCount] = React.useState(0)
+  const [filteredCount, setFilteredCount] = React.useState(0)
+  const [importDialogOpen, setImportDialogOpen] = React.useState(false)
   // 用于追踪勾选顺序的状态
   const [orderedSelectedRows, setOrderedSelectedRows] = React.useState<any[]>([])
   const selectedIdsRef = React.useRef<Set<string>>(new Set())
+
+  // 初始加载时获取全部数据总数
+  React.useEffect(() => {
+    const fetchTotalCount = async () => {
+      try {
+        const response = await fetch('/api/tms/pickup-management?page=1&limit=1')
+        if (response.ok) {
+          const data = await response.json()
+          const total = data.total ?? 0
+          setTotalCount(total)
+          setFilteredCount(total)
+        }
+      } catch (error) {
+        console.error('获取提柜管理总数失败:', error)
+      }
+    }
+    fetchTotalCount()
+  }, [refreshKey])
+
+  const handleTotalChange = React.useCallback((newTotal: number) => {
+    if (totalCount === 0) setTotalCount(newTotal)
+  }, [totalCount])
+
+  const handleFilteredTotalChange = React.useCallback((newFilteredTotal: number) => {
+    setFilteredCount(newFilteredTotal)
+  }, [])
+
+  // 导出选中行（前端生成Excel）
+  const handleExportSelected = React.useCallback(async () => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要导出的记录')
+      return
+    }
+    try {
+      toast.loading('正在生成Excel文件...')
+      const exportData: PickupManagementExportData[] = selectedRows.map((row: any) => ({
+        container_number: row.container_number ?? null,
+        mbl: row.mbl ?? null,
+        port_location: row.port_location ?? null,
+        port_text: row.port_text ?? null,
+        shipping_line: row.shipping_line ?? null,
+        customer_name: row.customer?.name ?? null,
+        container_type: row.container_type ?? null,
+        carrier_name: row.carrier?.name ?? null,
+        driver_code: row.driver?.driver_code ?? null,
+        do_issued: row.do_issued ?? null,
+        order_date: row.order_date ?? null,
+        eta_date: row.eta_date ?? null,
+        operation_mode_display: row.operation_mode_display ?? null,
+        delivery_location: row.delivery_location ?? null,
+        lfd_date: row.lfd_date ?? null,
+        pickup_date: row.pickup_date ?? null,
+        ready_date: row.ready_date ?? null,
+        return_deadline: row.return_deadline ?? null,
+        warehouse_account: row.warehouse_account ?? null,
+        earliest_appointment_time: row.earliest_appointment_time ?? null,
+        current_location: row.current_location ?? null,
+        status: row.status ?? null,
+        notes: row.notes ?? null,
+        created_at: row.created_at ?? null,
+        updated_at: row.updated_at ?? null,
+      }))
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
+      const filename = `提柜管理_选中_${timestamp}`
+      const workbook = await generatePickupManagementExportExcel(exportData, filename)
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${filename}.xlsx`
+      a.click()
+      window.URL.revokeObjectURL(url)
+      toast.dismiss()
+      toast.success(`成功导出 ${selectedRows.length} 条提柜数据`)
+    } catch (error) {
+      console.error('导出失败:', error)
+      toast.dismiss()
+      toast.error('导出失败，请重试')
+    }
+  }, [selectedRows])
+
+  // 导出筛选结果（后端生成Excel）
+  const handleExportFiltered = React.useCallback(async () => {
+    try {
+      const confirmed =
+        filteredCount > 1000
+          ? window.confirm(`即将导出 ${filteredCount} 条数据，可能需要数秒时间。是否继续？`)
+          : true
+      if (!confirmed) return
+      toast.loading('正在生成Excel文件，请稍候...')
+      const response = await fetch(`/api/tms/pickup-management/export?${currentSearchParams.toString()}`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `导出失败 (${response.status})`)
+      }
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `提柜管理_筛选_${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      window.URL.revokeObjectURL(url)
+      toast.dismiss()
+      toast.success(`成功导出 ${filteredCount} 条数据`)
+    } catch (error: any) {
+      console.error('导出筛选结果失败:', error)
+      toast.dismiss()
+      toast.error(error.message || '导出失败，请重试')
+    }
+  }, [currentSearchParams, filteredCount])
+
+  // 导出全部数据（后端生成Excel）
+  const handleExportAll = React.useCallback(async () => {
+    try {
+      const confirmed =
+        totalCount > 1000
+          ? window.confirm(`即将导出全部 ${totalCount} 条数据，可能需要较长时间。是否继续？`)
+          : true
+      if (!confirmed) return
+      toast.loading('正在生成Excel文件，请稍候...')
+      const response = await fetch('/api/tms/pickup-management/export?all=true')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `导出失败 (${response.status})`)
+      }
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `提柜管理_全部_${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      window.URL.revokeObjectURL(url)
+      toast.dismiss()
+      toast.success(`成功导出 ${totalCount} 条数据`)
+    } catch (error: any) {
+      console.error('导出全部数据失败:', error)
+      toast.dismiss()
+      toast.error(error.message || '导出失败，请重试')
+    }
+  }, [totalCount])
 
   // 维护按勾选顺序排列的数组
   React.useEffect(() => {
@@ -333,56 +485,130 @@ export function PickupManagementClient() {
       })
   }, [orderedSelectedRows])
 
-  // 自定义工具栏按钮（同步按钮）
+  // 自定义工具栏按钮：第一行两个同步按钮，第二行批量导出 + 批量导入（与订单/预约管理 UI 一致）
   const customToolbarButtons = React.useMemo(() => {
     return (
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSync}
-          disabled={isSyncing}
-          className="gap-2"
-        >
-          {isSyncing ? (
-            <>
-              <RefreshCw className="h-4 w-4 animate-spin" />
-              同步中...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="h-4 w-4" />
-              同步提柜数据
-            </>
-          )}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSyncAppointmentInfo}
-          disabled={isSyncingAppointment}
-          className="gap-2"
-        >
-          {isSyncingAppointment ? (
-            <>
-              <RefreshCw className="h-4 w-4 animate-spin" />
-              同步中...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="h-4 w-4" />
-              同步预约信息
-            </>
-          )}
-        </Button>
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2 items-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="gap-2"
+          >
+            {isSyncing ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                同步中...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4" />
+                同步提柜数据
+              </>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSyncAppointmentInfo}
+            disabled={isSyncingAppointment}
+            className="gap-2"
+          >
+            {isSyncingAppointment ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                同步中...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4" />
+                同步预约信息
+              </>
+            )}
+          </Button>
+        </div>
+        <div className="flex gap-2 items-center">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => setImportDialogOpen(true)}
+            className="group relative h-11 px-6 text-base font-medium border-2 border-blue-200 hover:border-blue-400 bg-white hover:bg-blue-50 text-blue-600 hover:text-blue-700 shadow-sm hover:shadow-md transition-all duration-200"
+          >
+            <Upload className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+            <span>批量导入</span>
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="lg"
+                className="group relative h-11 px-6 text-base font-medium border-2 border-blue-200 hover:border-blue-400 bg-white hover:bg-blue-50 text-blue-600 hover:text-blue-700 shadow-sm hover:shadow-md transition-all duration-200"
+              >
+                <Download className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+                <span>批量导出</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-[260px] p-2 bg-white border-2 border-blue-100 shadow-xl rounded-lg"
+            >
+              <DropdownMenuItem
+                onClick={handleExportFiltered}
+                className="px-4 py-3 rounded-md hover:bg-blue-50 cursor-pointer transition-colors duration-150 focus:bg-blue-50"
+              >
+                <FileSpreadsheet className="mr-3 h-5 w-5 text-blue-600" />
+                <div className="flex flex-col">
+                  <span className="font-medium text-gray-900">导出筛选结果</span>
+                  <span className="text-xs text-gray-500 mt-0.5">
+                    符合当前条件的 {filteredCount} 条数据
+                  </span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleExportAll}
+                className="px-4 py-3 rounded-md hover:bg-blue-50 cursor-pointer transition-colors duration-150 focus:bg-blue-50 mt-1"
+              >
+                <Database className="mr-3 h-5 w-5 text-blue-600" />
+                <div className="flex flex-col">
+                  <span className="font-medium text-gray-900">导出全部数据</span>
+                  <span className="text-xs text-gray-500 mt-0.5">
+                    全部 {totalCount} 条数据
+                  </span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     )
-  }, [isSyncing, isSyncingAppointment, handleSync, handleSyncAppointmentInfo])
+  }, [
+    isSyncing,
+    isSyncingAppointment,
+    handleSync,
+    handleSyncAppointmentInfo,
+    handleExportFiltered,
+    handleExportAll,
+    filteredCount,
+    totalCount,
+  ])
 
   // 自定义批量操作按钮
   const customBatchActions = React.useMemo(() => {
     return (
       <>
+        {/* 导出选中 */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[100px] h-9"
+          onClick={handleExportSelected}
+          disabled={selectedRows.length === 0}
+        >
+          <Download className="mr-2 h-4 w-4" />
+          导出选中 ({selectedRows.length}条)
+        </Button>
         {/* 汇总信息按钮 */}
         <Button
           variant="outline"
@@ -458,7 +684,7 @@ export function PickupManagementClient() {
         </DropdownMenu>
       </>
     )
-  }, [handleCopyContainerNumbers, handleSendEmails, isSendingEmails, orderedSelectedRows])
+  }, [handleCopyContainerNumbers, handleSendEmails, handleExportSelected, isSendingEmails, orderedSelectedRows, selectedRows.length])
 
   // 如果已经初始化或正在初始化，直接显示表格
   if (hasInitialized || !showInitButton) {
@@ -479,6 +705,9 @@ export function PickupManagementClient() {
           customToolbarButtons={customToolbarButtons}
           customBatchActions={customBatchActions}
           onRowSelectionChange={setSelectedRows}
+          onSearchParamsChange={setCurrentSearchParams}
+          onTotalChange={handleTotalChange}
+          onFilteredTotalChange={handleFilteredTotalChange}
         />
         
         {/* 汇总信息对话框 */}
@@ -486,6 +715,12 @@ export function PickupManagementClient() {
           open={summaryDialogOpen}
           onOpenChange={setSummaryDialogOpen}
           selectedRecords={orderedSelectedRows}
+        />
+        {/* 批量导入对话框 */}
+        <PickupImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          onSuccess={() => setRefreshKey((k) => k + 1)}
         />
       </>
     )

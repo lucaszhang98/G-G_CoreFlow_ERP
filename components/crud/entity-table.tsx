@@ -145,6 +145,8 @@ interface EntityTableProps<T = any> {
   } // 批量导入配置
   onRowSelectionChange?: (rows: T[]) => void // 行选择变化回调
   refreshKey?: number | string // 刷新触发器（变化时重新获取数据，但不卸载组件）
+  /** 默认筛选条件：当 URL 中没有任何 filter_ 参数时应用（例如入库管理默认本周拆柜） */
+  initialFilterValues?: Record<string, string>
 }
 
 export function EntityTable<T = any>({ 
@@ -167,6 +169,7 @@ export function EntityTable<T = any>({
   onTotalChange,
   onFilteredTotalChange,
   refreshKey,
+  initialFilterValues,
 }: EntityTableProps<T>) {
   // 自动增强配置，生成 filterFields 和 advancedSearchFields（如果未配置）
   const enhancedConfig = React.useMemo(() => {
@@ -221,8 +224,8 @@ export function EntityTable<T = any>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]) // 只在路径变化时触发
   
-  // 筛选状态
-  const [filterValues, setFilterValues] = React.useState<Record<string, any>>({})
+  // 筛选状态（若传入 initialFilterValues 则用其初始化，保证首屏请求即带默认筛选）
+  const [filterValues, setFilterValues] = React.useState<Record<string, any>>(() => initialFilterValues ?? {})
   
   // 高级搜索状态
   const [advancedSearchOpen, setAdvancedSearchOpen] = React.useState(false)
@@ -267,6 +270,10 @@ export function EntityTable<T = any>({
         filters[filterKey] = value
       }
     })
+    // 若 URL 中无任何筛选参数且传入了 initialFilterValues，则使用默认筛选（如入库管理默认本周拆柜）
+    if (Object.keys(filters).length === 0 && initialFilterValues && Object.keys(initialFilterValues).length > 0) {
+      Object.assign(filters, initialFilterValues)
+    }
     if (Object.keys(filters).length > 0) {
       setFilterValues(filters)
     }
