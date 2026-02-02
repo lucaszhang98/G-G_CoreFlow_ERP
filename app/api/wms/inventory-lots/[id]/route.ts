@@ -159,7 +159,6 @@ export async function PUT(
       if (data.pallet_count !== undefined) {
         updateData.pallet_count = data.pallet_count;
       }
-    } else {
       // 允许手动设置（但通常不建议）
       if (data.remaining_pallet_count !== undefined) {
         updateData.remaining_pallet_count = data.remaining_pallet_count ?? 0;
