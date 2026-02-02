@@ -122,41 +122,43 @@ export async function PUT(
     if (data.storage_location_code !== undefined) {
       updateData.storage_location_code = data.storage_location_code || null;
     }
-    if (data.pallet_count !== undefined) {
-      updateData.pallet_count = data.pallet_count;
-    }
     // 如果实际板数变化了，自动重新计算；否则允许手动设置
     if (shouldRecalculate) {
-      // 获取所有预约的预计板数之和（用于计算未约板数）
-      const appointmentLines = await prisma.appointment_detail_lines.findMany({
-        where: { order_detail_id: orderDetailId },
-        select: { estimated_pallets: true },
-      });
-      const totalAppointmentPallets = appointmentLines.reduce((sum, line) => {
-        return sum + (line.estimated_pallets || 0);
-      }, 0);
-
-      // 获取所有未过期预约的预计板数之和（用于计算剩余板数）
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const expiredAppointmentLines = await prisma.appointment_detail_lines.findMany({
-        where: {
-          order_detail_id: orderDetailId,
-          delivery_appointments: {
-            confirmed_start: {
-              lt: today,
-            },
-          },
+      // 使用 recalc-unbooked-remaining 服务来统一计算（与订单明细主表保持一致）
+      // 该服务会考虑拒收板数，使用有效占用公式：estimated_pallets - rejected_pallets
+      const { recalcUnbookedRemainingForOrderDetail } = await import('@/lib/services/recalc-unbooked-remaining.service')
+      
+      // 在事务中更新实际板数并重算未约板数和剩余板数
+      await prisma.$transaction(async (tx) => {
+        // 先更新实际板数
+        await tx.inventory_lots.update({
+          where: { inventory_lot_id: id },
+          data: { pallet_count: newPalletCount },
+        })
+        
+        // 然后使用统一的重算服务来更新未约板数和剩余板数
+        await recalcUnbookedRemainingForOrderDetail(orderDetailId, tx)
+      })
+      
+      // 重新查询更新后的值（用于返回和后续处理）
+      const updated = await prisma.inventory_lots.findUnique({
+        where: { inventory_lot_id: id },
+        select: {
+          unbooked_pallet_count: true,
+          remaining_pallet_count: true,
         },
-        select: { estimated_pallets: true },
-      });
-      const totalExpiredAppointmentPallets = expiredAppointmentLines.reduce((sum, line) => {
-        return sum + (line.estimated_pallets || 0);
-      }, 0);
-
-      // 自动计算
-      updateData.unbooked_pallet_count = newPalletCount - totalAppointmentPallets;
-      updateData.remaining_pallet_count = newPalletCount - totalExpiredAppointmentPallets;
+      })
+      
+      if (updated) {
+        updateData.unbooked_pallet_count = updated.unbooked_pallet_count
+        updateData.remaining_pallet_count = updated.remaining_pallet_count
+      }
+      // 注意：pallet_count 已经在事务中更新了，不需要再放入 updateData
+    } else {
+      // 如果实际板数没有变化，可以正常更新
+      if (data.pallet_count !== undefined) {
+        updateData.pallet_count = data.pallet_count;
+      }
     } else {
       // 允许手动设置（但通常不建议）
       if (data.remaining_pallet_count !== undefined) {

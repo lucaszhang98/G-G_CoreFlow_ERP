@@ -339,6 +339,7 @@ export async function GET(request: NextRequest) {
     // 不需要手动查询 locations 了
 
     // 转换数据格式，添加关联字段
+    // 实时计算未约板数和剩余板数（与订单明细主表保持一致，不依赖数据库字段）
     const serializedItems = items.map((item: any) => {
       try {
         const serialized = serializeBigInt(item);
@@ -361,14 +362,43 @@ export async function GET(request: NextRequest) {
         // 送仓性质
         const deliveryNature = orderDetail?.delivery_nature || null;
         
-        // 送货进度：对于库存管理，需要实时计算（基于 pallet_count 和 remaining_pallet_count）
+        // 实时计算未约板数和剩余板数（与订单明细主表保持一致）
+        // 有效占用 = estimated_pallets - rejected_pallets
+        const effective = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
+        const appointments = orderDetail?.appointment_detail_lines?.map((adl: any) => ({
+          appointment_id: adl.delivery_appointments?.appointment_id ? String(adl.delivery_appointments.appointment_id) : null,
+          reference_number: adl.delivery_appointments?.reference_number || null,
+          confirmed_start: adl.delivery_appointments?.confirmed_start || null,
+          estimated_pallets: adl.estimated_pallets || 0,
+          rejected_pallets: adl.rejected_pallets ?? 0,
+          status: adl.delivery_appointments?.status || null,
+        })) || []
+
+        const totalEffectivePallets = appointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const expiredAppointments = appointments.filter((appt: any) => {
+          if (!appt.confirmed_start) return false
+          const confirmedDate = new Date(appt.confirmed_start)
+          confirmedDate.setHours(0, 0, 0, 0)
+          return confirmedDate < today
+        })
+        const totalExpiredEffectivePallets = expiredAppointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
+
+        // 实时计算剩余板数（不依赖数据库字段，确保准确性）
+        // 公式：剩余板数 = 实际板数 - 已过期预约有效板数之和
+        const palletCount = serialized.pallet_count ?? 0
+        const remaining_pallet_count = Math.max(0, palletCount - totalExpiredEffectivePallets)
+
+        // 实时计算未约板数（不依赖数据库字段，确保一致性）
+        // 公式：未约板数 = 实际板数 - 所有预约有效板数之和
+        const unbooked_pallet_count = palletCount - totalEffectivePallets
+
+        // 计算送货进度（使用实时计算的剩余板数）
         // 公式：delivery_progress = (pallet_count - remaining_pallet_count) / pallet_count * 100
         let deliveryProgress = null;
-        const palletCount = serialized.pallet_count ?? 0;
-        const remainingCount = serialized.remaining_pallet_count ?? 0;
-        
         if (palletCount > 0) {
-          const deliveredCount = palletCount - remainingCount;
+          const deliveredCount = palletCount - remaining_pallet_count;
           deliveryProgress = (deliveredCount / palletCount) * 100;
           deliveryProgress = Math.round(deliveryProgress * 100) / 100; // 保留两位小数
           deliveryProgress = Math.max(0, Math.min(100, deliveryProgress)); // 确保在 0-100 之间
@@ -384,6 +414,9 @@ export async function GET(request: NextRequest) {
           planned_unload_at: plannedUnloadAt,
           delivery_location: deliveryLocation,
           delivery_nature: deliveryNature,
+          // 使用实时计算的值，覆盖数据库字段
+          remaining_pallet_count, // 实时计算的剩余板数
+          unbooked_pallet_count, // 实时计算的未约板数
           delivery_progress: deliveryProgress,
           warehouse_name: serialized.warehouses?.name || null,
         };
