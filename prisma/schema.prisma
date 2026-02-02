@@ -214,6 +214,9 @@ model customers {
   users_customers_created_byTousers users?         @relation("customers_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users_customers_updated_byTousers users?         @relation("customers_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   orders                            orders[]
+  invoices                          invoices[]
+  receivables                       receivables[]
+  payments                          payments[]
 
   @@schema("public")
 }
@@ -230,6 +233,104 @@ model delivery_status_codes {
   users_delivery_status_codes_updated_byTousers users?       @relation("delivery_status_codes_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   events_log                                    events_log[]
 
+  @@schema("public")
+}
+
+// ============================================
+// 财务管理 Phase 1：发票、应收、收款与核销
+// ============================================
+
+model invoices {
+  invoice_id                                    BigInt    @id @default(autoincrement())
+  invoice_number                                String    @unique @db.VarChar(50)
+  customer_id                                   BigInt
+  order_id                                      BigInt?
+  total_amount                                  Decimal   @db.Decimal(12, 2)
+  tax_amount                                    Decimal?  @default(0) @db.Decimal(12, 2)
+  currency                                      String?   @default("USD") @db.VarChar(10)
+  invoice_date                                  DateTime  @db.Date
+  status                                        String?   @default("draft") @db.VarChar(20)
+  notes                                         String?
+  created_at                                    DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at                                    DateTime? @default(now()) @db.Timestamptz(6)
+  created_by                                    BigInt?
+  updated_by                                    BigInt?
+  customers                                     customers @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders                                        orders?   @relation(fields: [order_id], references: [order_id], onDelete: SetNull, onUpdate: NoAction)
+  users_invoices_created_byTousers              users?    @relation("invoices_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_invoices_updated_byTousers              users?    @relation("invoices_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  receivables                                   receivables[]
+
+  @@index([customer_id], map: "idx_invoices_customer")
+  @@index([order_id], map: "idx_invoices_order")
+  @@index([invoice_date], map: "idx_invoices_date")
+  @@index([status], map: "idx_invoices_status")
+  @@schema("public")
+}
+
+model receivables {
+  receivable_id                                 BigInt    @id @default(autoincrement())
+  invoice_id                                   BigInt
+  customer_id                                  BigInt
+  receivable_amount                            Decimal   @db.Decimal(12, 2)
+  allocated_amount                            Decimal?  @default(0) @db.Decimal(12, 2)
+  balance                                      Decimal?  @db.Decimal(12, 2)
+  due_date                                     DateTime? @db.Date
+  status                                       String?   @default("open") @db.VarChar(20)
+  notes                                        String?
+  created_at                                   DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at                                   DateTime? @default(now()) @db.Timestamptz(6)
+  created_by                                   BigInt?
+  updated_by                                   BigInt?
+  invoices                                     invoices  @relation(fields: [invoice_id], references: [invoice_id], onDelete: Cascade, onUpdate: NoAction)
+  customers                                    customers @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_receivables_created_byTousers          users?    @relation("receivables_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_receivables_updated_byTousers          users?    @relation("receivables_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payment_allocations                          payment_allocations[]
+
+  @@index([invoice_id], map: "idx_receivables_invoice")
+  @@index([customer_id], map: "idx_receivables_customer")
+  @@index([due_date], map: "idx_receivables_due_date")
+  @@index([status], map: "idx_receivables_status")
+  @@schema("public")
+}
+
+model payments {
+  payment_id                                   BigInt    @id @default(autoincrement())
+  customer_id                                  BigInt
+  payment_date                                 DateTime  @db.Date
+  amount                                       Decimal   @db.Decimal(12, 2)
+  currency                                     String?   @default("USD") @db.VarChar(10)
+  payment_method                               String?   @db.VarChar(50)
+  bank_reference                               String?   @db.VarChar(100)
+  notes                                        String?
+  created_at                                   DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at                                   DateTime? @default(now()) @db.Timestamptz(6)
+  created_by                                   BigInt?
+  updated_by                                   BigInt?
+  customers                                    customers @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_payments_created_byTousers              users?    @relation("payments_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_payments_updated_byTousers              users?    @relation("payments_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payment_allocations                          payment_allocations[]
+
+  @@index([customer_id], map: "idx_payments_customer")
+  @@index([payment_date], map: "idx_payments_date")
+  @@schema("public")
+}
+
+model payment_allocations {
+  id                                            BigInt    @id @default(autoincrement())
+  payment_id                                    BigInt
+  receivable_id                                 BigInt
+  allocated_amount                              Decimal   @db.Decimal(12, 2)
+  created_at                                    DateTime? @default(now()) @db.Timestamptz(6)
+  created_by                                    BigInt?
+  payments                                      payments  @relation(fields: [payment_id], references: [payment_id], onDelete: Cascade, onUpdate: NoAction)
+  receivables                                   receivables @relation(fields: [receivable_id], references: [receivable_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([payment_id, receivable_id], map: "payment_allocations_unique")
+  @@index([payment_id], map: "idx_payment_allocations_payment")
+  @@index([receivable_id], map: "idx_payment_allocations_receivable")
   @@schema("public")
 }
 
@@ -464,6 +565,7 @@ model orders {
   inbound_receipt                                  inbound_receipt?
   inventory_lots                                   inventory_lots[]
   outbound_shipment_lines                          outbound_shipment_lines[]
+  invoices                                         invoices[]
 
   @@index([customer_id], map: "idx_order_customer")
   @@index([order_date], map: "idx_order_date")
@@ -611,6 +713,12 @@ model users {
   wms_labor_logs_wms_labor_logs_updated_byTousers                     wms_labor_logs[]           @relation("wms_labor_logs_updated_byTousers")
   wms_labor_logs_wms_labor_logs_user_idTousers                        wms_labor_logs[]           @relation("wms_labor_logs_user_idTousers")
   table_views                                                          table_views[]              @relation("table_views_user_idTousers")
+  invoices_invoices_created_byTousers                                   invoices[]                @relation("invoices_created_byTousers")
+  invoices_invoices_updated_byTousers                                   invoices[]                @relation("invoices_updated_byTousers")
+  receivables_receivables_created_byTousers                             receivables[]             @relation("receivables_created_byTousers")
+  receivables_receivables_updated_byTousers                             receivables[]             @relation("receivables_updated_byTousers")
+  payments_payments_created_byTousers                                   payments[]                @relation("payments_created_byTousers")
+  payments_payments_updated_byTousers                                    payments[]                @relation("payments_updated_byTousers")
 
   @@index([department_id], map: "idx_users_department")
   @@schema("public")

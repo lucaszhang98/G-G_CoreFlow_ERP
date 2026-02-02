@@ -35,6 +35,8 @@ import {
   UserCog,
   FileCheck,
   Activity,
+  Banknote,
+  Wallet,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -184,6 +186,28 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
+    title: "财务管理",
+    icon: Banknote,
+    roles: ["admin", "oms_manager", "employee", "user"],
+    children: [
+      {
+        title: "发票管理",
+        icon: FileText,
+        href: "/dashboard/finance/invoices",
+      },
+      {
+        title: "应收管理",
+        icon: Receipt,
+        href: "/dashboard/finance/receivables",
+      },
+      {
+        title: "收款管理",
+        icon: Wallet,
+        href: "/dashboard/finance/payments",
+      },
+    ],
+  },
+  {
     title: "运营追踪",
     icon: Activity,
     roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user"],
@@ -262,6 +286,9 @@ function getModuleFromPath(pathname: string): string | null {
       pathname.startsWith('/dashboard/settings/drivers')) {
     return '基础数据'
   }
+  if (pathname.startsWith('/dashboard/finance')) {
+    return '财务管理'
+  }
   if (pathname.startsWith('/dashboard/settings/system') ||
       pathname.startsWith('/dashboard/settings/roles') ||
       pathname.startsWith('/dashboard/settings/logs')) {
@@ -270,6 +297,7 @@ function getModuleFromPath(pathname: string): string | null {
   if (pathname.startsWith('/dashboard/oms')) return '订单管理 (OMS)'
   if (pathname.startsWith('/dashboard/tms')) return '运输管理 (TMS)'
   if (pathname.startsWith('/dashboard/wms')) return '仓库管理 (WMS)'
+  if (pathname.startsWith('/dashboard/finance')) return '财务管理'
   if (pathname.startsWith('/dashboard/reports')) return '报表分析'
   return null
 }

@@ -1068,6 +1068,13 @@ export function createCreateHandler(config: EntityConfig) {
         processedData.container_volume = 0
       }
 
+      // 对于应收表，创建时设置 balance = receivable_amount - allocated_amount
+      if (config.prisma?.model === 'receivables' && processedData.receivable_amount != null) {
+        const amt = Number(processedData.receivable_amount)
+        const allocated = Number(processedData.allocated_amount ?? 0)
+        processedData.balance = amt - allocated
+      }
+
       // 自动添加系统维护字段（创建人/时间、修改人/时间）
       const { addSystemFields } = await import('@/lib/api/helpers')
       addSystemFields(processedData, permissionResult.user, true)

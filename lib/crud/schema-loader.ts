@@ -18,6 +18,9 @@ import { inboundReceiptCreateSchema, inboundReceiptUpdateSchema } from '@/lib/va
 import { inventoryLotCreateSchema, inventoryLotUpdateSchema } from '@/lib/validations/inventory-lot'
 import { outboundShipmentCreateSchema, outboundShipmentUpdateSchema } from '@/lib/validations/outbound-shipment'
 import { deliveryAppointmentCreateSchema, deliveryAppointmentUpdateSchema } from '@/lib/validations/delivery-appointment'
+import { invoiceCreateSchema, invoiceUpdateSchema } from '@/lib/validations/invoice'
+import { receivableCreateSchema, receivableUpdateSchema } from '@/lib/validations/receivable'
+import { paymentCreateSchema, paymentUpdateSchema } from '@/lib/validations/payment'
 
 type SchemaMap = {
   create: z.ZodSchema
@@ -80,6 +83,18 @@ const schemaMap: Record<string, SchemaMap> = {
   delivery_appointment: {
     create: deliveryAppointmentCreateSchema,
     update: deliveryAppointmentUpdateSchema,
+  },
+  invoice: {
+    create: invoiceCreateSchema,
+    update: invoiceUpdateSchema,
+  },
+  receivable: {
+    create: receivableCreateSchema,
+    update: receivableUpdateSchema,
+  },
+  payment: {
+    create: paymentCreateSchema,
+    update: paymentUpdateSchema,
   },
 }
 

@@ -13,4 +13,7 @@ export { trailerConfig } from './trailers'
 export { driverConfig } from './drivers'
 export { orderConfig } from './orders'
 export { contactRoleConfig } from './contact-roles'
+export { invoiceConfig } from './invoices'
+export { receivableConfig } from './receivables'
+export { paymentConfig } from './payments'
 
