@@ -64,11 +64,11 @@ export async function GET(request: NextRequest) {
               belongsToOrderDetail = true
             } else if (fieldName === 'planned_unload_at') {
               belongsToInboundReceipt = true
-            } else if (['lot_id', 'inbound_receipt_id', 'order_detail_id', 'storage_location_code', 'pallet_count', 'notes', 'remaining_pallet_count', 'unbooked_pallet_count'].includes(fieldName)) {
-              belongsToMainTable = true
-            } else if (fieldName === 'delivery_progress') {
-              // delivery_progress 是实时计算的，不在数据库筛选，稍后在内存中筛选
+            } else if (fieldName === 'delivery_progress' || fieldName === 'unbooked_pallet_count' || fieldName === 'remaining_pallet_count') {
+              // 这些字段是实时计算的，不在数据库筛选，稍后在内存中筛选
               // 跳过这个条件，不添加到任何表
+            } else if (['lot_id', 'inbound_receipt_id', 'order_detail_id', 'storage_location_code', 'pallet_count', 'notes'].includes(fieldName)) {
+              belongsToMainTable = true
             } else if (cond[fieldName] && typeof cond[fieldName] === 'object') {
               // 递归检查嵌套对象（如 { not: { equals: 100 } }）
               checkNestedCondition(cond[fieldName])
@@ -112,11 +112,11 @@ export async function GET(request: NextRequest) {
           }
           // 判断字段是否来自主表
           // 主表字段：lot_id, inbound_receipt_id, order_detail_id, storage_location_code, pallet_count, notes, remaining_pallet_count, unbooked_pallet_count
-          // 注意：delivery_progress 是实时计算的，不在数据库筛选，稍后在内存中筛选
-          else if (fieldName === 'delivery_progress') {
-            // delivery_progress 是实时计算的，不在数据库筛选，稍后在内存中筛选
+          // 注意：delivery_progress、unbooked_pallet_count、remaining_pallet_count 是实时计算的，不在数据库筛选，稍后在内存中筛选
+          else if (fieldName === 'delivery_progress' || fieldName === 'unbooked_pallet_count' || fieldName === 'remaining_pallet_count') {
+            // 这些字段是实时计算的，不在数据库筛选，稍后在内存中筛选
             // 跳过这个条件，不添加到任何表
-          } else if (['lot_id', 'inbound_receipt_id', 'order_detail_id', 'storage_location_code', 'pallet_count', 'notes', 'remaining_pallet_count', 'unbooked_pallet_count'].includes(fieldName)) {
+          } else if (['lot_id', 'inbound_receipt_id', 'order_detail_id', 'storage_location_code', 'pallet_count', 'notes'].includes(fieldName)) {
             mainTableConditions.push(condition)
           } else {
             // 字段来自 orders 表
@@ -196,10 +196,14 @@ export async function GET(request: NextRequest) {
       orderBy.created_at = 'desc';
     }
 
-    // 检查是否有 delivery_progress 筛选（需要内存筛选）
+    // 检查是否有需要内存筛选的字段（这些字段是实时计算的，不能基于数据库字段筛选）
     // 需要在查询之前定义，以便在后续代码中使用
     const deliveryProgressFilter = searchParams.get('filter_delivery_progress');
-    const needsMemoryFilter = deliveryProgressFilter && deliveryProgressFilter !== '__all__';
+    const unbookedPalletCountFilter = searchParams.get('filter_unbooked_pallet_count');
+    const remainingPalletCountFilter = searchParams.get('filter_remaining_pallet_count');
+    const needsMemoryFilter = (deliveryProgressFilter && deliveryProgressFilter !== '__all__') ||
+                              (unbookedPalletCountFilter && unbookedPalletCountFilter !== '__all__') ||
+                              (remainingPalletCountFilter && remainingPalletCountFilter !== '__all__');
 
     // 查询数据
     let items: any[];
@@ -304,11 +308,11 @@ export async function GET(request: NextRequest) {
     };
     
     if (!needsMemoryFilter) {
-      // 没有 delivery_progress 筛选，正常分页查询
+      // 没有需要内存筛选的字段，正常分页查询
       queryOptions.skip = (page - 1) * limit;
       queryOptions.take = limit;
     }
-    // 如果有 delivery_progress 筛选，不应用分页，稍后在内存中筛选和分页
+    // 如果有需要内存筛选的字段（delivery_progress、unbooked_pallet_count、remaining_pallet_count），不应用分页，稍后在内存中筛选和分页
     
     try {
       // 检查 Prisma 客户端是否有 inventory_lots 模型
@@ -435,33 +439,71 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // 在内存中根据 delivery_progress 筛选（因为 delivery_progress 是实时计算的，不能基于数据库字段筛选）
+    // 在内存中根据实时计算的字段筛选（因为这些字段是实时计算的，不能基于数据库字段筛选）
     let filteredItems = serializedItems;
     let filteredTotal = total;
     
     if (needsMemoryFilter) {
-      if (deliveryProgressFilter === 'complete') {
-        // 已完成：delivery_progress >= 100
-        filteredItems = serializedItems.filter((item: any) => {
-          const progress = item.delivery_progress;
-          return progress !== null && progress !== undefined && progress >= 100;
-        });
-        filteredTotal = filteredItems.length;
-      } else if (deliveryProgressFilter === 'incomplete') {
-        // 未完成：delivery_progress < 100 或为 null
-        filteredItems = serializedItems.filter((item: any) => {
-          const progress = item.delivery_progress;
-          return progress === null || progress === undefined || progress < 100;
-        });
-        filteredTotal = filteredItems.length;
+      // 筛选 delivery_progress
+      if (deliveryProgressFilter && deliveryProgressFilter !== '__all__') {
+        if (deliveryProgressFilter === 'complete') {
+          // 已完成：delivery_progress >= 100
+          filteredItems = filteredItems.filter((item: any) => {
+            const progress = item.delivery_progress;
+            return progress !== null && progress !== undefined && progress >= 100;
+          });
+        } else if (deliveryProgressFilter === 'incomplete') {
+          // 未完成：delivery_progress < 100 或为 null
+          filteredItems = filteredItems.filter((item: any) => {
+            const progress = item.delivery_progress;
+            return progress === null || progress === undefined || progress < 100;
+          });
+        }
       }
+      
+      // 筛选 unbooked_pallet_count（未约板数）
+      if (unbookedPalletCountFilter && unbookedPalletCountFilter !== '__all__') {
+        if (unbookedPalletCountFilter === 'non_zero') {
+          // 有未约：unbooked_pallet_count > 0
+          filteredItems = filteredItems.filter((item: any) => {
+            const unbooked = item.unbooked_pallet_count;
+            return unbooked !== null && unbooked !== undefined && unbooked > 0;
+          });
+        } else if (unbookedPalletCountFilter === 'zero') {
+          // 无未约：unbooked_pallet_count <= 0
+          filteredItems = filteredItems.filter((item: any) => {
+            const unbooked = item.unbooked_pallet_count;
+            return unbooked === null || unbooked === undefined || unbooked <= 0;
+          });
+        }
+      }
+      
+      // 筛选 remaining_pallet_count（剩余板数）
+      if (remainingPalletCountFilter && remainingPalletCountFilter !== '__all__') {
+        if (remainingPalletCountFilter === 'non_zero') {
+          // 有剩余：remaining_pallet_count > 0
+          filteredItems = filteredItems.filter((item: any) => {
+            const remaining = item.remaining_pallet_count;
+            return remaining !== null && remaining !== undefined && remaining > 0;
+          });
+        } else if (remainingPalletCountFilter === 'zero') {
+          // 无剩余：remaining_pallet_count <= 0
+          filteredItems = filteredItems.filter((item: any) => {
+            const remaining = item.remaining_pallet_count;
+            return remaining === null || remaining === undefined || remaining <= 0;
+          });
+        }
+      }
+      
+      // 更新总数
+      filteredTotal = filteredItems.length;
       
       // 应用分页（在内存筛选后）
       const startIndex = (page - 1) * limit;
       const endIndex = startIndex + limit;
       filteredItems = filteredItems.slice(startIndex, endIndex);
     }
-    // 如果没有 delivery_progress 筛选，serializedItems 已经是分页后的数据，直接使用
+    // 如果没有需要内存筛选的字段，serializedItems 已经是分页后的数据，直接使用
 
     return NextResponse.json({
       data: filteredItems,
