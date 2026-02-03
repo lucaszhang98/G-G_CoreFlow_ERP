@@ -23,6 +23,7 @@ export function AppointmentDetailClient({ appointmentId, appointment }: Appointm
       location: true,
       locationType: true,
       estimatedPallets: true,
+      unloadTime: true, // 拆柜时间（来自入库管理，按明细对应订单关联）
       po: true,
       notes: true,
     },

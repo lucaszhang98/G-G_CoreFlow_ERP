@@ -75,19 +75,27 @@ export async function GET(request: NextRequest) {
 
     // 获取所有 order_detail_id，用于查询库存
     const orderDetailIds = appointmentDetailLines.map(line => line.order_detail_id)
-    const inventoryLots = await prisma.inventory_lots.findMany({
-      where: {
-        order_detail_id: {
-          in: orderDetailIds,
+    const orderIds = [...new Set(appointmentDetailLines.map(l => l.order_detail?.order_id).filter(Boolean))] as bigint[]
+
+    const [inventoryLots, inboundReceipts] = await Promise.all([
+      prisma.inventory_lots.findMany({
+        where: {
+          order_detail_id: { in: orderDetailIds },
         },
-      },
-      select: {
-        order_detail_id: true,
-        pallet_count: true,
-        unbooked_pallet_count: true,
-      },
-    })
-    
+        select: {
+          order_detail_id: true,
+          pallet_count: true,
+          unbooked_pallet_count: true,
+        },
+      }),
+      orderIds.length > 0
+        ? prisma.inbound_receipt.findMany({
+            where: { order_id: { in: orderIds } },
+            select: { order_id: true, planned_unload_at: true },
+          })
+        : [],
+    ])
+
     // 创建库存映射（order_detail_id -> inventory_lot）
     const inventoryMap = new Map<bigint, { pallet_count: number; unbooked_pallet_count: number | null }>()
     inventoryLots.forEach(lot => {
@@ -95,6 +103,12 @@ export async function GET(request: NextRequest) {
         pallet_count: lot.pallet_count,
         unbooked_pallet_count: lot.unbooked_pallet_count,
       })
+    })
+
+    // 创建入库拆柜时间映射（order_id -> planned_unload_at，来自入库管理）
+    const unloadTimeMap = new Map<string, Date | null>()
+    inboundReceipts.forEach(ir => {
+      unloadTimeMap.set(String(ir.order_id), ir.planned_unload_at)
     })
 
     // 序列化并格式化数据（跳过关联缺失的行，避免单条异常导致整表不显示）
@@ -149,6 +163,8 @@ export async function GET(request: NextRequest) {
         reference_number: deliveryAppointment.reference_number,
         // 从 order_detail.orders 获取柜号（order_number）
         order_number: orderDetailOrders?.order_number || null,
+        // 拆柜时间：根据明细对应订单，从入库管理（inbound_receipt）取该订单的 planned_unload_at
+        unload_time: orderDetail.order_id != null ? unloadTimeMap.get(String(orderDetail.order_id)) ?? null : null,
         // SKU 明细
         order_detail_item_order_detail_item_detail_idToorder_detail: orderDetail.order_detail_item_order_detail_item_detail_idToorder_detail,
       })

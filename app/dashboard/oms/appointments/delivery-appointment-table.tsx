@@ -264,11 +264,10 @@ export function DeliveryAppointmentTable() {
       orderNumber: true,
       location: true,
       locationType: true,
-      // totalVolume: false, // 总方数不需要显示
-      // totalPallets: false, // 总板数不需要显示
       estimatedPallets: true,
+      unloadTime: true, // 拆柜时间（来自入库管理，按明细对应订单关联）
       po: true,
-      notes: true, // 显示备注字段
+      notes: true,
     },
     getLocationName: (detail, context) => {
       return detail.order_detail_item_order_detail_item_detail_idToorder_detail?.[0]?.detail_name 

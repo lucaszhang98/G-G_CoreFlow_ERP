@@ -79,6 +79,8 @@ export interface DetailData {
   appointment_id?: string | number | null
   order_detail_id?: string | number | null
   order_number?: string | null
+  /** 拆柜时间：来自入库管理（inbound_receipt.planned_unload_at），按明细对应订单关联 */
+  unload_time?: string | Date | null
 }
 
 export interface DetailTableConfig {
@@ -93,6 +95,7 @@ export interface DetailTableConfig {
     totalPallets?: boolean // 总板数
     estimatedPallets?: boolean // 预计板数
     rejectedPallets?: boolean // 拒收板数（预约明细）
+    unloadTime?: boolean // 拆柜时间（预约明细，来自入库管理）
     volumePercentage?: boolean // 分仓占比
     unloadType?: boolean // FBA
     notes?: boolean // 备注
@@ -702,6 +705,7 @@ export function DetailTable({
     if (config.showColumns?.volume) cols.push('volume') // 体积
     if (config.showColumns?.estimatedPallets) cols.push('estimatedPallets') // 预计板数
     if (appointmentId && config.showColumns?.estimatedPallets) cols.push('rejectedPallets') // 预约明细：拒收板数
+    if (appointmentId && config.showColumns?.unloadTime) cols.push('unloadTime') // 预约明细：拆柜时间（来自入库管理）
     if (config.showColumns?.volumePercentage) cols.push('volumePercentage') // 分仓占比
     if (config.showColumns?.unloadType) cols.push('unloadType') // FBA
     if (config.showColumns?.notes) cols.push('notes') // 备注
@@ -818,6 +822,8 @@ export function DetailTable({
                     return <th key={col} className="text-left p-2 font-semibold text-sm">预计板数</th>
                   case 'rejectedPallets':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">拒收板数</th>
+                  case 'unloadTime':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm">拆柜时间</th>
                   case 'volumePercentage':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">分仓占比</th>
                   case 'unloadType':
@@ -1103,6 +1109,18 @@ export function DetailTable({
                             )
                           }
                           return <td key={col} className="p-2 text-sm">{formatInteger((detail as any).rejected_pallets ?? 0)}</td>
+                        case 'unloadTime': {
+                          const unloadTime = (detail as any).unload_time
+                          return (
+                            <td key={col} className="p-2 text-sm">
+                              {unloadTime
+                                ? (typeof unloadTime === 'string'
+                                    ? unloadTime.split('T')[0]
+                                    : new Date(unloadTime).toISOString().split('T')[0])
+                                : '-'}
+                            </td>
+                          )
+                        }
                         case 'volumePercentage':
                           return <td key={col} className="p-2 text-sm">{detail.volume_percentage ? `${formatNumber(detail.volume_percentage)}%` : '-'}</td>
                         case 'unloadType':
