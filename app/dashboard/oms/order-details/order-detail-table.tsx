@@ -14,9 +14,21 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Copy } from "lucide-react"
+import { toast } from "sonner"
 
 export function OrderDetailTable() {
   const router = useRouter();
+  const [selectedRows, setSelectedRows] = React.useState<any[]>([]);
   
   const customClickableColumns: ClickableColumnConfig<any>[] = React.useMemo(() => [
     {
@@ -74,11 +86,182 @@ export function OrderDetailTable() {
     onAdd: undefined, // 隐藏新建按钮
   }), [])
 
+  // 复制柜号功能
+  const handleCopyContainerNumbers = React.useCallback((format: 'line' | 'comma' | 'space') => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要复制的记录')
+      return
+    }
+
+    // 提取所有柜号（按选中顺序）
+    const containerNumbers = selectedRows
+      .map((row: any) => row.container_number)
+      .filter(Boolean) // 过滤掉空值
+
+    if (containerNumbers.length === 0) {
+      toast.error('选中的记录中没有柜号')
+      return
+    }
+
+    // 根据格式拼接
+    let textToCopy = ''
+    switch (format) {
+      case 'line':
+        textToCopy = containerNumbers.join('\n')
+        break
+      case 'comma':
+        textToCopy = containerNumbers.join(', ')
+        break
+      case 'space':
+        textToCopy = containerNumbers.join(' ')
+        break
+    }
+
+    // 复制到剪贴板
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        toast.success(`已复制 ${containerNumbers.length} 个柜号到剪贴板`)
+      })
+      .catch((error) => {
+        console.error('复制失败:', error)
+        toast.error('复制失败，请重试')
+      })
+  }, [selectedRows])
+
+  // 复制未约板数功能
+  const handleCopyUnbookedPallets = React.useCallback((format: 'line' | 'comma' | 'space') => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要复制的记录')
+      return
+    }
+
+    // 提取所有未约板数（按选中顺序）
+    const unbookedPallets = selectedRows
+      .map((row: any) => {
+        const unbooked = row.unbooked_pallets
+        // 如果未约板数为 null 或 undefined，返回空字符串，后续会被过滤
+        return unbooked !== null && unbooked !== undefined ? String(unbooked) : null
+      })
+      .filter((val): val is string => val !== null) // 过滤掉空值
+
+    if (unbookedPallets.length === 0) {
+      toast.error('选中的记录中没有未约板数')
+      return
+    }
+
+    // 根据格式拼接
+    let textToCopy = ''
+    switch (format) {
+      case 'line':
+        textToCopy = unbookedPallets.join('\n')
+        break
+      case 'comma':
+        textToCopy = unbookedPallets.join(', ')
+        break
+      case 'space':
+        textToCopy = unbookedPallets.join(' ')
+        break
+    }
+
+    // 复制到剪贴板
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        toast.success(`已复制 ${unbookedPallets.length} 个未约板数到剪贴板`)
+      })
+      .catch((error) => {
+        console.error('复制失败:', error)
+        toast.error('复制失败，请重试')
+      })
+  }, [selectedRows])
+
+  // 自定义批量操作按钮
+  const customBatchActions = React.useMemo(() => {
+    return (
+      <>
+        {/* 复制柜号下拉菜单 */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-w-[100px] h-9"
+              disabled={selectedRows.length === 0}
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              复制柜号
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>选择复制格式</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => handleCopyContainerNumbers('line')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">换行分隔</span>
+                <span className="text-xs text-muted-foreground">每个柜号一行</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopyContainerNumbers('comma')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">逗号分隔</span>
+                <span className="text-xs text-muted-foreground">A, B, C</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopyContainerNumbers('space')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">空格分隔</span>
+                <span className="text-xs text-muted-foreground">A B C</span>
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* 复制未约板数下拉菜单 */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-w-[120px] h-9"
+              disabled={selectedRows.length === 0}
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              复制未约板数
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>选择复制格式</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => handleCopyUnbookedPallets('line')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">换行分隔</span>
+                <span className="text-xs text-muted-foreground">每个数值一行</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopyUnbookedPallets('comma')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">逗号分隔</span>
+                <span className="text-xs text-muted-foreground">1, 2, 3</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopyUnbookedPallets('space')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">空格分隔</span>
+                <span className="text-xs text-muted-foreground">1 2 3</span>
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>
+    )
+  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets])
+
   return (
     <EntityTable
       config={orderDetailConfig}
       customClickableColumns={customClickableColumns}
       customActions={customActions}
+      customBatchActions={customBatchActions}
+      onRowSelectionChange={setSelectedRows}
       expandableRows={{
         enabled: true,
         getExpandedContent: (row: any) => {
