@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,8 +12,111 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Pencil } from "lucide-react"
-import { FuzzySearchSelect } from "@/components/ui/fuzzy-search-select"
+import { Loader2, Pencil, ChevronsUpDown, Check } from "lucide-react"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
+
+interface CustomerMultiSelectProps {
+  options: Array<{ label: string; value: string }>
+  value: string[]
+  onChange: (value: string[]) => void
+  placeholder?: string
+  emptyMessage?: string
+}
+
+function CustomerMultiSelect({
+  options,
+  value,
+  onChange,
+  placeholder = "搜索并选择客户",
+  emptyMessage = "无匹配客户",
+}: CustomerMultiSelectProps) {
+  const [open, setOpen] = useState(false)
+
+  const toggle = (id: string) => {
+    if (value.includes(id)) {
+      onChange(value.filter((v) => v !== id))
+    } else {
+      onChange([...value, id])
+    }
+  }
+
+  const displayText = useMemo(() => {
+    if (value.length === 0) return placeholder
+    if (value.length <= 2) {
+      return value
+        .map((id) => options.find((o) => o.value === id)?.label ?? id)
+        .join("、")
+    }
+    return `已选 ${value.length} 个客户`
+  }, [value, options, placeholder])
+
+  const filterFn = (optionValue: string, search: string) => {
+    const opt = options.find((o) => o.value === optionValue)
+    if (!opt) return 0
+    if (!search) return 1
+    return opt.label.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+        >
+          <span className="truncate">{displayText}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command filter={filterFn}>
+          <CommandInput placeholder="搜索客户..." />
+          <CommandList>
+            <CommandEmpty>{emptyMessage}</CommandEmpty>
+            <CommandGroup>
+              {options.map((opt) => {
+                const isSelected = value.includes(opt.value)
+                return (
+                  <CommandItem
+                    key={opt.value}
+                    value={opt.value}
+                    onSelect={() => toggle(opt.value)}
+                    className="flex items-center gap-2"
+                  >
+                    <div
+                      className={cn(
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                        isSelected ? "bg-primary border-primary" : "border-input"
+                      )}
+                    >
+                      {isSelected ? <Check className="h-3 w-3 text-primary-foreground" /> : null}
+                    </div>
+                    <span className="truncate">{opt.label}</span>
+                  </CommandItem>
+                )
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 interface FeeScopeCardProps {
   feeId: string
@@ -184,12 +287,11 @@ export function FeeScopeCard({ feeId }: FeeScopeCardProps) {
             <DialogDescription>选择使用本费用报价的客户；已选客户会从同费用编码下其他费用的范围中移除</DialogDescription>
           </DialogHeader>
           <div className="py-2">
-            <FuzzySearchSelect
+            <CustomerMultiSelect
               options={customerOptions}
               value={selectedCustomerIds}
-              onChange={(v) => setSelectedCustomerIds(Array.isArray(v) ? v : [v])}
+              onChange={setSelectedCustomerIds}
               placeholder="搜索并选择客户"
-              multiple
               emptyMessage="无匹配客户"
             />
           </div>

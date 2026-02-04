@@ -126,7 +126,6 @@ export function OutboundShipmentTable() {
       customClickableColumns={customClickableColumns}
       fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}
       customActions={{
-        onView: null, // 隐藏查看详情（null 表示隐藏）
         onAdd: undefined, // 隐藏新建
         onDelete: undefined, // 隐藏删除
       }}

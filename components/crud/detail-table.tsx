@@ -252,33 +252,38 @@ export function DetailTable({
     })
   }
 
-  // 初始化批量编辑值（仅用于订单明细，不用于预约明细）
+  // 初始化批量编辑值（订单明细：多字段；预约明细：预计板数、拒收板数）
   const initializeBatchEditValues = () => {
-    if (appointmentId) return // 预约明细不支持批量编辑
-    
     const values: Record<string | number, Partial<DetailData>> = {}
-    orderDetails.forEach(detail => {
-      values[detail.id] = {
-        quantity: detail.quantity,
-        estimated_pallets: detail.estimated_pallets,
-        po: detail.po || null,
-        window_period: detail.window_period || null,
-        delivery_location: detail.delivery_location,
-        delivery_nature: detail.delivery_nature,
-        volume: detail.volume,
-        fba: detail.fba,
-        notes: detail.notes,
-      }
-    })
+    if (appointmentId) {
+      orderDetails.forEach((detail: any) => {
+        values[detail.id] = {
+          estimated_pallets: detail.estimated_pallets ?? 0,
+          rejected_pallets: (detail.rejected_pallets ?? 0) as number | null,
+        }
+      })
+    } else {
+      orderDetails.forEach(detail => {
+        values[detail.id] = {
+          quantity: detail.quantity,
+          estimated_pallets: detail.estimated_pallets,
+          po: detail.po || null,
+          window_period: detail.window_period || null,
+          delivery_location: detail.delivery_location,
+          delivery_nature: detail.delivery_nature,
+          volume: detail.volume,
+          fba: detail.fba,
+          notes: detail.notes,
+        }
+      })
+    }
     setBatchEditValues(values)
   }
 
-  // 开启批量编辑模式（仅用于订单明细）
+  // 开启批量编辑模式（订单明细与预约明细均支持）
   const handleStartBatchEdit = () => {
-    if (appointmentId) return // 预约明细不支持批量编辑
     initializeBatchEditValues()
     setIsBatchEditMode(true)
-    // 退出单行编辑模式
     setEditingRowId(null)
     setEditingData(null)
   }
@@ -289,36 +294,46 @@ export function DetailTable({
     setBatchEditValues({})
   }
 
-  // 批量保存（仅用于订单明细）
+  // 批量保存（订单明细：order-details API；预约明细：appointment-detail-lines API）
   const handleBatchSave = async () => {
-    if (appointmentId) return // 预约明细不支持批量编辑
-    
     try {
-      const savePromises: Promise<void>[] = []
-      
-      for (const detailId of Object.keys(batchEditValues)) {
-        const values = batchEditValues[detailId]
-        const detail = orderDetails.find(d => String(d.id) === String(detailId))
-        if (!detail) continue
-        
-        const savePromise = (async () => {
-          const response = await fetch(`/api/order-details/${detailId}`, {
+      if (appointmentId) {
+        for (const detailId of Object.keys(batchEditValues)) {
+          const values = batchEditValues[detailId]
+          const response = await fetch(`/api/oms/appointment-detail-lines/${detailId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(values),
+            body: JSON.stringify({
+              estimated_pallets: values?.estimated_pallets,
+              rejected_pallets: values?.rejected_pallets,
+            }),
           })
-          
           if (!response.ok) {
             const errorData = await response.json()
             throw new Error(`更新明细 ${detailId} 失败: ${errorData.error || errorData.message || '未知错误'}`)
           }
-        })()
-        
-        savePromises.push(savePromise)
+        }
+      } else {
+        const savePromises: Promise<void>[] = []
+        for (const detailId of Object.keys(batchEditValues)) {
+          const values = batchEditValues[detailId]
+          const detail = orderDetails.find(d => String(d.id) === String(detailId))
+          if (!detail) continue
+          const savePromise = (async () => {
+            const response = await fetch(`/api/order-details/${detailId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(values),
+            })
+            if (!response.ok) {
+              const errorData = await response.json()
+              throw new Error(`更新明细 ${detailId} 失败: ${errorData.error || errorData.message || '未知错误'}`)
+            }
+          })()
+          savePromises.push(savePromise)
+        }
+        await Promise.all(savePromises)
       }
-      
-      await Promise.all(savePromises)
-      
       toast.success(`成功保存 ${Object.keys(batchEditValues).length} 条记录`)
       setIsBatchEditMode(false)
       setBatchEditValues({})
@@ -751,9 +766,9 @@ export function DetailTable({
   }
 
   return (
-    <div className="p-4 bg-muted/30">
+    <div className="p-4 bg-muted/30 relative">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <h4 className="font-semibold text-sm text-foreground">{config.title}</h4>
           {/* 添加按钮放在标题右边 */}
           <Button size="sm" onClick={() => setAddDetailDialogOpen(true)}>
@@ -761,40 +776,38 @@ export function DetailTable({
             添加
           </Button>
         </div>
-        <div className="flex items-center gap-2">
-          {/* 批量编辑按钮（仅订单明细显示，预约明细不显示） */}
-          {!appointmentId && (
-            isBatchEditMode ? (
-              <>
-                <Button
-                  size="sm"
-                  onClick={handleBatchSave}
-                  className="h-8"
-                >
-                  <Check className="h-4 w-4 mr-1" />
-                  保存全部
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCancelBatchEdit}
-                  className="h-8"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  取消
-                </Button>
-              </>
-            ) : (
+        {/* 批量编辑按钮：固定在右侧，横向滚动时跟随屏幕 */}
+        <div className="sticky right-0 z-50 flex-shrink-0 flex items-center gap-2 bg-muted/30 ml-auto pl-4 border-l border-border/60">
+          {isBatchEditMode ? (
+            <>
               <Button
                 size="sm"
-                variant="ghost"
-                onClick={handleStartBatchEdit}
+                onClick={handleBatchSave}
                 className="h-8"
-                title="批量编辑"
               >
-                <Pencil className="h-4 w-4" />
+                <Check className="h-4 w-4 mr-1" />
+                保存全部
               </Button>
-            )
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCancelBatchEdit}
+                className="h-8"
+              >
+                <X className="h-4 w-4 mr-1" />
+                取消
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleStartBatchEdit}
+              className="h-8"
+              title={appointmentId ? '修改明细' : '批量编辑'}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
           )}
         </div>
       </div>
@@ -1065,17 +1078,27 @@ export function DetailTable({
                         }
                           return <td key={col} className="p-2 text-sm">{formatVolume(detail.volume)}</td>
                         case 'estimatedPallets':
-                          // 预计板数：显示这个预约送了多少板（可编辑）
-                          if (editingRowId === detailId && editingData && appointmentId) {
+                          // 预计板数：预约明细可编辑（单行或批量）；订单明细仅单行/批量用其他分支
+                          if (appointmentId && (isBatchEditMode || (editingRowId === detailId && editingData))) {
                             const maxPallets = detail.remaining_pallets ?? detail.estimated_pallets ?? 0
+                            const currentValue = isBatchEditMode
+                              ? (batchEditValues[detailId]?.estimated_pallets ?? detail.estimated_pallets ?? '')
+                              : (editingData!.estimated_pallets !== null && editingData!.estimated_pallets !== undefined ? editingData!.estimated_pallets : '')
                             return (
                               <td key={col} className="p-2 text-sm">
                                 <Input
                                   type="number"
-                                  value={editingData.estimated_pallets !== null && editingData.estimated_pallets !== undefined ? editingData.estimated_pallets : ''}
+                                  value={currentValue}
                                   onChange={(e) => {
                                     const value = e.target.value === '' ? null : parseFloat(e.target.value)
-                                    setEditingData({ ...editingData, estimated_pallets: value })
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: { ...prev[detailId], estimated_pallets: value ?? 0 },
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData!, estimated_pallets: value })
+                                    }
                                   }}
                                   className="w-full"
                                   min="0"
@@ -1087,10 +1110,15 @@ export function DetailTable({
                           }
                           return <td key={col} className="p-2 text-sm">{formatInteger(detail.estimated_pallets)}</td>
                         case 'rejectedPallets':
-                          // 拒收板数（仅预约明细）：可编辑，且不能超过预计板数
-                          if (editingRowId === detailId && editingData && appointmentId) {
-                            const maxRejected = detail.estimated_pallets ?? 0
-                            const val = editingData.rejected_pallets ?? 0
+                          // 拒收板数（仅预约明细）：可编辑，且不能超过预计板数（单行或批量）
+                          if (appointmentId && (isBatchEditMode || (editingRowId === detailId && editingData))) {
+                            const estPallets = isBatchEditMode
+                              ? (batchEditValues[detailId]?.estimated_pallets ?? detail.estimated_pallets ?? 0)
+                              : (editingData!.estimated_pallets ?? detail.estimated_pallets ?? 0)
+                            const maxRejected = typeof estPallets === 'number' ? estPallets : (detail.estimated_pallets ?? 0)
+                            const val = isBatchEditMode
+                              ? (batchEditValues[detailId]?.rejected_pallets ?? (detail as any).rejected_pallets ?? 0)
+                              : (editingData!.rejected_pallets ?? 0)
                             return (
                               <td key={col} className="p-2 text-sm">
                                 <Input
@@ -1098,7 +1126,15 @@ export function DetailTable({
                                   value={val}
                                   onChange={(e) => {
                                     const value = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0)
-                                    setEditingData({ ...editingData, rejected_pallets: Math.min(value, maxRejected) })
+                                    const clamped = Math.min(value, maxRejected)
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: { ...prev[detailId], rejected_pallets: clamped },
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData!, rejected_pallets: clamped })
+                                    }
                                   }}
                                   className="w-full"
                                   min={0}

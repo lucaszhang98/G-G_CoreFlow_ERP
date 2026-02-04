@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import prisma from '@/lib/prisma';
+import { getOutboundShipmentDetail } from '@/lib/services/outbound-shipment-detail';
 
 // GET - 获取单个出库管理记录（通过 appointment_id）
 export async function GET(
@@ -8,10 +9,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    // 检查登录
     const authResult = await checkAuth();
     if (authResult.error) return authResult.error;
-    
+
     const resolvedParams = params instanceof Promise ? await params : params;
     const appointmentId = resolvedParams.id;
 
@@ -22,106 +22,15 @@ export async function GET(
       );
     }
 
-    // 查询 delivery_appointment
-    const appointment = await prisma.delivery_appointments.findUnique({
-      where: { appointment_id: BigInt(appointmentId) },
-      include: {
-        orders: {
-          select: {
-            order_id: true,
-            status: true,
-            order_detail: {
-              select: {
-                id: true,
-                estimated_pallets: true,
-              },
-            },
-          },
-        },
-        locations: {
-          select: {
-            location_id: true,
-            location_code: true,
-          },
-        },
-        locations_delivery_appointments_origin_location_idTolocations: {
-          select: {
-            location_id: true,
-            location_code: true,
-          },
-        },
-        outbound_shipments: {
-          select: {
-            outbound_shipment_id: true,
-            trailer_id: true,
-            loaded_by: true,
-            notes: true,
-            users_outbound_shipments_loaded_byTousers: {
-              select: {
-                id: true,
-                username: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!appointment) {
+    const detail = await getOutboundShipmentDetail(appointmentId);
+    if (!detail) {
       return NextResponse.json(
-        { error: '预约记录不存在' },
+        { error: '预约记录不存在或直送订单不在出库管理范围内' },
         { status: 404 }
       );
     }
 
-    // 检查订单状态（只显示非直送）
-    if (appointment.orders?.status === 'direct_delivery') {
-      return NextResponse.json(
-        { error: '直送订单不在出库管理范围内' },
-        { status: 400 }
-      );
-    }
-
-    const serialized = serializeBigInt(appointment);
-    const outboundShipment = serialized.outbound_shipments || null;
-    
-    // 计算总板数
-    let totalPallets = 0;
-    if (serialized.orders?.order_detail && Array.isArray(serialized.orders.order_detail)) {
-      totalPallets = serialized.orders.order_detail.reduce((sum: number, detail: any) => {
-        return sum + (detail.estimated_pallets || 0);
-      }, 0);
-    }
-
-    // 调试：记录 loaded_by 相关数据
-    console.log(`[OutboundShipments GET] loaded_by:`, outboundShipment?.loaded_by?.toString(), 
-      `loaded_by_name:`, outboundShipment?.users_outbound_shipments_loaded_byTousers?.username,
-      `关联对象:`, outboundShipment?.users_outbound_shipments_loaded_byTousers ? '存在' : '不存在')
-
-    return NextResponse.json({
-      // 从 delivery_appointments 获取的字段
-      appointment_id: serialized.appointment_id.toString(),
-      reference_number: serialized.reference_number || null,
-      delivery_method: serialized.delivery_method || null,
-      rejected: serialized.rejected || false,
-      appointment_account: serialized.appointment_account || null,
-      appointment_type: serialized.appointment_type || null,
-      origin_location: serialized.locations_delivery_appointments_origin_location_idTolocations?.location_code || null,
-      destination_location: serialized.locations?.location_code || null,
-      confirmed_start: serialized.confirmed_start || null,
-      total_pallets: totalPallets,
-      
-      // 从 outbound_shipments 获取的字段（如果存在）
-      outbound_shipment_id: outboundShipment ? outboundShipment.outbound_shipment_id.toString() : null,
-      trailer_id: outboundShipment?.trailer_id ? outboundShipment.trailer_id.toString() : null,
-      trailer_code: outboundShipment?.trailer_code || null, // 直接使用 outbound_shipments.trailer_code
-      loaded_by: outboundShipment?.loaded_by ? outboundShipment.loaded_by.toString() : null,
-      loaded_by_name: outboundShipment?.users_outbound_shipments_loaded_byTousers?.username || null,
-      notes: outboundShipment?.notes || null,
-      
-      // 关联对象（用于 relation 类型字段的显示）
-      users_outbound_shipments_loaded_byTousers: outboundShipment?.users_outbound_shipments_loaded_byTousers || null,
-    });
+    return NextResponse.json(detail);
   } catch (error: any) {
     console.error('获取出库管理记录失败:', error);
     return handleError(error);

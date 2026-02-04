@@ -14,7 +14,7 @@ export const outboundShipmentConfig: EntityConfig = {
   pluralName: '出库',
   
   apiPath: '/api/wms/outbound-shipments',
-  detailPath: '/dashboard/wms/outbound-shipments',
+  detailPath: '/dashboard/wms/outbound-shipments', // 列表页路径，详情页为 detailPath/[id]
   idField: 'appointment_id', // 使用 appointment_id 作为主键（因为列表显示的是 delivery_appointments）
   
   // Schema 名称，用于动态导入
@@ -106,6 +106,46 @@ export const outboundShipmentConfig: EntityConfig = {
       label: '备注',
       type: 'text',
     },
+    status: {
+      key: 'status',
+      label: '状态',
+      type: 'text',
+    },
+    requested_start: {
+      key: 'requested_start',
+      label: '请求开始时间',
+      type: 'datetime',
+    },
+    requested_end: {
+      key: 'requested_end',
+      label: '请求结束时间',
+      type: 'datetime',
+    },
+    confirmed_end: {
+      key: 'confirmed_end',
+      label: '确认结束时间',
+      type: 'datetime',
+    },
+    po: {
+      key: 'po',
+      label: 'PO',
+      type: 'text',
+    },
+    created_at: {
+      key: 'created_at',
+      label: '创建时间',
+      type: 'datetime',
+    },
+    updated_at: {
+      key: 'updated_at',
+      label: '更新时间',
+      type: 'datetime',
+    },
+    order_number: {
+      key: 'order_number',
+      label: '订单号',
+      type: 'text',
+    },
     // 隐藏字段：outbound_shipment_id, trailer_id, loaded_by
     outbound_shipment_id: {
       key: 'outbound_shipment_id',
@@ -143,6 +183,14 @@ export const outboundShipmentConfig: EntityConfig = {
       'destination_location',
       'total_pallets',
       'notes',
+      'status',
+      'requested_start',
+      'requested_end',
+      'confirmed_end',
+      'po',
+      'order_number',
+      'created_at',
+      'updated_at',
     ],
     searchFields: ['reference_number'], // 只搜索预约号码（最重要的字段）
     // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
@@ -171,6 +219,15 @@ export const outboundShipmentConfig: EntityConfig = {
     'trailer_id',
     'loaded_by',
     'notes',
+    'status',
+    'requested_start',
+    'requested_end',
+    'confirmed_start',
+    'confirmed_end',
+    'po',
+    'order_number',
+    'created_at',
+    'updated_at',
   ],
   
   permissions: {
