@@ -19,9 +19,10 @@ export async function loadRelationOptions(
     // 根据关系配置构建 API 路径
     // 例如：customers -> /api/customers；财务管理实体 -> /api/finance/{model}
     const modelName = field.relation.model
-    const financeModels = ['invoices', 'receivables', 'payments']
+    const financeModels = ['invoices', 'receivables', 'payments', 'fee']
+    const pathSegment = modelName === 'fee' ? 'fees' : modelName
     const apiPath = financeModels.includes(modelName)
-      ? `/api/finance/${modelName}?unlimited=true`
+      ? `/api/finance/${pathSegment}?unlimited=true`
       : `/api/${modelName}?unlimited=true`
     
     const response = await fetch(apiPath)

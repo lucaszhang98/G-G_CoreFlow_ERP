@@ -205,6 +205,11 @@ const menuItems: MenuItem[] = [
         icon: Wallet,
         href: "/dashboard/finance/payments",
       },
+      {
+        title: "费用管理",
+        icon: FileText,
+        href: "/dashboard/finance/fees",
+      },
     ],
   },
   {

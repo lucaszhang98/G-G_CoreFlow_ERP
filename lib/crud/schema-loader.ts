@@ -21,6 +21,7 @@ import { deliveryAppointmentCreateSchema, deliveryAppointmentUpdateSchema } from
 import { invoiceCreateSchema, invoiceUpdateSchema } from '@/lib/validations/invoice'
 import { receivableCreateSchema, receivableUpdateSchema } from '@/lib/validations/receivable'
 import { paymentCreateSchema, paymentUpdateSchema } from '@/lib/validations/payment'
+import { feeCreateSchema, feeUpdateSchema } from '@/lib/validations/fee'
 
 type SchemaMap = {
   create: z.ZodSchema
@@ -95,6 +96,10 @@ const schemaMap: Record<string, SchemaMap> = {
   payment: {
     create: paymentCreateSchema,
     update: paymentUpdateSchema,
+  },
+  fee: {
+    create: feeCreateSchema,
+    update: feeUpdateSchema,
   },
 }
 

@@ -16,4 +16,5 @@ export { contactRoleConfig } from './contact-roles'
 export { invoiceConfig } from './invoices'
 export { receivableConfig } from './receivables'
 export { paymentConfig } from './payments'
+export { feeConfig } from './fees'
 
