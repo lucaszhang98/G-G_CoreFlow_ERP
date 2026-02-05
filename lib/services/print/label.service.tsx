@@ -13,6 +13,7 @@ import { LabelData } from './types'
 import { formatDate } from './print-templates'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { LabelsDocument } from './label-pdf'
+import { ensurePdfFont } from './register-pdf-font'
 import JsBarcode from 'jsbarcode'
 import { createCanvas } from 'canvas'
 
@@ -237,6 +238,7 @@ export async function generateLabelsPDF(labels: LabelData[]): Promise<Buffer> {
   // 为每个 Label 生成条形码图片
   const barcodeImages = labels.map(label => generateBarcodeImage(label.barcode))
 
+  ensurePdfFont()
   // 使用 @react-pdf/renderer 生成 PDF
   const pdfDoc = <LabelsDocument labels={labels} barcodeImages={barcodeImages} />
   

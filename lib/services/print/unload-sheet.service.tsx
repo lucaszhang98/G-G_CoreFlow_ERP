@@ -10,6 +10,7 @@ import React from 'react'
 import { UnloadSheetData } from './types'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { UnloadSheetDocument } from './unload-sheet-pdf'
+import { ensurePdfFont } from './register-pdf-font'
 
 /**
  * 生成拆柜单据 PDF
@@ -35,6 +36,7 @@ export async function generateUnloadSheetPDF(data: UnloadSheetData): Promise<Buf
   }
 
   try {
+    ensurePdfFont()
     // 使用 @react-pdf/renderer 生成 PDF
     console.log('[UnloadSheet Service] 创建PDF文档组件...')
     const pdfDoc = <UnloadSheetDocument data={data} />
