@@ -12,6 +12,7 @@ import React from 'react'
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
 import { LabelData } from './types'
 import { PageSizes } from './print-templates'
+import { pdfFontFamily } from './register-pdf-font'
 
 // 页面尺寸（横向 4×6 英寸 = 152.4×101.6mm）
 const LABEL_WIDTH = PageSizes.LABEL_4X6_LANDSCAPE.width
@@ -27,11 +28,13 @@ const styles = StyleSheet.create({
     paddingLeft: 6,
     paddingRight: 14, // 进一步增加右边距，确保内容不被切掉
     position: 'relative',
+    fontFamily: pdfFontFamily,
   },
   row1: {
     // 第一行：柜号（居中，更大更粗）
     fontSize: 20,
     fontWeight: 'bold',
+    fontFamily: pdfFontFamily,
     textAlign: 'center',
     margin: 0,
     padding: 0,
@@ -46,6 +49,7 @@ const styles = StyleSheet.create({
     // 第二行：仓点（居中，更大更粗，与第一行有适当间距，字体小两个字号以确保显示完整）
     fontSize: 18,
     fontWeight: 'bold',
+    fontFamily: pdfFontFamily,
     textAlign: 'center',
     margin: 0,
     padding: 0,
@@ -107,6 +111,7 @@ const styles = StyleSheet.create({
   customerCode: {
     fontSize: 10,
     fontWeight: 'bold',
+    fontFamily: pdfFontFamily,
     lineHeight: 1,
     flexShrink: 1,
   },
@@ -120,6 +125,7 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 8, // 再稍微减小一点
+    fontFamily: pdfFontFamily,
     lineHeight: 1,
   },
   pageNumber: {

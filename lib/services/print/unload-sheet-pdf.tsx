@@ -8,85 +8,12 @@
  */
 
 import React from 'react'
-import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer'
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
 import { UnloadSheetData } from './types'
 import { PageSizes, formatDate } from './print-templates'
-import path from 'path'
-import fs from 'fs'
+import { pdfFontRegistered, pdfFontFamily } from './register-pdf-font'
 import JsBarcode from 'jsbarcode'
 import { createCanvas } from 'canvas'
-
-// 注册中文字体
-// 优先使用 public/fonts 目录中的字体文件，如果不存在则尝试 node_modules
-let fontRegistered = false
-let fontError: any = null
-
-function registerFont() {
-  const cwd = process.cwd()
-  // 优先使用 node_modules 中的 woff 文件（@react-pdf/renderer 支持 woff 和 ttf，但不支持 woff2）
-  const fontPaths = [
-    // 方案1: 使用 node_modules 中的 woff 字体（最可靠）
-    path.join(cwd, 'node_modules', '@fontsource', 'noto-sans-sc', 'files', 'noto-sans-sc-chinese-simplified-400-normal.woff'),
-    // 方案2: 使用 public/fonts 目录中的 woff 文件（如果存在）
-    path.join(cwd, 'public', 'fonts', 'NotoSansSC-Regular.woff'),
-  ]
-
-  console.log('[UnloadSheet PDF] 字体注册开始:', {
-    cwd,
-    fontPaths,
-  })
-
-  for (const fontPath of fontPaths) {
-    try {
-      if (fs.existsSync(fontPath)) {
-        // 验证文件确实是字体文件（不是 HTML 或其他格式）
-        const stats = fs.statSync(fontPath)
-        if (stats.size < 1000) {
-          // 文件太小，可能是 HTML 错误页面
-          console.warn(`[UnloadSheet PDF] 字体文件太小，跳过: ${fontPath} (${stats.size} bytes)`)
-          continue
-        }
-        
-        console.log(`[UnloadSheet PDF] 找到字体文件: ${fontPath} (${stats.size} bytes)`)
-        Font.register({
-          family: 'NotoSansSC',
-          src: fontPath,
-        })
-        fontRegistered = true
-        console.log('[UnloadSheet PDF] 字体注册成功')
-        return
-      } else {
-        console.log(`[UnloadSheet PDF] 字体文件不存在: ${fontPath}`)
-      }
-    } catch (error: any) {
-      console.warn(`[UnloadSheet PDF] 尝试注册字体失败 (${fontPath}):`, {
-        message: error?.message,
-        path: fontPath,
-        errorType: error?.constructor?.name,
-      })
-      // 继续尝试下一个路径
-    }
-  }
-
-  // 所有路径都失败
-  const errorMsg = '所有字体文件路径都不可用，中文可能显示为乱码'
-  console.error(`[UnloadSheet PDF] ${errorMsg}`, {
-    cwd,
-    triedPaths: fontPaths,
-  })
-  fontError = { message: errorMsg, triedPaths: fontPaths, cwd }
-}
-
-try {
-  registerFont()
-} catch (error: any) {
-  const errorMsg = '字体注册过程发生异常'
-  console.error(`[UnloadSheet PDF] ${errorMsg}:`, {
-    message: error?.message,
-    stack: error?.stack,
-  })
-  fontError = error
-}
 
 // 页面尺寸（A4 横排：297mm x 210mm）
 const PAGE_WIDTH = PageSizes.A4_LANDSCAPE.width // 297mm
@@ -150,7 +77,7 @@ function createStyles(rowCount: number) {
       width: PAGE_WIDTH,
       height: PAGE_HEIGHT,
       padding: PADDING,
-      fontFamily: fontRegistered ? 'NotoSansSC' : 'Helvetica', // 如果字体未注册，使用默认字体
+      fontFamily: pdfFontFamily,
     },
     title: {
       fontSize: titleFontSize,
@@ -271,8 +198,7 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
   console.log('[UnloadSheet PDF Component] 渲染文档:', {
     rowCount,
     containerNumber: data.containerNumber,
-    fontRegistered,
-    fontError: fontError ? { message: fontError.message } : null,
+    fontRegistered: pdfFontRegistered,
   })
   
   const styles = createStyles(rowCount)

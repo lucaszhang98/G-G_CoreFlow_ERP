@@ -11,35 +11,15 @@
  */
 
 import React from 'react'
-import { Document, Page, Text, View, Font, Image } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image } from '@react-pdf/renderer'
 import { OAKLoadSheetData } from './types'
 import { PageSizes } from './print-templates'
-import path from 'path'
-import fs from 'fs'
-
-let fontRegistered = false
-function registerFont() {
-  const cwd = process.cwd()
-  const fontPaths = [
-    path.join(cwd, 'node_modules', '@fontsource', 'noto-sans-sc', 'files', 'noto-sans-sc-chinese-simplified-400-normal.woff'),
-    path.join(cwd, 'public', 'fonts', 'NotoSansSC-Regular.woff'),
-  ]
-  for (const fontPath of fontPaths) {
-    try {
-      if (fs.existsSync(fontPath) && fs.statSync(fontPath).size > 1000) {
-        Font.register({ family: 'NotoSansSC', src: fontPath })
-        fontRegistered = true
-        return
-      }
-    } catch (_) {}
-  }
-}
-try { registerFont() } catch (_) {}
+import { pdfFontFamily } from './register-pdf-font'
 
 const PAGE_WIDTH = PageSizes.A4_PORTRAIT.width
 const PAGE_HEIGHT = PageSizes.A4_PORTRAIT.height
 const PADDING = 14
-const FONT_FAMILY = fontRegistered ? 'NotoSansSC' : 'Helvetica'
+const FONT_FAMILY = pdfFontFamily
 
 const borderColor = '#000'
 const borderWidth = 1
