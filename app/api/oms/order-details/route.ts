@@ -171,6 +171,7 @@ export async function GET(request: NextRequest) {
                 select: {
                   appointment_id: true,
                   reference_number: true,
+                  requested_start: true,
                   confirmed_start: true,
                   status: true,
                 },
@@ -207,11 +208,36 @@ export async function GET(request: NextRequest) {
       const appointments = item.appointment_detail_lines?.map((adl: any) => ({
         appointment_id: adl.delivery_appointments?.appointment_id ? String(adl.delivery_appointments.appointment_id) : null,
         reference_number: adl.delivery_appointments?.reference_number || null,
+        requested_start: adl.delivery_appointments?.requested_start || null,
         confirmed_start: adl.delivery_appointments?.confirmed_start || null,
         estimated_pallets: adl.estimated_pallets || 0,
         rejected_pallets: adl.rejected_pallets ?? 0,
         status: adl.delivery_appointments?.status || null,
       })) || []
+
+      // 最早预约：未过期的预约中，取日期最早的那条的预约号码和预约时间
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const nonExpiredAppointments = appointments.filter((appt: any) => {
+        const start = appt.confirmed_start || appt.requested_start
+        if (!start) return false
+        const d = new Date(start)
+        d.setHours(0, 0, 0, 0)
+        return d >= todayStart
+      })
+      const earliestAppointment = nonExpiredAppointments.length > 0
+        ? nonExpiredAppointments.reduce((earliest: any, appt: any) => {
+            const start = appt.confirmed_start || appt.requested_start
+            const earliestStart = earliest.confirmed_start || earliest.requested_start
+            if (!start) return earliest
+            if (!earliestStart) return appt
+            return new Date(start) < new Date(earliestStart) ? appt : earliest
+          })
+        : null
+      const earliest_appointment_reference_number = earliestAppointment?.reference_number ?? null
+      const earliest_appointment_time = earliestAppointment
+        ? (earliestAppointment.confirmed_start || earliestAppointment.requested_start)
+        : null
 
       const totalEffectivePallets = appointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
       const today = new Date()
@@ -267,6 +293,8 @@ export async function GET(request: NextRequest) {
         window_period: item.window_period || null,
         delivery_progress,
         appointments,
+        earliest_appointment_reference_number,
+        earliest_appointment_time,
         created_at: item.created_at,
         updated_at: item.updated_at,
       }

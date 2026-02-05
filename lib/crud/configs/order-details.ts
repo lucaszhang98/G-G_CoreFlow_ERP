@@ -120,6 +120,18 @@ export const orderDetailConfig: EntityConfig = {
       type: 'number',
       sortable: false,
     },
+    earliest_appointment_reference_number: {
+      key: 'earliest_appointment_reference_number',
+      label: '最早预约号码',
+      type: 'text',
+      sortable: false,
+    },
+    earliest_appointment_time: {
+      key: 'earliest_appointment_time',
+      label: '最早预约时间',
+      type: 'datetime',
+      sortable: false,
+    },
   },
   
   list: {
@@ -135,6 +147,8 @@ export const orderDetailConfig: EntityConfig = {
       'actual_pallets',
       'unbooked_pallets',
       'remaining_pallets',
+      'earliest_appointment_reference_number',
+      'earliest_appointment_time',
       'storage_location_code',
       'notes',
       'delivery_progress',

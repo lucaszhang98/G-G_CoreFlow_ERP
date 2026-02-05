@@ -216,6 +216,7 @@ export const outboundShipmentConfig: EntityConfig = {
   },
   
   formFields: [
+    'reference_number', // 预约号码，详情页优先展示
     'trailer_id',
     'loaded_by',
     'notes',

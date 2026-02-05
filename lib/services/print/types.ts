@@ -84,6 +84,40 @@ export interface LoadSheetData {
 }
 
 /**
+ * OAK 装车单模板数据（与 Excel「装车单模板」一致）
+ * 布局：卸货仓+仓点 | Trailer | Load# | SEAL# | 预约时间 | 表头 柜号|仓储位置|计划板数|装车板数|剩余板数|是否清空 | 合计
+ */
+export interface OAKLoadSheetData {
+  /** 卸货仓标签（固定「卸货仓」） */
+  destinationLabel: string
+  /** 仓点代码，如 TCY2 */
+  destinationCode: string
+  /** Trailer 车架号 */
+  trailer: string
+  /** Load# 装车单号，如预约号码或 ID */
+  loadNumber: string
+  /** SEAL# 封条号（可选） */
+  sealNumber: string
+  /** 预约时间 */
+  appointmentTime: string
+  /** 明细行（装车板数、剩余板数、是否清空留空供手填） */
+  lines: Array<{
+    container_number: string
+    storage_location: string
+    planned_pallets: number
+    loaded_pallets: string
+    remaining_pallets: string
+    is_clear: boolean | string
+  }>
+  /** 计划板数合计 */
+  totalPlannedPallets: number
+  /** 合计行「是否清空」显示，无则留空供手填 */
+  totalIsClearLabel?: string
+  /** 可选：logo 图片路径（如 public/loading-sheet/logo.png）或 base64 */
+  logoPath?: string
+}
+
+/**
  * BOL (Bill of Lading) 数据（竖排 A4）
  */
 export interface BOLData {
@@ -146,6 +180,48 @@ export interface BOLData {
   // 特殊字段
   specialInstructions?: string
   referenceNumbers?: string[]
+}
+
+/**
+ * OAK BOL 模板数据（与 docs/135928027988 SCK8 BOL.pdf 样本一致）
+ * 用于出库管理生成 BOL PDF
+ */
+export interface OAKBOLData {
+  /** 打印时间，如 2026-02-04 16:06:37（不生成二维码） */
+  printTime: string
+  /** 发货方 Ship from */
+  shipFrom: {
+    companyName: string
+    address: string
+    attn: string
+    phone: string
+  }
+  /** 收货方 Ship to */
+  shipTo: {
+    destinationCode: string
+    address: string
+    attn: string
+    phone: string
+  }
+  /** 预约号 Appointment ID */
+  appointmentId: string
+  /** 预约时间 Appointment time */
+  appointmentTime: string
+  /** SEAL（留空） */
+  seal: string
+  /** Container（留空） */
+  container: string
+  /** 明细行：Container | FBA ID | Qty (PLTS) | Box | Storage | PO ID */
+  lines: Array<{
+    container_number: string
+    fba_id: string
+    qty_plts: number | string
+    box: number | string
+    storage: string
+    po_id: string
+  }>
+  /** 可选 logo 路径，默认使用 docs/logo.png */
+  logoPath?: string
 }
 
 /**

@@ -10,6 +10,8 @@ import { EntityDetail } from "@/components/crud/entity-detail"
 import { outboundShipmentConfig } from "@/lib/crud/configs/outbound-shipments"
 import { getOutboundShipmentDetail } from "@/lib/services/outbound-shipment-detail"
 import { AppointmentDetailClient } from "@/app/dashboard/oms/appointments/[id]/appointment-detail-client"
+import { OutboundPrintLoadingSheetButton } from "./outbound-print-loading-sheet-button"
+import { OutboundPrintBOLButton } from "./outbound-print-bol-button"
 
 interface OutboundShipmentDetailPageProps {
   params: Promise<{ id: string }> | { id: string }
@@ -47,6 +49,11 @@ export default async function OutboundShipmentDetailPage({ params }: OutboundShi
               id={id}
               data={data}
             />
+            {/* 打印装车单、生成 BOL */}
+            <div className="flex justify-end gap-2">
+              <OutboundPrintLoadingSheetButton appointmentId={id} />
+              <OutboundPrintBOLButton appointmentId={id} />
+            </div>
             {/* 对应预约的所有明细 */}
             <AppointmentDetailClient
               appointmentId={id}
