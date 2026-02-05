@@ -826,7 +826,9 @@ model pickup_management {
   pickup_id                                 BigInt    @id @default(autoincrement())
   order_id                                  BigInt    @unique
   earliest_appointment_time                 DateTime? @db.Timestamptz(6)
-  status                                    String?   @default("planned") @db.VarChar(50)
+  pickup_out                                Boolean?  @default(false)
+  report_empty                              Boolean?  @default(false)
+  return_empty                              Boolean?  @default(false)
   current_location                          String?   @db.VarChar(100)
   port_text                                 String?   @db.VarChar(10)
   shipping_line                             String?   @db.VarChar(10)
@@ -842,7 +844,6 @@ model pickup_management {
   users_pickup_management_updated_byTousers users?    @relation("pickup_management_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([order_id])
-  @@index([status])
   @@index([created_at])
   @@index([earliest_appointment_time])
   @@index([current_location])

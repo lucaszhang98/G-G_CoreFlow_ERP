@@ -35,8 +35,14 @@ export async function POST(request: NextRequest) {
     const orderUpdateData: any = {}
 
     // 提柜管理自有字段
-    if (updates.status !== undefined) {
-      pickupUpdateData.status = updates.status
+    if (updates.pickup_out !== undefined) {
+      pickupUpdateData.pickup_out = Boolean(updates.pickup_out)
+    }
+    if (updates.report_empty !== undefined) {
+      pickupUpdateData.report_empty = Boolean(updates.report_empty)
+    }
+    if (updates.return_empty !== undefined) {
+      pickupUpdateData.return_empty = Boolean(updates.return_empty)
     }
     if (updates.current_location !== undefined) {
       pickupUpdateData.current_location = updates.current_location || null
@@ -56,6 +62,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 订单字段（通过提柜管理修改）
+    if (updates.mbl !== undefined) {
+      orderUpdateData.mbl_number = updates.mbl || null
+    }
     if (updates.port_location_id !== undefined) {
       // 不需要手动转换 BigInt，Prisma 会自动处理
       orderUpdateData.port_location_id = updates.port_location_id || null

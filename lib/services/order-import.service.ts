@@ -291,7 +291,6 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
           await tx.pickup_management.create({
             data: {
               order_id: order.order_id,
-              status: 'planned', // 默认状态：计划中
               created_by: userId,
               updated_by: userId,
             },

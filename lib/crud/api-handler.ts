@@ -1148,7 +1148,6 @@ export function createCreateHandler(config: EntityConfig) {
             await prisma.pickup_management.create({
               data: {
                 order_id: item.order_id,
-                status: 'planned', // 默认状态：计划中
                 created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                 updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
               },
@@ -1393,7 +1392,6 @@ export function createUpdateHandler(config: EntityConfig) {
             await prisma.pickup_management.create({
               data: {
                 order_id: item.order_id,
-                status: 'planned', // 默认状态：计划中
                 created_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
                 updated_by: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
               },

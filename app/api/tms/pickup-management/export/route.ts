@@ -35,7 +35,9 @@ export async function GET(request: NextRequest) {
       const mainTableFields = [
         'pickup_id',
         'order_id',
-        'status',
+        'pickup_out',
+        'report_empty',
+        'return_empty',
         'notes',
         'earliest_appointment_time',
         'current_location',
@@ -77,7 +79,9 @@ export async function GET(request: NextRequest) {
     const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
     const mainTableFields = [
       'pickup_id',
-      'status',
+      'pickup_out',
+      'report_empty',
+      'return_empty',
       'notes',
       'current_location',
       'port_text',
@@ -170,7 +174,9 @@ export async function GET(request: NextRequest) {
         earliest_appointment_time:
           order?.appointment_time || serialized.earliest_appointment_time || null,
         current_location: serialized.current_location || null,
-        status: serialized.status || null,
+        pickup_out: serialized.pickup_out ?? false,
+        report_empty: serialized.report_empty ?? false,
+        return_empty: serialized.return_empty ?? false,
         notes: serialized.notes || null,
         created_at: serialized.created_at || null,
         updated_at: serialized.updated_at || null,

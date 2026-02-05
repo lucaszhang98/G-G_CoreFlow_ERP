@@ -30,21 +30,12 @@ export interface PickupManagementExportData {
   warehouse_account: string | null
   earliest_appointment_time: Date | string | null
   current_location: string | null
-  status: string | null
+  pickup_out: boolean
+  report_empty: boolean
+  return_empty: boolean
   notes: string | null
   created_at: Date | string | null
   updated_at: Date | string | null
-}
-
-/**
- * 状态映射
- */
-const STATUS_MAP: Record<string, string> = {
-  planned: '计划中',
-  in_transit: '运输中',
-  delivered: '已送达',
-  unloaded: '已卸空',
-  returned: '已还柜',
 }
 
 /**
@@ -125,7 +116,9 @@ export async function generatePickupManagementExportExcel(
     { header: '约仓账号', key: 'warehouse_account', width: 15 },
     { header: '最早预约时间', key: 'earliest_appointment_time', width: 18 },
     { header: '现在位置', key: 'current_location', width: 14 },
-    { header: '状态', key: 'status', width: 10 },
+    { header: '提出', key: 'pickup_out', width: 8 },
+    { header: '报空', key: 'report_empty', width: 8 },
+    { header: '还空', key: 'return_empty', width: 8 },
     { header: '备注', key: 'notes', width: 25 },
     { header: '创建时间', key: 'created_at', width: 18 },
     { header: '更新时间', key: 'updated_at', width: 18 },
@@ -166,7 +159,9 @@ export async function generatePickupManagementExportExcel(
       warehouse_account: row.warehouse_account || '',
       earliest_appointment_time: formatDateTime(row.earliest_appointment_time),
       current_location: row.current_location || '',
-      status: STATUS_MAP[row.status || ''] || row.status || '',
+      pickup_out: formatBoolean(row.pickup_out),
+      report_empty: formatBoolean(row.report_empty),
+      return_empty: formatBoolean(row.return_empty),
       notes: row.notes || '',
       created_at: formatDate(row.created_at),
       updated_at: formatDate(row.updated_at),

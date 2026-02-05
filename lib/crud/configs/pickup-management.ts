@@ -194,18 +194,23 @@ export const pickupManagementConfig: EntityConfig = {
         { label: '满柜st', value: '满柜st' },
       ],
     },
-    status: {
-      key: 'status',
-      label: '状态',
-      type: 'badge',
+    pickup_out: {
+      key: 'pickup_out',
+      label: '提出',
+      type: 'boolean',
       sortable: true,
-      options: [
-        { label: '计划中', value: 'planned' },
-        { label: '运输中', value: 'in_transit' },
-        { label: '已送达', value: 'delivered' },
-        { label: '已卸空', value: 'unloaded' },
-        { label: '已还柜', value: 'returned' },
-      ],
+    },
+    report_empty: {
+      key: 'report_empty',
+      label: '报空',
+      type: 'boolean',
+      sortable: true,
+    },
+    return_empty: {
+      key: 'return_empty',
+      label: '还空',
+      type: 'boolean',
+      sortable: true,
     },
     notes: {
       key: 'notes',
@@ -239,7 +244,9 @@ export const pickupManagementConfig: EntityConfig = {
       'warehouse_account',
       'earliest_appointment_time',
       'current_location',
-      'status',
+      'pickup_out',
+      'report_empty',
+      'return_empty',
       'notes',
     ],
     searchFields: ['container_number'], // 只搜索柜号（最重要的字段）
@@ -247,6 +254,7 @@ export const pickupManagementConfig: EntityConfig = {
     inlineEdit: {
       enabled: true,
       fields: [
+        'mbl',
         'port_location',
         'port_text',
         'shipping_line',
@@ -259,7 +267,9 @@ export const pickupManagementConfig: EntityConfig = {
         'ready_date',
         'return_deadline',
         'current_location',
-        'status',
+        'pickup_out',
+        'report_empty',
+        'return_empty',
         'notes',
       ],
     },
@@ -268,6 +278,7 @@ export const pickupManagementConfig: EntityConfig = {
       edit: {
         enabled: true,
         fields: [
+          'mbl',
           'port_location',
           'port_text',
           'shipping_line',
@@ -280,7 +291,9 @@ export const pickupManagementConfig: EntityConfig = {
           'ready_date',
           'return_deadline',
           'current_location',
-          'status',
+          'pickup_out',
+          'report_empty',
+          'return_empty',
           'notes',
         ],
       },

@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
         // 判断字段是否来自 orders 表
         // 主表字段：pickup_id, order_id, status, notes, earliest_appointment_time, current_location, port_text, shipping_line, driver_id
         // 其他字段都来自 orders 表
-        const mainTableFields = ['pickup_id', 'order_id', 'status', 'notes', 'earliest_appointment_time', 'current_location', 'port_text', 'shipping_line', 'driver_id']
+        const mainTableFields = ['pickup_id', 'order_id', 'pickup_out', 'report_empty', 'return_empty', 'notes', 'earliest_appointment_time', 'current_location', 'port_text', 'shipping_line', 'driver_id']
         if (mainTableFields.includes(fieldName)) {
           mainTableConditions.push(condition)
         } else {
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
     let orderBy: any
     
     // 判断排序字段是来自主表还是 orders 表
-    const mainTableFields = ['pickup_id', 'status', 'notes', 'current_location', 'port_text', 'shipping_line', 'driver_id', 'created_at', 'updated_at']
+    const mainTableFields = ['pickup_id', 'pickup_out', 'report_empty', 'return_empty', 'notes', 'current_location', 'port_text', 'shipping_line', 'driver_id', 'created_at', 'updated_at']
     
     // earliest_appointment_time 特殊处理：优先使用 orders.appointment_time 排序
     if (sort === 'earliest_appointment_time') {
@@ -231,7 +231,9 @@ export async function GET(request: NextRequest) {
         driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
         earliest_appointment_time: order?.appointment_time || serialized.earliest_appointment_time || null, // 优先使用 orders.appointment_time，否则使用 pickup_management.earliest_appointment_time
         current_location: serialized.current_location || null,
-        status: serialized.status || null, // 使用 pickup_management 的 status，不是 orders 的
+        pickup_out: serialized.pickup_out ?? false,
+        report_empty: serialized.report_empty ?? false,
+        return_empty: serialized.return_empty ?? false,
         notes: serialized.notes || null, // 使用 pickup_management 的 notes，不是 orders 的
         // ========== 额外信息 ==========
         order_id: order ? String(order.order_id || '') : null,

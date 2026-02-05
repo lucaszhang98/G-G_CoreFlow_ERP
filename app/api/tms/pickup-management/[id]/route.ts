@@ -119,7 +119,9 @@ export async function GET(
       driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
       earliest_appointment_time: serialized.earliest_appointment_time || null,
       current_location: serialized.current_location || null,
-      status: serialized.status || null,
+      pickup_out: serialized.pickup_out ?? false,
+      report_empty: serialized.report_empty ?? false,
+      return_empty: serialized.return_empty ?? false,
       notes: serialized.notes || null,
       // 额外信息
       order_id: order ? String(order.order_id || '') : null,
@@ -167,8 +169,14 @@ async function updatePickupManagement(
     const orderUpdateData: any = {}
 
     // 提柜管理自有字段
-    if (body.status !== undefined) {
-      pickupUpdateData.status = body.status
+    if (body.pickup_out !== undefined) {
+      pickupUpdateData.pickup_out = Boolean(body.pickup_out)
+    }
+    if (body.report_empty !== undefined) {
+      pickupUpdateData.report_empty = Boolean(body.report_empty)
+    }
+    if (body.return_empty !== undefined) {
+      pickupUpdateData.return_empty = Boolean(body.return_empty)
     }
     if (body.current_location !== undefined) {
       pickupUpdateData.current_location = body.current_location || null
@@ -188,6 +196,9 @@ async function updatePickupManagement(
     }
 
     // 订单字段（通过提柜管理修改）
+    if (body.mbl !== undefined) {
+      orderUpdateData.mbl_number = body.mbl || null
+    }
     if (body.port_location_id !== undefined) {
       // 不需要手动转换 BigInt，Prisma 会自动处理
       orderUpdateData.port_location_id = body.port_location_id || null
@@ -365,7 +376,9 @@ async function updatePickupManagement(
         license_plate: serializedUpdated.drivers.license_plate || null,
       } : null,
       driver_id: serializedUpdated.driver_id ? String(serializedUpdated.driver_id) : null,
-      status: serializedUpdated.status || null,
+      pickup_out: serializedUpdated.pickup_out ?? false,
+      report_empty: serializedUpdated.report_empty ?? false,
+      return_empty: serializedUpdated.return_empty ?? false,
       notes: serializedUpdated.notes || null,
       container_type: updatedOrder?.container_type || null,
       port_location: updatedOrder?.locations_orders_port_location_idTolocations?.location_code || null,
