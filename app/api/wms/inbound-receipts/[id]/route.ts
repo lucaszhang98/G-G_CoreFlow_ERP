@@ -11,13 +11,13 @@ import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await checkAuth();
     if (authResult.error) return authResult.error;
 
-    const resolvedParams = params instanceof Promise ? await params : params;
+    const resolvedParams = await params;
 
     const inboundReceipt = await prisma.inbound_receipt.findUnique({
       where: { inbound_receipt_id: BigInt(resolvedParams.id) },
@@ -172,14 +172,14 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const permissionResult = await checkPermission(inboundReceiptConfig.permissions.update);
     if (permissionResult.error) return permissionResult.error;
     const currentUser = permissionResult.user;
 
-    const resolvedParams = params instanceof Promise ? await params : params;
+    const resolvedParams = await params;
 
     // 检查拆柜规划是否存在
     const existing = await prisma.inbound_receipt.findUnique({
@@ -346,13 +346,13 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const permissionResult = await checkPermission(inboundReceiptConfig.permissions.delete);
     if (permissionResult.error) return permissionResult.error;
 
-    const resolvedParams = params instanceof Promise ? await params : params;
+    const resolvedParams = await params;
 
     // 检查拆柜规划是否存在
     const inboundReceipt = await prisma.inbound_receipt.findUnique({

@@ -5,7 +5,7 @@ import { orderConfig } from '@/lib/crud/configs/orders'
 // GET - 获取订单详情
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const handler = createDetailHandler(orderConfig)
   return handler(request, { params })
@@ -14,7 +14,7 @@ export async function GET(
 // PUT - 更新订单
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const handler = createUpdateHandler(orderConfig)
   return handler(request, { params })
@@ -23,7 +23,7 @@ export async function PUT(
 // DELETE - 删除订单
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const handler = createDeleteHandler(orderConfig)
   return handler(request, { params })

@@ -9,7 +9,7 @@ import { EntityDetail } from "@/components/crud/entity-detail"
 import { invoiceConfig } from "@/lib/crud/configs/invoices"
 
 interface InvoiceDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
@@ -19,7 +19,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   return (
     <DashboardLayout user={session.user || {}}>

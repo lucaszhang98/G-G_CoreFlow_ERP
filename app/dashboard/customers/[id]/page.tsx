@@ -12,7 +12,7 @@ import { Decimal } from "@prisma/client/runtime/library"
 import { CustomerDetailClient } from "./customer-detail-client"
 
 interface CustomerDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function CustomerDetailPage({ params }: CustomerDetailPageProps) {
@@ -23,7 +23,7 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
   }
 
   // 处理 params（Next.js 15 中 params 可能是 Promise）
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   // 获取客户详情（用于显示最近订单）
   const customer = await prisma.customers.findUnique({

@@ -6,7 +6,7 @@ import prisma from '@/lib/prisma';
 // GET - 获取单个预约管理记录
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 检查登录
@@ -159,7 +159,7 @@ export async function GET(
 // PUT - 更新预约管理记录
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const body = await request.json();
@@ -523,7 +523,7 @@ export async function PUT(
 // DELETE - 删除预约管理记录
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 检查登录

@@ -5,14 +5,14 @@ import prisma from '@/lib/prisma'
 // GET - 获取订单的明细和库存信息
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ orderId: string }> | { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
     const authResult = await checkAuth()
     if (authResult.error) return authResult.error
 
-    const resolvedParams = await Promise.resolve(params)
-    const orderId = BigInt(resolvedParams.orderId)
+    const { orderId: orderIdStr } = await params
+    const orderId = BigInt(orderIdStr)
     
     // 获取预约ID（如果提供了）
     const { searchParams } = new URL(request.url)

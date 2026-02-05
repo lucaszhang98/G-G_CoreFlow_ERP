@@ -6,7 +6,7 @@ import { serializeBigInt } from '@/lib/api/helpers'
 // PUT - 更新SKU明细
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth()
@@ -14,7 +14,7 @@ export async function PUT(
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const resolvedParams = params instanceof Promise ? await params : params
+    const resolvedParams = await params
     const body = await request.json()
     const { detail_name, sku, description, stock_quantity, volume, status, fba } = body
 
@@ -54,7 +54,7 @@ export async function PUT(
 // DELETE - 删除SKU明细
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth()
@@ -62,7 +62,7 @@ export async function DELETE(
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const resolvedParams = params instanceof Promise ? await params : params
+    const resolvedParams = await params
 
     await prisma.order_detail_item.delete({
       where: { id: BigInt(resolvedParams.id) },

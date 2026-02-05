@@ -16,7 +16,7 @@ import { serializeBigInt } from '@/lib/api/helpers'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await checkAuth()
@@ -24,8 +24,7 @@ export async function GET(
     const permResult = await checkPermission(outboundShipmentConfig.permissions.list)
     if (permResult.error) return permResult.error
 
-    const resolvedParams = params instanceof Promise ? await params : params
-    const appointmentId = resolvedParams.id
+    const { id: appointmentId } = await params
     if (!appointmentId || isNaN(Number(appointmentId))) {
       return NextResponse.json({ error: '无效的预约ID' }, { status: 400 })
     }

@@ -14,13 +14,13 @@ import { paymentConfig } from '@/lib/crud/configs/payments'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const permissionResult = await checkPermission(paymentConfig.permissions.list)
     if (permissionResult.error) return permissionResult.error
 
-    const { id } = params instanceof Promise ? await params : params
+    const { id } = await params
     const paymentId = BigInt(id)
 
     const allocations = await prisma.payment_allocations.findMany({
@@ -54,14 +54,14 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const permissionResult = await checkPermission(paymentConfig.permissions.update)
     if (permissionResult.error) return permissionResult.error
     const currentUser = permissionResult.user
 
-    const { id } = params instanceof Promise ? await params : params
+    const { id } = await params
     const paymentId = BigInt(id)
 
     const body = await request.json()

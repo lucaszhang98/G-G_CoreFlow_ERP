@@ -36,7 +36,7 @@ function formatAppointmentTime(date: Date | string | null | undefined): string {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await checkAuth()
@@ -44,7 +44,7 @@ export async function GET(
     const permResult = await checkPermission(outboundShipmentConfig.permissions.list)
     if (permResult.error) return permResult.error
 
-    const resolvedParams = params instanceof Promise ? await params : params
+    const resolvedParams = await params
     const appointmentId = resolvedParams.id
     if (!appointmentId || isNaN(Number(appointmentId))) {
       return NextResponse.json({ error: '无效的预约ID' }, { status: 400 })

@@ -14,7 +14,7 @@ import { OutboundPrintLoadingSheetButton } from "./outbound-print-loading-sheet-
 import { OutboundPrintBOLButton } from "./outbound-print-bol-button"
 
 interface OutboundShipmentDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function OutboundShipmentDetailPage({ params }: OutboundShipmentDetailPageProps) {
@@ -24,8 +24,7 @@ export default async function OutboundShipmentDetailPage({ params }: OutboundShi
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
-  const id = resolvedParams.id
+  const { id } = await params
 
   const data = await getOutboundShipmentDetail(id)
   if (!data) {

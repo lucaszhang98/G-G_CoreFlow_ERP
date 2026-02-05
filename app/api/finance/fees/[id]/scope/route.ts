@@ -15,13 +15,13 @@ import { feeConfig } from '@/lib/crud/configs/fees'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const permissionResult = await checkPermission(feeConfig.permissions.list)
     if (permissionResult.error) return permissionResult.error
 
-    const { id } = params instanceof Promise ? await params : params
+    const { id } = await params
     const feeId = BigInt(id)
 
     const fee = await prisma.fee.findUnique({
@@ -61,13 +61,13 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const permissionResult = await checkPermission(feeConfig.permissions.update)
     if (permissionResult.error) return permissionResult.error
 
-    const { id } = params instanceof Promise ? await params : params
+    const { id } = await params
     const feeId = BigInt(id)
 
     const fee = await prisma.fee.findUnique({

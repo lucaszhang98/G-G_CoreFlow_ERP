@@ -9,7 +9,7 @@ import { EntityDetail } from "@/components/crud/entity-detail"
 import { trailerConfig } from "@/lib/crud/configs/trailers"
 
 interface TrailerDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function TrailerDetailPage({ params }: TrailerDetailPageProps) {
@@ -20,7 +20,7 @@ export default async function TrailerDetailPage({ params }: TrailerDetailPagePro
   }
 
   // 处理 params（Next.js 15 中 params 可能是 Promise）
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   return (
     <DashboardLayout user={session.user || {}}>

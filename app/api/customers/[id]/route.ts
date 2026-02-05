@@ -9,7 +9,7 @@ import prisma from '@/lib/prisma';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 检查登录
@@ -17,7 +17,7 @@ export async function GET(
     if (authResult.error) return authResult.error;
 
     // 处理 params（Next.js 15 中 params 可能是 Promise）
-    const resolvedParams = params instanceof Promise ? await params : params;
+    const resolvedParams = await params;
 
     const customer = await prisma.customers.findUnique({
       where: { id: BigInt(resolvedParams.id) },
@@ -66,7 +66,7 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 检查权限
@@ -75,7 +75,7 @@ export async function PUT(
     const currentUser = permissionResult.user;
 
     // 处理 params（Next.js 15 中 params 可能是 Promise）
-    const resolvedParams = params instanceof Promise ? await params : params;
+    const resolvedParams = await params;
 
     // 检查客户是否存在
     const existing = await prisma.customers.findUnique({
@@ -214,7 +214,7 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 检查权限
@@ -222,7 +222,7 @@ export async function DELETE(
     if (permissionResult.error) return permissionResult.error;
 
     // 处理 params（Next.js 15 中 params 可能是 Promise）
-    const resolvedParams = params instanceof Promise ? await params : params;
+    const resolvedParams = await params;
 
     // 检查客户是否存在
     const customer = await prisma.customers.findUnique({

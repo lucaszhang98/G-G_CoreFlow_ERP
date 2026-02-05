@@ -10,7 +10,7 @@ import { paymentConfig } from "@/lib/crud/configs/payments"
 import { PaymentAllocationsCard } from "@/components/finance/payment-allocations-card"
 
 interface PaymentDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function PaymentDetailPage({ params }: PaymentDetailPageProps) {
@@ -20,7 +20,7 @@ export default async function PaymentDetailPage({ params }: PaymentDetailPagePro
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   return (
     <DashboardLayout user={session.user || {}}>

@@ -10,7 +10,7 @@ import { feeConfig } from "@/lib/crud/configs/fees"
 import { FeeScopeCard } from "@/components/finance/fee-scope-card"
 
 interface FeeDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function FeeDetailPage({ params }: FeeDetailPageProps) {
@@ -20,7 +20,7 @@ export default async function FeeDetailPage({ params }: FeeDetailPageProps) {
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   return (
     <DashboardLayout user={session.user || {}}>

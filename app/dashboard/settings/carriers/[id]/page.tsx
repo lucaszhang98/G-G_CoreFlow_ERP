@@ -9,7 +9,7 @@ import { EntityDetail } from "@/components/crud/entity-detail"
 import { carrierConfig } from "@/lib/crud/configs/carriers"
 
 interface CarrierDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function CarrierDetailPage({ params }: CarrierDetailPageProps) {
@@ -19,7 +19,7 @@ export default async function CarrierDetailPage({ params }: CarrierDetailPagePro
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   return (
     <DashboardLayout user={session.user || {}}>

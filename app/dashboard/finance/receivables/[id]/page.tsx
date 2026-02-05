@@ -9,7 +9,7 @@ import { EntityDetail } from "@/components/crud/entity-detail"
 import { receivableConfig } from "@/lib/crud/configs/receivables"
 
 interface ReceivableDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function ReceivableDetailPage({ params }: ReceivableDetailPageProps) {
@@ -19,7 +19,7 @@ export default async function ReceivableDetailPage({ params }: ReceivableDetailP
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   return (
     <DashboardLayout user={session.user || {}}>

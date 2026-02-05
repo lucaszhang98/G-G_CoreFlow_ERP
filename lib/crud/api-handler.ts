@@ -794,13 +794,13 @@ export function createListHandler(config: EntityConfig) {
 export function createDetailHandler(config: EntityConfig) {
   return async (
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> | { id: string } }
+    { params }: { params: Promise<{ id: string }> }
   ) => {
     try {
       const permissionResult = await checkPermission(config.permissions.list)
       if (permissionResult.error) return permissionResult.error
 
-      const resolvedParams = params instanceof Promise ? await params : params
+      const resolvedParams = await params
       const prismaModel = getPrismaModel(config)
 
       // 获取主键字段名（默认为 'id'）
@@ -1182,13 +1182,13 @@ export function createCreateHandler(config: EntityConfig) {
 export function createUpdateHandler(config: EntityConfig) {
   return async (
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> | { id: string } }
+    { params }: { params: Promise<{ id: string }> }
   ) => {
     try {
       const permissionResult = await checkPermission(config.permissions.update)
       if (permissionResult.error) return permissionResult.error
 
-      const resolvedParams = params instanceof Promise ? await params : params
+      const resolvedParams = await params
       const body = await request.json()
       const updateSchema = getSchema(config.schemaName, 'update')
       const validationResult = updateSchema.safeParse(body)
@@ -1423,13 +1423,13 @@ export function createUpdateHandler(config: EntityConfig) {
 export function createDeleteHandler(config: EntityConfig) {
   return async (
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> | { id: string } }
+    { params }: { params: Promise<{ id: string }> }
   ) => {
     try {
       const permissionResult = await checkPermission(config.permissions.delete)
       if (permissionResult.error) return permissionResult.error
 
-      const resolvedParams = params instanceof Promise ? await params : params
+      const resolvedParams = await params
       const prismaModel = getPrismaModel(config)
       
       // 获取主键字段名（默认为 'id'）

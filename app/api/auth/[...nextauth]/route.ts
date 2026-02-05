@@ -1,14 +1,16 @@
 import { handlers } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
 
-export const { GET, POST } = handlers
+const { GET: authGet, POST: authPost } = handlers
 
-// 添加错误处理（如果需要）
-export async function GET_WITH_ERROR_HANDLING(request: NextRequest) {
+async function withAuthErrorHandling(
+  handler: (req: NextRequest) => Promise<Response>,
+  request: NextRequest
+): Promise<Response> {
   try {
-    return await GET(request)
+    return await handler(request)
   } catch (error) {
-    console.error('[NextAuth] GET error:', error)
+    console.error('[NextAuth] error:', error)
     return NextResponse.json(
       { error: 'Authentication error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -16,15 +18,11 @@ export async function GET_WITH_ERROR_HANDLING(request: NextRequest) {
   }
 }
 
-export async function POST_WITH_ERROR_HANDLING(request: NextRequest) {
-  try {
-    return await POST(request)
-  } catch (error) {
-    console.error('[NextAuth] POST error:', error)
-    return NextResponse.json(
-      { error: 'Authentication error', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    )
-  }
+export async function GET(request: NextRequest) {
+  return withAuthErrorHandling(authGet, request)
+}
+
+export async function POST(request: NextRequest) {
+  return withAuthErrorHandling(authPost, request)
 }
 

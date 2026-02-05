@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma"
 import { InboundReceiptDetailPageClient } from "./inbound-receipt-detail-page-client"
 
 interface InboundReceiptDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function InboundReceiptDetailPage({ params }: InboundReceiptDetailPageProps) {
@@ -16,7 +16,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   // 验证ID是否有效
   if (!resolvedParams.id || isNaN(Number(resolvedParams.id))) {

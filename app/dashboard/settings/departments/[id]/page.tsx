@@ -9,7 +9,7 @@ import { EntityDetail } from "@/components/crud/entity-detail"
 import { departmentConfig } from "@/lib/crud/configs/departments"
 
 interface DepartmentDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function DepartmentDetailPage({ params }: DepartmentDetailPageProps) {
@@ -19,7 +19,7 @@ export default async function DepartmentDetailPage({ params }: DepartmentDetailP
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   return (
     <DashboardLayout user={session.user || {}}>

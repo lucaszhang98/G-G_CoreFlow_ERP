@@ -6,13 +6,13 @@ import { getOutboundShipmentDetail } from '@/lib/services/outbound-shipment-deta
 // GET - 获取单个出库管理记录（通过 appointment_id）
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await checkAuth();
     if (authResult.error) return authResult.error;
 
-    const resolvedParams = params instanceof Promise ? await params : params;
+    const resolvedParams = await params;
     const appointmentId = resolvedParams.id;
 
     if (!appointmentId || isNaN(Number(appointmentId))) {
@@ -40,10 +40,10 @@ export async function GET(
 // PUT - 更新出库管理记录（只允许修改 trailer_id, loaded_by, notes）
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const resolvedParams = params instanceof Promise ? await params : params;
+    const resolvedParams = await params;
     const appointmentId = resolvedParams.id;
 
     if (!appointmentId || isNaN(Number(appointmentId))) {
@@ -367,7 +367,7 @@ export async function PUT(
 // DELETE - 不允许删除（出库管理记录应该与预约管理记录关联）
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   return NextResponse.json(
     { error: '出库管理记录不能删除，它们与预约管理记录关联' },

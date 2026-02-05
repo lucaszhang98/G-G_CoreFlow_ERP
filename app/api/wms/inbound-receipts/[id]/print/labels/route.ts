@@ -16,7 +16,7 @@ import { LabelData } from '@/lib/services/print/types'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   let resolvedParams: { id: string } | null = null
   try {
@@ -28,7 +28,7 @@ export async function GET(
     const permissionResult = await checkPermission(inboundReceiptConfig.permissions.list)
     if (permissionResult.error) return permissionResult.error
 
-    resolvedParams = params instanceof Promise ? await params : params
+    resolvedParams = await params
     
     // 从查询参数获取数据（前端传递）
     const searchParams = request.nextUrl.searchParams

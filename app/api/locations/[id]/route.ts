@@ -19,7 +19,7 @@ const baseDeleteHandler = createDeleteHandler(locationConfig)
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   return baseDetailHandler(request, { params })
 }
@@ -79,7 +79,7 @@ function calculateLocationData(data: {
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 检查权限
@@ -88,7 +88,7 @@ export async function PUT(
     const currentUser = permissionResult.user
 
     // 处理 params（Next.js 15 中 params 可能是 Promise）
-    const resolvedParams = params instanceof Promise ? await params : params
+    const resolvedParams = await params
 
     // 检查位置是否存在
     const existing = await prisma.locations.findUnique({
@@ -191,7 +191,7 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   return baseDeleteHandler(request, { params })
 }

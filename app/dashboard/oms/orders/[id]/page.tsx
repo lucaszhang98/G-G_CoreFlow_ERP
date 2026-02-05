@@ -9,7 +9,7 @@ import { OrderDetailPageClient } from "./order-detail-page-client"
 import { getOrderStatusBadge } from "@/lib/utils/badges"
 
 interface OrderDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
@@ -19,7 +19,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   // 验证ID是否有效
   if (!resolvedParams.id || isNaN(Number(resolvedParams.id))) {

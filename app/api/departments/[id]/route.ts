@@ -17,7 +17,7 @@ const baseDeleteHandler = createDeleteHandler(departmentConfig)
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   return baseDetailHandler(request, { params })
 }
@@ -28,7 +28,7 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   return baseUpdateHandler(request, { params })
 }
@@ -39,7 +39,7 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   return baseDeleteHandler(request, { params })
 }

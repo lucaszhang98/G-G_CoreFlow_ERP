@@ -9,7 +9,7 @@ import { EntityDetail } from "@/components/crud/entity-detail"
 import { vehicleConfig } from "@/lib/crud/configs/vehicles"
 
 interface VehicleDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function VehicleDetailPage({ params }: VehicleDetailPageProps) {
@@ -19,7 +19,7 @@ export default async function VehicleDetailPage({ params }: VehicleDetailPagePro
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   return (
     <DashboardLayout user={session.user || {}}>

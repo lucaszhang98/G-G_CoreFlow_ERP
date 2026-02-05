@@ -5,13 +5,13 @@ import prisma from '@/lib/prisma'
 // GET - 获取单个送仓管理记录
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await checkAuth()
     if (authResult.error) return authResult.error
 
-    const resolvedParams = params instanceof Promise ? await params : params
+    const resolvedParams = await params
     const deliveryId = resolvedParams.id
 
     const delivery = await prisma.delivery_management.findUnique({
@@ -180,13 +180,13 @@ export async function GET(
 // 更新送仓管理记录的共享逻辑
 async function updateDeliveryManagement(
   request: NextRequest,
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 ) {
   try {
     const authResult = await checkAuth()
     if (authResult.error) return authResult.error
 
-    const resolvedParams = params instanceof Promise ? await params : params
+    const resolvedParams = await params
     const deliveryId = resolvedParams.id
     const body = await request.json()
 
@@ -375,7 +375,7 @@ async function updateDeliveryManagement(
 // PATCH - 更新送仓管理记录
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   return updateDeliveryManagement(request, params)
 }
@@ -383,7 +383,7 @@ export async function PATCH(
 // PUT - 更新送仓管理记录（兼容标准 REST API）
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   return updateDeliveryManagement(request, params)
 }

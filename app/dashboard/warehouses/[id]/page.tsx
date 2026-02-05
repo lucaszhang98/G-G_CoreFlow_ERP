@@ -9,7 +9,7 @@ import { EntityDetail } from "@/components/crud/entity-detail"
 import { warehouseConfig } from "@/lib/crud/configs/warehouses"
 
 interface WarehouseDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function WarehouseDetailPage({ params }: WarehouseDetailPageProps) {
@@ -19,7 +19,7 @@ export default async function WarehouseDetailPage({ params }: WarehouseDetailPag
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   return (
     <DashboardLayout user={session.user || {}}>

@@ -6,9 +6,9 @@ import { serializeBigInt } from '@/lib/api/helpers'
 // PUT - 更新预约明细
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
   let body: any = null
   
   try {
@@ -161,9 +161,9 @@ export async function PUT(
 // DELETE - 删除预约明细（删除后重算未约/剩余板数）
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
   
   try {
     const session = await auth()

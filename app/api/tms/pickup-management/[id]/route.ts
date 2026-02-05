@@ -6,13 +6,13 @@ import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 // GET - 获取单个提柜管理记录
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await checkAuth()
     if (authResult.error) return authResult.error
 
-    const resolvedParams = params instanceof Promise ? await params : params
+    const resolvedParams = await params
     const pickupId = resolvedParams.id
 
     const pickup = await prisma.pickup_management.findUnique({
@@ -141,13 +141,13 @@ export async function GET(
 // 更新提柜管理记录的共享逻辑
 async function updatePickupManagement(
   request: NextRequest,
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 ) {
   try {
     const authResult = await checkAuth()
     if (authResult.error) return authResult.error
 
-    const resolvedParams = params instanceof Promise ? await params : params
+    const resolvedParams = await params
     const pickupId = resolvedParams.id
     const body = await request.json()
 
@@ -414,7 +414,7 @@ async function updatePickupManagement(
 // PATCH - 更新提柜管理记录
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   return updatePickupManagement(request, params)
 }
@@ -422,7 +422,7 @@ export async function PATCH(
 // PUT - 更新提柜管理记录（兼容标准 REST API）
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   return updatePickupManagement(request, params)
 }

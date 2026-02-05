@@ -6,7 +6,7 @@ import { serializeBigInt } from '@/lib/api/helpers'
 // PUT - 更新仓点明细
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth()
@@ -14,7 +14,7 @@ export async function PUT(
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const resolvedParams = params instanceof Promise ? await params : params
+    const resolvedParams = await params
     const body = await request.json()
     const { quantity, volume, delivery_nature, delivery_location, fba, notes, po, window_period } = body
 
@@ -196,7 +196,7 @@ export async function PUT(
 // DELETE - 删除仓点明细（会级联删除关联的SKU明细）
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth()
@@ -204,7 +204,7 @@ export async function DELETE(
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const resolvedParams = params instanceof Promise ? await params : params
+    const resolvedParams = await params
 
     // 先删除关联的SKU明细
     await prisma.order_detail_item.deleteMany({

@@ -10,15 +10,15 @@ import prisma from '@/lib/prisma';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ service_level_id: string }> | { service_level_id: string } }
+  { params }: { params: Promise<{ service_level_id: string }> }
 ) {
   try {
-    const resolvedParams = await Promise.resolve(params);
+    const { service_level_id: serviceLevelIdStr } = await params;
     // 检查登录
     const authResult = await checkAuth();
     if (authResult.error) return authResult.error;
 
-    const serviceLevelId = BigInt(resolvedParams.service_level_id);
+    const serviceLevelId = BigInt(serviceLevelIdStr);
 
     // 查询服务级别是否存在
     const serviceLevel = await prisma.carrier_service_levels.findUnique({

@@ -9,7 +9,7 @@ import { EntityDetail } from "@/components/crud/entity-detail"
 import { locationConfig } from "@/lib/crud/configs/locations"
 
 interface LocationDetailPageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function LocationDetailPage({ params }: LocationDetailPageProps) {
@@ -19,7 +19,7 @@ export default async function LocationDetailPage({ params }: LocationDetailPageP
     redirect("/login")
   }
 
-  const resolvedParams = params instanceof Promise ? await params : params
+  const resolvedParams = await params
 
   return (
     <DashboardLayout user={session.user || {}}>
