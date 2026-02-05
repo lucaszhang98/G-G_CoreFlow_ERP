@@ -7,6 +7,7 @@ import React from 'react'
 import { Document, Page, Text, View, Font, Image } from '@react-pdf/renderer'
 import { OAKBOLData } from './types'
 import { PageSizes } from './print-templates'
+import { getLogoDataUrl } from './logo-resolver'
 import path from 'path'
 import fs from 'fs'
 
@@ -227,28 +228,7 @@ export function BOLDocument({ data }: { data: OAKBOLData }) {
     logoPath,
   } = data
 
-  let logoSrc: string | null = null
-  if (logoPath) {
-    const cwd = process.cwd()
-    const fullPath = path.isAbsolute(logoPath) ? logoPath : path.join(cwd, logoPath)
-    if (fs.existsSync(fullPath)) {
-      try {
-        logoSrc = 'file://' + fullPath
-      } catch (_) {}
-    }
-  }
-  const publicLogo = path.join(process.cwd(), 'public', 'loading-sheet', 'logo.png')
-  const docsLogo = path.join(process.cwd(), 'docs', 'logo.png')
-  if (!logoSrc && fs.existsSync(publicLogo)) {
-    try {
-      logoSrc = 'file://' + publicLogo
-    } catch (_) {}
-  }
-  if (!logoSrc && fs.existsSync(docsLogo)) {
-    try {
-      logoSrc = 'file://' + docsLogo
-    } catch (_) {}
-  }
+  const logoSrc = getLogoDataUrl(logoPath)
 
   return (
     <Document>
@@ -260,7 +240,7 @@ export function BOLDocument({ data }: { data: OAKBOLData }) {
             <Text style={styles.printTimeValue}>{printTime}</Text>
           </View>
           <View style={styles.logoBlock}>
-            {logoSrc && <Image src={logoSrc} style={styles.logo} />}
+            <Image src={logoSrc} style={styles.logo} />
             <Text style={styles.companyName}>G&G Transport Inc</Text>
           </View>
         </View>
