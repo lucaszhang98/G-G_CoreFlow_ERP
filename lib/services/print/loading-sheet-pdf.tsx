@@ -105,8 +105,8 @@ const styles = {
   logoCell: {
     ...cellBase,
     borderRightWidth: borderWidth,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
   logo: {
     width: 80,
@@ -125,8 +125,8 @@ const styles = {
   },
   checkboxCell: {
     ...cellCenter,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
 }
 

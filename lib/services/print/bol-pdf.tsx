@@ -63,8 +63,8 @@ const styles = {
   },
   headerRow: {
     flexDirection: 'row' as const,
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    justifyContent: 'space-between' as const,
+    alignItems: 'flex-start' as const,
     marginBottom: 6,
   },
   printTimeBlock: {
@@ -81,7 +81,7 @@ const styles = {
   },
   logoBlock: {
     flexDirection: 'row' as const,
-    alignItems: 'center',
+    alignItems: 'center' as const,
   },
   logo: {
     width: 64,
@@ -182,7 +182,7 @@ const styles = {
     borderBottomWidth: borderWidth,
     borderColor,
     paddingBottom: 2,
-    alignItems: 'flex-end',
+    alignItems: 'flex-end' as const,
   },
   signatureLabel: {
     fontSize: 9,
@@ -199,7 +199,7 @@ const styles = {
   },
   dateBlock: {
     flexDirection: 'row' as const,
-    alignItems: 'center',
+    alignItems: 'center' as const,
     width: 120,
   },
   dateLabel: {
