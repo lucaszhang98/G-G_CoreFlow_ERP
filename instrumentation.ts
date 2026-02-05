@@ -1,5 +1,5 @@
 /**
- * Next.js 启动时加载。仅吞掉 Z_DATA_ERROR，避免 zlib 冲突导致进程崩。
+ * Next.js 启动时加载。仅吞掉 Z_DATA_ERROR（Node zlib 解压异常），避免进程崩。
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {

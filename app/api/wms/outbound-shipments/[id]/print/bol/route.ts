@@ -8,6 +8,7 @@ import { checkAuth, checkPermission } from '@/lib/api/helpers'
 import { outboundShipmentConfig } from '@/lib/crud/configs/outbound-shipments'
 import { getOutboundShipmentDetail } from '@/lib/services/outbound-shipment-detail'
 import { generateBOLPDF } from '@/lib/services/print/bol.service'
+import { resolveLogoDataUrl } from '@/lib/services/print/resolve-logo'
 import type { OAKBOLData } from '@/lib/services/print/types'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
@@ -145,6 +146,7 @@ export async function GET(
         }
       })
 
+    const logoDataUrl = await resolveLogoDataUrl()
     const data: OAKBOLData = {
       printTime: formatPrintTime(new Date()),
       shipFrom,
@@ -154,7 +156,7 @@ export async function GET(
       seal: '',
       container: '',
       lines: bolLines,
-      logoPath: undefined,
+      logoDataUrl: logoDataUrl ?? undefined,
     }
 
     const pdfBuffer = await generateBOLPDF(data)

@@ -7,7 +7,6 @@ import React from 'react'
 import { Document, Page, Text, View, Font, Image } from '@react-pdf/renderer'
 import { OAKBOLData } from './types'
 import { PageSizes } from './print-templates'
-import { getPdfLogoUrl } from './logo-url'
 import path from 'path'
 import fs from 'fs'
 
@@ -225,10 +224,10 @@ export function BOLDocument({ data }: { data: OAKBOLData }) {
     seal,
     container,
     lines,
-    logoPath,
+    logoDataUrl,
   } = data
 
-  const logoSrc = getPdfLogoUrl(logoPath)
+  const logoSrc = logoDataUrl || null
 
   return (
     <Document>

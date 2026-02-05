@@ -8,6 +8,7 @@ import { checkAuth, checkPermission } from '@/lib/api/helpers'
 import { outboundShipmentConfig } from '@/lib/crud/configs/outbound-shipments'
 import { getOutboundShipmentDetail } from '@/lib/services/outbound-shipment-detail'
 import { generateLoadingSheetPDF } from '@/lib/services/print/loading-sheet.service'
+import { resolveLogoDataUrl } from '@/lib/services/print/resolve-logo'
 import type { OAKLoadSheetData } from '@/lib/services/print/types'
 import { formatDate } from '@/lib/services/print/print-templates'
 import prisma from '@/lib/prisma'
@@ -95,6 +96,7 @@ export async function GET(
       0
     )
 
+    const logoDataUrl = await resolveLogoDataUrl()
     const data: OAKLoadSheetData = {
       destinationLabel: '卸货仓',
       destinationCode,
@@ -105,9 +107,26 @@ export async function GET(
       lines: sheetLines,
       totalPlannedPallets,
       totalIsClearLabel: '', // 留空，手工填写
+      logoDataUrl: logoDataUrl ?? undefined,
     }
 
-    const pdfBuffer = await generateLoadingSheetPDF(data)
+    let pdfBuffer: Buffer
+    try {
+      pdfBuffer = await generateLoadingSheetPDF(data)
+    } catch (pdfErr: unknown) {
+      const e = pdfErr as { code?: string; errno?: number }
+      if (e?.code === 'Z_DATA_ERROR' || e?.errno === -3) {
+        throw new Error('生成 PDF 时发生压缩/解压异常，请稍后重试')
+      }
+      throw pdfErr
+    }
+
+    const PDF_HEADER = Buffer.from('%PDF-')
+    if (!Buffer.isBuffer(pdfBuffer) || pdfBuffer.length < 100 || !pdfBuffer.subarray(0, 5).equals(PDF_HEADER)) {
+      console.error('[Loading Sheet Print] 生成的 buffer 无效，长度:', pdfBuffer?.length)
+      return NextResponse.json({ error: '生成装车单失败：PDF 内容异常' }, { status: 500 })
+    }
+
     const filename = `装车单-${detail.reference_number || appointmentId}.pdf`
     return new NextResponse(pdfBuffer as any, {
       headers: {

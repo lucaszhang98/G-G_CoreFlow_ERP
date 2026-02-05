@@ -113,8 +113,8 @@ export interface OAKLoadSheetData {
   totalPlannedPallets: number
   /** 合计行「是否清空」显示，无则留空供手填 */
   totalIsClearLabel?: string
-  /** 可选：logo 图片路径（如 public/loading-sheet/logo.png）或 base64 */
-  logoPath?: string
+  /** 可选：由 API 解析好的 logo data URL，本地/正式环境通用 */
+  logoDataUrl?: string | null
 }
 
 /**
@@ -220,8 +220,8 @@ export interface OAKBOLData {
     storage: string
     po_id: string
   }>
-  /** 可选 logo 路径，默认使用 docs/logo.png */
-  logoPath?: string
+  /** 可选：由 API 解析好的 logo data URL */
+  logoDataUrl?: string | null
 }
 
 /**

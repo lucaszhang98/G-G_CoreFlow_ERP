@@ -14,7 +14,6 @@ import React from 'react'
 import { Document, Page, Text, View, Font, Image } from '@react-pdf/renderer'
 import { OAKLoadSheetData } from './types'
 import { PageSizes } from './print-templates'
-import { getPdfLogoUrl } from './logo-url'
 import path from 'path'
 import fs from 'fs'
 
@@ -141,10 +140,10 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
     lines,
     totalPlannedPallets,
     totalIsClearLabel,
-    logoPath,
+    logoDataUrl,
   } = data
 
-  const logoSrc = getPdfLogoUrl(logoPath)
+  const logoSrc = logoDataUrl || null
 
   const footerLabel = totalIsClearLabel !== undefined && totalIsClearLabel !== '' ? totalIsClearLabel : '地板'
 
