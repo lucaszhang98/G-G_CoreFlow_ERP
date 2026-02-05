@@ -7,7 +7,7 @@ import React from 'react'
 import { Document, Page, Text, View, Font, Image } from '@react-pdf/renderer'
 import { OAKBOLData } from './types'
 import { PageSizes } from './print-templates'
-import { getLogoDataUrl } from './logo-resolver'
+import { getPdfLogoUrl } from './logo-url'
 import path from 'path'
 import fs from 'fs'
 
@@ -228,7 +228,7 @@ export function BOLDocument({ data }: { data: OAKBOLData }) {
     logoPath,
   } = data
 
-  const logoSrc = getLogoDataUrl(logoPath)
+  const logoSrc = getPdfLogoUrl(logoPath)
 
   return (
     <Document>
@@ -240,7 +240,7 @@ export function BOLDocument({ data }: { data: OAKBOLData }) {
             <Text style={styles.printTimeValue}>{printTime}</Text>
           </View>
           <View style={styles.logoBlock}>
-            <Image src={logoSrc} style={styles.logo} />
+            {logoSrc && <Image src={logoSrc} style={styles.logo} />}
             <Text style={styles.companyName}>G&G Transport Inc</Text>
           </View>
         </View>

@@ -14,7 +14,7 @@ import React from 'react'
 import { Document, Page, Text, View, Font, Image } from '@react-pdf/renderer'
 import { OAKLoadSheetData } from './types'
 import { PageSizes } from './print-templates'
-import { getLogoDataUrl } from './logo-resolver'
+import { getPdfLogoUrl } from './logo-url'
 import path from 'path'
 import fs from 'fs'
 
@@ -144,7 +144,7 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
     logoPath,
   } = data
 
-  const logoSrc = getLogoDataUrl(logoPath)
+  const logoSrc = getPdfLogoUrl(logoPath)
 
   const footerLabel = totalIsClearLabel !== undefined && totalIsClearLabel !== '' ? totalIsClearLabel : '地板'
 
@@ -155,7 +155,7 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
           {/* 第 1 行：第 1、2 列合并 Logo；第 3 列「卸货仓」；第 4、5、6 列合并 目的地代码 */}
           <View style={styles.tableRow}>
             <View style={[styles.logoCell, { width: `${W1_2}%` }]}>
-              <Image src={logoSrc} style={styles.logo} />
+              {logoSrc ? <Image src={logoSrc} style={styles.logo} /> : <Text> </Text>}
             </View>
             <View style={[styles.headerCell, { width: `${W3}%` }]}>
               <Text>{destinationLabel}</Text>
