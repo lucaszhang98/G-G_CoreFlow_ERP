@@ -61,6 +61,8 @@ interface SearchModuleProps {
   
   // 字段模糊搜索加载函数（用于 relation 类型的 filter）
   fieldFuzzyLoadOptions?: Record<string, (search: string) => Promise<FuzzySearchOption[]>>
+  /** 在「快速筛选」标签旁渲染的额外内容（如快捷按钮） */
+  extraFilterContent?: React.ReactNode
 }
 
 export function SearchModule({
@@ -82,6 +84,7 @@ export function SearchModule({
   onAdvancedSearch,
   onResetAdvancedSearch,
   fieldFuzzyLoadOptions,
+  extraFilterContent,
 }: SearchModuleProps) {
   // 只在客户端挂载后渲染 Radix UI 组件，避免 hydration 错误
   const [mounted, setMounted] = React.useState(false)
@@ -346,7 +349,7 @@ export function SearchModule({
                   <Filter className="h-4 w-4" />
                   <span className="font-medium">快速筛选</span>
                 </div>
-                
+                {extraFilterContent}
                 {filterFields.map((filter) => {
                   // 如果是 location 类型的筛选字段（relation.model === 'locations'），使用 LocationSelect（分步选择）
                   if (filter.type === 'select' && filter.relation && filter.relation.model === 'locations') {

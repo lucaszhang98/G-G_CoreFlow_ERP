@@ -67,15 +67,16 @@ export const feeConfig: EntityConfig = {
         { label: '指定客户', value: 'customers' },
       ],
     },
+    container_type: {
+      key: 'container_type',
+      label: '柜型',
+      type: 'text',
+      placeholder: '如 20GP/40HQ，空表示不限',
+    },
     description: {
       key: 'description',
       label: '说明',
       type: 'textarea',
-    },
-    sort_order: {
-      key: 'sort_order',
-      label: '排序',
-      type: 'number',
     },
     is_active: {
       key: 'is_active',
@@ -101,7 +102,7 @@ export const feeConfig: EntityConfig = {
   list: {
     defaultSort: 'fee_code',
     defaultOrder: 'asc',
-    columns: ['fee_code', 'fee_name', 'unit', 'unit_price', 'currency', 'scope_type', 'is_active', 'description'],
+    columns: ['fee_code', 'fee_name', 'unit', 'unit_price', 'currency', 'scope_type', 'container_type', 'is_active', 'description'],
     searchFields: ['fee_code', 'fee_name'],
     pageSize: 10,
     batchOperations: {
@@ -112,7 +113,7 @@ export const feeConfig: EntityConfig = {
     inlineEdit: { enabled: true },
   },
 
-  formFields: ['fee_code', 'fee_name', 'unit', 'unit_price', 'currency', 'scope_type', 'description', 'sort_order', 'is_active'],
+  formFields: ['fee_code', 'fee_name', 'unit', 'unit_price', 'currency', 'scope_type', 'container_type', 'description', 'is_active'],
 
   permissions: {
     list: ['admin', 'oms_manager', 'employee', 'user'],

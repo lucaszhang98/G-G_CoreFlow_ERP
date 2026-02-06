@@ -147,6 +147,8 @@ interface EntityTableProps<T = any> {
   refreshKey?: number | string // 刷新触发器（变化时重新获取数据，但不卸载组件）
   /** 默认筛选条件：当 URL 中没有任何 filter_ 参数时应用（例如入库管理默认本周拆柜） */
   initialFilterValues?: Record<string, string>
+  /** 在快速筛选区域渲染的额外内容，传入 applyFilterValues 可一次性设置多个筛选并刷新 */
+  customFilterContent?: (applyFilterValues: (v: Record<string, any>) => void) => React.ReactNode
 }
 
 export function EntityTable<T = any>({ 
@@ -170,6 +172,7 @@ export function EntityTable<T = any>({
   onFilteredTotalChange,
   refreshKey,
   initialFilterValues,
+  customFilterContent,
 }: EntityTableProps<T>) {
   // 自动增强配置，生成 filterFields 和 advancedSearchFields（如果未配置）
   const enhancedConfig = React.useMemo(() => {
@@ -1277,6 +1280,12 @@ export function EntityTable<T = any>({
     setFilterValues({})
     setPage(1)
   }
+
+  // 一次性应用多个筛选值（用于快捷按钮，如「显示本周」「显示最近一月」）
+  const applyFilterValues = React.useCallback((v: Record<string, any>) => {
+    setFilterValues(v)
+    setPage(1)
+  }, [])
   
   // 处理高级搜索变化（仅更新状态）
   const handleAdvancedSearchChange = (field: string, value: any) => {
@@ -2376,6 +2385,7 @@ export function EntityTable<T = any>({
         onAdvancedSearch={handleAdvancedSearch}
         onResetAdvancedSearch={handleResetAdvancedSearch}
         fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}
+        extraFilterContent={customFilterContent?.(applyFilterValues)}
       />
       
       {/* 统计信息和批量操作工具栏 */}

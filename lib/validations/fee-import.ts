@@ -25,10 +25,18 @@ export const feeImportRowSchema = z.object({
     .nullable()
     .transform((val) => (val === null || val === undefined || val === '' ? undefined : val)),
 
-  unit_price: z.union([
-    z.number().min(0, '单价不能为负'),
-    z.string().transform((v) => (v === '' ? 0 : Number(v))).pipe(z.number().min(0, '单价不能为负')),
-  ]),
+  // Excel 常把数字读成字符串，且可能带空格、千分位逗号等，需统一转成数字并校验
+  unit_price: z
+    .unknown()
+    .transform((v) => {
+      if (typeof v === 'number' && !Number.isNaN(v)) return v
+      const s = String(v ?? '').trim().replace(/,/g, '')
+      if (s === '') throw new Error('单价不能为空')
+      const n = Number(s)
+      if (Number.isNaN(n)) throw new Error('单价必须是有效数字')
+      return n
+    })
+    .pipe(z.number().min(0, '单价不能为负')),
 
   currency: z
     .string()
@@ -41,29 +49,18 @@ export const feeImportRowSchema = z.object({
     message: '归属范围只能是：all（所有客户）或 customers（指定客户）',
   }),
 
+  container_type: z
+    .string()
+    .max(50, '柜型不能超过50个字符')
+    .optional()
+    .nullable()
+    .transform((val) => (val === null || val === undefined || val === '' ? null : val)),
+
   description: z
     .string()
     .optional()
     .nullable()
     .transform((val) => (val === null || val === undefined || val === '' ? null : val)),
-
-  sort_order: z
-    .union([
-      z.number().int().min(0),
-      z.string().transform((v) => (v === '' ? 0 : parseInt(v, 10))),
-    ])
-    .optional()
-    .default(0),
-
-  is_active: z
-    .union([
-      z.boolean(),
-      z.enum(['是', '否', 'Y', 'N', '1', '0', 'true', 'false']).transform((v) =>
-        ['是', 'Y', '1', 'true'].includes(String(v))
-      ),
-    ])
-    .optional()
-    .default(true),
 })
 
 export type FeeImportRow = z.infer<typeof feeImportRowSchema>

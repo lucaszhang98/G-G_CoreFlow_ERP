@@ -25,6 +25,14 @@ function getThisWeekDateRange(): { planned_unload_at_from: string; planned_unloa
   }
 }
 
+/** 获取「最近一月及未来」的拆柜日期筛选：仅设置起始日为 30 天前，不设结束日 */
+function getLastMonthAndFuture(): { planned_unload_at_from: string } {
+  const d = new Date()
+  d.setDate(d.getDate() - 30)
+  d.setHours(0, 0, 0, 0)
+  return { planned_unload_at_from: d.toISOString().slice(0, 10) }
+}
+
 export function InboundReceiptTable() {
   const router = useRouter()
   const [isSyncing, setIsSyncing] = React.useState(false)
@@ -314,8 +322,30 @@ export function InboundReceiptTable() {
     </div>
   ), [handleSyncMissingRecords, handleFixPlannedUnloadDates, isSyncing, isFixingDates])
 
-  // 默认筛选：本周拆柜（周一至周日），仅当 URL 无任何筛选时生效
-  const defaultWeekFilter = React.useMemo(() => getThisWeekDateRange(), [])
+  // 快速筛选区两个按钮：显示本周 / 显示最近一月
+  const customFilterContent = React.useCallback(
+    (applyFilterValues: (v: Record<string, any>) => void) => (
+      <>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 rounded-lg"
+          onClick={() => applyFilterValues(getThisWeekDateRange())}
+        >
+          显示本周数据
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 rounded-lg"
+          onClick={() => applyFilterValues(getLastMonthAndFuture())}
+        >
+          显示最近一月数据
+        </Button>
+      </>
+    ),
+    [],
+  )
 
   return (
     <EntityTable 
@@ -324,7 +354,7 @@ export function InboundReceiptTable() {
       customClickableColumns={customClickableColumns}
       fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}
       customToolbarButtons={customToolbarButtons}
-      initialFilterValues={defaultWeekFilter}
+      customFilterContent={customFilterContent}
     />
   )
 }

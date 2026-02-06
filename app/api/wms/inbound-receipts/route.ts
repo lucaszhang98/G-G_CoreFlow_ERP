@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       orders: {
         operation_mode: 'unload',
       },
-    };
+    }
 
     // 使用统一的筛选逻辑
     const filterConditions = buildFilterConditions(enhancedConfig, searchParams)
@@ -57,6 +57,21 @@ export async function GET(request: NextRequest) {
     // 合并主表筛选条件
     if (mainTableConditions.length > 0) {
       mergeFilterConditions(where, mainTableConditions)
+    }
+
+    // 「显示最近一月」：仅设置了拆柜日期起、未设止时，包含“未填拆柜日期”的记录
+    const plannedFrom = searchParams.get('filter_planned_unload_at_from')
+    const plannedTo = searchParams.get('filter_planned_unload_at_to')
+    if (plannedFrom && !plannedTo && where.planned_unload_at?.gte && where.planned_unload_at?.lte === undefined) {
+      const gte = where.planned_unload_at.gte
+      where.AND = where.AND || []
+      where.AND.push({
+        OR: [
+          { planned_unload_at: { gte } },
+          { planned_unload_at: null },
+        ],
+      })
+      delete where.planned_unload_at
     }
     
     // 合并 orders 表的筛选条件（需要与现有的 operation_mode 条件合并）

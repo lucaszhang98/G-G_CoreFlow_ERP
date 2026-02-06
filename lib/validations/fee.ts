@@ -7,8 +7,8 @@ export const feeCreateSchema = z.object({
   unit_price: z.number().min(0, '单价不能为负'),
   currency: z.string().max(10).optional().default('USD'),
   scope_type: z.enum(['all', 'customers']),
+  container_type: z.string().max(50).optional().nullable(),
   description: z.string().optional(),
-  sort_order: z.number().int().min(0).optional().default(0),
   is_active: z.boolean().optional().default(true),
 })
 

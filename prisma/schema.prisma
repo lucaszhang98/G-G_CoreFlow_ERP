@@ -344,6 +344,7 @@ model fee {
   unit_price                                    Decimal     @db.Decimal(12, 2)
   currency                                      String?     @default("USD") @db.VarChar(10)
   scope_type                                     String      @db.VarChar(20)   // 'all' 所有客户 | 'customers' 仅指定客户
+  container_type                                 String?     @db.VarChar(50)   // 柜型（如 20GP/40HQ，空表示不限）
   description                                    String?
   sort_order                                    Int?        @default(0)
   is_active                                     Boolean?    @default(true)

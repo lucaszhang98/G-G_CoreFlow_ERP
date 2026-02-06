@@ -18,9 +18,8 @@ export async function generateFeeImportTemplate(): Promise<ExcelJS.Workbook> {
     { key: 'unit_price', header: '单价', width: 12 },
     { key: 'currency', header: '币种', width: 10 },
     { key: 'scope_type', header: '归属范围', width: 14 },
+    { key: 'container_type', header: '柜型', width: 12 },
     { key: 'description', header: '说明', width: 28 },
-    { key: 'sort_order', header: '排序', width: 8 },
-    { key: 'is_active', header: '启用', width: 10 },
   ]
 
   dataSheet.columns = columns.map((col) => ({
@@ -51,13 +50,6 @@ export async function generateFeeImportTemplate(): Promise<ExcelJS.Workbook> {
       errorTitle: '无效输入',
       error: '请填写 all（所有客户）或 customers（指定客户）',
     }
-    dataSheet.getCell(`I${rowNum}`).dataValidation = {
-      type: 'list',
-      allowBlank: true,
-      formulae: ['"是,否"'],
-      showErrorMessage: true,
-      error: '请填写 是 或 否',
-    }
   }
 
   // 示例行
@@ -68,9 +60,8 @@ export async function generateFeeImportTemplate(): Promise<ExcelJS.Workbook> {
   exampleRow.getCell(4).value = 100
   exampleRow.getCell(5).value = 'USD'
   exampleRow.getCell(6).value = 'all'
-  exampleRow.getCell(7).value = '默认仓储费'
-  exampleRow.getCell(8).value = 0
-  exampleRow.getCell(9).value = '是'
+  exampleRow.getCell(7).value = '20GP'
+  exampleRow.getCell(8).value = '默认仓储费'
 
   // 字段说明
   const instructionSheet = workbook.addWorksheet('字段说明')
@@ -94,9 +85,8 @@ export async function generateFeeImportTemplate(): Promise<ExcelJS.Workbook> {
     ['单价', '是', '数字，不能为负', '100'],
     ['币种', '否', '默认 USD', 'USD'],
     ['归属范围', '是', 'all=所有客户，customers=指定客户', 'all 或 customers'],
+    ['柜型', '否', '选填，如 20GP/40HQ，空表示不限柜型', '20GP'],
     ['说明', '否', '选填', '默认仓储费'],
-    ['排序', '否', '数字，默认 0', '0'],
-    ['启用', '否', '是/否，默认 是', '是'],
   ]
   instructions.forEach((row, idx) => {
     const r = instructionSheet.getRow(idx + 2)
