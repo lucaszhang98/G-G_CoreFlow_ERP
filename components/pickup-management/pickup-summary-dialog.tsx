@@ -95,7 +95,7 @@ export function PickupSummaryDialog({
     }
     
     // 司机
-    const driver = record.driver?.driver_code || record.driver || ''
+    const driver = record.driver_name || ''
     if (driver) {
       lines.push(`司机：${driver}`)
     }

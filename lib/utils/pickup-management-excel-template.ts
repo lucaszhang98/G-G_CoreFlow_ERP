@@ -1,7 +1,7 @@
 /**
  * 提柜管理批量导入Excel模板生成器（双 Sheet）
- * Sheet1：柜号，MBL，码头/查验站，承运公司，ETA，LFD，提柜日期
- * Sheet2：柜号，提出，报空，还空，码头/查验站，码头位置，柜型，船司，提柜日期，LFD，MBL，司机，现在位置
+ * Sheet1：MBL，柜号，码头/查验站，承运公司，ETA，LFD，提柜日期
+ * Sheet2：提出，报空，还空，码头/查验站，码头位置，柜型，船司，柜号，提柜日期，LFD，MBL，司机，现在位置
  */
 
 import * as ExcelJS from 'exceljs'
@@ -60,10 +60,10 @@ export async function generatePickupManagementImportTemplate(
   workbook.creator = 'G&G CoreFlow ERP'
   workbook.created = new Date()
 
-  // ---------- Sheet 1：柜号，MBL，码头/查验站，承运公司，ETA，LFD，提柜日期 ----------
+  // ---------- Sheet 1：MBL，柜号，码头/查验站，承运公司，ETA，LFD，提柜日期 ----------
   const sheet1Cols: Array<{ key: string; header: string; width: number; required: boolean }> = [
-    { key: 'container_number', header: '柜号', width: 18, required: true },
     { key: 'mbl', header: 'MBL', width: 18, required: false },
+    { key: 'container_number', header: '柜号', width: 18, required: true },
     { key: 'port_location_code', header: '码头/查验站', width: 15, required: false },
     { key: 'carrier_name', header: '承运公司', width: 15, required: false },
     { key: 'eta_date', header: 'ETA', width: 12, required: false },
@@ -136,9 +136,8 @@ export async function generatePickupManagementImportTemplate(
     })
   }
 
-  // ---------- Sheet 2：柜号，提出，报空，还空，码头/查验站，码头位置，柜型，船司，提柜日期，LFD，MBL，司机，现在位置 ----------
+  // ---------- Sheet 2：提出，报空，还空，码头/查验站，码头位置，柜型，船司，柜号，提柜日期，LFD，MBL，司机，现在位置 ----------
   const sheet2Cols: Array<{ key: string; header: string; width: number; required: boolean }> = [
-    { key: 'container_number', header: '柜号', width: 18, required: true },
     { key: 'pickup_out', header: '提出', width: 8, required: false },
     { key: 'report_empty', header: '报空', width: 8, required: false },
     { key: 'return_empty', header: '还空', width: 8, required: false },
@@ -146,10 +145,11 @@ export async function generatePickupManagementImportTemplate(
     { key: 'port_text', header: '码头位置', width: 12, required: false },
     { key: 'container_type', header: '柜型', width: 10, required: false },
     { key: 'shipping_line', header: '船司', width: 12, required: false },
+    { key: 'container_number', header: '柜号', width: 18, required: true },
     { key: 'pickup_date', header: '提柜日期', width: 16, required: false },
     { key: 'lfd_date', header: 'LFD', width: 12, required: false },
     { key: 'mbl', header: 'MBL', width: 18, required: false },
-    { key: 'driver_code', header: '司机', width: 12, required: false },
+    { key: 'driver_name', header: '司机', width: 12, required: false },
     { key: 'current_location', header: '现在位置', width: 14, required: false },
   ]
 
@@ -209,16 +209,7 @@ export async function generatePickupManagementImportTemplate(
           error: `请从下拉列表中选择：${CONTAINER_TYPE_OPTIONS.join('、')}`,
         }
       }
-      if (col.key === 'driver_code' && driverCodes.length > 0) {
-        cell.dataValidation = {
-          type: 'list',
-          allowBlank: true,
-          formulae: [`司机参考!$A$2:$A$${Math.min(driverCodes.length + 1, 1000)}`],
-          showErrorMessage: true,
-          errorTitle: '无效的司机',
-          error: '请从下拉列表中选择有效的司机代码',
-        }
-      }
+      // 司机为文本框，不设下拉
       if (['pickup_date', 'lfd_date'].includes(col.key)) {
         cell.dataValidation = {
           type: 'date',
@@ -246,8 +237,8 @@ export async function generatePickupManagementImportTemplate(
   // ---------- 填写说明 ----------
   const noteSheet = workbook.addWorksheet('填写说明', { state: 'hidden' })
   noteSheet.getCell('A1').value = '提柜管理批量导入说明（两个 Sheet）'
-  noteSheet.getCell('A2').value = '1. 请在「提柜数据1」填写：柜号（必填）、MBL、码头/查验站、承运公司、ETA、LFD、提柜日期。'
-  noteSheet.getCell('A3').value = '2. 请在「提柜数据2」填写：柜号（必填）、提出、报空、还空、码头/查验站、码头位置、柜型、船司、提柜日期、LFD、MBL、司机、现在位置。提出/报空/还空请填「是」或「否」。'
+  noteSheet.getCell('A2').value = '1. 请在「提柜数据1」填写：MBL、柜号（必填）、码头/查验站、承运公司、ETA、LFD、提柜日期。'
+  noteSheet.getCell('A3').value = '2. 请在「提柜数据2」填写：提出、报空、还空、码头/查验站、码头位置、柜型、船司、柜号（必填）、提柜日期、LFD、MBL、司机、现在位置。提出/报空/还空请填「是」或「否」。'
   noteSheet.getCell('A4').value = '3. 柜号用于匹配系统中已有订单；找不到对应订单时该行会报错。两个 Sheet 按柜号合并后更新，同一柜号可分别在两个 Sheet 中出现。'
   noteSheet.getCell('A5').value = '4. 日期：ETA、LFD 为日期（YYYY-MM-DD）；提柜日期可为日期时间（YYYY-MM-DD HH:mm）。'
 

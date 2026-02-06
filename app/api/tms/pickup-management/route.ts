@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
         // 判断字段是否来自 orders 表
         // 主表字段：pickup_id, order_id, status, notes, earliest_appointment_time, current_location, port_text, shipping_line, driver_id
         // 其他字段都来自 orders 表
-        const mainTableFields = ['pickup_id', 'order_id', 'pickup_out', 'report_empty', 'return_empty', 'notes', 'earliest_appointment_time', 'current_location', 'port_text', 'shipping_line', 'driver_id']
+        const mainTableFields = ['pickup_id', 'order_id', 'pickup_out', 'report_empty', 'return_empty', 'notes', 'earliest_appointment_time', 'current_location', 'port_text', 'shipping_line', 'driver_id', 'driver_name']
         if (mainTableFields.includes(fieldName)) {
           mainTableConditions.push(condition)
         } else {
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
     let orderBy: any
     
     // 判断排序字段是来自主表还是 orders 表
-    const mainTableFields = ['pickup_id', 'pickup_out', 'report_empty', 'return_empty', 'notes', 'current_location', 'port_text', 'shipping_line', 'driver_id', 'created_at', 'updated_at']
+    const mainTableFields = ['pickup_id', 'pickup_out', 'report_empty', 'return_empty', 'notes', 'current_location', 'port_text', 'shipping_line', 'driver_id', 'driver_name', 'created_at', 'updated_at']
     
     // earliest_appointment_time 特殊处理：优先使用 orders.appointment_time 排序
     if (sort === 'earliest_appointment_time') {
@@ -227,8 +227,7 @@ export async function GET(request: NextRequest) {
         // ========== 提柜管理自有字段（TMS 独有）==========
         port_text: serialized.port_text || null, // 码头位置（文本字段，来自 pickup_management）
         shipping_line: serialized.shipping_line || null, // 船司（文本字段，来自 pickup_management）
-        driver: serialized.drivers || null, // 返回完整的 driver 对象，用于 relation 类型字段
-        driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
+        driver_name: serialized.driver_name ?? serialized.drivers?.driver_code ?? null, // 司机（文本框，优先 driver_name，兼容旧 driver_id）
         earliest_appointment_time: order?.appointment_time || serialized.earliest_appointment_time || null, // 优先使用 orders.appointment_time，否则使用 pickup_management.earliest_appointment_time
         current_location: serialized.current_location || null,
         pickup_out: serialized.pickup_out ?? false,

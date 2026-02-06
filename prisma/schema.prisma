@@ -243,6 +243,7 @@ model delivery_status_codes {
 
 model invoices {
   invoice_id                                    BigInt    @id @default(autoincrement())
+  invoice_type                                  String    @default("storage") @db.VarChar(30)   // 账单类型：direct_delivery 直送 / unload 拆柜 / penalty 罚款 / storage 仓储
   invoice_number                                String    @unique @db.VarChar(50)
   customer_id                                   BigInt
   order_id                                      BigInt?
@@ -262,6 +263,7 @@ model invoices {
   users_invoices_updated_byTousers              users?    @relation("invoices_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   receivables                                   receivables[]
 
+  @@index([invoice_type], map: "idx_invoices_type")
   @@index([customer_id], map: "idx_invoices_customer")
   @@index([order_id], map: "idx_invoices_order")
   @@index([invoice_date], map: "idx_invoices_date")
@@ -834,6 +836,7 @@ model pickup_management {
   port_text                                 String?   @db.VarChar(10)
   shipping_line                             String?   @db.VarChar(10)
   driver_id                                 BigInt?
+  driver_name                               String?   @db.VarChar(100)   // 司机（文本框，弃用 driver_id 选择）
   notes                                     String?
   created_at                                DateTime? @default(now()) @db.Timestamptz(6)
   updated_at                                DateTime? @default(now()) @db.Timestamptz(6)
@@ -858,6 +861,7 @@ model delivery_management {
   appointment_id                              BigInt                @unique
   container_number                            String?               @db.VarChar(100) // 柜号（可编辑，直送时自动填入）
   driver_id                                   BigInt?
+  driver_name                                 String?               @db.VarChar(100)   // 送仓司机（文本框，弃用 driver_id 选择）
   status                                      String?               @default("planned") @db.VarChar(50)
   notes                                       String?
   created_at                                  DateTime?             @default(now()) @db.Timestamptz(6)

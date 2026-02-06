@@ -86,7 +86,9 @@ export const orderImportRowSchema = z.object({
   order_number: z
     .string()
     .min(1, '订单号不能为空')
-    .regex(/^[A-Z]{4}\d{7}$/, '订单号格式错误，应为4位大写字母+7位数字，如ABCD1234567'),
+    .transform((s) => s.trim())
+    .refine((s) => !/\s/.test(s), '柜号不允许包含空格')
+    .refine((s) => /^[A-Z]{4}\d{7}$/.test(s), '订单号格式错误，应为4位大写字母+7位数字，如ABCD1234567'),
   
   customer_code: z
     .string()

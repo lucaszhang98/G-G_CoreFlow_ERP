@@ -159,8 +159,7 @@ export async function GET(
       delivery_method: appointment?.delivery_method || null,
       warehouse_account: order?.warehouse_account || null,
       appointment_time: deliveryDate,
-      driver_name: serialized.drivers?.contact_roles?.name || serialized.drivers?.driver_code || null,
-      driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
+      driver_name: serialized.driver_name ?? serialized.drivers?.contact_roles?.name ?? serialized.drivers?.driver_code ?? null,
       rejected: appointment?.rejected || false,
       status: serialized.status || null,
       notes: serialized.notes || null,
@@ -197,8 +196,8 @@ async function updateDeliveryManagement(
     // if (body.container_number !== undefined) {
     //   updateData.container_number = body.container_number || null
     // }
-    if (body.driver_id !== undefined) {
-      updateData.driver_id = body.driver_id ? BigInt(body.driver_id) : null
+    if (body.driver_name !== undefined) {
+      updateData.driver_name = body.driver_name || null
     }
     if (body.status !== undefined) {
       updateData.status = body.status
@@ -353,8 +352,7 @@ async function updateDeliveryManagement(
         delivery_method: appointment?.delivery_method || null,
         warehouse_account: order?.warehouse_account || null,
         appointment_time: deliveryDate,
-        driver_name: serialized.drivers?.contact_roles?.name || serialized.drivers?.driver_code || null,
-        driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
+        driver_name: serialized.driver_name ?? serialized.drivers?.contact_roles?.name ?? serialized.drivers?.driver_code ?? null,
         rejected: appointment?.rejected || false, // 确保返回更新后的 rejected 值
         status: serialized.status || null,
         notes: serialized.notes || null,

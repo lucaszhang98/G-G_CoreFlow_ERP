@@ -88,7 +88,7 @@ export function PickupManagementClient() {
         customer_name: row.customer?.name ?? null,
         container_type: row.container_type ?? null,
         carrier_name: row.carrier?.name ?? null,
-        driver_code: row.driver?.driver_code ?? null,
+        driver_code: row.driver_name ?? null,
         do_issued: row.do_issued ?? null,
         order_date: row.order_date ?? null,
         eta_date: row.eta_date ?? null,
@@ -361,36 +361,6 @@ export function PickupManagementClient() {
       }))
     } catch (error) {
       console.error('加载承运公司选项失败:', error)
-      return []
-    }
-  }, [])
-
-  // 加载司机选项（用于司机字段的模糊搜索）
-  const loadDriverOptions = React.useCallback(async (search: string = ''): Promise<FuzzySearchOption[]> => {
-    try {
-      const params = new URLSearchParams({
-        limit: '100',
-        sort: 'driver_code',
-        order: 'asc',
-      })
-      if (search && search.trim()) {
-        params.append('search', search.trim())
-        params.append('unlimited', 'true')
-      }
-      
-      const response = await fetch(`/api/drivers?${params.toString()}`)
-      if (!response.ok) {
-        throw new Error('获取司机列表失败')
-      }
-      const result = await response.json()
-      const drivers = result.data || []
-      
-      return drivers.map((driver: any) => ({
-        label: driver.driver_code || '',
-        value: String(driver.driver_id || ''),
-      }))
-    } catch (error) {
-      console.error('加载司机选项失败:', error)
       return []
     }
   }, [])
@@ -698,8 +668,6 @@ export function PickupManagementClient() {
           fieldFuzzyLoadOptions={{
             carrier: loadCarrierOptions,
             carrier_id: loadCarrierOptions, // 也支持 carrier_id 作为 key
-            driver: loadDriverOptions,
-            driver_id: loadDriverOptions, // 也支持 driver_id 作为 key
           }}
           customActions={{
             onView: null, // 禁用查看详情功能

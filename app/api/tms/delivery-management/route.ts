@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
         // 判断字段是否来自 delivery_appointments 表
         // 主表字段：delivery_id, appointment_id, driver_id, status, notes
         // 其他字段都来自 delivery_appointments 表
-        const mainTableFields = ['delivery_id', 'appointment_id', 'driver_id', 'status', 'notes']
+        const mainTableFields = ['delivery_id', 'appointment_id', 'driver_id', 'driver_name', 'status', 'notes']
         if (mainTableFields.includes(fieldName)) {
           mainTableConditions.push(condition)
         } else {
@@ -321,8 +321,7 @@ export async function GET(request: NextRequest) {
         delivery_method: appointment?.delivery_method || null, // 直送/卡派
         warehouse_account: order?.warehouse_account || null,
         appointment_time: deliveryDate,
-        driver_name: serialized.drivers?.contact_roles?.name || serialized.drivers?.driver_code || null,
-        driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
+        driver_name: serialized.driver_name ?? serialized.drivers?.contact_roles?.name ?? serialized.drivers?.driver_code ?? null,
         rejected: appointment?.rejected || false,
         // ========== 送仓管理自有字段 ==========
         status: serialized.status || null,

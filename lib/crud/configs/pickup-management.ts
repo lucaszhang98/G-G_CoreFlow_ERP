@@ -52,22 +52,11 @@ export const pickupManagementConfig: EntityConfig = {
       label: '船司',
       type: 'text',
     },
-    driver: {
-      key: 'driver',
+    driver_name: {
+      key: 'driver_name',
       label: '司机',
-      type: 'relation',
-      relation: {
-        model: 'drivers',
-        displayField: 'driver_code',
-        valueField: 'driver_id',
-      },
-      relationField: 'driver_id', // 指定数据库字段名
-    },
-    driver_id: {
-      key: 'driver_id',
-      label: '司机ID',
       type: 'text',
-      hidden: true,
+      placeholder: '直接填写司机',
     },
     port_location_id: {
       key: 'port_location_id',
@@ -231,7 +220,7 @@ export const pickupManagementConfig: EntityConfig = {
       'customer',
       'container_type',
       'carrier',
-      'driver',
+      'driver_name',
       'do_issued',
       'order_date',
       'eta_date',
@@ -254,13 +243,14 @@ export const pickupManagementConfig: EntityConfig = {
     inlineEdit: {
       enabled: true,
       fields: [
+        'container_number',
         'mbl',
         'port_location',
         'port_text',
         'shipping_line',
         'container_type',
         'carrier',
-        'driver',
+        'driver_name',
         'eta_date',
         'lfd_date',
         'pickup_date',
@@ -278,13 +268,14 @@ export const pickupManagementConfig: EntityConfig = {
       edit: {
         enabled: true,
         fields: [
+          'container_number',
           'mbl',
           'port_location',
           'port_text',
           'shipping_line',
           'container_type',
           'carrier',
-          'driver',
+          'driver_name',
           'eta_date',
           'lfd_date',
           'pickup_date',

@@ -51,7 +51,7 @@ export const pickupManagementSheet2RowSchema = z.object({
   pickup_date: optionalStr,
   lfd_date: optionalStr,
   mbl: optionalStr,
-  driver_code: optionalStr,
+  driver_name: optionalStr,
   current_location: optionalStr,
 })
 
@@ -73,6 +73,6 @@ export interface PickupManagementMergedRow {
   port_text?: string
   container_type?: string
   shipping_line?: string
-  driver_code?: string
+  driver_name?: string
   current_location?: string
 }

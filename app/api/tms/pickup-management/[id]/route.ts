@@ -115,8 +115,7 @@ export async function GET(
       // 提柜管理自有字段
       port_text: serialized.port_text || null,
       shipping_line: serialized.shipping_line || null,
-      driver: serialized.drivers || null, // 返回完整的 driver 对象
-      driver_id: serialized.driver_id ? String(serialized.driver_id) : null,
+      driver_name: serialized.driver_name ?? serialized.drivers?.driver_code ?? null, // 司机（文本框）
       earliest_appointment_time: serialized.earliest_appointment_time || null,
       current_location: serialized.current_location || null,
       pickup_out: serialized.pickup_out ?? false,
@@ -187,15 +186,17 @@ async function updatePickupManagement(
     if (body.shipping_line !== undefined) {
       pickupUpdateData.shipping_line = body.shipping_line || null
     }
-    if (body.driver_id !== undefined) {
-      // 不需要手动转换 BigInt，Prisma 会自动处理
-      pickupUpdateData.driver_id = body.driver_id || null
+    if (body.driver_name !== undefined) {
+      pickupUpdateData.driver_name = body.driver_name || null
     }
     if (body.notes !== undefined) {
       pickupUpdateData.notes = body.notes
     }
 
     // 订单字段（通过提柜管理修改）
+    if (body.container_number !== undefined) {
+      orderUpdateData.order_number = body.container_number || null
+    }
     if (body.mbl !== undefined) {
       orderUpdateData.mbl_number = body.mbl || null
     }

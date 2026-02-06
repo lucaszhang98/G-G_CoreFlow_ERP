@@ -6,7 +6,11 @@ import { z } from 'zod'
 
 // 创建订单 Schema（只包含订单主表字段）
 export const orderCreateSchema = z.object({
-  order_number: z.string().min(1, '订单号不能为空').max(50, '订单号不能超过50个字符'),
+  order_number: z
+    .string()
+    .min(1, '订单号不能为空')
+    .max(50, '订单号不能超过50个字符')
+    .refine((val) => !/\s/.test(val), '柜号不允许包含空格'),
   customer_id: z.number().optional().nullable(),
   user_id: z.number().optional().nullable(),
   order_date: z.string().or(z.date()),

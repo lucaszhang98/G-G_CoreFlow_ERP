@@ -53,15 +53,17 @@ export async function POST(request: NextRequest) {
     if (updates.shipping_line !== undefined) {
       pickupUpdateData.shipping_line = updates.shipping_line || null
     }
-    if (updates.driver_id !== undefined) {
-      // 不需要手动转换 BigInt，Prisma 会自动处理
-      pickupUpdateData.driver_id = updates.driver_id || null
+    if (updates.driver_name !== undefined) {
+      pickupUpdateData.driver_name = updates.driver_name || null
     }
     if (updates.notes !== undefined) {
       pickupUpdateData.notes = updates.notes
     }
 
     // 订单字段（通过提柜管理修改）
+    if (updates.container_number !== undefined) {
+      orderUpdateData.order_number = updates.container_number || null
+    }
     if (updates.mbl !== undefined) {
       orderUpdateData.mbl_number = updates.mbl || null
     }

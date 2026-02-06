@@ -22,6 +22,17 @@ export const invoiceConfig: EntityConfig = {
       type: 'text',
       hidden: true,
     },
+    invoice_type: {
+      key: 'invoice_type',
+      label: '账单类型',
+      type: 'badge',
+      options: [
+        { label: '直送', value: 'direct_delivery' },
+        { label: '拆柜', value: 'unload' },
+        { label: '罚款', value: 'penalty' },
+        { label: '仓储', value: 'storage' },
+      ],
+    },
     invoice_number: {
       key: 'invoice_number',
       label: '发票号',
@@ -108,9 +119,22 @@ export const invoiceConfig: EntityConfig = {
   list: {
     defaultSort: 'invoice_date',
     defaultOrder: 'desc',
-    columns: ['invoice_number', 'customer_id', 'order_id', 'invoice_date', 'status', 'total_amount', 'tax_amount', 'currency', 'notes'],
+    columns: ['invoice_number', 'invoice_type', 'customer_id', 'order_id', 'invoice_date', 'status', 'total_amount', 'tax_amount', 'currency', 'notes'],
     searchFields: ['invoice_number'],
     pageSize: 10,
+    filterFields: [
+      {
+        field: 'invoice_type',
+        label: '账单类型',
+        type: 'select',
+        options: [
+          { label: '直送', value: 'direct_delivery' },
+          { label: '拆柜', value: 'unload' },
+          { label: '罚款', value: 'penalty' },
+          { label: '仓储', value: 'storage' },
+        ],
+      },
+    ],
     batchOperations: {
       enabled: true,
       edit: { enabled: true },
@@ -119,7 +143,7 @@ export const invoiceConfig: EntityConfig = {
     inlineEdit: { enabled: true },
   },
 
-  formFields: ['invoice_number', 'customer_id', 'order_id', 'total_amount', 'tax_amount', 'currency', 'invoice_date', 'status', 'notes'],
+  formFields: ['invoice_number', 'invoice_type', 'customer_id', 'order_id', 'total_amount', 'tax_amount', 'currency', 'invoice_date', 'status', 'notes'],
 
   permissions: {
     list: ['admin', 'oms_manager', 'employee', 'user'],

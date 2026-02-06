@@ -1,7 +1,7 @@
 /**
  * 提柜管理批量导入 Service（双 Sheet）
- * Sheet1：柜号，MBL，码头/查验站，承运公司，ETA，LFD，提柜日期
- * Sheet2：柜号，提出，报空，还空，码头/查验站，码头位置，柜型，船司，提柜日期，LFD，MBL，司机，现在位置
+ * Sheet1：MBL，柜号，码头/查验站，承运公司，ETA，LFD，提柜日期
+ * Sheet2：提出，报空，还空，码头/查验站，码头位置，柜型，船司，柜号，提柜日期，LFD，MBL，司机，现在位置
  * 按柜号合并后更新订单与提柜管理，不新建数据。
  */
 
@@ -42,14 +42,13 @@ const SHEET2_HEADER_MAP: Record<string, string> = {
   '提柜日期': 'pickup_date',
   'LFD': 'lfd_date',
   'MBL': 'mbl',
-  '司机': 'driver_code',
+  '司机': 'driver_name',
   '现在位置': 'current_location',
 }
 
 interface PickupMasterData {
   orderByNumber: Map<string, { order_id: bigint }>
   carrierByName: Map<string, bigint>
-  driverByCode: Map<string, bigint>
   locationByCode: Map<string, bigint>
 }
 
@@ -254,7 +253,7 @@ function mergeByContainerNumber(
       pickup_date: r.pickup_date ?? existing.pickup_date,
       lfd_date: r.lfd_date ?? existing.lfd_date,
       mbl: r.mbl ?? existing.mbl,
-      driver_code: r.driver_code,
+      driver_name: r.driver_name,
       current_location: r.current_location,
     })
   }
@@ -269,10 +268,9 @@ export interface PickupImportResult {
 }
 
 async function loadMasterData(): Promise<PickupMasterData> {
-  const [orders, carriers, drivers, locations] = await Promise.all([
+  const [orders, carriers, locations] = await Promise.all([
     prisma.orders.findMany({ select: { order_id: true, order_number: true } }),
     prisma.carriers.findMany({ select: { carrier_id: true, name: true, carrier_code: true } }),
-    prisma.drivers.findMany({ select: { driver_id: true, driver_code: true } }),
     prisma.locations.findMany({
       where: { location_type: 'port' },
       select: { location_id: true, location_code: true, name: true },
@@ -284,11 +282,10 @@ async function loadMasterData(): Promise<PickupMasterData> {
     if (c.name) carrierByName.set(c.name.trim(), c.carrier_id)
     if (c.carrier_code) carrierByName.set(c.carrier_code.trim(), c.carrier_id)
   })
-  const driverByCode = new Map(drivers.map((d) => [d.driver_code?.trim() || '', d.driver_id]))
   const locationByCode = new Map(
     locations.map((l) => [l.location_code?.trim() || l.name?.trim() || '', l.location_id])
   )
-  return { orderByNumber, carrierByName, driverByCode, locationByCode }
+  return { orderByNumber, carrierByName, locationByCode }
 }
 
 function checkDuplicates(merged: PickupManagementMergedRow[], master: PickupMasterData): ImportError[] {
@@ -333,8 +330,8 @@ async function executeImport(
     const pickupUpdate: any = { updated_by: userId, updated_at: new Date() }
     if (row.port_text !== undefined) pickupUpdate.port_text = row.port_text || null
     if (row.shipping_line !== undefined) pickupUpdate.shipping_line = row.shipping_line || null
-    if (row.driver_code !== undefined) {
-      pickupUpdate.driver_id = masterData.driverByCode.get(row.driver_code) ?? null
+    if (row.driver_name !== undefined) {
+      pickupUpdate.driver_name = row.driver_name?.trim() || null
     }
     if (row.current_location !== undefined) pickupUpdate.current_location = row.current_location || null
     if (row.pickup_out !== undefined) pickupUpdate.pickup_out = row.pickup_out

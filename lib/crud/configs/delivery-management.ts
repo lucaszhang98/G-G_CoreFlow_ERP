@@ -81,20 +81,8 @@ export const deliveryManagementConfig: EntityConfig = {
     driver_name: {
       key: 'driver_name',
       label: '送仓司机',
-      type: 'relation',
-      relation: {
-        model: 'drivers',
-        displayField: 'driver_code',
-        valueField: 'driver_id',
-      },
-      relationField: 'driver_id', // 指定数据库字段名
-      // 关系字段不应该在 searchFields 中，应该通过筛选来搜索
-    },
-    driver_id: {
-      key: 'driver_id',
-      label: '送仓司机ID',
       type: 'text',
-      hidden: true,
+      placeholder: '直接填写司机',
     },
     rejected: {
       key: 'rejected',

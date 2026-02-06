@@ -116,12 +116,6 @@ const menuItems: MenuItem[] = [
           href: "/dashboard/settings/trailers",
           roles: ["admin", "tms_manager", "wms_manager"], // 排除 oms_manager
         },
-        {
-          title: "司机管理",
-          icon: UserCog,
-          href: "/dashboard/settings/drivers",
-          roles: ["admin", "tms_manager"], // 排除 oms_manager
-        },
       ],
     },
     {
@@ -191,9 +185,24 @@ const menuItems: MenuItem[] = [
     roles: ["admin", "oms_manager", "employee", "user"],
     children: [
       {
-        title: "发票管理",
+        title: "直送账单",
         icon: FileText,
-        href: "/dashboard/finance/invoices",
+        href: "/dashboard/finance/bills/direct-delivery",
+      },
+      {
+        title: "拆柜账单",
+        icon: FileText,
+        href: "/dashboard/finance/bills/unload",
+      },
+      {
+        title: "罚款账单",
+        icon: FileText,
+        href: "/dashboard/finance/bills/penalty",
+      },
+      {
+        title: "仓储账单",
+        icon: FileText,
+        href: "/dashboard/finance/bills/storage",
       },
       {
         title: "应收管理",

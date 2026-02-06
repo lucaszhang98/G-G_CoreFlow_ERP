@@ -115,6 +115,10 @@ export function CreateOrderDialog({
       toast.error('请输入柜号')
       return false
     }
+    if (/\s/.test(orderData.order_number)) {
+      toast.error('柜号不允许包含空格')
+      return false
+    }
     if (!orderData.order_date) {
       toast.error('请选择订单日期')
       return false

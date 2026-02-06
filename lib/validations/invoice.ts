@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export const invoiceCreateSchema = z.object({
+  invoice_type: z.enum(['direct_delivery', 'unload', 'penalty', 'storage'], { message: '请选择账单类型' }),
   invoice_number: z.string().min(1, '发票号不能为空').max(50),
   customer_id: z.number().int().positive('请选择客户'),
   order_id: z.number().int().positive().optional(),
