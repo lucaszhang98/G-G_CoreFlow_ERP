@@ -62,10 +62,16 @@ export async function POST(request: NextRequest) {
             order_number: true,
             mbl_number: true,
             eta_date: true,
+            operation_mode: true,
             delivery_location: true,
             locations_orders_delivery_location_idTolocations: {
-              select: {
-                location_code: true,
+              select: { location_code: true },
+            },
+            delivery_appointments: {
+              take: 1,
+              orderBy: { appointment_id: 'asc' },
+              include: {
+                locations: { select: { location_code: true, name: true } },
               },
             },
             carriers: {
@@ -104,7 +110,10 @@ export async function POST(request: NextRequest) {
       const containerMbl = order.mbl_number || ''
       const containerNumber = order.order_number || ''
       const etaDate = formatDate(order.eta_date)
-      const destination = order.locations_orders_delivery_location_idTolocations?.location_code || order.delivery_location || ''
+      const destination =
+        order.operation_mode === 'direct_delivery' && order.delivery_appointments?.[0]
+          ? (order.delivery_appointments[0].locations?.location_code ?? order.delivery_appointments[0].locations?.name ?? '')
+          : (order.locations_orders_delivery_location_idTolocations?.location_code || order.delivery_location || '')
       
       // 获取承运公司名称或代码（转换为大写以便匹配）
       const carrierName = (order.carriers?.name || '').toUpperCase().trim()

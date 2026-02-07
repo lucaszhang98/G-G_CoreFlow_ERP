@@ -163,6 +163,22 @@ export async function GET(request: NextRequest) {
                 location_type: true,
               },
             },
+            delivery_appointments: {
+              take: 1,
+              orderBy: { appointment_id: 'asc' },
+              include: {
+                locations: { select: { location_id: true, location_code: true, name: true } },
+              },
+            },
+            order_detail: {
+              take: 1,
+              orderBy: { id: 'asc' },
+              include: {
+                locations_order_detail_delivery_location_idTolocations: {
+                  select: { location_id: true, location_code: true, name: true },
+                },
+              },
+            },
             customers: {
               select: {
                 id: true,
@@ -212,8 +228,25 @@ export async function GET(request: NextRequest) {
         eta_date: order?.eta_date || null,
         operation_mode: order?.operation_mode || null,
         operation_mode_display: order?.operation_mode === 'unload' ? '拆柜' : order?.operation_mode === 'direct_delivery' ? '直送' : order?.operation_mode || null,
-        delivery_location: order?.locations_orders_delivery_location_idTolocations?.location_code || order?.delivery_location || null,
-        delivery_location_id: order?.delivery_location_id ? String(order.delivery_location_id) : null,
+        delivery_location: (() => {
+          const fromAppointment =
+            order?.operation_mode === 'direct_delivery' &&
+            order?.delivery_appointments?.[0]?.locations
+          if (fromAppointment)
+            return order.delivery_appointments[0].locations.location_code ?? order.delivery_appointments[0].locations.name ?? null
+          const fromOrder =
+            order?.locations_orders_delivery_location_idTolocations?.location_code || order?.delivery_location
+          if (fromOrder) return fromOrder
+          const fromDetail = order?.order_detail?.[0]?.locations_order_detail_delivery_location_idTolocations
+          return fromDetail?.location_code ?? fromDetail?.name ?? null
+        })(),
+        delivery_location_id: (() => {
+          if (order?.operation_mode === 'direct_delivery' && order?.delivery_appointments?.[0]?.location_id)
+            return String(order.delivery_appointments[0].location_id)
+          if (order?.delivery_location_id) return String(order.delivery_location_id)
+          const fromDetail = order?.order_detail?.[0]?.locations_order_detail_delivery_location_idTolocations?.location_id
+          return fromDetail ? String(fromDetail) : null
+        })(),
         lfd_date: order?.lfd_date || null,
         pickup_date: order?.pickup_date || null,
         ready_date: order?.ready_date || null,
