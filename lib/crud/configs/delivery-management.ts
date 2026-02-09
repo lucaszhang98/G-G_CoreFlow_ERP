@@ -66,6 +66,12 @@ export const deliveryManagementConfig: EntityConfig = {
       key: 'delivery_method',
       label: '派送方式',
       type: 'badge',
+      options: [
+        { label: '私仓', value: '私仓' },
+        { label: '自提', value: '自提' },
+        { label: '直送', value: '直送' },
+        { label: '卡派', value: '卡派' },
+      ],
     },
     warehouse_account: {
       key: 'warehouse_account',

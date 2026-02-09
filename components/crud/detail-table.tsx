@@ -191,6 +191,8 @@ export function DetailTable({
   const [editingData, setEditingData] = React.useState<Partial<DetailData> | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const [itemToDelete, setItemToDelete] = React.useState<string | number | null>(null)
+  const [selectedRows, setSelectedRows] = React.useState<Set<string | number>>(new Set()) // 选中的行ID集合
+  const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = React.useState(false) // 批量删除确认对话框
   const [addDetailDialogOpen, setAddDetailDialogOpen] = React.useState(false)
   const [editSkuDialogOpen, setEditSkuDialogOpen] = React.useState(false)
   const [editingSku, setEditingSku] = React.useState<any | null>(null)
@@ -571,6 +573,88 @@ export function DetailTable({
     }
   }
 
+  // 批量删除预约明细
+  const handleBatchDelete = async () => {
+    if (selectedRows.size === 0) {
+      toast.error('请至少选择一条记录')
+      return
+    }
+
+    if (!appointmentId) {
+      toast.error('批量删除仅支持预约明细')
+      return
+    }
+
+    const ids = Array.from(selectedRows)
+    let successCount = 0
+    let failCount = 0
+
+    try {
+      setIsLoading(true)
+      
+      // 循环删除每个选中的明细
+      for (const id of ids) {
+        try {
+          const response = await fetch(`/api/oms/appointment-detail-lines/${id}`, {
+            method: 'DELETE',
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            throw new Error(errorData.error || errorData.message || '删除失败')
+          }
+
+          successCount++
+        } catch (error: any) {
+          console.error(`删除明细 ${id} 失败:`, error)
+          failCount++
+          // 继续删除其他记录，不中断
+        }
+      }
+
+      // 清除选中状态
+      setSelectedRows(new Set())
+      setBatchDeleteDialogOpen(false)
+
+      // 显示结果
+      if (failCount === 0) {
+        toast.success(`成功删除 ${successCount} 条预约明细`)
+      } else {
+        toast.warning(`成功删除 ${successCount} 条，失败 ${failCount} 条`)
+      }
+
+      // 刷新数据
+      onRefresh()
+    } catch (error: any) {
+      console.error('批量删除失败:', error)
+      toast.error(error.message || '批量删除失败')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // 切换行选择状态
+  const toggleRowSelection = (detailId: string | number) => {
+    setSelectedRows(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(detailId)) {
+        newSet.delete(detailId)
+      } else {
+        newSet.add(detailId)
+      }
+      return newSet
+    })
+  }
+
+  // 全选/取消全选
+  const toggleSelectAll = () => {
+    if (selectedRows.size === orderDetails.length) {
+      setSelectedRows(new Set())
+    } else {
+      setSelectedRows(new Set(orderDetails.map(d => d.id)))
+    }
+  }
+
   const handleAddDetail = async (data: {
     quantity: number
     volume?: number | null
@@ -710,6 +794,8 @@ export function DetailTable({
   // 获取显示的列（按照指定顺序：送仓地点-性质-数量-体积-预计板数-分仓占比-FBA-备注）
   const getVisibleColumns = () => {
     const cols: string[] = []
+    // 预约明细时显示 checkbox 列用于批量删除
+    if (appointmentId) cols.push('checkbox')
     if (config.showExpandable) cols.push('expand')
     if (config.showColumns?.orderNumber) cols.push('orderNumber')
     if (config.showColumns?.location) cols.push('location')
@@ -778,6 +864,18 @@ export function DetailTable({
         </div>
         {/* 批量编辑按钮：固定在右侧，横向滚动时跟随屏幕 */}
         <div className="sticky right-0 z-50 flex-shrink-0 flex items-center gap-2 bg-muted/30 ml-auto pl-4 border-l border-border/60">
+          {/* 预约明细时显示批量删除按钮 */}
+          {appointmentId && selectedRows.size > 0 && !isBatchEditMode && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setBatchDeleteDialogOpen(true)}
+              className="h-8"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              批量删除 ({selectedRows.size})
+            </Button>
+          )}
           {isBatchEditMode ? (
             <>
               <Button
@@ -817,6 +915,17 @@ export function DetailTable({
             <tr className="bg-muted/50 border-b">
               {visibleColumns.map((col) => {
                 switch (col) {
+                  case 'checkbox':
+                    return (
+                      <th key={col} className="text-left p-2 font-semibold text-sm w-12">
+                        <input
+                          type="checkbox"
+                          checked={orderDetails.length > 0 && selectedRows.size === orderDetails.length}
+                          onChange={toggleSelectAll}
+                          className="cursor-pointer"
+                        />
+                      </th>
+                    )
                   case 'expand':
                     return <th key={col} className="text-left p-2 font-semibold text-sm w-12"></th>
                   case 'orderNumber':
@@ -901,6 +1010,17 @@ export function DetailTable({
                   <tr className="border-b last:border-b-0 hover:bg-muted/20">
                     {visibleColumns.map((col) => {
                       switch (col) {
+                        case 'checkbox':
+                          return (
+                            <td key={col} className="p-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={selectedRows.has(detailId)}
+                                onChange={() => toggleRowSelection(detailId)}
+                                className="cursor-pointer"
+                              />
+                            </td>
+                          )
                         case 'expand':
                           return config.showExpandable ? (
                             <td key={col} className="p-2 text-sm">
@@ -1518,6 +1638,26 @@ export function DetailTable({
               取消
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量删除确认对话框 */}
+      <Dialog open={batchDeleteDialogOpen} onOpenChange={setBatchDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认批量删除</DialogTitle>
+            <DialogDescription>
+              确定要删除选中的 {selectedRows.size} 条预约明细吗？此操作无法撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchDeleteDialogOpen(false)}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={handleBatchDelete}>
               删除
             </Button>
           </DialogFooter>

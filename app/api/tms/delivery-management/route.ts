@@ -319,7 +319,7 @@ export async function GET(request: NextRequest) {
         po: po,
         pallet_type: appointment?.appointment_type || null, // 地板/卡板
         delivery_method: appointment?.delivery_method || null, // 直送/卡派
-        warehouse_account: order?.warehouse_account || null,
+        warehouse_account: appointment?.appointment_account || null, // 约仓账号来自预约管理的预约账号
         appointment_time: deliveryDate,
         driver_name: serialized.driver_name ?? serialized.drivers?.contact_roles?.name ?? serialized.drivers?.driver_code ?? null,
         rejected: appointment?.rejected || false,

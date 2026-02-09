@@ -164,9 +164,13 @@ export async function GET(request: NextRequest) {
               },
             },
             delivery_appointments: {
-              take: 1,
-              orderBy: { appointment_id: 'asc' },
-              include: {
+              select: {
+                appointment_id: true,
+                confirmed_start: true,
+                requested_start: true,
+                appointment_account: true,
+                rejected: true,
+                reference_number: true,
                 locations: { select: { location_id: true, location_code: true, name: true } },
               },
             },
@@ -214,6 +218,21 @@ export async function GET(request: NextRequest) {
       const serialized = serializeBigInt(pickup)
       const order = serialized.orders
 
+      // 找到时间最早的预约（用于获取约仓账号）
+      // 使用 confirmed_start，如果没有则使用 requested_start
+      // 排除被拒绝的预约
+      const validAppointments = (order?.delivery_appointments || []).filter((apt: any) => !apt.rejected)
+      let earliestAppointment: any = null
+      if (validAppointments.length > 0) {
+        earliestAppointment = validAppointments.reduce((earliest: any, current: any) => {
+          const earliestTime = earliest.confirmed_start || earliest.requested_start
+          const currentTime = current.confirmed_start || current.requested_start
+          if (!earliestTime) return current
+          if (!currentTime) return earliest
+          return currentTime < earliestTime ? current : earliest
+        })
+      }
+
       return {
         pickup_id: String(serialized.pickup_id || ''),
         container_id: String(serialized.pickup_id || ''), // 兼容海柜管理的字段名
@@ -231,9 +250,9 @@ export async function GET(request: NextRequest) {
         delivery_location: (() => {
           const fromAppointment =
             order?.operation_mode === 'direct_delivery' &&
-            order?.delivery_appointments?.[0]?.locations
+            earliestAppointment?.locations
           if (fromAppointment)
-            return order.delivery_appointments[0].locations.location_code ?? order.delivery_appointments[0].locations.name ?? null
+            return earliestAppointment.locations.location_code ?? earliestAppointment.locations.name ?? null
           const fromOrder =
             order?.locations_orders_delivery_location_idTolocations?.location_code || order?.delivery_location
           if (fromOrder) return fromOrder
@@ -241,8 +260,8 @@ export async function GET(request: NextRequest) {
           return fromDetail?.location_code ?? fromDetail?.name ?? null
         })(),
         delivery_location_id: (() => {
-          if (order?.operation_mode === 'direct_delivery' && order?.delivery_appointments?.[0]?.location_id)
-            return String(order.delivery_appointments[0].location_id)
+          if (order?.operation_mode === 'direct_delivery' && earliestAppointment?.locations?.location_id)
+            return String(earliestAppointment.locations.location_id)
           if (order?.delivery_location_id) return String(order.delivery_location_id)
           const fromDetail = order?.order_detail?.[0]?.locations_order_detail_delivery_location_idTolocations?.location_id
           return fromDetail ? String(fromDetail) : null
@@ -251,8 +270,8 @@ export async function GET(request: NextRequest) {
         pickup_date: order?.pickup_date || null,
         ready_date: order?.ready_date || null,
         return_deadline: order?.return_deadline || null,
-        warehouse_account: order?.warehouse_account || null,
-        appointment_time: order?.appointment_time || null, // 从 orders 表读取预约时间
+        warehouse_account: earliestAppointment?.appointment_account || order?.warehouse_account || null, // 优先使用最早预约的预约账号
+        appointment_time: earliestAppointment?.confirmed_start || earliestAppointment?.requested_start || order?.appointment_time || null, // 优先使用最早预约的时间
         port_location: order?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）- 来自orders表关联
         port_location_id: order?.port_location_id ? String(order.port_location_id) : null,
         carrier: order?.carriers || null, // 返回完整的 carrier 对象，用于 relation 类型字段
@@ -261,7 +280,7 @@ export async function GET(request: NextRequest) {
         port_text: serialized.port_text || null, // 码头位置（文本字段，来自 pickup_management）
         shipping_line: serialized.shipping_line || null, // 船司（文本字段，来自 pickup_management）
         driver_name: serialized.driver_name ?? serialized.drivers?.driver_code ?? null, // 司机（文本框，优先 driver_name，兼容旧 driver_id）
-        earliest_appointment_time: order?.appointment_time || serialized.earliest_appointment_time || null, // 优先使用 orders.appointment_time，否则使用 pickup_management.earliest_appointment_time
+        earliest_appointment_time: earliestAppointment?.confirmed_start || earliestAppointment?.requested_start || order?.appointment_time || serialized.earliest_appointment_time || null, // 优先使用最早预约的时间
         current_location: serialized.current_location || null,
         pickup_out: serialized.pickup_out ?? false,
         report_empty: serialized.report_empty ?? false,
