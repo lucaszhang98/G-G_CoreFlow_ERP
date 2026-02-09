@@ -543,7 +543,36 @@ export function SearchModule({
                     )
                   }
                   
-                  // 普通 select 类型（静态选项或动态加载选项）
+                  // select 无 relation 但有 fieldFuzzyLoadOptions（如司机：选项从 API 去重加载）
+                  if (filter.type === 'select' && !filter.relation && fieldFuzzyLoadOptions?.[filter.field]) {
+                    const currentValue = filterValues[filter.field]
+                    const isActive = currentValue && currentValue !== '__all__' && currentValue !== null && currentValue !== ''
+                    const loadFuzzyOptions = fieldFuzzyLoadOptions[filter.field]
+                    if (!mounted) {
+                      return (
+                        <Button key={filter.field} variant="outline" className="h-9 px-4 rounded-lg text-sm font-medium" disabled>
+                          <span className="truncate">{filter.label}</span>
+                          <ChevronDown className="ml-2 h-3 w-3 opacity-70 shrink-0" />
+                        </Button>
+                      )
+                    }
+                    return (
+                      <div key={filter.field} className="relative">
+                        <FuzzySearchSelect
+                          value={currentValue || null}
+                          onChange={(value) => onFilterChange(filter.field, value || null)}
+                          placeholder={filter.label}
+                          loadOptions={loadFuzzyOptions}
+                          className={`h-9 px-4 rounded-lg text-sm font-medium ${isActive ? 'border-indigo-200 dark:border-indigo-600 bg-indigo-100 dark:bg-indigo-900/40' : 'border-gray-200 dark:border-gray-800'}`}
+                        />
+                        {isActive && (
+                          <Badge variant="secondary" className="absolute -top-2 -right-2 h-4 min-w-4 px-1 bg-indigo-500 text-white border-0 shrink-0 z-10">1</Badge>
+                        )}
+                      </div>
+                    )
+                  }
+                  
+                  // 普通 select 类型（静态选项或 loadOptions）
                   if (filter.type === 'select') {
                     return (
                       <SelectFilterField

@@ -70,8 +70,8 @@ export function buildFilterConditions(
             }
           }
         }
-        // 如果是 relation 类型或 location 类型，使用统一的 relation 筛选处理
-        else if (fieldConfig?.type === 'relation' || (fieldConfig?.type === 'location' && filterField.relation)) {
+        // 若有 filterField.relation（如承运公司 carrier_id）或字段为 relation/location，用 equals 等 relation 筛选，避免把 ID 当文本用 contains
+        else if (filterField.relation || fieldConfig?.type === 'relation' || (fieldConfig?.type === 'location' && filterField.relation)) {
           const condition = buildRelationFilterCondition(filterField, filterValue, config)
           if (condition) {
             filterConditions.push(condition)

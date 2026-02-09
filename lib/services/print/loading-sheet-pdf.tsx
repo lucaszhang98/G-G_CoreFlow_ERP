@@ -12,6 +12,8 @@
 
 import React from 'react'
 import { Document, Page, Text, View, Image } from '@react-pdf/renderer'
+import JsBarcode from 'jsbarcode'
+import { createCanvas } from 'canvas'
 import { OAKLoadSheetData } from './types'
 import { PageSizes } from './print-templates'
 import { pdfFontFamily } from './register-pdf-font'
@@ -108,6 +110,39 @@ const styles = {
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
   },
+  /** 第一行仓点单元格：仓点文字 + 下方条形码（预约号码） */
+  destinationCell: {
+    ...cellCenter,
+    flexDirection: 'column' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'flex-start' as const,
+  },
+  barcodeImage: {
+    width: 120,
+    height: 36,
+    marginTop: 4,
+    objectFit: 'contain' as const,
+  },
+}
+
+/**
+ * 生成条形码图片（Base64），内容为预约号码
+ */
+function generateBarcodeImage(barcodeText: string): string {
+  try {
+    const canvas = createCanvas(200, 60)
+    JsBarcode(canvas, barcodeText, {
+      format: 'CODE128',
+      width: 2,
+      height: 44,
+      displayValue: false,
+      margin: 4,
+    })
+    return canvas.toDataURL('image/png')
+  } catch (error) {
+    console.error('[loading-sheet] 生成条形码失败:', error)
+    return ''
+  }
 }
 
 /** 装车单 PDF 文档 */
@@ -124,6 +159,7 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
   } = data
 
   const logoSrc = logoDataUrl || null
+  const barcodeDataUrl = loadNumber ? generateBarcodeImage(loadNumber.replace(/\s+/g, '')) : null
 
   const footerLabel = totalIsClearLabel !== undefined && totalIsClearLabel !== '' ? totalIsClearLabel : '地板'
 
@@ -131,7 +167,7 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
     <Document>
       <Page size="A4" orientation="portrait" style={styles.page} wrap={false}>
         <View style={styles.tableWrap}>
-          {/* 第 1 行：第 1、2 列合并 Logo；第 3 列「卸货仓」；第 4、5、6 列合并 目的地代码 */}
+          {/* 第 1 行：第 1、2 列合并 Logo；第 3 列「卸货仓」；第 4、5、6 列合并 仓点 + 下方条形码（预约号码） */}
           <View style={styles.tableRow}>
             <View style={[styles.logoCell, { width: `${W1_2}%` }]}>
               {logoSrc ? <Image src={logoSrc} style={styles.logo} /> : <Text> </Text>}
@@ -139,8 +175,9 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
             <View style={[styles.headerCell, { width: `${W3}%` }]}>
               <Text>{destinationLabel}</Text>
             </View>
-            <View style={[styles.cell, { width: `${W4_5_6}%`, borderRightWidth: 0 }]}>
+            <View style={[styles.destinationCell, { width: `${W4_5_6}%`, borderRightWidth: 0 }]}>
               <Text>{destinationCode}</Text>
+              {barcodeDataUrl ? <Image src={barcodeDataUrl} style={styles.barcodeImage} /> : null}
             </View>
           </View>
 

@@ -335,6 +335,22 @@ export function PickupManagementClient() {
     }
   }, [])
 
+  // 加载司机选项（筛选：遍历司机字段去重，从 API 获取）
+  const loadDriverOptions = React.useCallback(async (search: string = ''): Promise<FuzzySearchOption[]> => {
+    try {
+      const res = await fetch('/api/tms/pickup-management/driver-options')
+      if (!res.ok) throw new Error('获取司机选项失败')
+      const json = await res.json()
+      const list: Array<{ value: string; label: string }> = json.data || []
+      return list
+        .filter((o) => !search || o.label?.toLowerCase().includes(search.toLowerCase()))
+        .map((o) => ({ value: o.value, label: o.label }))
+    } catch (error) {
+      console.error('加载司机选项失败:', error)
+      return []
+    }
+  }, [])
+
   // 加载承运公司选项（用于承运公司字段的模糊搜索）
   const loadCarrierOptions = React.useCallback(async (search: string = ''): Promise<FuzzySearchOption[]> => {
     try {
@@ -667,7 +683,8 @@ export function PickupManagementClient() {
           config={pickupManagementConfig}
           fieldFuzzyLoadOptions={{
             carrier: loadCarrierOptions,
-            carrier_id: loadCarrierOptions, // 也支持 carrier_id 作为 key
+            carrier_id: loadCarrierOptions,
+            driver_name: loadDriverOptions,
           }}
           customActions={{
             onView: null, // 禁用查看详情功能

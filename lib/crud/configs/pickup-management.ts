@@ -292,9 +292,26 @@ export const pickupManagementConfig: EntityConfig = {
         enabled: false, // 禁用批量删除
       },
     },
-    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
-    // filterFields 已由 search-config-generator 自动生成
-    // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
+    // 筛选配置：承运公司、司机（司机选项由 API /driver-options 去重后动态加载）
+    filterFields: [
+      {
+        field: 'carrier_id',
+        label: '承运公司',
+        type: 'select',
+        relation: {
+          model: 'carriers',
+          displayField: 'name',
+          valueField: 'carrier_id',
+        },
+      },
+      {
+        field: 'driver_name',
+        label: '司机',
+        type: 'select',
+        // 选项由前端 fieldFuzzyLoadOptions.driver_name 从 /api/tms/pickup-management/driver-options 加载
+      },
+    ],
+    // 高级搜索配置（多条件组合）- 已自动生成
     // advancedSearchFields 已由 search-config-generator 自动生成
   },
   
