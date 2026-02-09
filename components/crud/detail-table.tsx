@@ -3,7 +3,7 @@
 import React from 'react'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, ChevronDown, ChevronRight, Pencil, Trash2, Check, ChevronsUpDown, X, Search } from "lucide-react"
+import { Plus, ChevronDown, ChevronRight, Pencil, Trash2, Check, ChevronsUpDown, X, Search, ArrowRightLeft } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { LocationSelect } from "@/components/ui/location-select"
 import { FuzzySearchSelect } from "@/components/ui/fuzzy-search-select"
@@ -193,6 +193,9 @@ export function DetailTable({
   const [itemToDelete, setItemToDelete] = React.useState<string | number | null>(null)
   const [selectedRows, setSelectedRows] = React.useState<Set<string | number>>(new Set()) // 选中的行ID集合
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = React.useState(false) // 批量删除确认对话框
+  const [batchMoveDialogOpen, setBatchMoveDialogOpen] = React.useState(false) // 批量转到其他预约
+  const [targetReferenceNumber, setTargetReferenceNumber] = React.useState('')
+  const [isBatchMoving, setIsBatchMoving] = React.useState(false)
   const [addDetailDialogOpen, setAddDetailDialogOpen] = React.useState(false)
   const [editSkuDialogOpen, setEditSkuDialogOpen] = React.useState(false)
   const [editingSku, setEditingSku] = React.useState<any | null>(null)
@@ -633,6 +636,45 @@ export function DetailTable({
     }
   }
 
+  // 批量转到其他预约
+  const handleBatchMove = async () => {
+    const ref = targetReferenceNumber.trim()
+    if (!ref) {
+      toast.error('请输入目标预约号码')
+      return
+    }
+    if (selectedRows.size === 0) {
+      toast.error('请至少选择一条明细')
+      return
+    }
+    if (!appointmentId) return
+
+    setIsBatchMoving(true)
+    try {
+      const res = await fetch('/api/oms/appointment-detail-lines/batch-move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lineIds: Array.from(selectedRows),
+          targetReferenceNumber: ref,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || data.message || '转移失败')
+      }
+      toast.success(data.message || `已成功将 ${selectedRows.size} 条明细转到预约「${ref}」`)
+      setSelectedRows(new Set())
+      setBatchMoveDialogOpen(false)
+      setTargetReferenceNumber('')
+      onRefresh()
+    } catch (error: any) {
+      toast.error(error.message || '批量转到其他预约失败')
+    } finally {
+      setIsBatchMoving(false)
+    }
+  }
+
   // 切换行选择状态
   const toggleRowSelection = (detailId: string | number) => {
     setSelectedRows(prev => {
@@ -866,15 +908,26 @@ export function DetailTable({
         <div className="sticky right-0 z-50 flex-shrink-0 flex items-center gap-2 bg-muted/30 ml-auto pl-4 border-l border-border/60">
           {/* 预约明细时显示批量删除按钮 */}
           {appointmentId && selectedRows.size > 0 && !isBatchEditMode && (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => setBatchDeleteDialogOpen(true)}
-              className="h-8"
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              批量删除 ({selectedRows.size})
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setBatchMoveDialogOpen(true)}
+                className="h-8"
+              >
+                <ArrowRightLeft className="h-4 w-4 mr-1" />
+                批量转到其他预约 ({selectedRows.size})
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setBatchDeleteDialogOpen(true)}
+                className="h-8"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                批量删除 ({selectedRows.size})
+              </Button>
+            </>
           )}
           {isBatchEditMode ? (
             <>
@@ -1659,6 +1712,38 @@ export function DetailTable({
             </Button>
             <Button variant="destructive" onClick={handleBatchDelete}>
               删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量转到其他预约对话框 */}
+      <Dialog open={batchMoveDialogOpen} onOpenChange={(open) => { setBatchMoveDialogOpen(open); if (!open) setTargetReferenceNumber('') }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>批量转到其他预约</DialogTitle>
+            <DialogDescription>
+              将选中的 {selectedRows.size} 条明细转到目标预约。请输入目标预约的预约号码（粘贴或输入后即可转移）。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="target-ref">目标预约号码</Label>
+              <Input
+                id="target-ref"
+                placeholder="请输入或粘贴预约号码"
+                value={targetReferenceNumber}
+                onChange={(e) => setTargetReferenceNumber(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleBatchMove()}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBatchMoveDialogOpen(false); setTargetReferenceNumber('') }}>
+              取消
+            </Button>
+            <Button onClick={handleBatchMove} disabled={isBatchMoving || !targetReferenceNumber.trim()}>
+              {isBatchMoving ? '转移中…' : '确认转移'}
             </Button>
           </DialogFooter>
         </DialogContent>
