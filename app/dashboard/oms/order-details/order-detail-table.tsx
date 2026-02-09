@@ -174,10 +174,31 @@ export function OrderDetailTable() {
       })
   }, [selectedRows])
 
+  // 计算选中行的未约板数合计
+  const totalUnbookedPallets = React.useMemo(() => {
+    return selectedRows.reduce((sum, row) => {
+      const unbooked = row.unbooked_pallets
+      // 如果未约板数为 null 或 undefined，视为 0
+      const value = unbooked !== null && unbooked !== undefined ? Number(unbooked) : 0
+      return sum + (isNaN(value) ? 0 : value)
+    }, 0)
+  }, [selectedRows])
+
   // 自定义批量操作按钮
   const customBatchActions = React.useMemo(() => {
     return (
       <>
+        {/* 显示合计未约板数 */}
+        {selectedRows.length > 0 && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <span className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+              合计未约板数：
+            </span>
+            <span className="text-sm text-blue-900 dark:text-blue-100 font-bold">
+              {formatInteger(totalUnbookedPallets)}
+            </span>
+          </div>
+        )}
         {/* 复制柜号下拉菜单 */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -253,7 +274,7 @@ export function OrderDetailTable() {
         </DropdownMenu>
       </>
     )
-  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets])
+  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets, totalUnbookedPallets])
 
   return (
     <EntityTable

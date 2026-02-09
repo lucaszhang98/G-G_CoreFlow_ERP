@@ -135,8 +135,8 @@ export const orderDetailConfig: EntityConfig = {
   },
   
   list: {
-    defaultSort: 'created_at',
-    defaultOrder: 'desc',
+    defaultSort: 'planned_unload_at',
+    defaultOrder: 'asc',
     columns: [
       'container_number',
       'customer_name',
