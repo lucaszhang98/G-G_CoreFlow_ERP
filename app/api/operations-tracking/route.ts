@@ -93,7 +93,8 @@ export async function GET(request: NextRequest) {
     searchParams.forEach((value, key) => {
       if (key.startsWith('filter_')) {
         const field = key.replace('filter_', '')
-        
+        // 拆柜日期走 inbound_receipt.planned_unload_at，下面单独处理
+        if (field === 'unload_date_from' || field === 'unload_date_to') return
         // 日期范围字段（_from 或 _to 结尾）
         if (field.endsWith('_from') || field.endsWith('_to')) {
           const baseField = field.replace(/_from$|_to$/, '')
@@ -112,6 +113,26 @@ export async function GET(request: NextRequest) {
         }
       }
     })
+
+    // 拆柜日期筛选：来自 inbound_receipt.planned_unload_at。仅设起、未设止时（显示最近一月）包含未填拆柜日期的记录
+    const unloadDateFrom = searchParams.get('filter_unload_date_from')
+    const unloadDateTo = searchParams.get('filter_unload_date_to')
+    if (unloadDateFrom || unloadDateTo) {
+      if (unloadDateFrom && !unloadDateTo) {
+        where.AND = where.AND || []
+        where.AND.push({
+          OR: [
+            { inbound_receipt: { planned_unload_at: { gte: new Date(unloadDateFrom) } } },
+            { inbound_receipt: { planned_unload_at: null } },
+          ],
+        })
+      } else {
+        where.inbound_receipt = where.inbound_receipt || {}
+        where.inbound_receipt.planned_unload_at = where.inbound_receipt.planned_unload_at || {}
+        if (unloadDateFrom) where.inbound_receipt.planned_unload_at.gte = new Date(unloadDateFrom)
+        if (unloadDateTo) where.inbound_receipt.planned_unload_at.lte = new Date(unloadDateTo)
+      }
+    }
 
     // 高级搜索条件
     const advancedSearch: Record<string, any> = {}

@@ -74,17 +74,37 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
     operationMode === "unload" ? [{ id: "unload_date", desc: false }] : []
   )
 
+  // 拆柜模式下显示拆柜日期筛选与「显示最近一月」按钮
+  const showUnloadFields = operationMode === "unload"
+
+  /** 拆柜日期：最近一月及未来（仅设起、不设止，与入库管理一致） */
+  const getLastMonthAndFuture = React.useCallback(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    return d.toISOString().slice(0, 10)
+  }, [])
+
+  const handleShowLastMonth = React.useCallback(() => {
+    setFilterValues((prev) => ({
+      ...prev,
+      unload_date_from: getLastMonthAndFuture(),
+      unload_date_to: "",
+    }))
+    setPage(1)
+  }, [getLastMonthAndFuture])
+
   // 定义筛选字段配置
-  const filterFields: FilterFieldConfig[] = React.useMemo(() => [
-    {
-      field: 'carrier_id',
-      label: '承运公司',
-      type: 'select',
-      relation: {
-        model: 'carriers',
-        displayField: 'name',
-        valueField: 'carrier_id',
-      },
+  const filterFields: FilterFieldConfig[] = React.useMemo(() => {
+    const base: FilterFieldConfig[] = [
+      {
+        field: 'carrier_id',
+        label: '承运公司',
+        type: 'select',
+        relation: {
+          model: 'carriers',
+          displayField: 'name',
+          valueField: 'carrier_id',
+        },
     },
     {
       field: 'port_location_id',
@@ -108,7 +128,17 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
       type: 'dateRange',
       dateFields: ['pickup_date'],
     },
-  ], [])
+    ]
+    if (showUnloadFields) {
+      base.push({
+        field: 'unload_date',
+        label: '拆柜日期',
+        type: 'dateRange',
+        dateFields: ['unload_date'],
+      })
+    }
+    return base
+  }, [showUnloadFields])
 
   // 定义高级搜索字段配置
   const advancedSearchFields: AdvancedSearchFieldConfig[] = React.useMemo(() => [
@@ -390,8 +420,6 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
   }
 
   // 根据操作模式决定是否显示拆柜相关字段
-  const showUnloadFields = operationMode === 'unload'
-
   const columns: ColumnDef<OperationsTrackingItem>[] = [
     {
       accessorKey: "container_number",
@@ -577,6 +605,13 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
         onAdvancedSearch={handleAdvancedSearch}
         onResetAdvancedSearch={handleResetAdvancedSearch}
         fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}
+        extraFilterContent={
+          showUnloadFields ? (
+            <Button variant="outline" size="sm" className="h-9 rounded-lg" onClick={handleShowLastMonth}>
+              显示最近一月数据
+            </Button>
+          ) : null
+        }
       />
 
       <DataTable
