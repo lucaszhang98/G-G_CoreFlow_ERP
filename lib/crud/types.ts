@@ -42,6 +42,8 @@ export interface FilterFieldConfig {
   numberFields?: string[]
   // location 类型字段的特殊配置
   locationType?: string // 位置类型（如 'port', 'warehouse'），用于过滤位置选项
+  // select 类型：是否支持多选
+  multiple?: boolean // 如果为 true，则支持多选（使用逗号分隔的值）
 }
 
 /**

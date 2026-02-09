@@ -144,8 +144,21 @@ export const deliveryManagementConfig: EntityConfig = {
         'notes',
       ],
     },
-    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
-    // filterFields 已由 search-config-generator 自动生成
+    // 筛选配置（快速筛选）- 手动覆盖 delivery_method 为多选
+    filterFields: [
+      {
+        field: 'delivery_method',
+        label: '派送方式',
+        type: 'select',
+        options: [
+          { label: '私仓', value: '私仓' },
+          { label: '自提', value: '自提' },
+          { label: '直送', value: '直送' },
+          { label: '卡派', value: '卡派' },
+        ],
+        multiple: true, // 启用多选
+      },
+    ],
     // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
     // advancedSearchFields 已由 search-config-generator 自动生成
   },

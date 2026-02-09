@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { FilterFieldConfig, AdvancedSearchFieldConfig } from "@/lib/crud/types"
 import { AdvancedSearchDialog } from "./advanced-search-dialog"
 import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
@@ -780,6 +781,42 @@ export function SearchModule({
               const value = filterValues[filter.field]
               if (!value || value === '__all__') return null
               
+              // 处理多选值
+              if (filter.multiple && value.includes(',')) {
+                const values = value.split(',').map(v => v.trim()).filter(v => v)
+                const labels = values.map(v => {
+                  if (filter.relation) {
+                    return relationFilterLabelsMap[filter.field]?.[String(v)] || v
+                  } else {
+                    const option = filter.options?.find(opt => opt.value === v)
+                    return option?.label || filterOptionsMap[filter.field]?.[v] || v
+                  }
+                })
+                const displayLabel = labels.length > 2 
+                  ? `${labels.slice(0, 2).join('、')} 等${labels.length}项`
+                  : labels.join('、')
+                
+                return (
+                  <Badge
+                    key={filter.field}
+                    variant="secondary"
+                    className="px-3 py-1.5 text-sm font-medium bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded-lg shadow-sm"
+                  >
+                    <Filter className="h-3 w-3 mr-1.5" />
+                    {filter.label}: {displayLabel}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onFilterChange(filter.field, null)}
+                      className="h-4 w-4 ml-2 -mr-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-full"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )
+              }
+              
+              // 单选值（原有逻辑）
               // 如果是关系字段，优先从关系字段标签映射查找
               let label: string
               if (filter.relation) {
@@ -960,14 +997,53 @@ function SelectFilterField({
     }
   }, [filter.loadOptions, filter.options, filter.field, optionsLoaded, loadingOptions, setFilterOptionsMap])
   
+  // 处理多选值：将逗号分隔的字符串转换为数组
+  const selectedValues = React.useMemo(() => {
+    if (!currentValue || currentValue === '__all__') {
+      return []
+    }
+    if (filter.multiple) {
+      return currentValue.split(',').map(v => v.trim()).filter(v => v)
+    }
+    return [currentValue]
+  }, [currentValue, filter.multiple])
+
   // 使用 DropdownMenu，Button 显示标签，点击后直接显示选项列表
   const selectedLabel = React.useMemo(() => {
     if (!currentValue || currentValue === '__all__') {
       return null
     }
+    if (filter.multiple && selectedValues.length > 0) {
+      // 多选：显示选中的标签，如果有多个则显示数量
+      const labels = selectedValues.map(v => {
+        const option = filter.options?.find(opt => opt.value === v)
+        return option?.label || filterOptionsMap[filter.field]?.[v] || v
+      })
+      if (labels.length === 1) {
+        return labels[0]
+      }
+      return `${labels.length} 项已选`
+    }
     const option = filter.options?.find(opt => opt.value === currentValue)
     return option?.label || filterOptionsMap[filter.field]?.[currentValue] || currentValue
-  }, [currentValue, filter.options, filter.field, filterOptionsMap])
+  }, [currentValue, filter.options, filter.field, filterOptionsMap, filter.multiple, selectedValues])
+
+  // 多选切换处理
+  const handleMultiSelectChange = (optionValue: string, checked: boolean) => {
+    if (checked) {
+      // 添加选中项
+      const newValues = [...selectedValues, optionValue]
+      onFilterChange(filter.field, newValues.join(','))
+    } else {
+      // 移除选中项
+      const newValues = selectedValues.filter(v => v !== optionValue)
+      if (newValues.length === 0) {
+        onFilterChange(filter.field, null)
+      } else {
+        onFilterChange(filter.field, newValues.join(','))
+      }
+    }
+  }
   
   // 只在客户端挂载后渲染 DropdownMenu，避免 hydration 错误
   if (!mounted) {
@@ -1012,7 +1088,7 @@ function SelectFilterField({
               variant="secondary" 
               className="ml-2 h-4 min-w-4 px-1 bg-white/20 text-white border-0 shrink-0"
             >
-              1
+              {filter.multiple ? selectedValues.length : 1}
             </Badge>
           )}
         </Button>
@@ -1024,15 +1100,44 @@ function SelectFilterField({
         >
           全部
         </DropdownMenuItem>
-        {selectOptions.map((option) => (
-          <DropdownMenuItem
-            key={option.value}
-            onClick={() => onFilterChange(filter.field, option.value)}
-            className={currentValue === option.value ? "bg-accent" : ""}
-          >
-            {option.label}
-          </DropdownMenuItem>
-        ))}
+        {selectOptions.map((option) => {
+          const isSelected = selectedValues.includes(option.value)
+          if (filter.multiple) {
+            // 多选模式：使用 Checkbox
+            return (
+              <DropdownMenuItem
+                key={option.value}
+                onSelect={(e) => {
+                  e.preventDefault()
+                  handleMultiSelectChange(option.value, !isSelected)
+                }}
+                className="cursor-pointer"
+              >
+                <div className="flex items-center space-x-2 w-full">
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={(checked) => {
+                      handleMultiSelectChange(option.value, checked as boolean)
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <span>{option.label}</span>
+                </div>
+              </DropdownMenuItem>
+            )
+          } else {
+            // 单选模式：原有逻辑
+            return (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => onFilterChange(filter.field, option.value)}
+                className={currentValue === option.value ? "bg-accent" : ""}
+              >
+                {option.label}
+              </DropdownMenuItem>
+            )
+          }
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -123,16 +123,39 @@ export function buildFilterConditions(
           }
           // 普通 select 筛选
           else {
-            // 对于文本类型的字段（如 delivery_nature, delivery_location），使用 contains 进行模糊匹配
-            if (fieldConfig?.type === 'text' && !fieldConfig.options) {
-              filterConditions.push({ [dbFieldName]: { contains: filterValueToUse, mode: 'insensitive' } })
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`[buildFilterConditions] 添加文本 select 筛选: ${dbFieldName} contains ${filterValueToUse}`)
+            // 处理多选：如果 filterField.multiple 为 true，且 filterValue 包含逗号，则使用 OR 条件
+            if (filterField.multiple && filterValue.includes(',')) {
+              const values = filterValue.split(',').map(v => v.trim()).filter(v => v)
+              if (values.length > 0) {
+                // 对于文本类型的字段，使用 contains 进行模糊匹配
+                if (fieldConfig?.type === 'text' && !fieldConfig.options) {
+                  const orConditions = values.map(v => ({ [dbFieldName]: { contains: v, mode: 'insensitive' as const } }))
+                  filterConditions.push({ OR: orConditions })
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`[buildFilterConditions] 添加多选文本 select 筛选: ${dbFieldName} OR [${values.join(', ')}]`)
+                  }
+                } else {
+                  // 对于有选项的字段，使用精确匹配
+                  const orConditions = values.map(v => ({ [dbFieldName]: v }))
+                  filterConditions.push({ OR: orConditions })
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`[buildFilterConditions] 添加多选 select 筛选: ${dbFieldName} OR [${values.join(', ')}]`)
+                  }
+                }
               }
             } else {
-              filterConditions.push({ [dbFieldName]: filterValueToUse })
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`[buildFilterConditions] 添加 select 筛选: ${dbFieldName} = ${filterValueToUse} (类型: ${typeof filterValueToUse})`)
+              // 单选或单个值
+              // 对于文本类型的字段（如 delivery_nature, delivery_location），使用 contains 进行模糊匹配
+              if (fieldConfig?.type === 'text' && !fieldConfig.options) {
+                filterConditions.push({ [dbFieldName]: { contains: filterValueToUse, mode: 'insensitive' } })
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`[buildFilterConditions] 添加文本 select 筛选: ${dbFieldName} contains ${filterValueToUse}`)
+                }
+              } else {
+                filterConditions.push({ [dbFieldName]: filterValueToUse })
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`[buildFilterConditions] 添加 select 筛选: ${dbFieldName} = ${filterValueToUse} (类型: ${typeof filterValueToUse})`)
+                }
               }
             }
           }
