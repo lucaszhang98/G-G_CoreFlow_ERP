@@ -57,6 +57,8 @@ export async function GET(request: NextRequest) {
     const pageSize = parseInt(searchParams.get("pageSize") || "50")
     const operationMode = searchParams.get("operationMode") // 'unload' 或 'direct_delivery' 或 null（全部）
     const search = searchParams.get("search") || "" // 柜号模糊搜索
+    const sortBy = searchParams.get("sortBy") || "" // 排序字段，如 unload_date
+    const sortOrder = (searchParams.get("sortOrder") || "asc") as "asc" | "desc"
     const skip = (page - 1) * pageSize
 
     console.log("[Operations Tracking API] 开始查询数据，page:", page, "pageSize:", pageSize, "operationMode:", operationMode, "search:", search)
@@ -236,6 +238,7 @@ export async function GET(request: NextRequest) {
               inventory_lots: {
                 select: {
                   pallet_count: true,
+                  remaining_pallet_count: true,
                 },
               },
               appointment_detail_lines: {
@@ -251,9 +254,10 @@ export async function GET(request: NextRequest) {
             },
           },
         },
-        orderBy: {
-          order_id: 'desc',
-        },
+        orderBy:
+          operationMode === "unload" && sortBy === "unload_date"
+            ? { inbound_receipt: { planned_unload_at: sortOrder } }
+            : { order_id: "desc" },
       }),
       prisma.orders.count({ where }),
     ])
@@ -271,6 +275,24 @@ export async function GET(request: NextRequest) {
       const lfdDate = order.lfd_date
       const pickupDate = order.pickup_date
       const unloadDate = order.inbound_receipt?.planned_unload_at || null
+      // 送货进度：按明细 (实际板数-剩余板数)/实际板数 计算，剩余=0 为 100%，主行取各明细按板数加权平均
+      const allLots = (order.order_detail || []).flatMap((d: any) => d.inventory_lots || [])
+      let deliveryProgress: number | null = null
+      if (allLots.length > 0) {
+        let totalWeighted = 0
+        let totalPallets = 0
+        for (const lot of allLots) {
+          const p = lot.pallet_count != null ? Number(lot.pallet_count) : 0
+          const r = lot.remaining_pallet_count != null ? Number(lot.remaining_pallet_count) : 0
+          if (p <= 0) continue
+          const progress = r === 0 ? 100 : ((p - r) / p) * 100
+          totalWeighted += progress * p
+          totalPallets += p
+        }
+        if (totalPallets > 0) {
+          deliveryProgress = Math.round((totalWeighted / totalPallets) * 100) / 100
+        }
+      }
       const returnDeadline = order.return_deadline
 
       // 计算时效字段（直接使用数据库返回的 Date 对象，不做额外转换）
@@ -384,6 +406,7 @@ export async function GET(request: NextRequest) {
         lfd_date: lfdDate,
         pickup_date: pickupDate,
         unload_date: unloadDate,
+        delivery_progress: deliveryProgress,
         return_deadline: returnDeadline,
         pickup_lead_time: pickupLeadTime,
         unload_lead_time: unloadLeadTime,

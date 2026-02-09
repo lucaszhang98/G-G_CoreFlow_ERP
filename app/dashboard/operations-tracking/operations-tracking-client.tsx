@@ -3,6 +3,7 @@
 import * as React from "react"
 import { DataTable } from "@/components/data-table"
 import { ColumnDef, Row } from "@tanstack/react-table"
+import type { SortingState } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { toast } from "sonner"
@@ -27,6 +28,7 @@ interface OperationsTrackingItem {
   lfd_date: string | null
   pickup_date: string | null
   unload_date: string | null
+  delivery_progress: number | string | null
   return_deadline: string | null
   pickup_lead_time: number | null
   unload_lead_time: number | null
@@ -66,6 +68,11 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
   const [advancedSearchOpen, setAdvancedSearchOpen] = React.useState(false)
   const [advancedSearchValues, setAdvancedSearchValues] = React.useState<Record<string, any>>({})
   const [advancedSearchLogic, setAdvancedSearchLogic] = React.useState<'AND' | 'OR'>('AND')
+
+  // 排序状态（拆柜模式下支持按拆柜日期排序）
+  const [sorting, setSorting] = React.useState<SortingState>(() =>
+    operationMode === "unload" ? [{ id: "unload_date", desc: false }] : []
+  )
 
   // 定义筛选字段配置
   const filterFields: FilterFieldConfig[] = React.useMemo(() => [
@@ -228,6 +235,12 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
         params.append('advanced_logic', advancedSearchLogic)
       }
 
+      // 拆柜模式：按拆柜日期排序
+      if (operationMode === 'unload' && sorting.length > 0 && sorting[0].id === 'unload_date') {
+        params.append('sortBy', 'unload_date')
+        params.append('sortOrder', sorting[0].desc ? 'desc' : 'asc')
+      }
+
       const response = await fetch(`/api/operations-tracking?${params.toString()}`)
       if (!response.ok) {
         throw new Error(`获取${title}数据失败`)
@@ -242,7 +255,7 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, operationMode, search, filterValues, advancedSearchValues, advancedSearchLogic, title])
+  }, [page, pageSize, operationMode, search, filterValues, advancedSearchValues, advancedSearchLogic, sorting, title])
 
   // 筛选处理函数
   const handleFilterChange = React.useCallback((field: string, value: any) => {
@@ -410,11 +423,24 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
       header: "提柜日期",
       cell: ({ row }) => <div>{formatDateTime(row.original.pickup_date)}</div>,
     },
-    // 拆柜日期：只在拆柜模式下显示
+    // 拆柜日期：只在拆柜模式下显示，支持排序
     ...(showUnloadFields ? [{
       accessorKey: "unload_date",
       header: "拆柜日期",
+      enableSorting: true,
       cell: ({ row }: { row: Row<OperationsTrackingItem> }) => <div>{formatDate(row.original.unload_date)}</div>,
+    }] : []),
+    // 送货进度：只在拆柜模式下显示，取自入库管理主行
+    ...(showUnloadFields ? [{
+      accessorKey: "delivery_progress",
+      header: "送货进度",
+      cell: ({ row }: { row: Row<OperationsTrackingItem> }) => {
+        const v = row.original.delivery_progress
+        if (v === null || v === undefined) return <div>-</div>
+        const num = Number(v)
+        if (Number.isNaN(num)) return <div>-</div>
+        return <div>{num.toFixed(2)}%</div>
+      },
     }] : []),
     {
       accessorKey: "return_deadline",
@@ -563,6 +589,12 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
         serverSidePagination={true}
+        initialSorting={sorting}
+        onSortingChange={(newSorting) => {
+          setSorting(newSorting)
+          setPage(1)
+        }}
+        sortableColumns={showUnloadFields ? ["unload_date"] : []}
         expandableRows={{
           enabled: true,
           getExpandedContent,

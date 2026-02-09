@@ -142,45 +142,30 @@ export function InboundReceiptDetailsTable({
 
     // 合并多个库存批次的信息
     const totalPalletCount = lots.reduce((sum, lot) => sum + (lot.pallet_count || 0), 0)
-    
-    // 实时计算剩余板数（与订单明细管理保持一致）
-    // 获取该订单明细的预约信息
+    // 剩余板数：使用 DB 的 remaining_pallet_count 汇总，与主行送货进度算法一致
+    const totalRemainingPalletCount = lots.reduce((sum, lot) => sum + (lot.remaining_pallet_count ?? 0), 0)
+
+    // 实时计算未约板数（用于展示）：基于预约
     const detail = orderDetails.find(d => d.id === detailId)
     const appointments = detail?.appointments || []
-    
-    // 计算已过期预约的板数之和（用于计算剩余板数）
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
     const effectivePallets = (appt: DeliveryAppointment) => (appt.estimated_pallets ?? 0) - (appt.rejected_pallets ?? 0)
-    const expiredAppointments = appointments.filter((appt: DeliveryAppointment) => {
-      if (!appt.confirmed_start) return false
-      const confirmedDate = new Date(appt.confirmed_start)
-      confirmedDate.setHours(0, 0, 0, 0)
-      return confirmedDate < today
-    })
-    const totalExpiredAppointmentPallets = expiredAppointments.reduce((sum: number, appt: DeliveryAppointment) => {
-      return sum + effectivePallets(appt)
-    }, 0)
-    
-    // 实时计算剩余板数 = 实际板数 - 已过期预约有效板数之和（确保不为负数）
-    const totalRemainingPalletCount = Math.max(0, totalPalletCount - totalExpiredAppointmentPallets)
-    
-    // 计算所有预约的有效板数之和（用于计算未约板数）
     const totalAppointmentPallets = appointments.reduce((sum: number, appt: DeliveryAppointment) => {
       return sum + effectivePallets(appt)
     }, 0)
-    
-    // 实时计算未约板数 = 实际板数 - 所有预约板数之和
     const totalUnbookedPalletCount = totalPalletCount - totalAppointmentPallets
-    
-    // 计算送货进度（使用实时计算的剩余板数）
+
+    // 送货进度 = (实际板数 - 剩余板数) / 实际板数；剩余板数为 0 则为 100%
     let avgDeliveryProgress: number | null = null
     if (totalPalletCount > 0) {
-      const shipped = totalPalletCount - totalRemainingPalletCount
-      avgDeliveryProgress = Math.round((shipped / totalPalletCount) * 100 * 100) / 100 // 保留两位小数
-      avgDeliveryProgress = Math.max(0, Math.min(100, avgDeliveryProgress)) // 确保在 0-100 之间
-    } else if (totalPalletCount === 0) {
-      // 如果实际板数为0，视为已送完（100%）
+      if (totalRemainingPalletCount === 0) {
+        avgDeliveryProgress = 100
+      } else {
+        const shipped = totalPalletCount - totalRemainingPalletCount
+        avgDeliveryProgress = Math.round((shipped / totalPalletCount) * 100 * 100) / 100
+        avgDeliveryProgress = Math.max(0, Math.min(100, avgDeliveryProgress))
+      }
+    } else {
+      // 实际板数为 0 视为已送完（100%）
       avgDeliveryProgress = 100
     }
     

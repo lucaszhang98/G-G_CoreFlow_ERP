@@ -111,30 +111,22 @@ export async function GET(
       return sum + volume;
     }, 0) || 0;
 
-    // 计算送货进度：从关联的 inventory_lots 按板数加权平均
-    // 公式：delivery_progress = Σ(delivery_progress_i * pallet_count_i) / Σ(pallet_count_i)
+    // 计算送货进度：明细为 (实际板数-剩余板数)/实际板数，剩余=0 为 100%；主行 = 各明细按板数加权平均
     let calculatedDeliveryProgress = 0;
     const inventoryLots = serialized.inventory_lots || [];
     if (inventoryLots.length > 0) {
       let totalWeightedProgress = 0;
       let totalPallets = 0;
-      
       inventoryLots.forEach((lot: any) => {
-        const progress = lot.delivery_progress !== null && lot.delivery_progress !== undefined 
-          ? Number(lot.delivery_progress) 
-          : 0;
-        const pallets = lot.pallet_count !== null && lot.pallet_count !== undefined 
-          ? Number(lot.pallet_count) 
-          : 0;
-        
-        if (pallets > 0) {
-          totalWeightedProgress += progress * pallets;
-          totalPallets += pallets;
-        }
+        const pallets = lot.pallet_count !== null && lot.pallet_count !== undefined ? Number(lot.pallet_count) : 0;
+        const remaining = lot.remaining_pallet_count !== null && lot.remaining_pallet_count !== undefined ? Number(lot.remaining_pallet_count) : 0;
+        if (pallets <= 0) return;
+        const progress = remaining === 0 ? 100 : ((pallets - remaining) / pallets) * 100;
+        totalWeightedProgress += progress * pallets;
+        totalPallets += pallets;
       });
-      
       if (totalPallets > 0) {
-        calculatedDeliveryProgress = totalWeightedProgress / totalPallets;
+        calculatedDeliveryProgress = Math.round((totalWeightedProgress / totalPallets) * 100) / 100;
       }
     }
 
@@ -278,30 +270,22 @@ export async function PUT(
     const serialized = serializeBigInt(inboundReceipt);
     const orderData = serialized.orders;
 
-    // 计算送货进度：从关联的 inventory_lots 按板数加权平均
-    // 公式：delivery_progress = Σ(delivery_progress_i * pallet_count_i) / Σ(pallet_count_i)
+    // 计算送货进度：明细为 (实际板数-剩余板数)/实际板数，剩余=0 为 100%；主行 = 各明细按板数加权平均
     let calculatedDeliveryProgress = 0;
     const inventoryLots = serialized.inventory_lots || [];
     if (inventoryLots.length > 0) {
       let totalWeightedProgress = 0;
       let totalPallets = 0;
-      
       inventoryLots.forEach((lot: any) => {
-        const progress = lot.delivery_progress !== null && lot.delivery_progress !== undefined 
-          ? Number(lot.delivery_progress) 
-          : 0;
-        const pallets = lot.pallet_count !== null && lot.pallet_count !== undefined 
-          ? Number(lot.pallet_count) 
-          : 0;
-        
-        if (pallets > 0) {
-          totalWeightedProgress += progress * pallets;
-          totalPallets += pallets;
-        }
+        const pallets = lot.pallet_count !== null && lot.pallet_count !== undefined ? Number(lot.pallet_count) : 0;
+        const remaining = lot.remaining_pallet_count !== null && lot.remaining_pallet_count !== undefined ? Number(lot.remaining_pallet_count) : 0;
+        if (pallets <= 0) return;
+        const progress = remaining === 0 ? 100 : ((pallets - remaining) / pallets) * 100;
+        totalWeightedProgress += progress * pallets;
+        totalPallets += pallets;
       });
-      
       if (totalPallets > 0) {
-        calculatedDeliveryProgress = totalWeightedProgress / totalPallets;
+        calculatedDeliveryProgress = Math.round((totalWeightedProgress / totalPallets) * 100) / 100;
       }
     }
 

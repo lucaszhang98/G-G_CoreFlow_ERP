@@ -41,18 +41,56 @@ export async function GET(request: NextRequest) {
     const ordersConditions: any = {}
     
     filterConditions.forEach((condition) => {
+      // 整条 condition 若包含 delivery_progress（含 OR: [{ delivery_progress: ... }] 形式），不参与主表/orders 合并，由下面单独用 inventory_lots 处理
+      const hasDeliveryProgress = (obj: any): boolean => {
+        if (!obj || typeof obj !== 'object') return false
+        if ('delivery_progress' in obj) return true
+        return Object.values(obj).some((v) => hasDeliveryProgress(v))
+      }
+      if (hasDeliveryProgress(condition)) return
+
       Object.keys(condition).forEach((fieldName) => {
-        // 判断字段是否来自 orders 表
-        // 主表字段：inbound_receipt_id, order_id, status, planned_unload_at, unloaded_by, received_by, notes, delivery_progress
-        const mainTableFields = ['inbound_receipt_id', 'order_id', 'status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes', 'delivery_progress']
+        const mainTableFields = ['inbound_receipt_id', 'order_id', 'status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes']
         if (mainTableFields.includes(fieldName)) {
           mainTableConditions.push(condition)
         } else {
-          // 字段来自 orders 表
           Object.assign(ordersConditions, condition)
         }
       })
     })
+
+    // 送仓进度筛选：按「送货进度」字段是否 100% 区分。已完成=该字段为 100%，未完成=该字段不是 100%
+    // 100% 仅当：有明细且所有明细 remaining_pallet_count=0；非 100%=无明细 或 存在 remaining>0 或 null
+    const filterDeliveryProgress = searchParams.get('filter_delivery_progress')
+    if (filterDeliveryProgress === 'complete' || filterDeliveryProgress === 'incomplete') {
+      where.AND = where.AND || []
+      if (filterDeliveryProgress === 'complete') {
+        // 已完成：送货进度 100% = 有明细且所有明细剩余板数均为 0
+        where.AND.push({
+          AND: [
+            { inventory_lots: { some: {} } },
+            { inventory_lots: { every: { remaining_pallet_count: 0 } } },
+          ],
+        })
+      } else {
+        // 未完成：送货进度不是 100% = 无明细 或 至少有一条 remaining > 0 或 null
+        where.AND.push({
+          OR: [
+            { inventory_lots: { none: {} } },
+            {
+              inventory_lots: {
+                some: {
+                  OR: [
+                    { remaining_pallet_count: { gt: 0 } },
+                    { remaining_pallet_count: null },
+                  ],
+                },
+              },
+            },
+          ],
+        })
+      }
+    }
     
     // 合并主表筛选条件
     if (mainTableConditions.length > 0) {
@@ -136,6 +174,9 @@ export async function GET(request: NextRequest) {
     } else if (sort === 'carrier') {
       // 承运公司排序
       orderBy = { orders: { carriers: { name: order } } };
+    } else if (sort === 'delivery_progress') {
+      // 送仓进度为计算字段，先按主键查回再在内存中按计算值排序
+      orderBy = { inbound_receipt_id: 'desc' };
     } else if (mainTableFields.includes(sort)) {
       // 主表字段直接排序
       orderBy = { [sort]: order };
@@ -147,6 +188,11 @@ export async function GET(request: NextRequest) {
         }
       };
     }
+
+    // 按送仓进度排序时需先拉取较多数据，在内存中计算并排序后再分页
+    const sortByDeliveryProgress = sort === 'delivery_progress';
+    const skip = sortByDeliveryProgress ? 0 : (page - 1) * limit;
+    const take = sortByDeliveryProgress ? 50000 : limit;
 
     // 查询数据
     // 注意：inbound_receipt 在 wms schema 中，Prisma 客户端应该能直接访问
@@ -199,8 +245,8 @@ export async function GET(request: NextRequest) {
         },
         inventory_lots: {
           select: {
-            delivery_progress: true,
             pallet_count: true,
+            remaining_pallet_count: true,
           },
         },
       };
@@ -236,8 +282,8 @@ export async function GET(request: NextRequest) {
       const queryOptions: any = {
         where,
         orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
+        skip,
+        take,
       };
 
       // 添加 include，如果包含用户关联字段失败，使用简化版本
@@ -296,8 +342,8 @@ export async function GET(request: NextRequest) {
             },
             inventory_lots: {
               select: {
-                delivery_progress: true,
                 pallet_count: true,
+                remaining_pallet_count: true,
               },
             },
           };
@@ -334,30 +380,22 @@ export async function GET(request: NextRequest) {
         // 柜号使用订单号（order_number），与海柜管理保持一致
         const containerNumber = order?.order_number || null;
         
-        // 计算送货进度：从关联的 inventory_lots 按板数加权平均
-        // 公式：delivery_progress = Σ(delivery_progress_i * pallet_count_i) / Σ(pallet_count_i)
+        // 计算送货进度：明细为 (实际板数-剩余板数)/实际板数，剩余=0 为 100%；主行 = 各明细按板数加权平均
         let calculatedDeliveryProgress = 0;
         const inventoryLots = serialized.inventory_lots || [];
         if (inventoryLots.length > 0) {
           let totalWeightedProgress = 0;
           let totalPallets = 0;
-          
           inventoryLots.forEach((lot: any) => {
-            const progress = lot.delivery_progress !== null && lot.delivery_progress !== undefined 
-              ? Number(lot.delivery_progress) 
-              : 0;
-            const pallets = lot.pallet_count !== null && lot.pallet_count !== undefined 
-              ? Number(lot.pallet_count) 
-              : 0;
-            
-            if (pallets > 0) {
-              totalWeightedProgress += progress * pallets;
-              totalPallets += pallets;
-            }
+            const pallets = lot.pallet_count !== null && lot.pallet_count !== undefined ? Number(lot.pallet_count) : 0;
+            const remaining = lot.remaining_pallet_count !== null && lot.remaining_pallet_count !== undefined ? Number(lot.remaining_pallet_count) : 0;
+            if (pallets <= 0) return;
+            const progress = remaining === 0 ? 100 : ((pallets - remaining) / pallets) * 100;
+            totalWeightedProgress += progress * pallets;
+            totalPallets += pallets;
           });
-          
           if (totalPallets > 0) {
-            calculatedDeliveryProgress = totalWeightedProgress / totalPallets;
+            calculatedDeliveryProgress = Math.round((totalWeightedProgress / totalPallets) * 100) / 100;
           }
         }
         
@@ -404,18 +442,30 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // 按送仓进度排序时在内存中按计算后的 delivery_progress 排序再分页
+    let resultItems = serializedItems;
+    if (sortByDeliveryProgress && resultItems.length > 0) {
+      const dir = order === 'asc' ? 1 : -1;
+      resultItems = [...resultItems].sort((a: any, b: any) => {
+        const va = a.delivery_progress != null ? Number(a.delivery_progress) : 0;
+        const vb = b.delivery_progress != null ? Number(b.delivery_progress) : 0;
+        return (va - vb) * dir;
+      });
+      resultItems = resultItems.slice((page - 1) * limit, page * limit);
+    }
+
     // 调试：检查第一条数据的 container_number
-    if (serializedItems.length > 0 && process.env.NODE_ENV === 'development') {
+    if (resultItems.length > 0 && process.env.NODE_ENV === 'development') {
       console.log('第一条拆柜规划数据:', {
-        inbound_receipt_id: serializedItems[0].inbound_receipt_id,
-        container_number: serializedItems[0].container_number,
-        order_id: serializedItems[0].order_id,
-        order: serializedItems[0].orders,
+        inbound_receipt_id: resultItems[0].inbound_receipt_id,
+        container_number: resultItems[0].container_number,
+        order_id: resultItems[0].order_id,
+        order: resultItems[0].orders,
       });
     }
 
     return NextResponse.json({
-      data: serializedItems,
+      data: resultItems,
       pagination: {
         page,
         limit,
