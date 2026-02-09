@@ -1003,7 +1003,7 @@ function SelectFilterField({
       return []
     }
     if (filter.multiple) {
-      return currentValue.split(',').map(v => v.trim()).filter(v => v)
+      return currentValue.split(',').map((v: string) => v.trim()).filter((v: string) => v)
     }
     return [currentValue]
   }, [currentValue, filter.multiple])
@@ -1015,7 +1015,7 @@ function SelectFilterField({
     }
     if (filter.multiple && selectedValues.length > 0) {
       // 多选：显示选中的标签，如果有多个则显示数量
-      const labels = selectedValues.map(v => {
+      const labels = selectedValues.map((v: string) => {
         const option = filter.options?.find(opt => opt.value === v)
         return option?.label || filterOptionsMap[filter.field]?.[v] || v
       })
@@ -1036,7 +1036,7 @@ function SelectFilterField({
       onFilterChange(filter.field, newValues.join(','))
     } else {
       // 移除选中项
-      const newValues = selectedValues.filter(v => v !== optionValue)
+      const newValues = selectedValues.filter((v: string) => v !== optionValue)
       if (newValues.length === 0) {
         onFilterChange(filter.field, null)
       } else {
