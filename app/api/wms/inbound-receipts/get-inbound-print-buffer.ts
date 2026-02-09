@@ -38,11 +38,11 @@ export async function getLabelsPdfBuffer(
   const { containerNumber, customerCode, plannedUnloadDate, orderDetails } = loaded
   const labels: LabelData[] = []
   for (const detail of orderDetails) {
-    const deliveryLocation = detail.delivery_location || detail.deliveryLocation || ''
+    const deliveryLocation = detail.delivery_location || ''
     const deliveryLocationCode = deliveryLocation
     const estimatedPallets = detail.estimated_pallets ?? 1
-    const deliveryNature = detail.delivery_nature || detail.deliveryNature || undefined
-    const notes = detail.notes || ''
+    const deliveryNature = detail.delivery_nature ?? undefined
+    const notes = detail.notes ?? ''
     if (!deliveryLocationCode) continue
     let row2Content = ''
     if (deliveryNature === '私仓' || deliveryNature === '转仓') {

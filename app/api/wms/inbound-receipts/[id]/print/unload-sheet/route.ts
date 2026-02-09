@@ -19,8 +19,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   let resolvedParams: { id: string } | null = null
-  let containerNumber: string
-  let orderDetails: any[]
+  let containerNumber: string = ''
+  let orderDetails: any[] = []
   let customerCode: string | undefined
   let unloadedBy: string | undefined
   let receivedBy: string | undefined
@@ -106,9 +106,9 @@ export async function GET(
     
     console.error('[Unload Sheet Print] 生成失败:', {
       error: errorDetails,
-      inboundReceiptId: resolvedParams?.id || 'unknown',
+      inboundReceiptId: resolvedParams?.id ?? 'unknown',
       containerNumber: containerNumber || 'unknown',
-      orderDetailsCount: orderDetails?.length || 0,
+      orderDetailsCount: orderDetails.length,
       hasUnloadedBy: !!unloadedBy,
       hasReceivedBy: !!receivedBy,
       hasUnloadDate: !!unloadDate,

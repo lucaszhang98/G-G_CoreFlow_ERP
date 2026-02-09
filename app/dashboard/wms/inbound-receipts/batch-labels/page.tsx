@@ -1,13 +1,10 @@
 'use client'
 
-import React from 'react'
+import React, { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { FileText } from 'lucide-react'
 
-/**
- * 批量 Label：一个标签页内用多个 iframe 分别加载每条 PDF，选多少条就显示多少块，无需多步、不被拦截。
- */
-export default function BatchLabelsPage() {
+function BatchLabelsContent() {
   const searchParams = useSearchParams()
   const idsParam = searchParams.get('ids') ?? ''
   const ids = idsParam.split(',').map((s) => s.trim()).filter(Boolean)
@@ -43,5 +40,16 @@ export default function BatchLabelsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * 批量 Label：一个标签页内用多个 iframe 分别加载每条 PDF，选多少条就显示多少块，无需多步、不被拦截。
+ */
+export default function BatchLabelsPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[200px] items-center justify-center p-6 text-muted-foreground">加载中...</div>}>
+      <BatchLabelsContent />
+    </Suspense>
   )
 }
