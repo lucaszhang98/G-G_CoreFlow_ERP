@@ -783,8 +783,8 @@ export function SearchModule({
               
               // 处理多选值
               if (filter.multiple && value.includes(',')) {
-                const values = value.split(',').map(v => v.trim()).filter(v => v)
-                const labels = values.map(v => {
+                const values = value.split(',').map((v: string) => v.trim()).filter((v: string) => v)
+                const labels = values.map((v: string) => {
                   if (filter.relation) {
                     return relationFilterLabelsMap[filter.field]?.[String(v)] || v
                   } else {
