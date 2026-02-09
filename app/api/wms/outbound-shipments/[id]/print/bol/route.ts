@@ -23,15 +23,21 @@ function formatPrintTime(date: Date): string {
   return `${y}-${m}-${d} ${h}:${min}:${s}`
 }
 
-/** 预约时间格式：YYYY-MM-DD HH:mm，不做时区转换，直接按数据库原始值显示 */
+/** 与装车单预约时间一致：完整 YYYY-MM-DD HH:mm:ss，仅日期时补 00:00:00，无值显示 - */
 function formatAppointmentTime(date: Date | string | null | undefined): string {
-  if (!date) return ''
+  if (date === null || date === undefined) return '-'
   const str = typeof date === 'string' ? date : date.toISOString()
-  // 解析 ISO 字符串的日期和时间部分，不转时区
-  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
-  if (!match) return ''
-  const [, y, m, day, h, min] = match
-  return `${y}-${m}-${day} ${h}:${min}`
+  const withTime = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/)
+  if (withTime) {
+    const [, y, m, day, h, min, sec] = withTime
+    return `${y}-${m}-${day} ${h}:${min}:${sec ?? '00'}`
+  }
+  const dateOnly = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (dateOnly) {
+    const [, y, m, day] = dateOnly
+    return `${y}-${m}-${day} 00:00:00`
+  }
+  return '-'
 }
 
 export async function GET(

@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
+    "@fontsource/noto-sans-sc": "^5.2.8",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.19.0",
     "@radix-ui/react-avatar": "^1.1.11",
@@ -55,6 +56,7 @@
     "next": "^16.0.7",
     "next-auth": "^5.0.0-beta.30",
     "nodemailer": "^7.0.12",
+    "pdf-lib": "^1.17.1",
     "prisma": "^6.19.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
@@ -67,8 +69,7 @@
     "typescript": "^5",
     "xlsx": "^0.18.5",
     "xlsx-js-style": "^1.2.0",
-    "zod": "^4.1.12",
-    "@fontsource/noto-sans-sc": "^5.2.8"
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@mermaid-js/mermaid-cli": "^11.12.0",

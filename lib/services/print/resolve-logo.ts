@@ -17,8 +17,11 @@ function isPngBuffer(buf: Buffer): boolean {
   return buf.length >= 8 && buf.subarray(0, 8).equals(PNG_MAGIC)
 }
 
-/** 先读本地 public/loading-sheet/logo.jpg 或 logo.png，没有则请求公网；按魔数识别 JPEG/PNG。 */
+let cachedLogo: string | null | undefined = undefined
+
+/** 先读本地 public/loading-sheet/logo.jpg 或 logo.png，没有则请求公网；按魔数识别 JPEG/PNG。进程内缓存，批量打印只读一次。 */
 export async function resolveLogoDataUrl(): Promise<string | null> {
+  if (cachedLogo !== undefined) return cachedLogo
   const dir = path.join(process.cwd(), 'public', 'loading-sheet')
   const candidates = ['logo.jpg', 'logo.jpeg', 'logo.png']
   for (const name of candidates) {
@@ -27,10 +30,12 @@ export async function resolveLogoDataUrl(): Promise<string | null> {
       if (!fs.existsSync(p)) continue
       const buf = fs.readFileSync(p)
       if (isJpegBuffer(buf)) {
-        return `data:image/jpeg;base64,${buf.toString('base64')}`
+        cachedLogo = `data:image/jpeg;base64,${buf.toString('base64')}`
+        return cachedLogo
       }
       if (isPngBuffer(buf)) {
-        return `data:image/png;base64,${buf.toString('base64')}`
+        cachedLogo = `data:image/png;base64,${buf.toString('base64')}`
+        return cachedLogo
       }
     } catch {
       // 忽略单文件读取失败，继续尝试下一个
@@ -39,12 +44,23 @@ export async function resolveLogoDataUrl(): Promise<string | null> {
   try {
     const url = 'https://raw.githubusercontent.com/lucaszhang98/G-G_CoreFlow_ERP/main/public/loading-sheet/logo.jpg'
     const res = await fetch(url)
-    if (!res.ok) return null
+    if (!res.ok) {
+      cachedLogo = null
+      return null
+    }
     const buf = Buffer.from(await res.arrayBuffer())
-    if (isJpegBuffer(buf)) return `data:image/jpeg;base64,${buf.toString('base64')}`
-    if (isPngBuffer(buf)) return `data:image/png;base64,${buf.toString('base64')}`
+    if (isJpegBuffer(buf)) {
+      cachedLogo = `data:image/jpeg;base64,${buf.toString('base64')}`
+      return cachedLogo
+    }
+    if (isPngBuffer(buf)) {
+      cachedLogo = `data:image/png;base64,${buf.toString('base64')}`
+      return cachedLogo
+    }
+    cachedLogo = null
     return null
   } catch {
+    cachedLogo = null
     return null
   }
 }

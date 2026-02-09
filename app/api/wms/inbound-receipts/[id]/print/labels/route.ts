@@ -2,10 +2,9 @@
  * GET /api/wms/inbound-receipts/[id]/print/labels
  * 生成入库管理的 Label PDF
  * 
- * 根据入库管理关联的订单明细生成 Label
- * 每个明细生成 预计板数*4 个 Label
- * 
- * 注意：此 API 接收前端传递的完整数据，避免重复查询数据库
+ * 支持两种调用方式：
+ * 1. 详情页：前端传递 orderDetails, containerNumber, customerCode, plannedUnloadDate
+ * 2. 批量操作：无 query 时根据 id 从数据库加载
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -13,6 +12,7 @@ import { checkAuth, checkPermission, handleError } from '@/lib/api/helpers'
 import { inboundReceiptConfig } from '@/lib/crud/configs/inbound-receipts'
 import { generateLabelsPDF } from '@/lib/services/print/label.service'
 import { LabelData } from '@/lib/services/print/types'
+import { loadInboundReceiptForPrint } from '../load-receipt-for-print'
 
 export async function GET(
   request: NextRequest,
@@ -20,37 +20,40 @@ export async function GET(
 ) {
   let resolvedParams: { id: string } | null = null
   try {
-    // 检查登录
     const authResult = await checkAuth()
     if (authResult.error) return authResult.error
 
-    // 检查权限（使用 list 权限，因为打印是查看操作）
     const permissionResult = await checkPermission(inboundReceiptConfig.permissions.list)
     if (permissionResult.error) return permissionResult.error
 
     resolvedParams = await params
-    
-    // 从查询参数获取数据（前端传递）
     const searchParams = request.nextUrl.searchParams
+    let orderDetails: any[]
+    let containerNumber: string
+    let customerCode: string
+    let plannedUnloadDate: string
+
     const orderDetailsJson = searchParams.get('orderDetails')
-    const containerNumber = searchParams.get('containerNumber')
-    const customerCode = searchParams.get('customerCode')
-    const plannedUnloadDate = searchParams.get('plannedUnloadDate')
-
-    if (!orderDetailsJson || !containerNumber || !customerCode || !plannedUnloadDate) {
-      return NextResponse.json(
-        { error: '缺少必要参数：orderDetails, containerNumber, customerCode, plannedUnloadDate' },
-        { status: 400 }
-      )
-    }
-
-    // 解析订单明细数据
-    const orderDetails = JSON.parse(orderDetailsJson)
-    if (!Array.isArray(orderDetails) || orderDetails.length === 0) {
-      return NextResponse.json(
-        { error: '订单明细数据不能为空' },
-        { status: 400 }
-      )
+    if (orderDetailsJson && searchParams.get('containerNumber') && searchParams.get('customerCode') && searchParams.get('plannedUnloadDate')) {
+      containerNumber = searchParams.get('containerNumber')!
+      customerCode = searchParams.get('customerCode')!
+      plannedUnloadDate = searchParams.get('plannedUnloadDate')!
+      orderDetails = JSON.parse(orderDetailsJson)
+      if (!Array.isArray(orderDetails) || orderDetails.length === 0) {
+        return NextResponse.json({ error: '订单明细数据不能为空' }, { status: 400 })
+      }
+    } else {
+      const loaded = await loadInboundReceiptForPrint(resolvedParams.id)
+      if (!loaded || loaded.orderDetails.length === 0) {
+        return NextResponse.json(
+          { error: '入库单不存在或没有订单明细' },
+          { status: 404 }
+        )
+      }
+      containerNumber = loaded.containerNumber
+      customerCode = loaded.customerCode
+      plannedUnloadDate = loaded.plannedUnloadDate
+      orderDetails = loaded.orderDetails
     }
 
     // 生成 Label 数据

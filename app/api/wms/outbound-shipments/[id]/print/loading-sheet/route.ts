@@ -62,9 +62,9 @@ export async function GET(
 
     // 不设默认值：没有的留空，打印后手工填写
     const destinationCode = detail.destination_location ?? ''
-    const appointmentTime = detail.confirmed_start
-      ? formatDate(detail.confirmed_start, 'long')
-      : ''
+    const appointmentTime = (detail.confirmed_start ?? detail.requested_start)
+      ? formatDate(detail.confirmed_start ?? detail.requested_start, 'long')
+      : '-'
 
     const sheetLines = lines
       .filter((l) => l.order_detail)

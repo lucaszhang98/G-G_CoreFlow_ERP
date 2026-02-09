@@ -6,7 +6,7 @@ import { EntityTable } from "@/components/crud/entity-table"
 import { inboundReceiptConfig } from "@/lib/crud/configs/inbound-receipts"
 import type { ClickableColumnConfig } from "@/lib/table/config"
 import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw, Printer, FileText } from "lucide-react"
 import { toast } from "sonner"
 
 /** 获取当前工作周（周一至周日）的起止日期，格式 YYYY-MM-DD */
@@ -33,10 +33,54 @@ function getLastMonthAndFuture(): { planned_unload_at_from: string } {
   return { planned_unload_at_from: d.toISOString().slice(0, 10) }
 }
 
+const INBOUND_ID_FIELD = 'inbound_receipt_id'
+
 export function InboundReceiptTable() {
   const router = useRouter()
   const [isSyncing, setIsSyncing] = React.useState(false)
   const [refreshKey, setRefreshKey] = React.useState(0)
+  const [selectedInboundRows, setSelectedInboundRows] = React.useState<any[]>([])
+
+  // 生成单据：合并为一份 PDF，只开一个标签页
+  const openBatchUnloadSheet = React.useCallback(() => {
+    const ids = selectedInboundRows.map((r) => r[INBOUND_ID_FIELD]).filter(Boolean)
+    if (ids.length === 0) {
+      toast.error('请先选择要生成的记录')
+      return
+    }
+    const idsParam = ids.join(',')
+    window.open(`/api/wms/inbound-receipts/batch-print/unload-sheet?ids=${encodeURIComponent(idsParam)}`, '_blank', 'noopener,noreferrer')
+    toast.success(`已打开拆柜单据打印（${ids.length} 份合并）`)
+  }, [selectedInboundRows])
+
+  // Label：选多少条开多少页。先打开启动页，用户点「打开全部」再开 N 个标签，避免被浏览器拦截
+  const openBatchLabels = React.useCallback(() => {
+    const ids = selectedInboundRows.map((r) => r[INBOUND_ID_FIELD]).filter(Boolean)
+    if (ids.length === 0) {
+      toast.error('请先选择要生成的记录')
+      return
+    }
+    const idsParam = ids.join(',')
+    window.open(
+      `/dashboard/wms/inbound-receipts/batch-labels?ids=${encodeURIComponent(idsParam)}`,
+      '_blank',
+      'noopener,noreferrer'
+    )
+    toast.success(`已打开 ${ids.length} 个 Label 打印页`)
+  }, [selectedInboundRows])
+
+  const customBatchActions = React.useMemo(() => (
+    <>
+      <Button size="sm" variant="outline" onClick={openBatchUnloadSheet} className="min-w-[100px]">
+        <Printer className="mr-2 h-4 w-4" />
+        批量生成单据
+      </Button>
+      <Button size="sm" variant="outline" onClick={openBatchLabels} className="min-w-[100px]">
+        <FileText className="mr-2 h-4 w-4" />
+        批量生成 Label
+      </Button>
+    </>
+  ), [openBatchUnloadSheet, openBatchLabels])
 
   // 可点击列配置：柜号列可点击跳转到入库管理详情
   const customClickableColumns: ClickableColumnConfig<any>[] = React.useMemo(() => [
@@ -355,6 +399,8 @@ export function InboundReceiptTable() {
       fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}
       customToolbarButtons={customToolbarButtons}
       customFilterContent={customFilterContent}
+      onRowSelectionChange={setSelectedInboundRows}
+      customBatchActions={customBatchActions}
     />
   )
 }

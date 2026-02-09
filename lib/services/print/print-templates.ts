@@ -44,13 +44,16 @@ export function formatDate(date: Date | string | null | undefined, format: 'shor
     if (format === 'short') {
       return `${year}/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`
     } else {
-      // 如果有时间部分，也解析出来
+      // long 格式：完整年月日+时间。有时间部分则解析，否则补 00:00:00
       const timePart = date.includes('T') ? date.split('T')[1].split('.')[0] : null
       if (timePart) {
-        const [hour, minute] = timePart.split(':').map(Number)
-        return `${year}/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+        const parts = timePart.split(':').map(Number)
+        const hour = parts[0] ?? 0
+        const minute = parts[1] ?? 0
+        const second = parts[2] ?? 0
+        return `${year}/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`
       }
-      return `${year}/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`
+      return `${year}/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')} 00:00:00`
     }
   }
   
@@ -61,12 +64,14 @@ export function formatDate(date: Date | string | null | undefined, format: 'shor
   if (format === 'short') {
     return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
   } else {
-    return d.toLocaleDateString('zh-CN', { 
-      year: 'numeric', 
-      month: '2-digit', 
+    return d.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
     })
   }
 }
