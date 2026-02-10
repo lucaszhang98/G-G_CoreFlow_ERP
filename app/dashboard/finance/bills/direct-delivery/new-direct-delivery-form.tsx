@@ -28,7 +28,7 @@ const schema = z.object({
   status: z.enum(["draft", "issued", "void"]).default("draft"),
 })
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.input<typeof schema>
 
 async function loadCustomerOptions(search: string): Promise<FuzzySearchOption[]> {
   const params = new URLSearchParams()
@@ -74,7 +74,7 @@ export function NewDirectDeliveryBillForm() {
         invoice_type: "direct_delivery",
         customer_id: Number(values.customer_id),
         notes: values.notes || undefined,
-        status: values.status,
+        status: values.status ?? "draft",
       }
       if (values.order_id) body.order_id = Number(values.order_id)
       const res = await fetch("/api/finance/invoices", {

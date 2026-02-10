@@ -1,10 +1,13 @@
 import prisma from '@/lib/prisma'
-import type { PrismaClient } from '@prisma/client'
+import type { Prisma } from '@prisma/client'
 
 /**
  * 根据账单明细重新计算发票总金额并更新 invoices.total_amount
  */
-export async function recalcInvoiceTotal(invoiceId: bigint, tx?: PrismaClient): Promise<void> {
+export async function recalcInvoiceTotal(
+  invoiceId: bigint,
+  tx?: Prisma.TransactionClient
+): Promise<void> {
   const db = tx ?? prisma
   const agg = await db.invoice_line_items.aggregate({
     where: { invoice_id: invoiceId },
