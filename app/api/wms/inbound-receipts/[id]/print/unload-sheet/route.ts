@@ -22,6 +22,7 @@ export async function GET(
   let containerNumber: string = ''
   let orderDetails: any[] = []
   let customerCode: string | undefined
+  let orderNotes: string | undefined
   let unloadedBy: string | undefined
   let receivedBy: string | undefined
   let unloadDate: string | undefined
@@ -39,12 +40,18 @@ export async function GET(
     if (searchParams.get('containerNumber') && orderDetailsJson) {
       containerNumber = searchParams.get('containerNumber')!
       customerCode = searchParams.get('customerCode') || undefined
+      orderNotes = searchParams.get('orderNotes') || undefined
       unloadedBy = searchParams.get('unloadedBy') || undefined
       receivedBy = searchParams.get('receivedBy') || undefined
       unloadDate = searchParams.get('unloadDate') || undefined
       orderDetails = JSON.parse(orderDetailsJson)
       if (!Array.isArray(orderDetails) || orderDetails.length === 0) {
         return NextResponse.json({ error: '订单明细数据不能为空' }, { status: 400 })
+      }
+      // 详情页未传 orderNotes 时，从数据库补取订单备注
+      if ((orderNotes == null || orderNotes === '') && resolvedParams.id) {
+        const loaded = await loadInboundReceiptForPrint(resolvedParams.id)
+        orderNotes = loaded?.orderNotes ?? undefined
       }
     } else {
       const loaded = await loadInboundReceiptForPrint(resolvedParams.id)
@@ -56,6 +63,7 @@ export async function GET(
       }
       containerNumber = loaded.containerNumber
       customerCode = loaded.customerCode || undefined
+      orderNotes = loaded.orderNotes || undefined
       unloadedBy = loaded.unloadedBy || undefined
       receivedBy = loaded.receivedBy || undefined
       unloadDate = loaded.unloadDate || undefined
@@ -65,6 +73,7 @@ export async function GET(
     const unloadSheetData: UnloadSheetData = {
       containerNumber,
       customerCode,
+      orderNotes,
       unloadedBy,
       receivedBy,
       unloadDate,

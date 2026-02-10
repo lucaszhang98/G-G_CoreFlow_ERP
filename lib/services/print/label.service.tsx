@@ -188,28 +188,35 @@ export async function generateLabelDataFromOrderDetails(
 }
 
 /**
+ * CODE128 仅支持 ASCII（约 0x20–0x7E），含中文等非 ASCII 会报错。
+ * 保留仅 ASCII 可打印字符，非 ASCII 剔除；若结果为空则用 fallback。
+ */
+function sanitizeBarcodeForCode128(barcodeText: string, fallback: string = '0'): string {
+  if (!barcodeText || typeof barcodeText !== 'string') return fallback
+  const asciiOnly = barcodeText.replace(/[^\x20-\x7E]/g, '')
+  return asciiOnly.length > 0 ? asciiOnly : fallback
+}
+
+/**
  * 生成条形码图片（Base64）
  * 
- * @param barcodeText 条形码文本
+ * @param barcodeText 条形码文本（若含中文等非 ASCII，会先做 sanitize 再生成）
  * @returns Base64 编码的图片数据
  */
 function generateBarcodeImage(barcodeText: string): string {
   try {
     const canvas = createCanvas(200, 50)
-    
-    // JsBarcode 可以直接传入 canvas 对象
-    JsBarcode(canvas, barcodeText, {
+    const safeText = sanitizeBarcodeForCode128(barcodeText, barcodeText.slice(0, 1) || '0')
+    JsBarcode(canvas, safeText, {
       format: 'CODE128',
       width: 2,
       height: 40,
-      displayValue: false, // 不显示文本，我们在 PDF 中单独显示
+      displayValue: false,
       margin: 0,
     })
-    
     return canvas.toDataURL('image/png')
   } catch (error) {
     console.error('生成条形码失败:', error)
-    // 如果生成失败，返回空字符串，PDF 中只显示文本
     return ''
   }
 }

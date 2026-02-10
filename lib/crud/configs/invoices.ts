@@ -171,3 +171,19 @@ export const invoiceConfig: EntityConfig = {
     },
   },
 }
+
+/** 直送账单列表用：仅显示直送类型，详情跳转至直送账单详情页 */
+export const directDeliveryBillConfig: EntityConfig = {
+  ...invoiceConfig,
+  displayName: '直送账单',
+  pluralName: '直送账单',
+  detailPath: '/dashboard/finance/bills/direct-delivery',
+  list: {
+    ...invoiceConfig.list,
+    columns: ['invoice_number', 'customer_id', 'order_id', 'invoice_date', 'status', 'total_amount', 'currency', 'notes'],
+  },
+  permissions: {
+    ...invoiceConfig.permissions,
+    create: [], // 新建通过单独页面 /bills/direct-delivery/new
+  },
+}

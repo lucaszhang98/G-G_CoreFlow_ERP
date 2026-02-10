@@ -133,7 +133,7 @@ export const deliveryManagementConfig: EntityConfig = {
       'status',
       'notes',
     ],
-    searchFields: ['appointment_number'], // 只搜索预约号码（最重要的字段）
+    searchFields: ['appointment_number', 'container_number'], // 模糊搜索：预约号码、柜号
     pageSize: 20,
     inlineEdit: {
       enabled: true,

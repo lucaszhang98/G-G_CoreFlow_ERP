@@ -16,6 +16,7 @@ export async function getUnloadSheetPdfBuffer(
   const unloadSheetData: UnloadSheetData = {
     containerNumber: loaded.containerNumber,
     customerCode: loaded.customerCode || undefined,
+    orderNotes: loaded.orderNotes || undefined,
     unloadedBy: loaded.unloadedBy || undefined,
     receivedBy: loaded.receivedBy || undefined,
     unloadDate: loaded.unloadDate || undefined,
@@ -84,6 +85,7 @@ export async function loadBatchUnloadSheetData(
       orders: {
         select: {
           order_number: true,
+          notes: true,
           customers: { select: { code: true } },
           order_detail: {
             select: {
@@ -143,6 +145,7 @@ export async function loadBatchUnloadSheetData(
     result.push({
       containerNumber,
       customerCode: customerCode || undefined,
+      orderNotes: orderData?.notes != null ? String(orderData.notes) : undefined,
       unloadedBy: serialized.unloaded_by != null ? String(serialized.unloaded_by) : undefined,
       receivedBy: serialized.received_by != null ? String(serialized.received_by) : undefined,
       unloadDate: plannedUnloadDate || undefined,

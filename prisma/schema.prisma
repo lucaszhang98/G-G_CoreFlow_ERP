@@ -262,12 +262,35 @@ model invoices {
   users_invoices_created_byTousers              users?    @relation("invoices_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users_invoices_updated_byTousers              users?    @relation("invoices_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   receivables                                   receivables[]
+  invoice_line_items                            invoice_line_items[]
 
   @@index([invoice_type], map: "idx_invoices_type")
   @@index([customer_id], map: "idx_invoices_customer")
   @@index([order_id], map: "idx_invoices_order")
   @@index([invoice_date], map: "idx_invoices_date")
   @@index([status], map: "idx_invoices_status")
+  @@schema("public")
+}
+
+model invoice_line_items {
+  id               BigInt    @id @default(autoincrement())
+  invoice_id       BigInt
+  fee_id           BigInt
+  quantity         Decimal   @db.Decimal(12, 4)
+  unit_price       Decimal   @db.Decimal(12, 2)
+  total_amount     Decimal   @db.Decimal(12, 2)
+  sort_order       Int?      @default(0)
+  created_at       DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime? @default(now()) @db.Timestamptz(6)
+  created_by       BigInt?
+  updated_by       BigInt?
+  invoices         invoices  @relation(fields: [invoice_id], references: [invoice_id], onDelete: Cascade, onUpdate: NoAction)
+  fee              fee       @relation(fields: [fee_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  users_invoice_line_items_created_byTousers  users? @relation("invoice_line_items_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_invoice_line_items_updated_byTousers  users? @relation("invoice_line_items_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([invoice_id], map: "idx_invoice_line_items_invoice_id")
+  @@index([fee_id], map: "idx_invoice_line_items_fee_id")
   @@schema("public")
 }
 
@@ -355,6 +378,7 @@ model fee {
   created_by                                    BigInt?
   updated_by                                    BigInt?
   fee_scope                                     fee_scope[]
+  invoice_line_items                            invoice_line_items[]
   users_fee_created_byTousers                   users?      @relation("fee_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users_fee_updated_byTousers                    users?      @relation("fee_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -758,6 +782,8 @@ model users {
   table_views                                                          table_views[]              @relation("table_views_user_idTousers")
   invoices_invoices_created_byTousers                                   invoices[]                @relation("invoices_created_byTousers")
   invoices_invoices_updated_byTousers                                   invoices[]                @relation("invoices_updated_byTousers")
+  invoice_line_items_invoice_line_items_created_byTousers                invoice_line_items[]      @relation("invoice_line_items_created_byTousers")
+  invoice_line_items_invoice_line_items_updated_byTousers               invoice_line_items[]      @relation("invoice_line_items_updated_byTousers")
   receivables_receivables_created_byTousers                             receivables[]             @relation("receivables_created_byTousers")
   receivables_receivables_updated_byTousers                             receivables[]             @relation("receivables_updated_byTousers")
   payments_payments_created_byTousers                                   payments[]                @relation("payments_created_byTousers")

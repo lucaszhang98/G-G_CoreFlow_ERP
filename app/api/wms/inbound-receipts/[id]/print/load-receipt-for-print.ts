@@ -7,6 +7,7 @@ import { serializeBigInt } from '@/lib/api/helpers'
 export interface LoadedReceiptForPrint {
   containerNumber: string
   customerCode: string
+  orderNotes?: string // 订单备注
   plannedUnloadDate: string
   unloadedBy: string
   receivedBy: string
@@ -33,6 +34,7 @@ export async function loadInboundReceiptForPrint(
       orders: {
         select: {
           order_number: true,
+          notes: true,
           customers: { select: { code: true } },
           order_detail: {
             select: {
@@ -60,6 +62,7 @@ export async function loadInboundReceiptForPrint(
   const orderData = serialized.orders as any
   const containerNumber = orderData?.order_number || ''
   const customerCode = orderData?.customers?.code || ''
+  const orderNotes = orderData?.notes != null ? String(orderData.notes) : undefined
   const plannedUnloadAt = serialized.planned_unload_at
   const plannedUnloadDate =
     typeof plannedUnloadAt === 'string'
@@ -90,6 +93,7 @@ export async function loadInboundReceiptForPrint(
   return {
     containerNumber,
     customerCode,
+    orderNotes,
     plannedUnloadDate,
     unloadedBy,
     receivedBy,

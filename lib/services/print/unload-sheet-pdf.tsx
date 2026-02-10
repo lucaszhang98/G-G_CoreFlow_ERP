@@ -79,6 +79,22 @@ function createStyles(rowCount: number) {
       padding: PADDING,
       fontFamily: pdfFontFamily,
     },
+    orderNotesSection: {
+      marginBottom: 8 * scaleFactor,
+      paddingBottom: 6 * scaleFactor,
+      borderBottomWidth: 1,
+      borderBottomColor: '#e0e0e0',
+    },
+    orderNotesLabel: {
+      fontSize: Math.max(8, baseHeaderLabelFontSize),
+      color: '#666',
+      marginBottom: 2 * scaleFactor,
+    },
+    orderNotesText: {
+      fontSize: Math.max(9, baseHeaderValueFontSize * 0.9),
+      lineHeight: 1.4,
+      wordBreak: 'break-word' as const,
+    },
     title: {
       fontSize: titleFontSize,
       fontWeight: 'bold',
@@ -219,7 +235,7 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
         {/* 标题：显示柜号，尽可能大 */}
         <Text style={styles.title}>{containerNumber || '-'}</Text>
 
-        {/* 主数据 */}
+        {/* 主数据：条形码、客户代码等 */}
         <View style={styles.headerSection}>
           <View style={styles.headerItem}>
             <Text style={styles.headerLabel}>条形码：</Text>
@@ -248,6 +264,14 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
             </Text>
           </View>
         </View>
+
+        {/* 订单备注：夹在表头上一行（条形码/客户代码等下方） */}
+        {(data.orderNotes != null && data.orderNotes !== '') && (
+          <View style={styles.orderNotesSection}>
+            <Text style={styles.orderNotesLabel}>备注：</Text>
+            <Text style={styles.orderNotesText}>{data.orderNotes}</Text>
+          </View>
+        )}
 
         {/* 明细表格 */}
         <View style={styles.table}>

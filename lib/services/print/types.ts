@@ -10,6 +10,7 @@
  */
 export interface UnloadSheetData {
   // 主数据
+  orderNotes?: string // 订单备注（显示在单据最上方）
   containerNumber: string // 柜号
   customerCode?: string // 客户代码
   unloadedBy?: string // 拆柜人员
