@@ -18,7 +18,7 @@ export async function PUT(
     }
 
     body = await request.json()
-    const { estimated_pallets, rejected_pallets } = body
+    const { estimated_pallets, rejected_pallets, load_sheet_notes, bol_notes } = body
 
     // 获取当前预约明细（含 rejected_pallets）
     const currentLine = await prisma.appointment_detail_lines.findUnique({
@@ -87,6 +87,8 @@ export async function PUT(
       if (estimated_pallets !== undefined) updateData.estimated_pallets = newEstimated
       if (rejected_pallets !== undefined) updateData.rejected_pallets = newRejected
       if (estimated_pallets !== undefined) updateData.total_pallets_at_time = totalPalletsAtTime
+      if (load_sheet_notes !== undefined) updateData.load_sheet_notes = load_sheet_notes == null || load_sheet_notes === '' ? null : String(load_sheet_notes)
+      if (bol_notes !== undefined) updateData.bol_notes = bol_notes == null || bol_notes === '' ? null : String(bol_notes)
 
       const appointmentDetailLine = await tx.appointment_detail_lines.update({
         where: { id: BigInt(resolvedParams.id) },

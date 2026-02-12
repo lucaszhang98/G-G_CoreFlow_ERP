@@ -7,6 +7,7 @@ import { generateLoadingSheetPDF } from '@/lib/services/print/loading-sheet.serv
 import { resolveLogoDataUrl } from '@/lib/services/print/resolve-logo'
 import { formatDate } from '@/lib/services/print/print-templates'
 import type { OAKBOLData, OAKLoadSheetData } from '@/lib/services/print/types'
+import { getLabelSecondRowAndBarcode } from '@/lib/services/print/label-utils'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
 
@@ -91,7 +92,12 @@ export async function getBOLPdfBuffer(appointmentId: string): Promise<Buffer | n
     attn: process.env.BOL_SHIP_FROM_ATTN ?? 'CJ',
     phone: process.env.BOL_SHIP_FROM_PHONE ?? '510-422-9233',
   }
-  const shipTo = { destinationCode, address: shipToAddress, attn: '', phone: '' }
+  const shipTo = {
+    destinationCode,
+    address: (detail.delivery_address && String(detail.delivery_address).trim()) ? String(detail.delivery_address).trim() : shipToAddress,
+    attn: detail.contact_name ?? '',
+    phone: detail.contact_phone ?? '',
+  }
   const appointmentTime = formatAppointmentTime(detail.confirmed_start ?? detail.requested_start)
 
   const bolLines = lines
@@ -109,8 +115,10 @@ export async function getBOLPdfBuffer(appointmentId: string): Promise<Buffer | n
       const fbaFromItem = detailItem?.fba != null && detailItem.fba !== '' ? String(detailItem.fba) : ''
       const fbaRaw = od.fba != null && od.fba !== '' ? String(od.fba) : fbaFromItem
       const poRaw = od.po != null && od.po !== '' ? String(od.po) : ''
+      const lineWithNotes = l as { bol_notes?: string | null }
       return {
         container_number: order?.order_number ?? '',
+        bol_notes: lineWithNotes.bol_notes ?? null,
         fba_id: fbaRaw,
         qty_plts: Number(l.estimated_pallets) ?? '',
         box: Number(od.quantity) ?? '',
@@ -163,6 +171,13 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
             postal_code: true,
           },
         },
+        outbound_shipments: {
+          select: {
+            delivery_address: true,
+            contact_name: true,
+            contact_phone: true,
+          },
+        },
       },
     }),
     prisma.appointment_detail_lines.findMany({
@@ -213,6 +228,11 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
           .filter(Boolean)
           .join(', ') || ''
       : ''
+    const outbound = Array.isArray(serialized.outbound_shipments)
+      ? serialized.outbound_shipments[0]
+      : serialized.outbound_shipments
+    const ob = outbound as { delivery_address?: string | null; contact_name?: string | null; contact_phone?: string | null } | undefined
+    const shipToAddressFinal = (ob?.delivery_address && String(ob.delivery_address).trim()) ? String(ob.delivery_address).trim() : shipToAddress
     const appointmentTime = formatAppointmentTime(serialized.confirmed_start ?? serialized.requested_start)
     const bolLines = lines
       .filter((l) => l.order_detail)
@@ -229,8 +249,10 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
         const fbaFromItem = detailItem?.fba != null && detailItem.fba !== '' ? String(detailItem.fba) : ''
         const fbaRaw = od.fba != null && od.fba !== '' ? String(od.fba) : fbaFromItem
         const poRaw = od.po != null && od.po !== '' ? String(od.po) : ''
+        const lineWithNotes = l as { bol_notes?: string | null }
         return {
           container_number: order?.order_number ?? '',
+          bol_notes: lineWithNotes.bol_notes ?? null,
           fba_id: fbaRaw,
           qty_plts: Number(l.estimated_pallets) ?? '',
           box: Number(od.quantity) ?? '',
@@ -241,7 +263,12 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
     result.push({
       printTime: formatPrintTime(new Date()),
       shipFrom: BOL_SHIP_FROM,
-      shipTo: { destinationCode, address: shipToAddress, attn: '', phone: '' },
+      shipTo: {
+        destinationCode,
+        address: shipToAddressFinal,
+        attn: ob?.contact_name ?? '',
+        phone: ob?.contact_phone ?? '',
+      },
       appointmentId: serialized.reference_number ?? id,
       appointmentTime,
       seal: '',
@@ -267,9 +294,12 @@ export async function getLoadingSheetPdfBuffer(appointmentId: string): Promise<B
           order_id: true,
           estimated_pallets: true,
           remaining_pallets: true,
+          delivery_nature: true,
+          notes: true,
           locations_order_detail_delivery_location_idTolocations: { select: { location_code: true, name: true } },
           order_detail_item_order_detail_item_detail_idToorder_detail: { select: { detail_name: true } },
           orders: { select: { order_number: true } },
+          inventory_lots: { select: { storage_location_code: true } },
         },
       },
     },
@@ -285,17 +315,22 @@ export async function getLoadingSheetPdfBuffer(appointmentId: string): Promise<B
     .map((l) => {
       const od = serializeBigInt(l.order_detail!)
       const loc = od.locations_order_detail_delivery_location_idTolocations
-      const detailItem = Array.isArray(od.order_detail_item_order_detail_item_detail_idToorder_detail)
-        ? od.order_detail_item_order_detail_item_detail_idToorder_detail[0]
-        : null
-      const storageLocation =
-        (loc && (loc as any).location_code) ||
-        (detailItem && (detailItem as any).detail_name) ||
-        ''
+      const locationCode = loc && (loc as any).location_code ? String((loc as any).location_code) : ''
       const containerNumber = (od.orders && (od.orders as any).order_number) || ''
+      const deliveryNature = (od as any).delivery_nature ?? undefined
+      const notes = (od as any).notes ?? undefined
+      const lineWithNotes = l as { load_sheet_notes?: string | null }
+      // 柜号列：与入库 Label 一致，柜号后跟「第二行」（私仓/转仓=备注，亚马逊/其他=仓点，扣货=仓点+hold）
+      const { secondRow } = getLabelSecondRowAndBarcode(containerNumber, locationCode, deliveryNature, notes)
+      const containerDisplay = secondRow ? `${containerNumber}-${secondRow}` : containerNumber
+      // 仓储位置：入库管理明细行（inventory_lots）的仓库位置，如 B9/B10
+      const lots = (od.inventory_lots as { storage_location_code?: string | null }[]) || []
+      const storageCodes = [...new Set(lots.map((lot) => lot.storage_location_code).filter(Boolean))] as string[]
+      const storageLocation = storageCodes.join('/')
       return {
-        container_number: containerNumber,
+        container_number: containerDisplay,
         storage_location: storageLocation,
+        load_sheet_notes: lineWithNotes.load_sheet_notes ?? null,
         planned_pallets: Number(l.estimated_pallets) || 0,
         loaded_pallets: '',
         remaining_pallets: '',
@@ -312,6 +347,9 @@ export async function getLoadingSheetPdfBuffer(appointmentId: string): Promise<B
     loadNumber: detail.reference_number ?? '',
     sealNumber: '',
     appointmentTime,
+    delivery_address: detail.delivery_address ?? null,
+    contact_name: detail.contact_name ?? null,
+    contact_phone: detail.contact_phone ?? null,
     lines: sheetLines,
     totalPlannedPallets,
     totalIsClearLabel: '',
@@ -337,7 +375,14 @@ export async function loadBatchLoadingSheetData(
       include: {
         orders: { select: { status: true } },
         locations: { select: { location_code: true } },
-        outbound_shipments: { select: { trailer_code: true } },
+        outbound_shipments: {
+          select: {
+            trailer_code: true,
+            delivery_address: true,
+            contact_name: true,
+            contact_phone: true,
+          },
+        },
       },
     }),
     prisma.appointment_detail_lines.findMany({
@@ -349,9 +394,12 @@ export async function loadBatchLoadingSheetData(
             order_id: true,
             estimated_pallets: true,
             remaining_pallets: true,
+            delivery_nature: true,
+            notes: true,
             locations_order_detail_delivery_location_idTolocations: { select: { location_code: true, name: true } },
             order_detail_item_order_detail_item_detail_idToorder_detail: { select: { detail_name: true } },
             orders: { select: { order_number: true } },
+            inventory_lots: { select: { storage_location_code: true } },
           },
         },
       },
@@ -387,23 +435,27 @@ export async function loadBatchLoadingSheetData(
     const outbound = Array.isArray(serializedApp.outbound_shipments)
       ? serializedApp.outbound_shipments[0]
       : serializedApp.outbound_shipments
-    const trailerCode = (outbound as any)?.trailer_code ?? ''
+    const ob = outbound as { trailer_code?: string; delivery_address?: string | null; contact_name?: string | null; contact_phone?: string | null } | undefined
+    const trailerCode = ob?.trailer_code ?? ''
     const sheetLines = lines
       .filter((l) => l.order_detail)
       .map((l) => {
         const od = serializeBigInt(l.order_detail!)
         const loc = od.locations_order_detail_delivery_location_idTolocations
-        const detailItem = Array.isArray(od.order_detail_item_order_detail_item_detail_idToorder_detail)
-          ? od.order_detail_item_order_detail_item_detail_idToorder_detail[0]
-          : null
-        const storageLocation =
-          (loc && (loc as any).location_code) ||
-          (detailItem && (detailItem as any).detail_name) ||
-          ''
+        const locationCode = loc && (loc as any).location_code ? String((loc as any).location_code) : ''
         const containerNumber = (od.orders && (od.orders as any).order_number) || ''
+        const deliveryNature = (od as any).delivery_nature ?? undefined
+        const notes = (od as any).notes ?? undefined
+        const lineWithNotes = l as { load_sheet_notes?: string | null }
+        const { secondRow } = getLabelSecondRowAndBarcode(containerNumber, locationCode, deliveryNature, notes)
+        const containerDisplay = secondRow ? `${containerNumber}-${secondRow}` : containerNumber
+        const lots = (od.inventory_lots as { storage_location_code?: string | null }[]) || []
+        const storageCodes = [...new Set(lots.map((lot) => lot.storage_location_code).filter(Boolean))] as string[]
+        const storageLocation = storageCodes.join('/')
         return {
-          container_number: containerNumber,
+          container_number: containerDisplay,
           storage_location: storageLocation,
+          load_sheet_notes: lineWithNotes.load_sheet_notes ?? null,
           planned_pallets: Number(l.estimated_pallets) || 0,
           loaded_pallets: '',
           remaining_pallets: '',
@@ -418,6 +470,9 @@ export async function loadBatchLoadingSheetData(
       loadNumber: serializedApp.reference_number ?? '',
       sealNumber: '',
       appointmentTime,
+      delivery_address: ob?.delivery_address ?? null,
+      contact_name: ob?.contact_name ?? null,
+      contact_phone: ob?.contact_phone ?? null,
       lines: sheetLines,
       totalPlannedPallets,
       totalIsClearLabel: '',

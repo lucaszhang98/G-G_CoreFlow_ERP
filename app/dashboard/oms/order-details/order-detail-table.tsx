@@ -23,12 +23,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Copy } from "lucide-react"
+import { Copy, CalendarPlus } from "lucide-react"
 import { toast } from "sonner"
+import { NewAppointmentDialog } from "./new-appointment-dialog"
 
 export function OrderDetailTable() {
   const router = useRouter();
   const [selectedRows, setSelectedRows] = React.useState<any[]>([]);
+  const [newAppointmentOpen, setNewAppointmentOpen] = React.useState(false);
   
   const customClickableColumns: ClickableColumnConfig<any>[] = React.useMemo(() => [
     {
@@ -184,10 +186,30 @@ export function OrderDetailTable() {
     }, 0)
   }, [selectedRows])
 
+  // 新建预约：打开弹窗，带入勾选的明细
+  const handleNewAppointment = React.useCallback(() => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要预约的明细行')
+      return
+    }
+    setNewAppointmentOpen(true)
+  }, [selectedRows])
+
   // 自定义批量操作按钮
   const customBatchActions = React.useMemo(() => {
     return (
       <>
+        {/* 新建预约 */}
+        <Button
+          variant="default"
+          size="sm"
+          className="min-w-[100px] h-9 bg-indigo-600 hover:bg-indigo-700"
+          disabled={selectedRows.length === 0}
+          onClick={handleNewAppointment}
+        >
+          <CalendarPlus className="mr-2 h-4 w-4" />
+          新建预约
+        </Button>
         {/* 显示合计未约板数 */}
         {selectedRows.length > 0 && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -274,9 +296,10 @@ export function OrderDetailTable() {
         </DropdownMenu>
       </>
     )
-  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets, totalUnbookedPallets])
+  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets, totalUnbookedPallets, handleNewAppointment])
 
   return (
+    <>
     <EntityTable
       config={orderDetailConfig}
       customClickableColumns={customClickableColumns}
@@ -362,6 +385,12 @@ export function OrderDetailTable() {
         },
       }}
     />
+    <NewAppointmentDialog
+      open={newAppointmentOpen}
+      onOpenChange={setNewAppointmentOpen}
+      selectedRows={selectedRows}
+    />
+    </>
   );
 }
 

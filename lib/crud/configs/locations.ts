@@ -132,7 +132,7 @@ export const locationConfig: EntityConfig = {
     defaultSort: 'location_code',
     defaultOrder: 'asc',
     columns: ['location_code', 'name', 'location_type', 'notes', 'created_at'],
-    searchFields: ['name'], // 只搜索位置名称（最重要的字段）
+    searchFields: ['location_code', 'name'], // 支持按代码、名称模糊搜索
     pageSize: 10,
     // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
     // filterFields 已由 search-config-generator 自动生成

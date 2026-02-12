@@ -147,10 +147,11 @@ export function LocationSelect({
           const isNumeric = !isNaN(Number(value)) && !isNaN(parseFloat(String(value)))
           
           if (isNumeric) {
-            // value是location_id，直接查询
+            // value是location_id，直接查询（API 可能返回 { data: {...} }）
             const response = await fetch(`/api/locations/${value}`)
             if (response.ok) {
-              const location = await response.json()
+              const raw = await response.json()
+              const location = raw?.data ?? raw
               if (location && location.location_type) {
                 setSelectedType(location.location_type)
                 await loadLocations(location.location_type)

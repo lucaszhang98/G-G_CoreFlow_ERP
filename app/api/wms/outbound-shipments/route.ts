@@ -181,6 +181,9 @@ export async function GET(request: NextRequest) {
                 trailer_code: true,
                 loaded_by: true,
                 notes: true,
+                delivery_address: true,
+                contact_name: true,
+                contact_phone: true,
                 users_outbound_shipments_loaded_byTousers: {
                   select: {
                     id: true,
@@ -254,7 +257,10 @@ export async function GET(request: NextRequest) {
         loaded_by: shipment?.loaded_by?.toString() || null,
         loaded_by_name: shipment?.users_outbound_shipments_loaded_byTousers?.username || null,
         notes: shipment?.notes || null,
-        
+        delivery_address: shipment?.delivery_address || null,
+        contact_name: shipment?.contact_name || null,
+        contact_phone: shipment?.contact_phone || null,
+
         // 关联对象（用于 relation 类型字段的显示，已序列化）
         users_outbound_shipments_loaded_byTousers: shipment?.users_outbound_shipments_loaded_byTousers || null,
         

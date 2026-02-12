@@ -99,6 +99,15 @@ export async function PUT(
     if (body.notes !== undefined) {
       updateData.notes = body.notes || null;
     }
+    if (body.delivery_address !== undefined) {
+      updateData.delivery_address = body.delivery_address || null;
+    }
+    if (body.contact_name !== undefined) {
+      updateData.contact_name = body.contact_name || null;
+    }
+    if (body.contact_phone !== undefined) {
+      updateData.contact_phone = body.contact_phone || null;
+    }
 
     // rejected 字段在 delivery_appointments 表中，需要单独更新
     const appointmentUpdateData: any = {}
@@ -132,9 +141,20 @@ export async function PUT(
       );
     }
 
-    // 检查 outbound_shipment 是否存在，如果不存在则创建
+    // 检查 outbound_shipment 是否存在，如果不存在则创建（显式 select 避免请求不存在的列，如 load_sheet_notes 仅在 appointment_detail_lines）
     let outboundShipment = await prisma.outbound_shipments.findUnique({
       where: { appointment_id: BigInt(appointmentId) },
+      select: {
+        appointment_id: true,
+        trailer_code: true,
+        outbound_shipment_id: true,
+        warehouse_id: true,
+        loaded_by: true,
+        notes: true,
+        delivery_address: true,
+        contact_name: true,
+        contact_phone: true,
+      },
     });
 
     // 记录旧的 trailer_code，用于判断是否需要更新 delivery_management
@@ -152,6 +172,9 @@ export async function PUT(
         trailer_code: updateData.trailer_code || null,
         loaded_by: updateData.loaded_by || null,
         notes: updateData.notes || null,
+        delivery_address: updateData.delivery_address ?? null,
+        contact_name: updateData.contact_name ?? null,
+        contact_phone: updateData.contact_phone ?? null,
       };
       
       const finalCreateData = await addSystemFields(createData, user, true);
@@ -280,6 +303,9 @@ export async function PUT(
         trailer_code: true,
         loaded_by: true,
         notes: true,
+        delivery_address: true,
+        contact_name: true,
+        contact_phone: true,
         users_outbound_shipments_loaded_byTousers: {
           select: {
             id: true,
@@ -352,7 +378,10 @@ export async function PUT(
         loaded_by: finalOutboundShipment?.loaded_by?.toString() || null,
         loaded_by_name: finalOutboundShipment?.users_outbound_shipments_loaded_byTousers?.username || null,
         notes: finalOutboundShipment?.notes || null,
-        
+        delivery_address: finalOutboundShipment?.delivery_address ?? null,
+        contact_name: finalOutboundShipment?.contact_name ?? null,
+        contact_phone: finalOutboundShipment?.contact_phone ?? null,
+
         // 关联对象（用于 relation 类型字段的显示，已序列化）
         users_outbound_shipments_loaded_byTousers: finalOutboundShipment?.users_outbound_shipments_loaded_byTousers || null,
       },

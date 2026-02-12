@@ -3,6 +3,7 @@
  */
 import { generateUnloadSheetPDF } from '@/lib/services/print/unload-sheet.service'
 import { generateLabelsPDF } from '@/lib/services/print/label.service'
+import { getLabelSecondRowAndBarcode } from '@/lib/services/print/label-utils'
 import type { UnloadSheetData, LabelData } from '@/lib/services/print/types'
 import { loadInboundReceiptForPrint } from './[id]/print/load-receipt-for-print'
 import prisma from '@/lib/prisma'
@@ -45,14 +46,12 @@ export async function getLabelsPdfBuffer(
     const deliveryNature = detail.delivery_nature ?? undefined
     const notes = detail.notes ?? ''
     if (!deliveryLocationCode) continue
-    let row2Content = ''
-    if (deliveryNature === '私仓' || deliveryNature === '转仓') {
-      row2Content = notes || ''
-    } else {
-      row2Content = deliveryLocation || ''
-      if (deliveryNature === '扣货') row2Content += '-hold'
-    }
-    const barcode = `${containerNumber || ''}${row2Content}`.replace(/\s+/g, '')
+    const { secondRow, barcode } = getLabelSecondRowAndBarcode(
+      containerNumber ?? '',
+      deliveryLocation,
+      deliveryNature,
+      notes
+    )
     const labelData: LabelData = {
       containerNumber,
       deliveryLocation,

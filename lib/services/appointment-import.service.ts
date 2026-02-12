@@ -510,7 +510,7 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
                 appointment_type: firstRow.appointment_type,
                 confirmed_start: confirmedStart,
                 requested_start: confirmedStart,  // 与confirmed_start相同
-                status: 'requested',  // 默认状态
+                status: '待处理',  // 默认状态
                 rejected: firstRow.rejected,
                 po: firstRow.po,
                 notes: firstRow.notes,

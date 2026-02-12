@@ -35,6 +35,16 @@ export const orderDetailConfig: EntityConfig = {
       sortable: true,
       searchable: true,
     },
+    operation_mode: {
+      key: 'operation_mode',
+      label: '操作方式',
+      type: 'select',
+      sortable: true,
+      options: [
+        { label: '直送', value: 'direct_delivery' },
+        { label: '拆柜', value: 'unload' },
+      ],
+    },
     customer_name: {
       key: 'customer_name',
       label: '客户',
@@ -139,6 +149,7 @@ export const orderDetailConfig: EntityConfig = {
     defaultOrder: 'asc',
     columns: [
       'container_number',
+      'operation_mode',
       'customer_name',
       'delivery_location_code',
       'delivery_nature',
@@ -157,6 +168,15 @@ export const orderDetailConfig: EntityConfig = {
     pageSize: 20,
     // 筛选配置
     filterFields: [
+      {
+        field: 'operation_mode',
+        label: '操作方式',
+        type: 'select',
+        options: [
+          { label: '直送', value: 'direct_delivery' },
+          { label: '拆柜', value: 'unload' },
+        ],
+      },
       {
         field: 'delivery_nature',
         label: '送仓性质',

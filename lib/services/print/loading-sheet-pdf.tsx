@@ -1,13 +1,13 @@
 /**
- * 装车单 PDF 组件（6 列布局）
+ * 装车单 PDF 组件（7 列布局）
  *
- * 全表 6 列：
- * - 第 1 行：第 1、2 列合并放 Logo；第 3 列「卸货仓」；第 4、5、6 列合并放目的地代码
- * - 第 2 行：Trailer | 空 | Load# | 预约号码(4+5+6 合并)
- * - 第 3 行：SEAL# | 空 | 预约时间 | 具体预约时间(4+5+6 合并)
- * - 第 4 行：柜号 | 仓储位置 | 计划板数 | 装车板数 | 剩余板数 | 是否清空
+ * 全表 7 列：
+ * - 第 1 行：第 1、2 列合并放 Logo；第 3 列「卸货仓」；第 4、5、6、7 列合并放目的地代码
+ * - 第 2 行：Trailer | 空 | Load# | 预约号码(5+6+7 合并)
+ * - 第 3 行：SEAL# | 空（工人填写） | 预约时间 | 具体预约时间(5+6+7 合并)
+ * - 第 4 行：柜号 | 仓储位置 | 备注 | 计划板数 | 装车板数 | 剩余板数 | 是否清空
  * - 第 5 行起：明细（有几条生成几条）
- * - 最后一行：第 1、2 列合并「合计」| 总板数 | 空 | 空 | 地板/卡板
+ * - 最后一行：第 1、2 列合并「合计」| 总板数 | 空 | 空 | 空 | 地板/卡板
  */
 
 import React from 'react'
@@ -28,15 +28,16 @@ const borderWidth = 1
 const cellPadding = 5
 const minRowHeight = 22
 
-// 6 列宽度（%）
-const W1 = 20
-const W2 = 20
-const W3 = 15
-const W4 = 15
-const W5 = 15
-const W6 = 15
-const W1_2 = W1 + W2   // 第 1+2 列合并
-const W4_5_6 = W4 + W5 + W6  // 第 4+5+6 列合并
+// 7 列宽度（%）：柜号 | 仓储位置 | 备注 | 计划板数 | 装车板数 | 剩余板数 | 是否清空
+const W1 = 14
+const W2 = 14
+const W3 = 18  // 备注
+const W4 = 12
+const W5 = 12
+const W6 = 12
+const W7 = 18
+const W1_2 = W1 + W2
+const W4_5_6_7 = W4 + W5 + W6 + W7  // 第 4+5+6+7 列合并（预约号码/预约时间）
 
 const cellBase = {
   padding: cellPadding,
@@ -110,6 +111,18 @@ const styles = {
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
   },
+  /** 柜号列：缩小字体并限制在格内不溢出 */
+  cellContainerNumber: {
+    ...cellCenter,
+    overflow: 'hidden' as const,
+    fontSize: 8,
+  },
+  /** 备注列：可换行、缩小字体，避免溢出 */
+  cellRemarks: {
+    ...cellLeft,
+    overflow: 'hidden' as const,
+    fontSize: 8,
+  },
   /** 第一行仓点单元格：仓点文字 + 下方条形码（预约号码） */
   destinationCell: {
     ...cellCenter,
@@ -152,6 +165,7 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
     destinationCode,
     loadNumber,
     appointmentTime,
+    delivery_address,
     lines,
     totalPlannedPallets,
     totalIsClearLabel,
@@ -175,77 +189,82 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
             <View style={[styles.headerCell, { width: `${W3}%` }]}>
               <Text>{destinationLabel}</Text>
             </View>
-            <View style={[styles.destinationCell, { width: `${W4_5_6}%`, borderRightWidth: 0 }]}>
+            <View style={[styles.destinationCell, { width: `${W4_5_6_7}%`, borderRightWidth: 0 }]}>
               <Text>{destinationCode}</Text>
               {barcodeDataUrl ? <Image src={barcodeDataUrl} style={styles.barcodeImage} /> : null}
             </View>
           </View>
 
-          {/* 第 2 行：Trailer | 空 | Load# | 预约号码(4+5+6 合并) */}
+          {/* 第 2 行：Trailer | 空 | Load# | 预约号码(5+6+7 合并) */}
           <View style={styles.tableRow}>
             <View style={[styles.headerCellLeft, { width: `${W1}%` }]}><Text>Trailer</Text></View>
             <View style={[styles.cell, { width: `${W2}%` }]}><Text></Text></View>
             <View style={[styles.headerCell, { width: `${W3}%` }]}><Text>Load#</Text></View>
-            <View style={[styles.cell, { width: `${W4_5_6}%`, borderRightWidth: 0 }]}>
+            <View style={[styles.cell, { width: `${W4_5_6_7}%`, borderRightWidth: 0 }]}>
               <Text>{loadNumber}</Text>
             </View>
           </View>
 
-          {/* 第 3 行：SEAL# | 空 | 预约时间 | 具体预约时间(4+5+6 合并) */}
+          {/* 第 3 行：SEAL# | 空（工人填写） | 预约时间 | 具体预约时间(5+6+7 合并) */}
           <View style={styles.tableRow}>
             <View style={[styles.headerCellLeft, { width: `${W1}%` }]}><Text>SEAL#</Text></View>
             <View style={[styles.cell, { width: `${W2}%` }]}><Text></Text></View>
             <View style={[styles.headerCell, { width: `${W3}%` }]}><Text>预约时间</Text></View>
-            <View style={[styles.cell, { width: `${W4_5_6}%`, borderRightWidth: 0 }]}>
+            <View style={[styles.cell, { width: `${W4_5_6_7}%`, borderRightWidth: 0 }]}>
               <Text>{appointmentTime}</Text>
             </View>
           </View>
 
-          {/* 第 4 行：表头 柜号 | 仓储位置 | 计划板数 | 装车板数 | 剩余板数 | 是否清空 */}
+          {/* 第 4 行：表头 柜号 | 仓储位置 | 备注 | 计划板数 | 装车板数 | 剩余板数 | 是否清空 */}
           <View style={styles.tableRow}>
             <View style={[styles.headerCell, { width: `${W1}%` }]}><Text>柜号</Text></View>
             <View style={[styles.headerCell, { width: `${W2}%` }]}><Text>仓储位置</Text></View>
-            <View style={[styles.headerCell, { width: `${W3}%` }]}><Text>计划板数</Text></View>
-            <View style={[styles.headerCell, { width: `${W4}%` }]}><Text>装车板数</Text></View>
-            <View style={[styles.headerCell, { width: `${W5}%` }]}><Text>剩余板数</Text></View>
-            <View style={[styles.headerCell, { width: `${W6}%`, borderRightWidth: 0 }]}><Text>是否清空</Text></View>
+            <View style={[styles.headerCell, { width: `${W3}%` }]}><Text>备注</Text></View>
+            <View style={[styles.headerCell, { width: `${W4}%` }]}><Text>计划板数</Text></View>
+            <View style={[styles.headerCell, { width: `${W5}%` }]}><Text>装车板数</Text></View>
+            <View style={[styles.headerCell, { width: `${W6}%` }]}><Text>剩余板数</Text></View>
+            <View style={[styles.headerCell, { width: `${W7}%`, borderRightWidth: 0 }]}><Text>是否清空</Text></View>
           </View>
 
-          {/* 明细行：有几条生成几条 */}
+          {/* 明细行：有几条生成几条；柜号、备注列限制在格内不溢出 */}
           {lines.map((line, i) => (
             <View key={i} style={styles.tableRow}>
-              <View style={[styles.cell, { width: `${W1}%` }]}>
-                <Text>{line.container_number}</Text>
+              <View style={[styles.cellContainerNumber, { width: `${W1}%` }]}>
+                <Text wrap>{line.container_number}</Text>
               </View>
               <View style={[styles.cell, { width: `${W2}%` }]}>
-                <Text>{line.storage_location}</Text>
+                <Text wrap>{line.storage_location}</Text>
               </View>
-              <View style={[styles.cell, { width: `${W3}%` }]}>
-                <Text>{String(line.planned_pallets)}</Text>
+              <View style={[styles.cellRemarks, { width: `${W3}%` }]}>
+                <Text wrap>{(line.load_sheet_notes ?? '').toString()}</Text>
               </View>
               <View style={[styles.cell, { width: `${W4}%` }]}>
-                <Text>{line.loaded_pallets || ''}</Text>
+                <Text>{String(line.planned_pallets)}</Text>
               </View>
               <View style={[styles.cell, { width: `${W5}%` }]}>
+                <Text>{line.loaded_pallets || ''}</Text>
+              </View>
+              <View style={[styles.cell, { width: `${W6}%` }]}>
                 <Text>{line.remaining_pallets || ''}</Text>
               </View>
-              <View style={[styles.checkboxCell, { width: `${W6}%`, borderRightWidth: 0 }]}>
+              <View style={[styles.checkboxCell, { width: `${W7}%`, borderRightWidth: 0 }]}>
                 <View style={styles.checkbox} />
               </View>
             </View>
           ))}
 
-          {/* 最后一行：第 1、2 列合并「合计」| 总板数 | 空 | 空 | 地板/卡板 */}
+          {/* 最后一行：第 1、2 列合并「合计」| 空 | 总板数 | 空 | 空 | 地板/卡板 */}
           <View style={[styles.tableRow, styles.totalRow]}>
             <View style={[styles.headerCell, { width: `${W1_2}%` }]}>
               <Text>合计</Text>
             </View>
-            <View style={[styles.cell, { width: `${W3}%` }]}>
+            <View style={[styles.cell, { width: `${W3}%` }]}><Text></Text></View>
+            <View style={[styles.cell, { width: `${W4}%` }]}>
               <Text>{totalPlannedPallets}</Text>
             </View>
-            <View style={[styles.cell, { width: `${W4}%` }]}><Text></Text></View>
             <View style={[styles.cell, { width: `${W5}%` }]}><Text></Text></View>
-            <View style={[styles.cell, { width: `${W6}%`, borderRightWidth: 0 }]}>
+            <View style={[styles.cell, { width: `${W6}%` }]}><Text></Text></View>
+            <View style={[styles.cell, { width: `${W7}%`, borderRightWidth: 0 }]}>
               <Text>{footerLabel}</Text>
             </View>
           </View>

@@ -106,6 +106,21 @@ export const outboundShipmentConfig: EntityConfig = {
       label: '备注',
       type: 'text',
     },
+    delivery_address: {
+      key: 'delivery_address',
+      label: '详细地址',
+      type: 'textarea',
+    },
+    contact_name: {
+      key: 'contact_name',
+      label: '联系人',
+      type: 'text',
+    },
+    contact_phone: {
+      key: 'contact_phone',
+      label: '电话',
+      type: 'text',
+    },
     status: {
       key: 'status',
       label: '状态',
@@ -182,6 +197,9 @@ export const outboundShipmentConfig: EntityConfig = {
       'confirmed_start',
       'destination_location',
       'total_pallets',
+      'delivery_address',
+      'contact_name',
+      'contact_phone',
       'notes',
       'status',
       'requested_start',
@@ -202,7 +220,7 @@ export const outboundShipmentConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['loaded_by_name', 'trailer_code', 'rejected', 'notes'],
+        fields: ['loaded_by_name', 'trailer_code', 'rejected', 'delivery_address', 'contact_name', 'contact_phone', 'notes'],
       },
       delete: {
         enabled: false, // 不允许批量删除
@@ -211,7 +229,7 @@ export const outboundShipmentConfig: EntityConfig = {
     // 行内编辑配置：允许修改 loaded_by_name, trailer_code, rejected, notes
     inlineEdit: {
       enabled: true,
-      fields: ['loaded_by_name', 'trailer_code', 'rejected', 'notes'],
+      fields: ['loaded_by_name', 'trailer_code', 'rejected', 'delivery_address', 'contact_name', 'contact_phone', 'notes'],
     },
   },
   
@@ -219,6 +237,9 @@ export const outboundShipmentConfig: EntityConfig = {
     'reference_number', // 预约号码，详情页优先展示
     'trailer_id',
     'loaded_by',
+    'delivery_address',
+    'contact_name',
+    'contact_phone',
     'notes',
     'status',
     'requested_start',

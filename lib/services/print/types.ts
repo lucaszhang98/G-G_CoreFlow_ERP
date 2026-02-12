@@ -86,7 +86,7 @@ export interface LoadSheetData {
 
 /**
  * OAK 装车单模板数据（与 Excel「装车单模板」一致）
- * 布局：卸货仓+仓点 | Trailer | Load# | SEAL# | 预约时间 | 表头 柜号|仓储位置|计划板数|装车板数|剩余板数|是否清空 | 合计
+ * 布局：卸货仓+仓点 | Trailer | Load# | SEAL# | 预约时间 | 表头 柜号|仓储位置|备注|计划板数|装车板数|剩余板数|是否清空 | 合计
  */
 export interface OAKLoadSheetData {
   /** 卸货仓标签（固定「卸货仓」） */
@@ -101,10 +101,18 @@ export interface OAKLoadSheetData {
   sealNumber: string
   /** 预约时间 */
   appointmentTime: string
-  /** 明细行（装车板数、剩余板数、是否清空留空供手填） */
+  /** 详细地址（装车单第3行第2列） */
+  delivery_address?: string | null
+  /** 联系人（可选，装车单可扩展用） */
+  contact_name?: string | null
+  /** 电话（可选） */
+  contact_phone?: string | null
+  /** 明细行（装车板数、剩余板数、是否清空留空供手填；备注=装车单明细备注） */
   lines: Array<{
     container_number: string
     storage_location: string
+    /** 装车单明细备注（第3列，仓储位置与计划板数之间） */
+    load_sheet_notes?: string | null
     planned_pallets: number
     loaded_pallets: string
     remaining_pallets: string
@@ -212,9 +220,11 @@ export interface OAKBOLData {
   seal: string
   /** Container（留空） */
   container: string
-  /** 明细行：Container | FBA ID | Qty (PLTS) | Box | Storage | PO ID */
+  /** 明细行：Container | 备注(bol_notes) | FBA | Qty (PLTS) | Box | Storage | PO */
   lines: Array<{
     container_number: string
+    /** BOL 明细备注（第2列，Container 与 FBA 之间） */
+    bol_notes?: string | null
     fba_id: string
     qty_plts: number | string
     box: number | string

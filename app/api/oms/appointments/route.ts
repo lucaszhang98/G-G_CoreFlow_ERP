@@ -80,8 +80,14 @@ export async function GET(request: NextRequest) {
         },
       },
       appointment_detail_lines: {
-        select: {
-          estimated_pallets: true,
+        include: {
+          order_detail: {
+            include: {
+              orders: {
+                select: { eta_date: true },
+              },
+            },
+          },
         },
       },
     };
@@ -156,8 +162,14 @@ export async function GET(request: NextRequest) {
             },
           },
           appointment_detail_lines: {
-            select: {
-              estimated_pallets: true,
+            include: {
+              order_detail: {
+                include: {
+                  orders: {
+                    select: { eta_date: true },
+                  },
+                },
+              },
             },
           },
         };
@@ -246,6 +258,18 @@ export async function GET(request: NextRequest) {
       // 拒收字段
       const rejected = serialized.rejected ?? false;
 
+      // ETA：仅当派送方式为直送时，取第一个明细行对应订单的 eta_date，否则为空
+      let eta: string | null = null;
+      if (deliveryMethod === '直送' && serialized.appointment_detail_lines?.length > 0) {
+        const firstLine = serialized.appointment_detail_lines[0];
+        const orderDetail = firstLine?.order_detail;
+        const orders = orderDetail?.orders as { eta_date?: string | Date | null } | undefined;
+        const etaDate = orders?.eta_date;
+        if (etaDate) {
+          eta = typeof etaDate === 'string' ? etaDate.split('T')[0] : new Date(etaDate).toISOString().split('T')[0];
+        }
+      }
+
       return {
         ...serialized,
         reference_number: referenceNumber,
@@ -262,6 +286,7 @@ export async function GET(request: NextRequest) {
         requested_end: requestedEnd,
         confirmed_start: confirmedStart,
         confirmed_end: confirmedEnd,
+        eta,
         total_pallets: totalPallets, // 从 order_detail.estimated_pallets 计算
         rejected: rejected,
         po: po,
@@ -335,7 +360,7 @@ export async function POST(request: NextRequest) {
       requested_end: data.requested_end ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.requested_end) : null,
       confirmed_start: data.confirmed_start ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.confirmed_start) : null,
       confirmed_end: data.confirmed_end ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.confirmed_end) : null,
-      status: data.status || 'requested',
+      status: data.status || '待处理',
       rejected: data.rejected !== undefined ? Boolean(data.rejected) : false,
       po: data.po || null,
       notes: data.notes || null,

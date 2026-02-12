@@ -7,9 +7,11 @@ import { DetailTable, type DetailTableConfig } from '@/components/crud/detail-ta
 interface AppointmentDetailClientProps {
   appointmentId: string
   appointment: any
+  /** 出库详情页为 true 时，显示并可编辑装车单明细备注、BOL明细备注（每条明细行） */
+  showOutboundLineNotes?: boolean
 }
 
-export function AppointmentDetailClient({ appointmentId, appointment }: AppointmentDetailClientProps) {
+export function AppointmentDetailClient({ appointmentId, appointment, showOutboundLineNotes }: AppointmentDetailClientProps) {
   const handleRefresh = React.useCallback(() => {
     // 刷新页面以更新数据
     window.location.reload()
@@ -26,6 +28,7 @@ export function AppointmentDetailClient({ appointmentId, appointment }: Appointm
       unloadTime: true, // 拆柜时间（来自入库管理，按明细对应订单关联）
       po: true,
       notes: true,
+      ...(showOutboundLineNotes && { loadSheetNotes: true, bolNotes: true }),
     },
     getLocationName: (detail, context) => {
       return detail.order_detail_item_order_detail_item_detail_idToorder_detail?.[0]?.detail_name 

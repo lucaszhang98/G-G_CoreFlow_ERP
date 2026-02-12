@@ -3,18 +3,17 @@
  */
 
 /**
- * 审计字段列表 - 这些字段由系统自动维护，不应该显示在前端
+ * 审计字段列表 - 这些字段由系统自动维护，默认不在列表/表单中显示
  * 包括：
  * - ID字段（数据库自动生成）
- * - created_by（创建人ID，前端自动填入当前登录用户）
- * - updated_by（更新人ID，前端自动填入当前登录用户）
- * - created_at（创建时间，前端自动填入当前时间）
- * - updated_at（更新时间，前端自动填入当前时间）
+ * - created_by（创建人ID）
+ * - updated_by（更新人ID）
+ * - updated_at（更新时间）
+ * 注：created_at（创建时间）已移出，需显示时在实体的 list.columns 中加入即可
  */
 export const AUDIT_FIELDS = [
   'created_by',
   'updated_by',
-  'created_at',
   'updated_at',
 ] as const
 

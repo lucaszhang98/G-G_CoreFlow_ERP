@@ -28,6 +28,7 @@ export async function GET(
             select: {
               order_id: true,
               order_number: true,
+              eta_date: true,
               order_detail: {
                 select: {
                   id: true,
@@ -66,6 +67,7 @@ export async function GET(
               select: {
                 order_id: true,
                 order_number: true,
+                eta_date: true,
                 order_detail: {
                   select: {
                     id: true,
@@ -131,6 +133,16 @@ export async function GET(
     // 拒收字段
     const rejected = serialized.rejected ?? false;
 
+    // ETA：仅当派送方式为直送时，取第一个明细对应订单的 eta_date，否则为空
+    let eta: string | null = null;
+    if (deliveryMethod === '直送' && serialized.orders) {
+      const orders = serialized.orders as { eta_date?: string | Date | null };
+      const etaDate = orders?.eta_date;
+      if (etaDate) {
+        eta = typeof etaDate === 'string' ? etaDate.split('T')[0] : new Date(etaDate).toISOString().split('T')[0];
+      }
+    }
+
     return NextResponse.json({
       ...serialized,
       delivery_method: deliveryMethod,
@@ -147,6 +159,7 @@ export async function GET(
       requested_end: requestedEnd,
       confirmed_start: confirmedStart,
       confirmed_end: confirmedEnd,
+      eta,
       total_pallets: totalPallets ?? 0,
       rejected: rejected,
     });

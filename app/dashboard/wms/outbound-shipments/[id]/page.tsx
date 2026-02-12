@@ -53,10 +53,11 @@ export default async function OutboundShipmentDetailPage({ params }: OutboundShi
               <OutboundPrintLoadingSheetButton appointmentId={id} />
               <OutboundPrintBOLButton appointmentId={id} />
             </div>
-            {/* 对应预约的所有明细 */}
+            {/* 对应预约的所有明细（出库详情中显示装车单明细备注、BOL明细备注并可编辑） */}
             <AppointmentDetailClient
               appointmentId={id}
               appointment={appointmentContext}
+              showOutboundLineNotes
             />
           </div>
         </div>

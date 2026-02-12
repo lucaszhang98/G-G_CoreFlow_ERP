@@ -165,6 +165,9 @@ export async function GET(request: NextRequest) {
         order_number: orderDetailOrders?.order_number || null,
         // 拆柜时间：根据明细对应订单，从入库管理（inbound_receipt）取该订单的 planned_unload_at
         unload_time: orderDetail.order_id != null ? unloadTimeMap.get(String(orderDetail.order_id)) ?? null : null,
+        // 装车单/BOL 明细备注（出库详情中每条明细可编辑）
+        load_sheet_notes: (serialized as any).load_sheet_notes ?? null,
+        bol_notes: (serialized as any).bol_notes ?? null,
         // SKU 明细
         order_detail_item_order_detail_item_detail_idToorder_detail: orderDetail.order_detail_item_order_detail_item_detail_idToorder_detail,
       })

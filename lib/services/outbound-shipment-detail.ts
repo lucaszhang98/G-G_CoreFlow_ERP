@@ -22,6 +22,9 @@ export interface OutboundShipmentDetailPayload {
   loaded_by: string | null
   loaded_by_name: string | null
   notes: string | null
+  delivery_address: string | null
+  contact_name: string | null
+  contact_phone: string | null
   users_outbound_shipments_loaded_byTousers: { id: string; username: string; full_name?: string | null } | null
   // 主行完整信息（delivery_appointments）
   status: string | null
@@ -80,6 +83,9 @@ export async function getOutboundShipmentDetail(
           trailer_code: true,
           loaded_by: true,
           notes: true,
+          delivery_address: true,
+          contact_name: true,
+          contact_phone: true,
           users_outbound_shipments_loaded_byTousers: {
             select: {
               id: true,
@@ -125,6 +131,9 @@ export async function getOutboundShipmentDetail(
       outboundShipment?.users_outbound_shipments_loaded_byTousers?.username ||
       null,
     notes: outboundShipment?.notes || null,
+    delivery_address: outboundShipment?.delivery_address || null,
+    contact_name: outboundShipment?.contact_name || null,
+    contact_phone: outboundShipment?.contact_phone || null,
     users_outbound_shipments_loaded_byTousers: outboundShipment?.users_outbound_shipments_loaded_byTousers || null,
     status: serialized.status || null,
     requested_start: serialized.requested_start || null,

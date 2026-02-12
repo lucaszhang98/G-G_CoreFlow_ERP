@@ -13,6 +13,7 @@ import prisma from '@/lib/prisma'
  * - order: 排序方向（asc/desc，默认desc）
  * - search: 搜索关键词（仅搜索柜号/订单号）
  * - filter_customer_name: 客户筛选
+ * - filter_operation_mode: 操作方式筛选（direct_delivery 直送 / unload 拆柜）
  * - filter_delivery_nature: 送仓性质筛选
  * - filter_delivery_location_code: 仓点筛选
  * - filter_booking_status: 预约状态筛选（unbooked/fully_booked/overbooked）
@@ -38,6 +39,19 @@ export async function GET(request: NextRequest) {
     // 构建查询条件
     const where: any = {
       // 不筛选已入库，显示所有订单明细
+    }
+
+    // 按 id 列表筛选（用于新建预约时拉取勾选的明细）
+    const idsParam = searchParams.get('ids')
+    if (idsParam && idsParam.trim()) {
+      try {
+        const ids = idsParam.split(',').map((s) => s.trim()).filter(Boolean).map((s) => BigInt(s))
+        if (ids.length > 0) {
+          where.id = { in: ids }
+        }
+      } catch {
+        // 忽略无效 ids
+      }
     }
 
     // 搜索条件（只搜索柜号，即订单号）
@@ -71,6 +85,15 @@ export async function GET(request: NextRequest) {
       // 注意：前端传的是 location_id（因为配置中 valueField 是 location_id）
       where.locations_order_detail_delivery_location_idTolocations = {
         location_id: BigInt(delivery_location),
+      }
+    }
+
+    // 操作方式筛选（直送 direct_delivery / 拆柜 unload）
+    const filter_operation_mode = searchParams.get('filter_operation_mode')
+    if (filter_operation_mode && filter_operation_mode !== '__all__') {
+      where.orders = {
+        ...where.orders,
+        operation_mode: filter_operation_mode,
       }
     }
 
@@ -108,6 +131,8 @@ export async function GET(request: NextRequest) {
       orderBy.locations_order_detail_delivery_location_idTolocations = {
         location_code: order,
       }
+    } else if (sort === 'operation_mode') {
+      orderBy.orders = { operation_mode: order }
     } else {
       orderBy[sort] = order
     }
@@ -115,10 +140,12 @@ export async function GET(request: NextRequest) {
     // 查询数据
     // 如果有预约状态筛选，需要先查询所有数据（因为未约板数是实时计算的），筛选后再分页
     // 为了性能考虑，设置最大查询限制（10000条）
+    // 若按 ids 筛选，则取满全部 id 且不分页
+    const hasIdsFilter = Array.isArray(where.id?.in) && where.id.in.length > 0
     const hasBookingStatusFilter = booking_status_filter && booking_status_filter !== '__all__'
     const MAX_QUERY_LIMIT = 10000
-    const queryLimit = hasBookingStatusFilter ? MAX_QUERY_LIMIT : limit
-    const querySkip = hasBookingStatusFilter ? undefined : (page - 1) * limit
+    const queryLimit = hasIdsFilter ? where.id.in.length : (hasBookingStatusFilter ? MAX_QUERY_LIMIT : limit)
+    const querySkip = hasIdsFilter || hasBookingStatusFilter ? undefined : (page - 1) * limit
     
     const [items, total] = await Promise.all([
       prisma.order_detail.findMany({
@@ -278,6 +305,7 @@ export async function GET(request: NextRequest) {
         id: String(item.id),
         order_id: item.order_id ? String(item.order_id) : null,
         order_number: item.orders?.order_number || null,
+        operation_mode: item.orders?.operation_mode ?? null,
         customer_name: customer?.name || null,
         container_number: item.orders?.order_number || null, // container_number 实际是 order_number
         planned_unload_at: ir?.planned_unload_at || null,
@@ -299,6 +327,12 @@ export async function GET(request: NextRequest) {
         updated_at: item.updated_at,
       }
     })
+
+    // 按 ids 参数顺序排列（新建预约时保持勾选顺序）
+    if (hasIdsFilter && where.id?.in?.length) {
+      const idOrder = new Map((where.id.in as bigint[]).map((id, i) => [String(id), i]))
+      transformedItems.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0))
+    }
 
     /**
      * 预约状态筛选函数
@@ -340,10 +374,12 @@ export async function GET(request: NextRequest) {
       console.warn(`[order-details] 预约状态筛选查询已达到上限 ${MAX_QUERY_LIMIT} 条记录，可能有数据未包含在筛选结果中，建议添加其他筛选条件`)
     }
 
-    // 应用分页（在筛选后，如果有筛选的话）
-    const paginatedItems = hasBookingStatusFilter
-      ? filteredItems.slice((page - 1) * limit, page * limit)
-      : filteredItems
+    // 应用分页（在筛选后，如果有筛选的话；按 ids 筛选时返回全部不分页）
+    const paginatedItems = hasIdsFilter
+      ? filteredItems
+      : hasBookingStatusFilter
+        ? filteredItems.slice((page - 1) * limit, page * limit)
+        : filteredItems
 
     // 序列化 BigInt
     const serialized = serializeBigInt(paginatedItems)

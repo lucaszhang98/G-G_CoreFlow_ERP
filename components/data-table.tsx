@@ -484,7 +484,26 @@ export function DataTable<TData, TValue>({
                 setColumnSizing(defaultView.columnSizing)
               }
               if (defaultView.columnOrder && defaultView.columnOrder.length > 0) {
-                setColumnOrder(defaultView.columnOrder)
+                // 合并保存的列顺序与当前表格默认顺序，使新增列（不在保存视图中的列）出现在配置位置而非最右侧
+                const defaultOrder = allColumnIds
+                const savedSet = new Set(defaultView.columnOrder)
+                const missingInSaved = defaultOrder.filter((id) => !savedSet.has(id))
+                if (missingInSaved.length > 0) {
+                  let savedIdx = 0
+                  const merged: string[] = []
+                  for (const id of defaultOrder) {
+                    if (missingInSaved.includes(id)) {
+                      merged.push(id)
+                    } else {
+                      if (savedIdx < defaultView.columnOrder!.length) {
+                        merged.push(defaultView.columnOrder![savedIdx++])
+                      }
+                    }
+                  }
+                  setColumnOrder(merged)
+                } else {
+                  setColumnOrder(defaultView.columnOrder)
+                }
               }
             }
           } catch (error) {

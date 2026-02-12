@@ -105,11 +105,14 @@ export async function GET(
 
     const destinationCode = detail.destination_location ?? ''
     const location = appointment?.locations
-    const shipToAddress = location
+    const shipToAddressFromLocation = location
       ? [location.address_line1, location.address_line2, location.city, location.state, location.postal_code]
           .filter(Boolean)
           .join(', ') || ''
       : ''
+    const shipToAddress = (detail.delivery_address && String(detail.delivery_address).trim())
+      ? String(detail.delivery_address).trim()
+      : shipToAddressFromLocation
 
     const shipFrom = {
       companyName: process.env.BOL_SHIP_FROM_NAME ?? 'G&G TRANSPORT INC.',
@@ -121,8 +124,8 @@ export async function GET(
     const shipTo = {
       destinationCode,
       address: shipToAddress,
-      attn: '',
-      phone: '',
+      attn: detail.contact_name ?? '',
+      phone: detail.contact_phone ?? '',
     }
 
     const appointmentTime = formatAppointmentTime(detail.confirmed_start ?? detail.requested_start)
@@ -142,8 +145,10 @@ export async function GET(
         const fbaFromItem = detailItem?.fba != null && detailItem.fba !== '' ? String(detailItem.fba) : ''
         const fbaRaw = od.fba != null && od.fba !== '' ? String(od.fba) : fbaFromItem
         const poRaw = od.po != null && od.po !== '' ? String(od.po) : ''
+        const lineWithNotes = l as { bol_notes?: string | null }
         return {
           container_number: order?.order_number ?? '',
+          bol_notes: lineWithNotes.bol_notes ?? null,
           fba_id: fbaRaw,
           qty_plts: Number(l.estimated_pallets) ?? '',
           box: Number(od.quantity) ?? '',

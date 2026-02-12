@@ -10,6 +10,7 @@ import { getOutboundShipmentDetail } from '@/lib/services/outbound-shipment-deta
 import { generateLoadingSheetPDF } from '@/lib/services/print/loading-sheet.service'
 import { resolveLogoDataUrl } from '@/lib/services/print/resolve-logo'
 import type { OAKLoadSheetData } from '@/lib/services/print/types'
+import { getLabelSecondRowAndBarcode } from '@/lib/services/print/label-utils'
 import { formatDate } from '@/lib/services/print/print-templates'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
@@ -46,6 +47,8 @@ export async function GET(
             order_id: true,
             estimated_pallets: true,
             remaining_pallets: true,
+            delivery_nature: true,
+            notes: true,
             locations_order_detail_delivery_location_idTolocations: {
               select: { location_code: true, name: true },
             },
@@ -55,6 +58,7 @@ export async function GET(
             orders: {
               select: { order_number: true },
             },
+            inventory_lots: { select: { storage_location_code: true } },
           },
         },
       },
@@ -71,18 +75,22 @@ export async function GET(
       .map((l) => {
         const od = serializeBigInt(l.order_detail!)
         const loc = od.locations_order_detail_delivery_location_idTolocations
-        const detailItem = Array.isArray(od.order_detail_item_order_detail_item_detail_idToorder_detail)
-          ? od.order_detail_item_order_detail_item_detail_idToorder_detail[0]
-          : null
-        const storageLocation =
-          (loc && (loc as any).location_code) ||
-          (detailItem && (detailItem as any).detail_name) ||
-          ''
-        const containerNumber =
-          (od.orders && (od.orders as any).order_number) || ''
+        const locationCode = loc && (loc as any).location_code ? String((loc as any).location_code) : ''
+        const containerNumber = (od.orders && (od.orders as any).order_number) || ''
+        const deliveryNature = (od as any).delivery_nature ?? undefined
+        const notes = (od as any).notes ?? undefined
+        const lineWithNotes = l as { load_sheet_notes?: string | null }
+        // 柜号列：与入库 Label 一致，柜号后跟「第二行」（私仓/转仓=备注，亚马逊/其他=仓点，扣货=仓点+hold）
+        const { secondRow } = getLabelSecondRowAndBarcode(containerNumber, locationCode, deliveryNature, notes)
+        const containerDisplay = secondRow ? `${containerNumber}-${secondRow}` : containerNumber
+        // 仓储位置：入库管理明细行（inventory_lots）的仓库位置，如 B9/B10
+        const lots = (od.inventory_lots as { storage_location_code?: string | null }[]) || []
+        const storageCodes = [...new Set(lots.map((lot) => lot.storage_location_code).filter(Boolean))] as string[]
+        const storageLocation = storageCodes.join('/')
         return {
-          container_number: containerNumber,
+          container_number: containerDisplay,
           storage_location: storageLocation,
+          load_sheet_notes: lineWithNotes.load_sheet_notes ?? null,
           planned_pallets: Number(l.estimated_pallets) || 0,
           loaded_pallets: '',   // 留空，手工填写
           remaining_pallets: '', // 留空，手工填写
@@ -103,6 +111,9 @@ export async function GET(
       loadNumber: detail.reference_number ?? '',
       sealNumber: '',
       appointmentTime,
+      delivery_address: detail.delivery_address ?? null,
+      contact_name: detail.contact_name ?? null,
+      contact_phone: detail.contact_phone ?? null,
       lines: sheetLines,
       totalPlannedPallets,
       totalIsClearLabel: '', // 留空，手工填写

@@ -16,6 +16,9 @@ import { LabelsDocument } from './label-pdf'
 import { ensurePdfFont } from './register-pdf-font'
 import JsBarcode from 'jsbarcode'
 import { createCanvas } from 'canvas'
+import { getLabelSecondRowAndBarcode } from './label-utils'
+
+export { getLabelSecondRowAndBarcode }
 
 /**
  * 从订单明细生成 Label 数据
@@ -128,26 +131,12 @@ export async function generateLabelDataFromOrderDetail(
     ? Number(orderDetail.estimated_pallets) 
     : 1
 
-  // 生成条形码内容：直接使用第一行和第二行的内容
-  // 第一行：柜号
-  const row1Content = containerNumber || ''
-  
-  // 第二行：根据性质确定显示内容（与 label-pdf.tsx 中的逻辑完全一致）
-  let row2Content = ''
-  if (deliveryNature === '私仓' || deliveryNature === '转仓') {
-    // 私仓或转仓：显示备注（无论备注是否为空）
-    row2Content = notes || ''
-  } else {
-    // 其他情况显示仓点
-    row2Content = deliveryLocation || ''
-    // 如果性质是扣货，仓点后加-hold
-    if (deliveryNature === '扣货') {
-      row2Content += '-hold'
-    }
-  }
-  
-  // 条形码 = 第一行 + 第二行（去除所有空格）
-  const barcode = `${row1Content}${row2Content}`.replace(/\s+/g, '')
+  const { secondRow, barcode } = getLabelSecondRowAndBarcode(
+    containerNumber,
+    deliveryLocation,
+    deliveryNature,
+    notes
+  )
 
   // 创建单个 Label 数据
   const labelData: LabelData = {

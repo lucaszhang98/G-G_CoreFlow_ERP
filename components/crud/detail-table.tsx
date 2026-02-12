@@ -56,6 +56,10 @@ export interface DetailData {
   volume_percentage?: number | string | null
   notes?: string | null
   po?: string | null // PO字段
+  /** 装车单明细备注（出库详情中每条明细可编辑） */
+  load_sheet_notes?: string | null
+  /** BOL 明细备注（出库详情中每条明细可编辑） */
+  bol_notes?: string | null
   window_period?: string | null // 窗口期字段
   total_pallets?: number | null // 总板数（用于验证，已废弃，使用 remaining_pallets）
   total_pallets_at_time?: number | null // 总板数快照（预约明细创建/更新时的总板数）
@@ -99,8 +103,10 @@ export interface DetailTableConfig {
     volumePercentage?: boolean // 分仓占比
     unloadType?: boolean // FBA
     notes?: boolean // 备注
-        po?: boolean // PO
-        windowPeriod?: boolean // 窗口期
+    po?: boolean // PO
+    loadSheetNotes?: boolean // 装车单明细备注（出库详情）
+    bolNotes?: boolean // BOL 明细备注（出库详情）
+    windowPeriod?: boolean // 窗口期
         detailId?: boolean // 仓点ID（隐藏）
     quantity?: boolean // 数量
     volume?: boolean // 体积
@@ -257,14 +263,19 @@ export function DetailTable({
     })
   }
 
-  // 初始化批量编辑值（订单明细：多字段；预约明细：预计板数、拒收板数）
+  // 初始化批量编辑值（订单明细：多字段；预约明细：预计板数、拒收板数、装车单/BOL明细备注）
   const initializeBatchEditValues = () => {
     const values: Record<string | number, Partial<DetailData>> = {}
     if (appointmentId) {
+      const withLineNotes = config.showColumns?.loadSheetNotes || config.showColumns?.bolNotes
       orderDetails.forEach((detail: any) => {
         values[detail.id] = {
           estimated_pallets: detail.estimated_pallets ?? 0,
           rejected_pallets: (detail.rejected_pallets ?? 0) as number | null,
+          ...(withLineNotes && {
+            load_sheet_notes: (detail.load_sheet_notes ?? '') || null,
+            bol_notes: (detail.bol_notes ?? '') || null,
+          }),
         }
       })
     } else {
@@ -311,6 +322,8 @@ export function DetailTable({
             body: JSON.stringify({
               estimated_pallets: values?.estimated_pallets,
               rejected_pallets: values?.rejected_pallets,
+              load_sheet_notes: values?.load_sheet_notes,
+              bol_notes: values?.bol_notes,
             }),
           })
           if (!response.ok) {
@@ -359,6 +372,8 @@ export function DetailTable({
       setEditingData({
         estimated_pallets: detail.estimated_pallets,
         rejected_pallets: (detail as any).rejected_pallets ?? 0,
+        load_sheet_notes: (detail as any).load_sheet_notes ?? null,
+        bol_notes: (detail as any).bol_notes ?? null,
       })
     } else {
       setEditingData({
@@ -395,6 +410,8 @@ export function DetailTable({
             body: JSON.stringify({
               estimated_pallets: editingData.estimated_pallets,
               rejected_pallets: editingData.rejected_pallets,
+              load_sheet_notes: editingData.load_sheet_notes,
+              bol_notes: editingData.bol_notes,
             }),
           })
 
@@ -852,6 +869,8 @@ export function DetailTable({
     if (config.showColumns?.volumePercentage) cols.push('volumePercentage') // 分仓占比
     if (config.showColumns?.unloadType) cols.push('unloadType') // FBA
     if (config.showColumns?.notes) cols.push('notes') // 备注
+    if (config.showColumns?.loadSheetNotes) cols.push('loadSheetNotes') // 装车单明细备注（出库详情）
+    if (config.showColumns?.bolNotes) cols.push('bolNotes') // BOL 明细备注（出库详情）
     // 其他可选字段
     if (config.showColumns?.totalVolume) cols.push('totalVolume')
     if (config.showColumns?.totalPallets) cols.push('totalPallets')
@@ -1005,6 +1024,10 @@ export function DetailTable({
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[200px]">FBA</th>
                   case 'notes':
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[180px]">备注</th>
+                  case 'loadSheetNotes':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[180px]">装车单明细备注</th>
+                  case 'bolNotes':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[180px]">BOL明细备注</th>
                   case 'po':
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[200px]">PO</th>
                   case 'windowPeriod':
@@ -1404,6 +1427,62 @@ export function DetailTable({
                             )
                           }
                           return <td key={col} className="p-2 text-sm min-w-[180px] whitespace-pre-wrap break-words">{detail.notes || '-'}</td>
+                        case 'loadSheetNotes':
+                          // 出库详情中预约明细可编辑装车单明细备注（单行编辑或批量编辑）
+                          if (appointmentId && (editingRowId === detailId || isBatchEditMode)) {
+                            const val = isBatchEditMode
+                              ? (batchEditValues[detailId]?.load_sheet_notes ?? (detail as any).load_sheet_notes ?? '')
+                              : (editingData?.load_sheet_notes ?? (detail as any).load_sheet_notes ?? '')
+                            return (
+                              <td key={col} className="p-2 text-sm min-w-[180px]">
+                                <Textarea
+                                  value={val || ''}
+                                  onChange={(e) => {
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: { ...prev[detailId], load_sheet_notes: e.target.value || null },
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData, load_sheet_notes: e.target.value || null })
+                                    }
+                                  }}
+                                  className="w-full min-w-[180px] min-h-[60px] resize-both"
+                                  placeholder="装车单明细备注"
+                                  rows={2}
+                                />
+                              </td>
+                            )
+                          }
+                          return <td key={col} className="p-2 text-sm min-w-[180px] whitespace-pre-wrap break-words">{(detail as any).load_sheet_notes || '-'}</td>
+                        case 'bolNotes':
+                          // 出库详情中预约明细可编辑 BOL 明细备注（单行编辑或批量编辑）
+                          if (appointmentId && (editingRowId === detailId || isBatchEditMode)) {
+                            const val = isBatchEditMode
+                              ? (batchEditValues[detailId]?.bol_notes ?? (detail as any).bol_notes ?? '')
+                              : (editingData?.bol_notes ?? (detail as any).bol_notes ?? '')
+                            return (
+                              <td key={col} className="p-2 text-sm min-w-[180px]">
+                                <Textarea
+                                  value={val || ''}
+                                  onChange={(e) => {
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: { ...prev[detailId], bol_notes: e.target.value || null },
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData, bol_notes: e.target.value || null })
+                                    }
+                                  }}
+                                  className="w-full min-w-[180px] min-h-[60px] resize-both"
+                                  placeholder="BOL明细备注"
+                                  rows={2}
+                                />
+                              </td>
+                            )
+                          }
+                          return <td key={col} className="p-2 text-sm min-w-[180px] whitespace-pre-wrap break-words">{(detail as any).bol_notes || '-'}</td>
                         case 'totalVolume':
                           return <td key={col} className="p-2 text-sm">{formatVolume(detail.volume)}</td>
                         case 'totalPallets':

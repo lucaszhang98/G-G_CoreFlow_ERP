@@ -90,6 +90,14 @@ export const deliveryAppointmentConfig: EntityConfig = {
       type: 'datetime',
       sortable: true,
     },
+    eta: {
+      key: 'eta',
+      label: 'ETA',
+      type: 'date',
+      sortable: false,
+      readonly: true,
+      computed: true,
+    },
     total_pallets: {
       key: 'total_pallets',
       label: '板数',
@@ -114,6 +122,17 @@ export const deliveryAppointmentConfig: EntityConfig = {
       label: '备注',
       type: 'textarea',
     },
+    status: {
+      key: 'status',
+      label: '状态',
+      type: 'select',
+      sortable: true,
+      options: [
+        { label: '待处理', value: '待处理' },
+        { label: '已校验PO', value: '已校验PO' },
+        { label: '已校验装车单', value: '已校验装车单' },
+      ],
+    },
   },
   
   list: {
@@ -127,6 +146,8 @@ export const deliveryAppointmentConfig: EntityConfig = {
       'origin_location',
       'destination_location',
       'confirmed_start',
+      'eta',
+      'status',
       'total_pallets',
       'rejected',
       'po',
@@ -142,7 +163,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'po', 'notes'],
+        fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'status', 'rejected', 'po', 'notes'],
       },
       delete: {
         enabled: true,
@@ -151,7 +172,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'po', 'notes'],
+      fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'status', 'rejected', 'po', 'notes'],
     },
   },
   
@@ -164,6 +185,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
     'delivery_method',
     'appointment_account',
     'confirmed_start',
+    'status',
     'rejected',
     'po',
     'notes',

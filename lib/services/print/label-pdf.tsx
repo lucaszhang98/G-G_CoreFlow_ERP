@@ -13,6 +13,7 @@ import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/render
 import { LabelData } from './types'
 import { PageSizes } from './print-templates'
 import { pdfFontFamily } from './register-pdf-font'
+import { getLabelSecondRowAndBarcode } from './label-utils'
 
 // 页面尺寸（横向 4×6 英寸 = 152.4×101.6mm）
 const LABEL_WIDTH = PageSizes.LABEL_4X6_LANDSCAPE.width
@@ -151,22 +152,14 @@ export function LabelPage({ label, barcodeImage, pageNumber }: LabelPDFProps) {
       {/* 第一行：柜号（居中，更大更粗，无空隙） */}
       <Text style={styles.row1}>{label.containerNumber}</Text>
 
-      {/* 第二行：仓点（居中，更大更粗，紧贴第一行，无空隙） */}
+      {/* 第二行：与条形码一致，统一规则（私仓/转仓=备注，亚马逊/其他=仓点，扣货=仓点+hold） */}
       <Text style={styles.row2}>
-        {(() => {
-          // 如果性质是私仓或转仓，显示备注（无论备注是否为空）
-          if (label.deliveryNature === '私仓' || label.deliveryNature === '转仓') {
-            return label.notes ?? ''
-          }
-          
-          // 其他情况显示仓点
-          let location = label.deliveryLocation || ''
-          // 如果性质是扣货，仓点后加-hold
-          if (label.deliveryNature === '扣货') {
-            location += '-hold'
-          }
-          return location
-        })()}
+        {getLabelSecondRowAndBarcode(
+          label.containerNumber,
+          label.deliveryLocation ?? '',
+          label.deliveryNature,
+          label.notes
+        ).secondRow}
       </Text>
 
       {/* 第三行：条形码（只显示图片，不显示文本，紧贴第二行和第四行） */}

@@ -112,13 +112,11 @@ export const orderConfig: EntityConfig = {
       label: '备注',
       type: 'textarea',
     },
-    // created_at 和 updated_at 是审计字段，由系统自动维护，不在前端显示
     created_at: {
       key: 'created_at',
       label: '创建时间',
       type: 'date',
       sortable: true,
-      hidden: true,
     },
     updated_at: {
       key: 'updated_at',
@@ -268,7 +266,7 @@ export const orderConfig: EntityConfig = {
   list: {
     defaultSort: 'order_date',
     defaultOrder: 'desc',
-    columns: ['order_number', 'customer', 'user_id', 'order_date', 'status', 'operation_mode', 'delivery_location', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'container_volume', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'notes'],
+    columns: ['order_number', 'customer', 'user_id', 'order_date', 'created_at', 'status', 'operation_mode', 'delivery_location', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'container_volume', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'notes'],
     searchFields: ['order_number'], // 只搜索订单号（最重要的字段）
     pageSize: 10,
     // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
