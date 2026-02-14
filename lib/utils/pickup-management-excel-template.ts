@@ -274,3 +274,144 @@ export async function generatePickupManagementImportTemplate(
 
   return workbook
 }
+
+/** 导出选中行所用：与导入模板一致的两表结构单行数据 */
+export interface PickupExportRowForTemplate {
+  mbl?: string | null
+  container_number?: string | null
+  port_location_code?: string | null
+  carrier_name?: string | null
+  eta_date?: Date | string | null
+  lfd_date?: Date | string | null
+  pickup_date?: Date | string | null
+  pickup_out?: boolean
+  report_empty?: boolean
+  return_empty?: boolean
+  port_text?: string | null
+  container_type?: string | null
+  shipping_line?: string | null
+  driver_name?: string | null
+  current_location?: string | null
+}
+
+function formatDateForExport(date: Date | string | null | undefined): string {
+  if (date === null || date === undefined) return ''
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date
+    if (isNaN(d.getTime())) return ''
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  } catch {
+    return ''
+  }
+}
+
+function formatDateTimeForExport(date: Date | string | null | undefined): string {
+  if (date === null || date === undefined) return ''
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date
+    if (isNaN(d.getTime())) return ''
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const h = String(d.getHours()).padStart(2, '0')
+    const min = String(d.getMinutes()).padStart(2, '0')
+    return `${y}-${m}-${day} ${h}:${min}`
+  } catch {
+    return ''
+  }
+}
+
+function formatBooleanForExport(value: boolean | undefined): string {
+  if (value === undefined) return ''
+  return value ? '是' : '否'
+}
+
+/**
+ * 按导入模板格式导出选中数据（两个 Sheet，列与导入模板一致）
+ */
+export async function generatePickupExportByTemplate(
+  rows: PickupExportRowForTemplate[]
+): Promise<ExcelJS.Workbook> {
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'G&G CoreFlow ERP'
+  workbook.created = new Date()
+
+  const sheet1Cols: Array<{ key: string; header: string; width: number }> = [
+    { key: 'mbl', header: 'MBL', width: 18 },
+    { key: 'container_number', header: '柜号', width: 18 },
+    { key: 'port_location_code', header: '码头/查验站', width: 15 },
+    { key: 'carrier_name', header: '承运公司', width: 15 },
+    { key: 'eta_date', header: 'ETA', width: 12 },
+    { key: 'lfd_date', header: 'LFD', width: 12 },
+    { key: 'pickup_date', header: '提柜日期', width: 16 },
+  ]
+
+  const sheet1 = workbook.addWorksheet('提柜数据1', {
+    views: [{ state: 'frozen', xSplit: 0, ySplit: 1 }],
+  })
+  sheet1.columns = sheet1Cols.map((c) => ({ key: c.key, header: c.header, width: c.width }))
+  const header1 = sheet1.getRow(1)
+  header1.height = 20
+  header1.alignment = { horizontal: 'center', vertical: 'middle' }
+  header1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } }
+  header1.font = { bold: true, size: 11 }
+  rows.forEach((r) => {
+    sheet1.addRow({
+      mbl: r.mbl ?? '',
+      container_number: r.container_number ?? '',
+      port_location_code: r.port_location_code ?? '',
+      carrier_name: r.carrier_name ?? '',
+      eta_date: formatDateForExport(r.eta_date),
+      lfd_date: formatDateForExport(r.lfd_date),
+      pickup_date: formatDateTimeForExport(r.pickup_date),
+    })
+  })
+
+  const sheet2Cols: Array<{ key: string; header: string; width: number }> = [
+    { key: 'pickup_out', header: '提出', width: 8 },
+    { key: 'report_empty', header: '报空', width: 8 },
+    { key: 'return_empty', header: '还空', width: 8 },
+    { key: 'port_location_code', header: '码头/查验站', width: 15 },
+    { key: 'port_text', header: '码头位置', width: 12 },
+    { key: 'container_type', header: '柜型', width: 10 },
+    { key: 'shipping_line', header: '船司', width: 12 },
+    { key: 'container_number', header: '柜号', width: 18 },
+    { key: 'pickup_date', header: '提柜日期', width: 16 },
+    { key: 'lfd_date', header: 'LFD', width: 12 },
+    { key: 'mbl', header: 'MBL', width: 18 },
+    { key: 'driver_name', header: '司机', width: 12 },
+    { key: 'current_location', header: '现在位置', width: 14 },
+  ]
+
+  const sheet2 = workbook.addWorksheet('提柜数据2', {
+    views: [{ state: 'frozen', xSplit: 0, ySplit: 1 }],
+  })
+  sheet2.columns = sheet2Cols.map((c) => ({ key: c.key, header: c.header, width: c.width }))
+  const header2 = sheet2.getRow(1)
+  header2.height = 20
+  header2.alignment = { horizontal: 'center', vertical: 'middle' }
+  header2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } }
+  header2.font = { bold: true, size: 11 }
+  rows.forEach((r) => {
+    sheet2.addRow({
+      pickup_out: formatBooleanForExport(r.pickup_out),
+      report_empty: formatBooleanForExport(r.report_empty),
+      return_empty: formatBooleanForExport(r.return_empty),
+      port_location_code: r.port_location_code ?? '',
+      port_text: r.port_text ?? '',
+      container_type: r.container_type ?? '',
+      shipping_line: r.shipping_line ?? '',
+      container_number: r.container_number ?? '',
+      pickup_date: formatDateTimeForExport(r.pickup_date),
+      lfd_date: formatDateForExport(r.lfd_date),
+      mbl: r.mbl ?? '',
+      driver_name: r.driver_name ?? '',
+      current_location: r.current_location ?? '',
+    })
+  })
+
+  return workbook
+}

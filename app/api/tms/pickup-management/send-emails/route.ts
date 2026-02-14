@@ -6,9 +6,9 @@ import { Resend } from 'resend'
 
 // 承运公司到邮箱的映射
 const CARRIER_EMAIL_MAP: Record<string, string> = {
-  'NST': 'nextstopop1@gmail.com,nextstoptransportation888@gmail.com,nextstopop2@gmail.com,zhang.yuxuan5@northeastern.edu',
-  'CVT': 'conveytrucking56@gmail.com,zhang.yuxuan5@northeastern.edu',
-  'GG': 'zhang.yuxuan5@northeastern.edu',
+  'NST': 'nextstopop1@gmail.com,nextstoptransportation888@gmail.com,nextstopop2@gmail.com',
+  'CVT': 'conveytrucking56@gmail.com',
+  'GG': 'info@hwhexpressinc.com',
 }
 
 // 固定抄送邮箱
@@ -164,6 +164,7 @@ export async function POST(request: NextRequest) {
     let sentCount = 0
     let failedCount = 0
     const errors: string[] = []
+    const resendIds: string[] = []
 
     // 优先使用 Resend API
     if (resendApiKey) {
@@ -174,16 +175,30 @@ export async function POST(request: NextRequest) {
           // Resend 支持多个收件人（用数组或逗号分隔的字符串）
           const toEmails = email.to.split(',').map((e: string) => e.trim())
           
-          await resend.emails.send({
-            from: process.env.RESEND_FROM || process.env.EMAIL_FROM || 'ERP System <noreply@ggtransport.in>',
+          // 未配置 RESEND_FROM 时使用 Resend 提供的发件地址，无需验证域名（可发到任意收件人）
+          const fromAddress = process.env.RESEND_FROM || process.env.EMAIL_FROM || 'ERP System <onboarding@resend.dev>'
+          const result = await resend.emails.send({
+            from: fromAddress,
             to: toEmails,
             cc: [email.cc],
             subject: email.subject,
             text: email.message,
           })
-          
-          sentCount++
-          console.log(`[发送邮件] ✅ 成功发送邮件 (Resend) - 柜号: ${email.containerNumber}, 收件人: ${email.to}`)
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[发送邮件] Resend 原始响应:', JSON.stringify(result, null, 2))
+          }
+          const resendError = (result as { error?: { message?: string } })?.error
+          if (resendError) {
+            failedCount++
+            const errorMsg = `柜号 ${email.containerNumber}: ${resendError.message || 'Resend 返回错误'}`
+            errors.push(errorMsg)
+            console.error(`[发送邮件] ❌ 发送失败 (Resend) - 柜号: ${email.containerNumber}:`, resendError.message)
+          } else {
+            const resendId = (result as { data?: { id?: string } })?.data?.id
+            if (resendId) resendIds.push(resendId)
+            sentCount++
+            console.log(`[发送邮件] ✅ 成功发送邮件 (Resend) - 柜号: ${email.containerNumber}, 收件人: ${email.to}${resendId ? `, Resend ID: ${resendId}` : ''}`)
+          }
         } catch (error: any) {
           failedCount++
           const errorMsg = `柜号 ${email.containerNumber}: ${error.message || '发送失败'}`
@@ -263,19 +278,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: '邮件服务未配置。请选择以下方式之一：\n\n' +
-                 '方式1（推荐 - 无需应用专用密码）：\n' +
-                 '1. 访问 https://resend.com 注册账号（免费）\n' +
-                 '2. 获取 API Key\n' +
-                 '3. 在 .env.local 中添加: RESEND_API_KEY=你的API密钥\n' +
-                 '4. 可选: RESEND_FROM=ERP System <noreply@ggtransport.in>\n\n' +
-                 '方式2（需要应用专用密码）：\n' +
-                 '在 .env.local 中添加: SMTP_USER=你的邮箱, SMTP_PASS=应用专用密码',
+                 '方式1 - Resend（无需域名）：\n' +
+                 '1. 访问 https://resend.com 注册，获取 API Key\n' +
+                 '2. 在 .env 或 .env.local 中添加: RESEND_API_KEY=你的API密钥\n' +
+                 '3. 不设 RESEND_FROM 即使用 Resend 默认发件地址（无需验证域名）\n\n' +
+                 '方式2 - Gmail SMTP（无需域名）：\n' +
+                 '在 .env 中添加: SMTP_USER=你的Gmail, SMTP_PASS=Gmail应用专用密码',
           email_data: process.env.NODE_ENV === 'development' ? emailData : undefined,
         },
         { status: 500 }
       )
     }
 
+    const usingOnboardingFrom = !process.env.RESEND_FROM && !process.env.EMAIL_FROM
     return NextResponse.json({
       success: true,
       message: failedCount === 0 
@@ -284,6 +299,10 @@ export async function POST(request: NextRequest) {
       sent_count: sentCount,
       failed_count: failedCount,
       errors: errors.length > 0 ? errors : undefined,
+      resend_ids: resendIds.length > 0 ? resendIds : undefined,
+      resend_no_domain_hint: usingOnboardingFrom && sentCount > 0
+        ? '当前使用 Resend 默认发件人(未验证域名)，Resend 可能不会投递到真实邮箱。若收不到请改用 Gmail：在 .env 中设置 SMTP_USER 与 SMTP_PASS（Gmail 应用专用密码），并去掉 RESEND_API_KEY 即可用 Gmail 发送。'
+        : undefined,
       email_data: process.env.NODE_ENV === 'development' ? emailData : undefined, // 仅开发环境返回邮件数据用于调试
     })
   } catch (error: any) {

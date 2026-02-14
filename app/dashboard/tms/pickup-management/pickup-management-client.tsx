@@ -23,9 +23,9 @@ import {
 import { PickupSummaryDialog } from "@/components/pickup-management/pickup-summary-dialog"
 import { PickupImportDialog } from "./pickup-import-dialog"
 import {
-  generatePickupManagementExportExcel,
-  type PickupManagementExportData,
-} from "@/lib/utils/pickup-management-export-excel"
+  generatePickupExportByTemplate,
+  type PickupExportRowForTemplate,
+} from "@/lib/utils/pickup-management-excel-template"
 
 export function PickupManagementClient() {
   const [isInitializing, setIsInitializing] = React.useState(false)
@@ -71,7 +71,7 @@ export function PickupManagementClient() {
     setFilteredCount(newFilteredTotal)
   }, [])
 
-  // 导出选中行（前端生成Excel）
+  // 导出选中行（与导入模板一致的双 Sheet 格式）
   const handleExportSelected = React.useCallback(async () => {
     if (selectedRows.length === 0) {
       toast.error('请先选择要导出的记录')
@@ -79,38 +79,26 @@ export function PickupManagementClient() {
     }
     try {
       toast.loading('正在生成Excel文件...')
-      const exportData: PickupManagementExportData[] = selectedRows.map((row: any) => ({
-        container_number: row.container_number ?? null,
+      const exportData: PickupExportRowForTemplate[] = selectedRows.map((row: any) => ({
         mbl: row.mbl ?? null,
-        port_location: row.port_location ?? null,
-        port_text: row.port_text ?? null,
-        shipping_line: row.shipping_line ?? null,
-        customer_name: row.customer?.name ?? null,
-        container_type: row.container_type ?? null,
-        carrier_name: row.carrier?.name ?? null,
-        driver_code: row.driver_name ?? null,
-        do_issued: row.do_issued ?? null,
-        order_date: row.order_date ?? null,
+        container_number: row.container_number ?? null,
+        port_location_code: row.port_location ?? null,
+        carrier_name: row.carrier_name ?? row.carrier?.name ?? null,
         eta_date: row.eta_date ?? null,
-        operation_mode_display: row.operation_mode_display ?? null,
-        delivery_location: row.delivery_location ?? null,
         lfd_date: row.lfd_date ?? null,
         pickup_date: row.pickup_date ?? null,
-        ready_date: row.ready_date ?? null,
-        return_deadline: row.return_deadline ?? null,
-        warehouse_account: row.warehouse_account ?? null,
-        earliest_appointment_time: row.earliest_appointment_time ?? null,
-        current_location: row.current_location ?? null,
         pickup_out: row.pickup_out ?? false,
         report_empty: row.report_empty ?? false,
         return_empty: row.return_empty ?? false,
-        notes: row.notes ?? null,
-        created_at: row.created_at ?? null,
-        updated_at: row.updated_at ?? null,
+        port_text: row.port_text ?? null,
+        container_type: row.container_type ?? null,
+        shipping_line: row.shipping_line ?? null,
+        driver_name: row.driver_name ?? row.driver_code ?? null,
+        current_location: row.current_location ?? null,
       }))
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
       const filename = `提柜管理_选中_${timestamp}`
-      const workbook = await generatePickupManagementExportExcel(exportData, filename)
+      const workbook = await generatePickupExportByTemplate(exportData)
       const buffer = await workbook.xlsx.writeBuffer()
       const blob = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -122,7 +110,7 @@ export function PickupManagementClient() {
       a.click()
       window.URL.revokeObjectURL(url)
       toast.dismiss()
-      toast.success(`成功导出 ${selectedRows.length} 条提柜数据`)
+      toast.success(`成功导出 ${selectedRows.length} 条提柜数据（与导入模板格式一致）`)
     } catch (error) {
       console.error('导出失败:', error)
       toast.dismiss()
@@ -415,6 +403,16 @@ export function PickupManagementClient() {
           toast.warning(`成功发送 ${data.sent_count} 封邮件，${data.failed_count} 封失败`)
           if (data.errors && data.errors.length > 0) {
             console.error('发送失败的邮件:', data.errors)
+          }
+        }
+        if (data.sent_count > 0) {
+          if (data.resend_no_domain_hint) {
+            toast.warning(data.resend_no_domain_hint, { duration: 8000 })
+          } else {
+            toast.info('若未收到请先查垃圾邮件；投递状态可在 resend.com/emails 查看')
+          }
+          if (data.resend_ids?.length) {
+            console.log('Resend 邮件 ID（可在后台搜索）:', data.resend_ids)
           }
         }
       } else {
