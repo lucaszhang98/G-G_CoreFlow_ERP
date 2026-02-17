@@ -3,7 +3,6 @@ import { checkAuth, checkPermission, handleValidationError, handleError, seriali
 import { inboundReceiptUpdateSchema } from '@/lib/validations/inbound-receipt';
 import { inboundReceiptConfig } from '@/lib/crud/configs/inbound-receipts';
 import prisma from '@/lib/prisma';
-import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
 
 /**
  * GET /api/wms/inbound-receipts/:id
@@ -214,32 +213,13 @@ export async function PUT(
     if (data.warehouse_id !== undefined) updateData.warehouse_id = BigInt(data.warehouse_id);
     if (data.order_id !== undefined) updateData.order_id = BigInt(data.order_id);
 
-    // 处理拆柜日期
+    // 处理拆柜日期：仅当请求中明确传入 planned_unload_at 时才更新，否则保留原值（避免只改状态时被重算覆盖）
     if (data.planned_unload_at !== undefined) {
       if (data.planned_unload_at) {
-        // 如果提供了拆柜日期，使用提供的值
         const [year, month, day] = data.planned_unload_at.split('-').map(Number);
         updateData.planned_unload_at = new Date(Date.UTC(year, month - 1, day));
       } else {
-        // 如果明确设置为空，则设置为 null
         updateData.planned_unload_at = null;
-      }
-    } else {
-      // 如果没有提供 planned_unload_at，且订单日期可能已更新，则自动重新计算
-      // 获取当前订单的日期（可能已更新）
-      const currentOrder = await prisma.orders.findUnique({
-        where: { order_id: BigInt(existing.order_id) },
-        select: {
-          pickup_date: true,
-          eta_date: true,
-        },
-      });
-      
-      if (currentOrder) {
-        const calculatedUnloadDate = calculateUnloadDate(currentOrder.pickup_date, currentOrder.eta_date);
-        if (calculatedUnloadDate) {
-          updateData.planned_unload_at = calculatedUnloadDate;
-        }
       }
     }
 

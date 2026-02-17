@@ -103,6 +103,8 @@ export async function loadBatchUnloadSheetData(
         },
       },
       warehouses: { select: { name: true } },
+      users_inbound_receipt_unloaded_byTousers: { select: { full_name: true, username: true } },
+      users_inbound_receipt_received_byTousers: { select: { full_name: true, username: true } },
     },
   })
   const receiptMap = new Map<string, (typeof receipts)[0]>()
@@ -141,12 +143,16 @@ export async function loadBatchUnloadSheetData(
       result.push(null)
       continue
     }
+    const unloadedByUser = (serialized as any).users_inbound_receipt_unloaded_byTousers
+    const receivedByUser = (serialized as any).users_inbound_receipt_received_byTousers
+    const unloadedByName = unloadedByUser?.full_name || unloadedByUser?.username || undefined
+    const receivedByName = receivedByUser?.full_name || receivedByUser?.username || undefined
     result.push({
       containerNumber,
       customerCode: customerCode || undefined,
       orderNotes: orderData?.notes != null ? String(orderData.notes) : undefined,
-      unloadedBy: serialized.unloaded_by != null ? String(serialized.unloaded_by) : undefined,
-      receivedBy: serialized.received_by != null ? String(serialized.received_by) : undefined,
+      unloadedBy: unloadedByName,
+      receivedBy: receivedByName,
       unloadDate: plannedUnloadDate || undefined,
       orderDetails,
     })

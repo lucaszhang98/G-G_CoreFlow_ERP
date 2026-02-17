@@ -281,6 +281,10 @@ async function loadMasterData(): Promise<PickupMasterData> {
   carriers.forEach((c) => {
     if (c.name) carrierByName.set(c.name.trim(), c.carrier_id)
     if (c.carrier_code) carrierByName.set(c.carrier_code.trim(), c.carrier_id)
+    // 兼容旧模板：Excel 中填 "G&G" 时映射到已改名为 "GG" 的承运商
+    if ((c.name?.trim() === 'GG' || c.carrier_code?.trim() === 'GG') && !carrierByName.has('G&G')) {
+      carrierByName.set('G&G', c.carrier_id)
+    }
   })
   const locationByCode = new Map(
     locations.map((l) => [l.location_code?.trim() || l.name?.trim() || '', l.location_id])

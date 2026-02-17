@@ -53,6 +53,8 @@ export async function loadInboundReceiptForPrint(
         },
       },
       warehouses: { select: { name: true } },
+      users_inbound_receipt_unloaded_byTousers: { select: { full_name: true, username: true } },
+      users_inbound_receipt_received_byTousers: { select: { full_name: true, username: true } },
     },
   })
 
@@ -71,8 +73,10 @@ export async function loadInboundReceiptForPrint(
       ? new Date(plannedUnloadAt).toISOString().split('T')[0]
       : ''
   const unloadDate = plannedUnloadDate
-  const unloadedBy = serialized.unloaded_by != null ? String(serialized.unloaded_by) : ''
-  const receivedBy = serialized.received_by != null ? String(serialized.received_by) : ''
+  const unloadedByUser = (serialized as any).users_inbound_receipt_unloaded_byTousers
+  const receivedByUser = (serialized as any).users_inbound_receipt_received_byTousers
+  const unloadedBy = unloadedByUser?.full_name || unloadedByUser?.username || ''
+  const receivedBy = receivedByUser?.full_name || receivedByUser?.username || ''
 
   const orderDetails = (orderData?.order_detail || []).map((d: any) => {
     const loc = d.locations_order_detail_delivery_location_idTolocations
