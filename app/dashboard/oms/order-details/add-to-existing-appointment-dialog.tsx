@@ -97,7 +97,7 @@ export function AddToExistingAppointmentDialog({
         setAppointments(options)
         if (options.length > 0) {
           setSelectedAppointmentId((prev) => {
-            const exists = options.some((o) => o.appointment_id === prev)
+            const exists = options.some((o: AppointmentOption) => o.appointment_id === prev)
             return exists ? prev : options[0].appointment_id
           })
         }
