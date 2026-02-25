@@ -24,7 +24,7 @@ export function CustomerFeesTable({ customerId }: CustomerFeesTableProps) {
   return (
     <EntityTable
       config={config}
-      importConfig={{ enabled: false }}
+      importConfig={{ enabled: false, onImport: () => {} }}
     />
   )
 }
