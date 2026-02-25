@@ -265,10 +265,10 @@ export const inventoryLotConfig: EntityConfig = {
         enabled: true,
       },
     },
-    // 行内编辑配置（已禁用，隐藏编辑按钮）
+    // 行内编辑配置：仅允许编辑「位置」字段
     inlineEdit: {
-      enabled: false, // 禁用行内编辑，隐藏铅笔图标
-      fields: [],
+      enabled: true,
+      fields: ['storage_location_code'],
     },
   },
   

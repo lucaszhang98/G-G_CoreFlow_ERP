@@ -132,6 +132,19 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
               }
             />
 
+            {/* 该客户费用表入口 */}
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle>费用表</CardTitle>
+                <CardDescription>该客户适用的费用项（与费用管理同结构）</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href={`/dashboard/customers/${resolvedParams.id}/fees`}>
+                  <Button variant="outline">查看费用表</Button>
+                </Link>
+              </CardContent>
+            </Card>
+
             {/* 最近订单（客户管理特有功能） */}
             {customer && (
               <Card className="border-0 shadow-lg">

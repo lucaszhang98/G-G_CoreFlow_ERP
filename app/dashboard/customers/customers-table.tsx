@@ -107,6 +107,11 @@ export function CustomersTable() {
     router.push(`/dashboard/customers/${customer.id}`)
   }
 
+  // 跳转该客户费用表
+  const handleFees = (customer: Customer) => {
+    router.push(`/dashboard/customers/${customer.id}/fees`)
+  }
+
   // 处理删除
   const handleDelete = (customer: Customer) => {
     setCustomerToDelete(customer)
@@ -270,9 +275,12 @@ export function CustomersTable() {
       actionsConfig: {
         onView: handleView,
         onDelete: handleDelete,
+        customActions: [
+          { label: "费用表", onClick: handleFees, variant: "outline" },
+        ],
       },
     })
-  }, [baseColumns, handleView, handleDelete])
+  }, [baseColumns, handleView, handleDelete, handleFees])
 
   const { columns, sortableColumns, columnLabels } = tableConfig
 

@@ -23,14 +23,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Copy, CalendarPlus } from "lucide-react"
+import { Copy, CalendarPlus, CalendarCheck } from "lucide-react"
 import { toast } from "sonner"
 import { NewAppointmentDialog } from "./new-appointment-dialog"
+import { AddToExistingAppointmentDialog } from "./add-to-existing-appointment-dialog"
 
 export function OrderDetailTable() {
   const router = useRouter();
   const [selectedRows, setSelectedRows] = React.useState<any[]>([]);
   const [newAppointmentOpen, setNewAppointmentOpen] = React.useState(false);
+  const [addToExistingAppointmentOpen, setAddToExistingAppointmentOpen] = React.useState(false);
   
   const customClickableColumns: ClickableColumnConfig<any>[] = React.useMemo(() => [
     {
@@ -210,6 +212,16 @@ export function OrderDetailTable() {
           <CalendarPlus className="mr-2 h-4 w-4" />
           新建预约
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[100px] h-9"
+          disabled={selectedRows.length === 0}
+          onClick={() => setAddToExistingAppointmentOpen(true)}
+        >
+          <CalendarCheck className="mr-2 h-4 w-4" />
+          加入预约
+        </Button>
         {/* 显示合计未约板数 */}
         {selectedRows.length > 0 && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -296,7 +308,7 @@ export function OrderDetailTable() {
         </DropdownMenu>
       </>
     )
-  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets, totalUnbookedPallets, handleNewAppointment])
+  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets, totalUnbookedPallets, handleNewAppointment, setAddToExistingAppointmentOpen])
 
   return (
     <>
@@ -389,6 +401,12 @@ export function OrderDetailTable() {
       open={newAppointmentOpen}
       onOpenChange={setNewAppointmentOpen}
       selectedRows={selectedRows}
+    />
+    <AddToExistingAppointmentDialog
+      open={addToExistingAppointmentOpen}
+      onOpenChange={setAddToExistingAppointmentOpen}
+      selectedRows={selectedRows}
+      onSuccess={() => setAddToExistingAppointmentOpen(false)}
     />
     </>
   );
