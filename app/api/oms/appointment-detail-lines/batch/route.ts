@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
           },
         })
         if (existing) {
-          throw new Error(`该预约中已存在订单明细 ${order_detail_id}，请勿重复添加`)
+          throw new Error(`该预约中已存在订单明细 ${rawId}，请勿重复添加`)
         }
 
         const inventoryLot = await tx.inventory_lots.findFirst({
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 
         if (estimated_pallets > totalPalletsAtTime) {
           throw new Error(
-            `订单明细 ${order_detail_id} 预计板数（${estimated_pallets}）不能超过总板数（${totalPalletsAtTime}）`
+            `订单明细 ${rawId} 预计板数（${estimated_pallets}）不能超过总板数（${totalPalletsAtTime}）`
           )
         }
 
