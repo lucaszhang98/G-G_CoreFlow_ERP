@@ -126,8 +126,6 @@ export async function POST(request: NextRequest) {
 
         created.push({ id: row.id, order_detail_id: orderDetailId })
         totalPalletsToAdd += estimated_pallets
-
-        await recalcUnbookedRemainingForOrderDetail(orderDetailId, tx)
       }
 
       const appointment = await tx.delivery_appointments.findUnique({
@@ -145,6 +143,17 @@ export async function POST(request: NextRequest) {
     })
 
     const orderDetailIds = results.map((r) => r.order_detail_id)
+    const uniqueOrderDetailIds = [...new Set(orderDetailIds)]
+
+    // 事务外重算未约/剩余板数，避免 serverless(Neon) 上长事务导致 "Transaction not found"
+    try {
+      for (const orderDetailId of uniqueOrderDetailIds) {
+        await recalcUnbookedRemainingForOrderDetail(orderDetailId, prisma)
+      }
+    } catch (recalcError: any) {
+      console.warn('批量加入预约后重算未约板数失败:', recalcError)
+    }
+
     const orderDetails = await prisma.order_detail.findMany({
       where: { id: { in: orderDetailIds } },
       select: { order_id: true },
