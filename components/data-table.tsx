@@ -1082,12 +1082,13 @@ export function DataTable<TData, TValue>({
                       data-state={(isSelected && "selected") || (isEditing && "editing")}
                       suppressHydrationWarning={isEditing} // 编辑状态可能在服务器端和客户端不一致
                       className={cn(
-                        "transition-all duration-200 border-b border-border/30 group cursor-pointer",
+                        "transition-colors duration-150 border-b border-border/40 group cursor-pointer",
+                        // 主行：浅底 + 左侧竖线，与展开的明细行区分
                         isEditing
-                          ? "bg-gradient-to-r from-amber-50 via-yellow-50/80 to-amber-50 dark:from-amber-950/40 dark:via-yellow-950/30 dark:to-amber-950/40 shadow-md shadow-amber-500/20 border-amber-300 dark:border-amber-700"
+                          ? "bg-amber-50/80 dark:bg-amber-950/30 border-l-2 border-l-amber-500 dark:border-l-amber-500 shadow-sm"
                           : isSelected
-                          ? "bg-gradient-to-r from-blue-50 via-indigo-50/80 to-blue-50 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-blue-950/40 shadow-sm shadow-blue-500/10"
-                          : getRowClassName?.(row.original) || "hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-blue-950/20 dark:hover:to-indigo-950/20"
+                          ? "bg-slate-50/80 dark:bg-slate-800/30 border-l-2 border-l-primary"
+                          : getRowClassName?.(row.original) || "bg-background hover:bg-slate-50/70 dark:hover:bg-slate-800/20 border-l-2 border-l-transparent hover:border-l-slate-300 dark:hover:border-l-slate-600"
                       )}
                       onClick={(e) => {
                         // 完全禁用行点击展开，只允许通过展开图标展开
@@ -1097,7 +1098,7 @@ export function DataTable<TData, TValue>({
                     >
                       {/* 展开图标列（如果启用展开行功能，始终显示以保持对齐） */}
                       {expandableRows?.enabled && (
-                        <TableCell className="py-3 px-2 w-[40px] text-center">
+                        <TableCell className="py-3.5 px-2 w-[40px] text-center">
                           {canExpand ? (
                             <div 
                               data-expand-trigger
@@ -1223,7 +1224,9 @@ export function DataTable<TData, TValue>({
                           <TableCell 
                             key={cell.id} 
                             className={cn(
-                              "py-3 group-hover:text-foreground transition-colors relative",
+                              "py-3.5 group-hover:text-foreground transition-colors relative",
+                              // 主行数据格：略大字号 + 中等字重，与明细行 text-sm 区分且更耐看
+                              !isActionsCell && !isSelectCell && "text-[15px] font-medium text-foreground/95",
                               isActionsCell ? 'px-2' : 'px-3',
                               widthClass,
                               shouldSticky && stickyPosition === 'left' && "sticky z-10 left-0",
@@ -1275,8 +1278,8 @@ export function DataTable<TData, TValue>({
                       })}
                     </TableRow>
                     {isExpanded && currentExpandedContent && (
-                      <TableRow>
-                        <TableCell colSpan={row.getVisibleCells().length + (expandableRows?.enabled ? 1 : 0)} className="p-0 bg-muted/30">
+                      <TableRow className="border-b border-border/30">
+                        <TableCell colSpan={row.getVisibleCells().length + (expandableRows?.enabled ? 1 : 0)} className="p-0 bg-muted/25 text-sm border-l-4 border-l-muted-foreground/15 pl-2">
                           {currentExpandedContent}
                         </TableCell>
                       </TableRow>

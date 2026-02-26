@@ -274,25 +274,26 @@ export async function addSystemFields(data: any, user: any, isCreate: boolean = 
     validUserId = userId  // 保持为字符串或数字，不转换为 BigInt
   }
   
+  const userIdAsBigInt = validUserId != null ? BigInt(validUserId) : null
   if (isCreate) {
     // 创建操作：设置 created_by 和 created_at
-    if (!data.created_by && validUserId) {
-      data.created_by = validUserId  // Prisma 会自动转换为 BigInt
+    if (!data.created_by && userIdAsBigInt != null) {
+      data.created_by = userIdAsBigInt
     }
     if (!data.created_at) {
       data.created_at = now
     }
     // 创建时也设置 updated_by 和 updated_at
-    if (!data.updated_by && validUserId) {
-      data.updated_by = validUserId  // Prisma 会自动转换为 BigInt
+    if (!data.updated_by && userIdAsBigInt != null) {
+      data.updated_by = userIdAsBigInt
     }
     if (!data.updated_at) {
       data.updated_at = now
     }
   } else {
     // 更新操作：只更新 updated_by 和 updated_at
-    if (validUserId) {
-      data.updated_by = validUserId  // Prisma 会自动转换为 BigInt
+    if (userIdAsBigInt != null) {
+      data.updated_by = userIdAsBigInt
     }
     data.updated_at = now
     // 更新时不能修改 created_by 和 created_at

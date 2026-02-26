@@ -188,10 +188,19 @@ export function EntityTable<T = any>({
   const [itemToDelete, setItemToDelete] = React.useState<T | null>(null)
   const [editingItem, setEditingItem] = React.useState<T | null>(null)
   
-  // ========== 状态初始化（服务端和客户端使用相同的默认值） ==========
-  // 分页和排序状态
-  const [page, setPage] = React.useState(1)
-  const [pageSize, setPageSize] = React.useState(config.list.pageSize || 10)
+  const defaultPageSize = config.list.pageSize || 10
+  const [page, setPage] = React.useState(() => {
+    if (typeof window === 'undefined') return 1
+    const p = new URLSearchParams(window.location.search).get('page')
+    const n = p ? parseInt(p, 10) : 1
+    return !Number.isNaN(n) && n >= 1 ? n : 1
+  })
+  const [pageSize, setPageSize] = React.useState(() => {
+    if (typeof window === 'undefined') return defaultPageSize
+    const p = new URLSearchParams(window.location.search).get('limit')
+    const n = p ? parseInt(p, 10) : defaultPageSize
+    return !Number.isNaN(n) && n >= 1 ? n : defaultPageSize
+  })
   const [total, setTotal] = React.useState(0)
   const [sort, setSort] = React.useState(config.list.defaultSort)
   const [order, setOrder] = React.useState<'asc' | 'desc'>(config.list.defaultOrder)
@@ -235,12 +244,13 @@ export function EntityTable<T = any>({
   const [advancedSearchValues, setAdvancedSearchValues] = React.useState<Record<string, any>>({})
   const [advancedSearchLogic, setAdvancedSearchLogic] = React.useState<'AND' | 'OR'>('AND')
   
-  // ========== 客户端挂载后从URL初始化状态（避免hydration错误） ==========
-  React.useEffect(() => {
+  // ========== 客户端挂载后从 URL 恢复状态（useLayoutEffect 在首帧同步执行，早于 URL 同步，避免被 page=1 覆盖） ==========
+  React.useLayoutEffect(() => {
     if (typeof window === 'undefined') return
 
-    // 标记正在从URL初始化
+    hasInitialized.current = false
     isInitializingFromURL.current = true
+    searchRestoredFromUrlRef.current = true
 
     const params = new URLSearchParams(window.location.search)
     
@@ -250,15 +260,16 @@ export function EntityTable<T = any>({
     const urlSort = params.get('sort')
     const urlOrder = params.get('order')
     
-    if (urlPage) setPage(parseInt(urlPage, 10))
-    if (urlLimit) setPageSize(parseInt(urlLimit, 10))
+    const parsedPage = urlPage ? parseInt(urlPage, 10) : NaN
+    if (!Number.isNaN(parsedPage) && parsedPage >= 1) setPage(parsedPage)
+    const parsedLimit = urlLimit ? parseInt(urlLimit, 10) : NaN
+    if (!Number.isNaN(parsedLimit) && parsedLimit >= 1) setPageSize(parsedLimit)
     if (urlSort) {
       setSort(urlSort)
       setSorting([{ id: urlSort, desc: (urlOrder || config.list.defaultOrder) === 'desc' }])
     }
     if (urlOrder) setOrder(urlOrder as 'asc' | 'desc')
     
-    // 搜索
     const urlSearch = params.get('search')
     if (urlSearch) {
       setSearch(urlSearch)
@@ -298,13 +309,13 @@ export function EntityTable<T = any>({
       setAdvancedSearchLogic(advancedLogic as 'AND' | 'OR')
     }
     
-    // 初始化完成后，允许后续的URL同步
-    // 使用 setTimeout 确保所有状态更新都已完成
-    setTimeout(() => {
+    // 延迟一帧再允许 URL 同步，避免本周期内用 page=1 覆盖地址栏
+    const t = window.setTimeout(() => {
       isInitializingFromURL.current = false
       hasInitialized.current = true
     }, 0)
-  }, [config.list.defaultOrder]) // 只在挂载时执行一次
+    return () => window.clearTimeout(t)
+  }, [config.list.defaultOrder])
   
   // 批量操作状态
   const [selectedRows, setSelectedRows] = React.useState<T[]>([])
@@ -312,25 +323,19 @@ export function EntityTable<T = any>({
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = React.useState(false)
   const [batchEditValues, setBatchEditValues] = React.useState<Record<string, any>>({})
   
-  // ========== URL同步：通过useEffect监听状态变化并更新URL ==========
-  // 使用ref来跟踪是否正在从URL初始化状态，避免循环更新
   const isInitializingFromURL = React.useRef(false)
   const hasInitialized = React.useRef(false)
-  
-  React.useEffect(() => {
-    // 跳过首次挂载和从URL初始化期间的URL更新
-    if (!hasInitialized.current || isInitializingFromURL.current) {
-      return
-    }
+  const allowUrlSyncRef = React.useRef(false)
+  const searchRestoredFromUrlRef = React.useRef(false)
 
+  React.useEffect(() => {
+    if (!allowUrlSyncRef.current || isInitializingFromURL.current) return
     if (typeof window === 'undefined') return
 
     const params = new URLSearchParams()
     
-    // 分页
-    if (page > 1) {
-      params.set('page', String(page))
-    }
+    // 分页（始终写入 URL，便于刷新后保持当前页）
+    params.set('page', String(page))
     if (pageSize !== (config.list.pageSize || 10)) {
       params.set('limit', String(pageSize))
     }
@@ -407,7 +412,8 @@ export function EntityTable<T = any>({
       })
   }, [config.list.batchOperations?.edit?.fields, config.fields, config.idField])
 
-  // 获取列表数据
+  const fetchAbortRef = React.useRef<AbortController | null>(null)
+  // 获取列表数据（新请求会取消上一次未完成的请求，避免刷新后 page=1 的响应覆盖 page=7）
   const fetchData = React.useCallback(async (
     currentPage: number,
     currentPageSize: number,
@@ -418,6 +424,11 @@ export function EntityTable<T = any>({
     currentAdvancedSearch?: Record<string, any>,
     currentLogic?: 'AND' | 'OR'
   ) => {
+    if (fetchAbortRef.current) {
+      fetchAbortRef.current.abort()
+    }
+    const controller = new AbortController()
+    fetchAbortRef.current = controller
     try {
       setLoading(true)
       const params = new URLSearchParams({
@@ -455,8 +466,9 @@ export function EntityTable<T = any>({
       
       const apiUrl = `${config.apiPath}?${params.toString()}`
       
-      const response = await fetch(apiUrl)
+      const response = await fetch(apiUrl, { signal: controller.signal })
       
+      if (fetchAbortRef.current !== controller) return
       if (!response.ok) {
         let errorMessage = `获取${config.displayName}列表失败`
         try {
@@ -480,8 +492,8 @@ export function EntityTable<T = any>({
         throw new Error('服务器返回数据格式错误')
       }
       
+      if (fetchAbortRef.current !== controller) return
       setData(result.data || [])
-      // 支持两种返回格式：pagination.total 或直接 total
       const newTotal = result.pagination?.total ?? result.total ?? 0
       setTotal(newTotal)
       
@@ -499,18 +511,16 @@ export function EntityTable<T = any>({
         onFilteredTotalChange(newTotal)
       }
     } catch (error: any) {
+      if (error?.name === 'AbortError') return
       console.error(`[EntityTable] 获取${config.displayName}列表失败:`, error)
       const errorMsg = error?.message || `获取${config.displayName}列表失败`
       toast.error(errorMsg)
-      // 设置空数据，避免显示旧数据
       setData([])
       setTotal(0)
-      
-      // 错误时也触发回调
       if (onTotalChange) onTotalChange(0)
       if (onFilteredTotalChange) onFilteredTotalChange(0)
     } finally {
-      setLoading(false)
+      if (fetchAbortRef.current === controller) setLoading(false)
     }
   }, [config.apiPath, config.displayName, onSearchParamsChange, onTotalChange, onFilteredTotalChange])
 
@@ -523,24 +533,27 @@ export function EntityTable<T = any>({
   const isPathChangingRef = React.useRef(false)
   
   React.useEffect(() => {
-    // 如果正在处理路径变化，立即更新 search（不防抖），避免延迟导致的问题
     if (isPathChangingRef.current) {
       setSearch(searchInput)
       setPage(1)
       isPathChangingRef.current = false
     } else {
-      // 正常情况使用防抖
       const timer = setTimeout(() => {
+        if (searchRestoredFromUrlRef.current) {
+          searchRestoredFromUrlRef.current = false
+          setSearch(searchInput)
+          return
+        }
+        if (hasInitialized.current) allowUrlSyncRef.current = true
         setSearch(searchInput)
-        setPage(1) // 搜索时重置到第一页
-      }, 300) // 300ms 防抖
-      
+        setPage(1)
+      }, 300)
       return () => clearTimeout(timer)
     }
   }, [searchInput])
 
-  // 处理排序
   const handleSortingChange = (newSorting: Array<{ id: string; desc: boolean }>) => {
+    allowUrlSyncRef.current = true
     setSorting(newSorting)
     if (newSorting.length > 0) {
       const sortItem = newSorting[0]
@@ -1274,17 +1287,18 @@ export function EntityTable<T = any>({
       }
       return newFilters
     })
-    setPage(1) // 筛选时重置到第一页
+    allowUrlSyncRef.current = true
+    setPage(1)
   }
-  
-  // 清除所有筛选
+
   const handleClearFilters = () => {
+    allowUrlSyncRef.current = true
     setFilterValues({})
     setPage(1)
   }
 
-  // 一次性应用多个筛选值（用于快捷按钮，如「显示本周」「显示最近一月」）
   const applyFilterValues = React.useCallback((v: Record<string, any>) => {
+    allowUrlSyncRef.current = true
     setFilterValues(v)
     setPage(1)
   }, [])
@@ -1301,14 +1315,14 @@ export function EntityTable<T = any>({
     })
   }
   
-  // 执行高级搜索
   const handleAdvancedSearch = () => {
+    allowUrlSyncRef.current = true
     setAdvancedSearchOpen(false)
-    setPage(1) // 搜索时重置到第一页
+    setPage(1)
   }
-  
-  // 重置高级搜索
+
   const handleResetAdvancedSearch = () => {
+    allowUrlSyncRef.current = true
     setAdvancedSearchValues({})
     setAdvancedSearchLogic('AND')
     setPage(1)
@@ -2449,9 +2463,11 @@ export function EntityTable<T = any>({
         pageSize={pageSize}
         total={total}
         onPageChange={(newPage) => {
+          allowUrlSyncRef.current = true
           setPage(newPage)
         }}
         onPageSizeChange={(newPageSize) => {
+          allowUrlSyncRef.current = true
           setPageSize(newPageSize)
           setPage(1)
         }}

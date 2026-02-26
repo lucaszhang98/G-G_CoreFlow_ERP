@@ -255,8 +255,10 @@ export async function GET(request: NextRequest) {
       const po = serialized.po || null;
       const notes = serialized.notes || null;
       
-      // 拒收字段
+      // 拒收、校验PO、校验装车单
       const rejected = serialized.rejected ?? false;
+      const verify_po = serialized.verify_po ?? false;
+      const verify_loading_sheet = serialized.verify_loading_sheet ?? false;
 
       // ETA：仅当派送方式为直送时，取第一个明细行对应订单的 eta_date，否则为空
       let eta: string | null = null;
@@ -289,6 +291,8 @@ export async function GET(request: NextRequest) {
         eta,
         total_pallets: totalPallets, // 从 order_detail.estimated_pallets 计算
         rejected: rejected,
+        verify_po: verify_po,
+        verify_loading_sheet: verify_loading_sheet,
         po: po,
         notes: notes,
         // 保留 orders 对象，用于展开行获取 order_detail
@@ -362,6 +366,8 @@ export async function POST(request: NextRequest) {
       confirmed_end: data.confirmed_end ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.confirmed_end) : null,
       status: data.status || '待处理',
       rejected: data.rejected !== undefined ? Boolean(data.rejected) : false,
+      verify_po: data.verify_po !== undefined ? Boolean(data.verify_po) : false,
+      verify_loading_sheet: data.verify_loading_sheet !== undefined ? Boolean(data.verify_loading_sheet) : false,
       po: data.po || null,
       notes: data.notes || null,
     };

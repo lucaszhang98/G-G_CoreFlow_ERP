@@ -110,6 +110,18 @@ export const deliveryAppointmentConfig: EntityConfig = {
       type: 'boolean',
       sortable: true,
     },
+    verify_po: {
+      key: 'verify_po',
+      label: '校验PO',
+      type: 'boolean',
+      sortable: true,
+    },
+    verify_loading_sheet: {
+      key: 'verify_loading_sheet',
+      label: '校验装车单',
+      type: 'boolean',
+      sortable: true,
+    },
     po: {
       key: 'po',
       label: 'PO',
@@ -127,7 +139,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       label: '状态',
       type: 'select',
       sortable: true,
-      filterMultiple: true, // 预约管理状态筛选支持多选
+      hidden: true, // 已弃用，改用校验PO、校验装车单
       options: [
         { label: '待处理', value: '待处理' },
         { label: '已校验PO', value: '已校验PO' },
@@ -148,9 +160,10 @@ export const deliveryAppointmentConfig: EntityConfig = {
       'destination_location',
       'confirmed_start',
       'eta',
-      'status',
       'total_pallets',
       'rejected',
+      'verify_po',
+      'verify_loading_sheet',
       'po',
       'notes',
     ],
@@ -164,7 +177,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'status', 'rejected', 'po', 'notes'],
+        fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'verify_po', 'verify_loading_sheet', 'po', 'notes'],
       },
       delete: {
         enabled: true,
@@ -173,7 +186,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'status', 'rejected', 'po', 'notes'],
+      fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'verify_po', 'verify_loading_sheet', 'po', 'notes'],
     },
   },
   
@@ -186,8 +199,9 @@ export const deliveryAppointmentConfig: EntityConfig = {
     'delivery_method',
     'appointment_account',
     'confirmed_start',
-    'status',
     'rejected',
+    'verify_po',
+    'verify_loading_sheet',
     'po',
     'notes',
   ],

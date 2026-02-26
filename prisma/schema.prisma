@@ -19,11 +19,13 @@ model delivery_appointments {
   requested_end                                                 DateTime?                  @db.Timestamptz(6)
   confirmed_start                                               DateTime?                  @db.Timestamptz(6)
   confirmed_end                                                 DateTime?                  @db.Timestamptz(6)
-  status                                                        String?                    @default("待处理") @db.VarChar(50)
+  status                                                        String?                    @default("待处理") @db.VarChar(50) // 已弃用，保留兼容
   reference_number                                              String?                    @db.VarChar(100)
   delivery_method                                               String?                    @db.VarChar(50)
   appointment_account                                           String?                    @db.VarChar(100)
   rejected                                                      Boolean?                   @default(false)
+  verify_po                                                     Boolean?                   @default(false) // 校验PO
+  verify_loading_sheet                                           Boolean?                   @default(false) // 校验装车单
   total_pallets                                                 Int                        @default(0) // 预约总板数（累加所有预约明细的estimated_pallets）
   po                                                            String?                    @db.VarChar(2000)
   notes                                                         String?

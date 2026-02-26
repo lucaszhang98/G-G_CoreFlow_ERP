@@ -130,8 +130,10 @@ export async function GET(
       ? formatUTCDateTimeString(serialized.confirmed_end) 
       : null
     
-    // 拒收字段
+    // 拒收、校验PO、校验装车单
     const rejected = serialized.rejected ?? false;
+    const verify_po = serialized.verify_po ?? false;
+    const verify_loading_sheet = serialized.verify_loading_sheet ?? false;
 
     // ETA：仅当派送方式为直送时，取第一个明细对应订单的 eta_date，否则为空
     let eta: string | null = null;
@@ -162,6 +164,8 @@ export async function GET(
       eta,
       total_pallets: totalPallets ?? 0,
       rejected: rejected,
+      verify_po: verify_po,
+      verify_loading_sheet: verify_loading_sheet,
     });
   } catch (error: any) {
     console.error('获取预约管理记录失败:', error);
@@ -327,6 +331,12 @@ export async function PUT(
     }
     if (data.rejected !== undefined) {
       updateData.rejected = Boolean(data.rejected);
+    }
+    if (data.verify_po !== undefined) {
+      updateData.verify_po = Boolean(data.verify_po);
+    }
+    if (data.verify_loading_sheet !== undefined) {
+      updateData.verify_loading_sheet = Boolean(data.verify_loading_sheet);
     }
     if (data.po !== undefined) {
       updateData.po = data.po;

@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertTriangle } from "lucide-react"
 
 type RowData = {
   id: string
@@ -67,9 +67,18 @@ export function AddToExistingAppointmentDialog({
   const [selectedAppointmentId, setSelectedAppointmentId] = React.useState<string>("")
   const [linePallets, setLinePallets] = React.useState<Record<string, number>>({})
   const [submitting, setSubmitting] = React.useState(false)
+  /** 仓点与预约目的地不一致时的确认弹窗 */
+  const [mismatchDialogOpen, setMismatchDialogOpen] = React.useState(false)
+  const [mismatchList, setMismatchList] = React.useState<{ container_number: string; detail_location: string; appointment_destination: string }[]>([])
 
   const MAX_ADD_LINES = 50
   const linesForAppointment = selectedRows
+
+  /** 当前选中的预约信息（含目的地） */
+  const selectedAppointment = React.useMemo(
+    () => appointments.find((a) => a.appointment_id === selectedAppointmentId),
+    [appointments, selectedAppointmentId]
+  )
 
   React.useEffect(() => {
     if (!open || selectedRows.length === 0) return
@@ -109,23 +118,14 @@ export function AddToExistingAppointmentDialog({
       .finally(() => setLoadingAppointments(false))
   }, [open, appointmentSearch])
 
-  const handleSubmit = async () => {
-    if (linesForAppointment.length === 0) {
-      toast.error("没有可用的明细行")
-      return
-    }
-    if (!selectedAppointmentId) {
-      toast.error("请选择要加入的预约")
-      return
-    }
-    if (linesForAppointment.length > MAX_ADD_LINES) {
-      toast.error(`最多一次性加入 ${MAX_ADD_LINES} 条，当前勾选 ${linesForAppointment.length} 条，请减少勾选后再试`)
-      return
-    }
+  /** 执行加入预约的 API 请求（校验通过后或用户确认不一致仍加入时调用） */
+  const doSubmit = React.useCallback(async () => {
+    const validRows = linesForAppointment.filter((row) => row.id != null && String(row.id).trim() !== "")
+    if (validRows.length === 0) return
     setSubmitting(true)
     try {
-      const lines = linesForAppointment.map((row) => ({
-        order_detail_id: row.id,
+      const lines = validRows.map((row) => ({
+        order_detail_id: String(row.id),
         estimated_pallets: linePallets[row.id] ?? row.remaining_pallets ?? row.unbooked_pallets ?? row.estimated_pallets ?? 0,
       }))
       const res = await fetch("/api/oms/appointment-detail-lines/batch", {
@@ -141,6 +141,7 @@ export function AddToExistingAppointmentDialog({
         throw new Error(data?.error || "加入预约失败")
       }
       toast.success(`已加入预约，共 ${data?.data?.created ?? lines.length} 条明细`)
+      setMismatchDialogOpen(false)
       onOpenChange(false)
       onSuccess?.(selectedAppointmentId)
       router.refresh()
@@ -149,11 +150,55 @@ export function AddToExistingAppointmentDialog({
     } finally {
       setSubmitting(false)
     }
+  }, [linesForAppointment, linePallets, selectedAppointmentId, onOpenChange, onSuccess, router])
+
+  const handleSubmit = async () => {
+    if (linesForAppointment.length === 0) {
+      toast.error("没有可用的明细行")
+      return
+    }
+    if (!selectedAppointmentId) {
+      toast.error("请选择要加入的预约")
+      return
+    }
+    if (linesForAppointment.length > MAX_ADD_LINES) {
+      toast.error(`最多一次性加入 ${MAX_ADD_LINES} 条，当前勾选 ${linesForAppointment.length} 条，请减少勾选后再试`)
+      return
+    }
+    const validRows = linesForAppointment.filter((row) => row.id != null && String(row.id).trim() !== "")
+    if (validRows.length === 0) {
+      toast.error("勾选的明细缺少有效 ID，请刷新页面后重新勾选")
+      return
+    }
+
+    const appointmentDestination = (selectedAppointment?.destination_location ?? "").trim()
+    const mismatches = validRows.filter((row) => {
+      const detailLocation = (row.delivery_location_code ?? "").trim()
+      return detailLocation !== appointmentDestination
+    })
+    if (mismatches.length > 0) {
+      setMismatchList(
+        mismatches.map((row) => ({
+          container_number: row.container_number ?? row.order_number ?? String(row.id),
+          detail_location: (row.delivery_location_code ?? "").trim() || "—",
+          appointment_destination: appointmentDestination || "—",
+        }))
+      )
+      setMismatchDialogOpen(true)
+      return
+    }
+
+    await doSubmit()
+  }
+
+  const handleConfirmMismatchSubmit = () => {
+    doSubmit()
   }
 
   const hasRows = selectedRows.length > 0
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
@@ -254,5 +299,62 @@ export function AddToExistingAppointmentDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* 仓点与预约目的地不一致时的确认弹窗 */}
+    <Dialog open={mismatchDialogOpen} onOpenChange={setMismatchDialogOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            仓点与预约目的地不一致
+          </DialogTitle>
+          <DialogDescription>
+            以下明细的仓点与目标预约目的地不一致，请核对后再决定是否仍要加入。
+          </DialogDescription>
+          <div className="space-y-2">
+              <div className="rounded-md border bg-muted/30 max-h-[240px] overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="py-2 text-xs">柜号/订单号</TableHead>
+                      <TableHead className="py-2 text-xs">明细仓点</TableHead>
+                      <TableHead className="py-2 text-xs">预约目的地</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {mismatchList.map((item, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="py-1.5 text-sm">{item.container_number}</TableCell>
+                        <TableCell className="py-1.5 text-sm">{item.detail_location}</TableCell>
+                        <TableCell className="py-1.5 text-sm">{item.appointment_destination}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+          </div>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setMismatchDialogOpen(false)}>
+            取消
+          </Button>
+          <Button
+            onClick={handleConfirmMismatchSubmit}
+            disabled={submitting}
+            className="bg-amber-600 hover:bg-amber-700 focus:ring-amber-500"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                提交中…
+              </>
+            ) : (
+              "仍要加入"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </>
   )
 }

@@ -5,7 +5,7 @@
  * - 第 1 行：第 1、2 列合并放 Logo；第 3 列「卸货仓」；第 4、5、6、7 列合并放目的地代码
  * - 第 2 行：Trailer | 空 | Load# | 预约号码(5+6+7 合并)
  * - 第 3 行：SEAL# | 空（工人填写） | 预约时间 | 具体预约时间(5+6+7 合并)
- * - 第 4 行：柜号 | 仓储位置 | 备注 | 计划板数 | 装车板数 | 剩余板数 | 是否清空
+ * - 第 4 行：柜号 | 仓储位置 | 计划板数 | 备注 | 装车板数 | 剩余板数 | 是否清空
  * - 第 5 行起：明细（有几条生成几条）
  * - 最后一行：第 1、2 列合并「合计」| 总板数 | 空 | 空 | 空 | 地板/卡板
  */
@@ -28,14 +28,14 @@ const borderWidth = 1
 const cellPadding = 5
 const minRowHeight = 22
 
-// 7 列宽度（%）：柜号 | 仓储位置 | 备注 | 计划板数 | 装车板数 | 剩余板数 | 是否清空
-const W1 = 14
-const W2 = 14
-const W3 = 18  // 备注
-const W4 = 12
+// 7 列宽度（%）：柜号 | 仓储位置 | 计划板数 | 备注 | 装车板数 | 剩余板数 | 是否清空
+const W1 = 20   // 柜号列加宽，避免显示不全
+const W2 = 12
+const W3 = 12   // 计划板数
+const W4 = 18   // 备注
 const W5 = 12
 const W6 = 12
-const W7 = 18
+const W7 = 14
 const W1_2 = W1 + W2
 const W4_5_6_7 = W4 + W5 + W6 + W7  // 第 4+5+6+7 列合并（预约号码/预约时间）
 
@@ -111,11 +111,12 @@ const styles = {
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
   },
-  /** 柜号列：缩小字体并限制在格内不溢出 */
+  /** 柜号列：加粗加大，与其余列区分 */
   cellContainerNumber: {
     ...cellCenter,
     overflow: 'hidden' as const,
-    fontSize: 8,
+    fontSize: 12,
+    fontWeight: 'bold' as const,
   },
   /** 备注列：可换行、缩小字体，避免溢出 */
   cellRemarks: {
@@ -217,18 +218,18 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
             </View>
           </View>
 
-          {/* 第 4 行：表头 柜号 | 仓储位置 | 备注 | 计划板数 | 装车板数 | 剩余板数 | 是否清空 */}
+          {/* 第 4 行：表头 柜号 | 仓储位置 | 计划板数 | 备注 | 装车板数 | 剩余板数 | 是否清空 */}
           <View style={styles.tableRow}>
             <View style={[styles.headerCell, { width: `${W1}%` }]}><Text>柜号</Text></View>
             <View style={[styles.headerCell, { width: `${W2}%` }]}><Text>仓储位置</Text></View>
-            <View style={[styles.headerCell, { width: `${W3}%` }]}><Text>备注</Text></View>
-            <View style={[styles.headerCell, { width: `${W4}%` }]}><Text>计划板数</Text></View>
+            <View style={[styles.headerCell, { width: `${W3}%` }]}><Text>计划板数</Text></View>
+            <View style={[styles.headerCell, { width: `${W4}%` }]}><Text>备注</Text></View>
             <View style={[styles.headerCell, { width: `${W5}%` }]}><Text>装车板数</Text></View>
             <View style={[styles.headerCell, { width: `${W6}%` }]}><Text>剩余板数</Text></View>
             <View style={[styles.headerCell, { width: `${W7}%`, borderRightWidth: 0 }]}><Text>是否清空</Text></View>
           </View>
 
-          {/* 明细行：有几条生成几条；柜号、备注列限制在格内不溢出 */}
+          {/* 明细行：柜号加粗加大；第3列计划板数、第4列备注 */}
           {lines.map((line, i) => (
             <View key={i} style={styles.tableRow}>
               <View style={[styles.cellContainerNumber, { width: `${W1}%` }]}>
@@ -237,11 +238,11 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
               <View style={[styles.cell, { width: `${W2}%` }]}>
                 <Text wrap>{line.storage_location}</Text>
               </View>
-              <View style={[styles.cellRemarks, { width: `${W3}%` }]}>
-                <Text wrap>{(line.load_sheet_notes ?? '').toString()}</Text>
-              </View>
-              <View style={[styles.cell, { width: `${W4}%` }]}>
+              <View style={[styles.cell, { width: `${W3}%` }]}>
                 <Text>{String(line.planned_pallets)}</Text>
+              </View>
+              <View style={[styles.cellRemarks, { width: `${W4}%` }]}>
+                <Text wrap>{(line.load_sheet_notes ?? '').toString()}</Text>
               </View>
               <View style={[styles.cell, { width: `${W5}%` }]}>
                 <Text>{line.loaded_pallets || ''}</Text>
@@ -255,15 +256,15 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
             </View>
           ))}
 
-          {/* 最后一行：第 1、2 列合并「合计」| 空 | 总板数 | 空 | 空 | 地板/卡板 */}
+          {/* 最后一行：第 1、2 列合并「合计」| 空 | 总板数(计划板数列) | 空 | 空 | 地板/卡板 */}
           <View style={[styles.tableRow, styles.totalRow]}>
             <View style={[styles.headerCell, { width: `${W1_2}%` }]}>
               <Text>合计</Text>
             </View>
-            <View style={[styles.cell, { width: `${W3}%` }]}><Text></Text></View>
-            <View style={[styles.cell, { width: `${W4}%` }]}>
+            <View style={[styles.cell, { width: `${W3}%` }]}>
               <Text>{totalPlannedPallets}</Text>
             </View>
+            <View style={[styles.cell, { width: `${W4}%` }]}><Text></Text></View>
             <View style={[styles.cell, { width: `${W5}%` }]}><Text></Text></View>
             <View style={[styles.cell, { width: `${W6}%` }]}><Text></Text></View>
             <View style={[styles.cell, { width: `${W7}%`, borderRightWidth: 0 }]}>

@@ -7,7 +7,6 @@ import { generateLoadingSheetPDF } from '@/lib/services/print/loading-sheet.serv
 import { resolveLogoDataUrl } from '@/lib/services/print/resolve-logo'
 import { formatDate } from '@/lib/services/print/print-templates'
 import type { OAKBOLData, OAKLoadSheetData } from '@/lib/services/print/types'
-import { getLabelSecondRowAndBarcode } from '@/lib/services/print/label-utils'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
 
@@ -314,21 +313,15 @@ export async function getLoadingSheetPdfBuffer(appointmentId: string): Promise<B
     .filter((l) => l.order_detail)
     .map((l) => {
       const od = serializeBigInt(l.order_detail!)
-      const loc = od.locations_order_detail_delivery_location_idTolocations
-      const locationCode = loc && (loc as any).location_code ? String((loc as any).location_code) : ''
       const containerNumber = (od.orders && (od.orders as any).order_number) || ''
-      const deliveryNature = (od as any).delivery_nature ?? undefined
-      const notes = (od as any).notes ?? undefined
       const lineWithNotes = l as { load_sheet_notes?: string | null }
-      // 柜号列：与入库 Label 一致，柜号后跟「第二行」（私仓=备注，转仓=仓点+，亚马逊/其他=仓点，扣货=仓点+hold）
-      const { secondRow } = getLabelSecondRowAndBarcode(containerNumber, locationCode, deliveryNature, notes)
-      const containerDisplay = secondRow ? `${containerNumber}-${secondRow}` : containerNumber
+      // 柜号列：装车单第一列只显示柜号，不显示 -仓点
       // 仓储位置：入库管理明细行（inventory_lots）的仓库位置，如 B9/B10
       const lots = (od.inventory_lots as { storage_location_code?: string | null }[]) || []
       const storageCodes = [...new Set(lots.map((lot) => lot.storage_location_code).filter(Boolean))] as string[]
       const storageLocation = storageCodes.join('/')
       return {
-        container_number: containerDisplay,
+        container_number: containerNumber,
         storage_location: storageLocation,
         load_sheet_notes: lineWithNotes.load_sheet_notes ?? null,
         planned_pallets: Number(l.estimated_pallets) || 0,
@@ -442,19 +435,13 @@ export async function loadBatchLoadingSheetData(
       .filter((l) => l.order_detail)
       .map((l) => {
         const od = serializeBigInt(l.order_detail!)
-        const loc = od.locations_order_detail_delivery_location_idTolocations
-        const locationCode = loc && (loc as any).location_code ? String((loc as any).location_code) : ''
         const containerNumber = (od.orders && (od.orders as any).order_number) || ''
-        const deliveryNature = (od as any).delivery_nature ?? undefined
-        const notes = (od as any).notes ?? undefined
         const lineWithNotes = l as { load_sheet_notes?: string | null }
-        const { secondRow } = getLabelSecondRowAndBarcode(containerNumber, locationCode, deliveryNature, notes)
-        const containerDisplay = secondRow ? `${containerNumber}-${secondRow}` : containerNumber
         const lots = (od.inventory_lots as { storage_location_code?: string | null }[]) || []
         const storageCodes = [...new Set(lots.map((lot) => lot.storage_location_code).filter(Boolean))] as string[]
         const storageLocation = storageCodes.join('/')
         return {
-          container_number: containerDisplay,
+          container_number: containerNumber,
           storage_location: storageLocation,
           load_sheet_notes: lineWithNotes.load_sheet_notes ?? null,
           planned_pallets: Number(l.estimated_pallets) || 0,

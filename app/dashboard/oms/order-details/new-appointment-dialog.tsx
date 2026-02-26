@@ -87,16 +87,18 @@ export function NewAppointmentDialog({
     setLinePallets(next)
   }, [open, selectedRows])
 
-  // 打开弹窗时：重置表单，PO 自动填为预约明细中的柜号（逗号分隔），并自动拉取起始地 GG
+  // 打开弹窗时：重置表单，PO 自动填为预约明细中的柜号（逗号分隔），目的地自动填为第一个明细的仓点，并自动拉取起始地 GG
   React.useEffect(() => {
     if (!open) return
     const poFromContainerNumbers =
       selectedRows.length > 0
         ? [...new Set(selectedRows.map((r) => (r.container_number ?? r.order_number ?? "").toString().trim()).filter(Boolean))].join(",")
         : ""
+    const firstRowLocationCode =
+      selectedRows.length > 0 ? (selectedRows[0].delivery_location_code ?? "").toString().trim() : ""
     setForm({
       origin_location_id: "",
-      location_id: "",
+      location_id: firstRowLocationCode || "",
       delivery_method: "卡派",
       reference_number: "",
       appointment_type: "卡板",

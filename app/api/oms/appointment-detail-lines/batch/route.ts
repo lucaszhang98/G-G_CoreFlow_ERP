@@ -48,14 +48,19 @@ export async function POST(request: NextRequest) {
       let totalPalletsToAdd = 0
 
       for (const line of lines) {
-        const order_detail_id = line.order_detail_id
+        const rawId = line.order_detail_id
         const estimated_pallets = parseInt(line.estimated_pallets, 10) || 0
 
-        if (!order_detail_id) {
-          throw new Error('lines 中缺少 order_detail_id')
+        if (rawId === undefined || rawId === null || String(rawId).trim() === '') {
+          throw new Error('lines 中缺少 order_detail_id，请刷新订单明细页后重新勾选再试')
         }
 
-        const orderDetailId = BigInt(order_detail_id)
+        let orderDetailId: bigint
+        try {
+          orderDetailId = BigInt(rawId)
+        } catch {
+          throw new Error(`无效的订单明细 ID: ${rawId}，请刷新页面后重新勾选`)
+        }
 
         const existing = await tx.appointment_detail_lines.findFirst({
           where: {
