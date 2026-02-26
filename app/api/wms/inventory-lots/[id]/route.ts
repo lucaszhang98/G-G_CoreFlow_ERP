@@ -115,7 +115,6 @@ export async function PUT(
     const hasValidPalletCount =
       data.pallet_count !== undefined &&
       data.pallet_count !== null &&
-      data.pallet_count !== '' &&
       !Number.isNaN(Number(data.pallet_count));
     const newPalletCount = hasValidPalletCount ? Number(data.pallet_count) : existing.pallet_count;
     const shouldRecalculate =
