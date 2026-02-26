@@ -1,7 +1,8 @@
 /**
  * Label 第二行与条形码统一规则（与装车单、入库打印 Label 完全一致）
  *
- * - 私仓/转仓：第二行 = 备注（可为空）
+ * - 私仓：第二行 = 备注（可为空）
+ * - 转仓：第二行 = 仓点 + '+'
  * - 亚马逊/其他：第二行 = 仓点
  * - 扣货：第二行 = 仓点 + '-hold'
  *
@@ -14,8 +15,10 @@ export function getLabelSecondRowAndBarcode(
   notes?: string | null
 ): { secondRow: string; barcode: string } {
   let secondRow = ''
-  if (deliveryNature === '私仓' || deliveryNature === '转仓') {
+  if (deliveryNature === '私仓') {
     secondRow = notes ?? ''
+  } else if (deliveryNature === '转仓') {
+    secondRow = (deliveryLocation || '') + '+'
   } else {
     secondRow = deliveryLocation || ''
     if (deliveryNature === '扣货') secondRow += '-hold'

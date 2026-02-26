@@ -120,8 +120,10 @@ export interface OAKLoadSheetData {
   }>
   /** 计划板数合计 */
   totalPlannedPallets: number
-  /** 合计行「是否清空」显示，无则留空供手填 */
+  /** 合计行「是否清空」显示：类型（地板/卡板），无则留空供手填 */
   totalIsClearLabel?: string
+  /** 派送方式（卡派/自提等），与类型同格显示，空格后追加 */
+  deliveryMethod?: string | null
   /** 可选：由 API 解析好的 logo data URL，本地/正式环境通用 */
   logoDataUrl?: string | null
 }

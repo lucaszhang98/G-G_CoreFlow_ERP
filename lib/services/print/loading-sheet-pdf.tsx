@@ -169,13 +169,15 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
     lines,
     totalPlannedPallets,
     totalIsClearLabel,
+    deliveryMethod,
     logoDataUrl,
   } = data
 
   const logoSrc = logoDataUrl || null
   const barcodeDataUrl = loadNumber ? generateBarcodeImage(loadNumber.replace(/\s+/g, '')) : null
 
-  const footerLabel = totalIsClearLabel !== undefined && totalIsClearLabel !== '' ? totalIsClearLabel : '地板'
+  const typeLabel = totalIsClearLabel !== undefined && totalIsClearLabel !== '' ? totalIsClearLabel : '地板'
+  const footerLabel = deliveryMethod ? `${typeLabel} ${deliveryMethod}` : typeLabel
 
   return (
     <Document>

@@ -74,10 +74,15 @@ export async function GET(request: NextRequest) {
         where.rejected = rejected === 'true'
       }
 
-      // 状态筛选
-      const status = searchParams.get('filter_status')
-      if (status && status !== '__all__') {
-        where.status = status
+      // 状态筛选（支持多选，逗号分隔）
+      const statusParam = searchParams.get('filter_status')
+      if (statusParam && statusParam !== '__all__') {
+        const statusValues = statusParam.split(',').map((s) => s.trim()).filter(Boolean)
+        if (statusValues.length === 1) {
+          where.status = statusValues[0]
+        } else if (statusValues.length > 1) {
+          where.status = { in: statusValues }
+        }
       }
 
       // 日期范围筛选

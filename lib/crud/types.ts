@@ -91,6 +91,8 @@ export interface FieldConfig {
   computed?: boolean // 标记为计算字段，由系统自动计算
   // location 类型字段的特殊配置
   locationType?: string // 位置类型（如 'port', 'warehouse'），用于过滤位置选项
+  // 筛选时是否多选（仅对 select 类型筛选生效）
+  filterMultiple?: boolean
 }
 
 /**

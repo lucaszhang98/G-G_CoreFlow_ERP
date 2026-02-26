@@ -273,7 +273,7 @@ export function InboundReceiptDetailsTable({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   storage_location_code: values.storage_location_code || null,
-                  pallet_count: values.pallet_count || 0,
+                  pallet_count: values.pallet_count ?? firstLot.pallet_count ?? 0,
                 }),
               })
               
@@ -289,7 +289,7 @@ export function InboundReceiptDetailsTable({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   storage_location_code: values.storage_location_code || null,
-                  pallet_count: values.pallet_count || 0,
+                  pallet_count: values.pallet_count ?? firstLot.pallet_count ?? 0,
                 }),
               })
               
@@ -422,7 +422,7 @@ export function InboundReceiptDetailsTable({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               storage_location_code: editingValues.storage_location_code || null,
-              pallet_count: editingValues.pallet_count || 0,
+              pallet_count: editingValues.pallet_count ?? firstLot.pallet_count ?? 0,
             }),
           })
 
@@ -439,7 +439,7 @@ export function InboundReceiptDetailsTable({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               storage_location_code: editingValues.storage_location_code || null,
-              pallet_count: editingValues.pallet_count || 0,
+              pallet_count: editingValues.pallet_count ?? firstLot.pallet_count ?? 0,
             }),
           })
 

@@ -320,7 +320,7 @@ export async function getLoadingSheetPdfBuffer(appointmentId: string): Promise<B
       const deliveryNature = (od as any).delivery_nature ?? undefined
       const notes = (od as any).notes ?? undefined
       const lineWithNotes = l as { load_sheet_notes?: string | null }
-      // 柜号列：与入库 Label 一致，柜号后跟「第二行」（私仓/转仓=备注，亚马逊/其他=仓点，扣货=仓点+hold）
+      // 柜号列：与入库 Label 一致，柜号后跟「第二行」（私仓=备注，转仓=仓点+，亚马逊/其他=仓点，扣货=仓点+hold）
       const { secondRow } = getLabelSecondRowAndBarcode(containerNumber, locationCode, deliveryNature, notes)
       const containerDisplay = secondRow ? `${containerNumber}-${secondRow}` : containerNumber
       // 仓储位置：入库管理明细行（inventory_lots）的仓库位置，如 B9/B10
@@ -352,7 +352,8 @@ export async function getLoadingSheetPdfBuffer(appointmentId: string): Promise<B
     contact_phone: detail.contact_phone ?? null,
     lines: sheetLines,
     totalPlannedPallets,
-    totalIsClearLabel: '',
+    totalIsClearLabel: detail.appointment_type ?? '',
+    deliveryMethod: detail.delivery_method ?? null,
     logoDataUrl: logoDataUrl ?? undefined,
   }
   const pdfBuffer = await generateLoadingSheetPDF(data)
@@ -475,7 +476,8 @@ export async function loadBatchLoadingSheetData(
       contact_phone: ob?.contact_phone ?? null,
       lines: sheetLines,
       totalPlannedPallets,
-      totalIsClearLabel: '',
+      totalIsClearLabel: (serializedApp as any).appointment_type ?? '',
+      deliveryMethod: (serializedApp as any).delivery_method ?? null,
       logoDataUrl: undefined,
     })
   }

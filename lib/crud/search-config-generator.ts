@@ -25,6 +25,7 @@ export function generateFilterFields(config: EntityConfig): FilterFieldConfig[] 
         label: fieldConfig.label,
         type: 'select',
         options: fieldConfig.options,
+        ...(fieldConfig.filterMultiple && { multiple: true }),
       })
     }
     
@@ -35,6 +36,7 @@ export function generateFilterFields(config: EntityConfig): FilterFieldConfig[] 
         label: fieldConfig.label,
         type: 'select',
         options: fieldConfig.options,
+        ...(fieldConfig.filterMultiple && { multiple: true }),
       })
     }
     

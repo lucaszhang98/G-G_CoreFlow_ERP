@@ -37,6 +37,7 @@ type RowData = {
   order_number?: string | null
   delivery_location_code?: string | null
   estimated_pallets?: number
+  remaining_pallets?: number | null
   unbooked_pallets?: number
   container_number?: string | null
 }
@@ -67,13 +68,15 @@ export function AddToExistingAppointmentDialog({
   const [linePallets, setLinePallets] = React.useState<Record<string, number>>({})
   const [submitting, setSubmitting] = React.useState(false)
 
+  const MAX_ADD_LINES = 50
   const linesForAppointment = selectedRows
 
   React.useEffect(() => {
     if (!open || selectedRows.length === 0) return
     const next: Record<string, number> = {}
     selectedRows.forEach((row) => {
-      next[row.id] = row.estimated_pallets ?? row.unbooked_pallets ?? 0
+      // 默认使用剩余板数（未约板数），其次预计板数
+      next[row.id] = row.remaining_pallets ?? row.unbooked_pallets ?? row.estimated_pallets ?? 0
     })
     setLinePallets(next)
   }, [open, selectedRows])
@@ -115,25 +118,29 @@ export function AddToExistingAppointmentDialog({
       toast.error("请选择要加入的预约")
       return
     }
+    if (linesForAppointment.length > MAX_ADD_LINES) {
+      toast.error(`最多一次性加入 ${MAX_ADD_LINES} 条，当前勾选 ${linesForAppointment.length} 条，请减少勾选后再试`)
+      return
+    }
     setSubmitting(true)
     try {
-      for (const row of linesForAppointment) {
-        const pallets = linePallets[row.id] ?? row.estimated_pallets ?? row.unbooked_pallets ?? 0
-        const lineRes = await fetch("/api/oms/appointment-detail-lines", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            appointment_id: selectedAppointmentId,
-            order_detail_id: row.id,
-            estimated_pallets: pallets,
-          }),
-        })
-        if (!lineRes.ok) {
-          const err = await lineRes.json().catch(() => ({}))
-          throw new Error(err?.error || `添加明细失败: ${row.id}`)
-        }
+      const lines = linesForAppointment.map((row) => ({
+        order_detail_id: row.id,
+        estimated_pallets: linePallets[row.id] ?? row.remaining_pallets ?? row.unbooked_pallets ?? row.estimated_pallets ?? 0,
+      }))
+      const res = await fetch("/api/oms/appointment-detail-lines/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appointment_id: selectedAppointmentId,
+          lines,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data?.error || "加入预约失败")
       }
-      toast.success("已加入预约")
+      toast.success(`已加入预约，共 ${data?.data?.created ?? lines.length} 条明细`)
       onOpenChange(false)
       onSuccess?.(selectedAppointmentId)
       router.refresh()
@@ -153,7 +160,7 @@ export function AddToExistingAppointmentDialog({
           <DialogTitle>加入已存在的预约</DialogTitle>
           <DialogDescription>
             {hasRows
-              ? `已带入勾选的 ${selectedRows.length} 条订单明细，请选择目标预约并确认各明细预计板数后提交。`
+              ? `已带入勾选的 ${selectedRows.length} 条订单明细（最多 ${MAX_ADD_LINES} 条），请选择目标预约并确认预计板数。提交后全部成功或全部不生效。`
               : "请先勾选需要加入预约的订单明细。"}
           </DialogDescription>
         </DialogHeader>

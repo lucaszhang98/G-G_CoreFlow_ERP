@@ -111,10 +111,15 @@ export async function PUT(
     }
 
     const orderDetailId = existing.order_detail_id;
-    const newPalletCount = data.pallet_count !== undefined ? data.pallet_count : existing.pallet_count;
-
-    // 如果实际板数变化了，需要重新计算未约板数和剩余板数
-    let shouldRecalculate = data.pallet_count !== undefined && data.pallet_count !== existing.pallet_count;
+    // 仅当请求体明确提供有效数字时才认为「修改了实际板数」，避免只改仓库位置时把板数误写成 0
+    const hasValidPalletCount =
+      data.pallet_count !== undefined &&
+      data.pallet_count !== null &&
+      data.pallet_count !== '' &&
+      !Number.isNaN(Number(data.pallet_count));
+    const newPalletCount = hasValidPalletCount ? Number(data.pallet_count) : existing.pallet_count;
+    const shouldRecalculate =
+      hasValidPalletCount && Number(data.pallet_count) !== Number(existing.pallet_count);
 
     // 构建更新数据
     const updateData: any = {};
@@ -122,7 +127,7 @@ export async function PUT(
     if (data.storage_location_code !== undefined) {
       updateData.storage_location_code = data.storage_location_code || null;
     }
-    // 如果实际板数变化了，自动重新计算；否则允许手动设置
+    // 如果实际板数变化了，自动重新计算；否则不触碰板数字段（仅改仓库位置时不改板数）
     if (shouldRecalculate) {
       // 使用 recalc-unbooked-remaining 服务来统一计算（与订单明细主表保持一致）
       // 该服务会考虑拒收板数，使用有效占用公式：estimated_pallets - rejected_pallets
@@ -155,17 +160,11 @@ export async function PUT(
       }
       // 注意：pallet_count 已经在事务中更新了，不需要再放入 updateData
     } else {
-      // 如果实际板数没有变化，可以正常更新
-      if (data.pallet_count !== undefined) {
-        updateData.pallet_count = data.pallet_count;
+      // 实际板数未变化：仅写入实际板数（若请求体明确提供）；剩余板数/未约板数由系统在「实际板数变化」时重算，此处不写入，避免只改仓库位置时被前端传的 0 误覆盖
+      if (hasValidPalletCount) {
+        updateData.pallet_count = Number(data.pallet_count);
       }
-      // 允许手动设置（但通常不建议）
-      if (data.remaining_pallet_count !== undefined) {
-        updateData.remaining_pallet_count = data.remaining_pallet_count ?? 0;
-      }
-      if (data.unbooked_pallet_count !== undefined) {
-        updateData.unbooked_pallet_count = data.unbooked_pallet_count ?? 0;
-      }
+      // 不根据请求体更新 remaining_pallet_count / unbooked_pallet_count，保持库内原值
     }
     if (data.delivery_progress !== undefined) {
       updateData.delivery_progress = data.delivery_progress ? Number(data.delivery_progress) : null;

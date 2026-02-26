@@ -263,11 +263,12 @@ export function DetailTable({
     })
   }
 
-  // 初始化批量编辑值（订单明细：多字段；预约明细：预计板数、拒收板数、装车单/BOL明细备注）
+  // 初始化批量编辑值（订单明细：多字段；预约明细：预计板数、拒收板数、装车单/BOL明细备注、备注）
   const initializeBatchEditValues = () => {
     const values: Record<string | number, Partial<DetailData>> = {}
     if (appointmentId) {
       const withLineNotes = config.showColumns?.loadSheetNotes || config.showColumns?.bolNotes
+      const withNotes = config.showColumns?.notes
       orderDetails.forEach((detail: any) => {
         values[detail.id] = {
           estimated_pallets: detail.estimated_pallets ?? 0,
@@ -276,6 +277,7 @@ export function DetailTable({
             load_sheet_notes: (detail.load_sheet_notes ?? '') || null,
             bol_notes: (detail.bol_notes ?? '') || null,
           }),
+          ...(withNotes && { notes: detail.notes ?? null }),
         }
       })
     } else {
@@ -330,6 +332,19 @@ export function DetailTable({
             const errorData = await response.json()
             throw new Error(`更新明细 ${detailId} 失败: ${errorData.error || errorData.message || '未知错误'}`)
           }
+          // 备注存于 order_detail，若有修改则更新订单明细
+          const detail = orderDetails.find((d: any) => String(d.id) === String(detailId))
+          if (values?.notes !== undefined && detail?.order_detail_id) {
+            const odRes = await fetch(`/api/order-details/${detail.order_detail_id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ notes: values.notes }),
+            })
+            if (!odRes.ok) {
+              const errData = await odRes.json().catch(() => ({}))
+              throw new Error(`更新明细备注失败: ${errData.error || errData.message || '未知错误'}`)
+            }
+          }
         }
       } else {
         const savePromises: Promise<void>[] = []
@@ -374,6 +389,7 @@ export function DetailTable({
         rejected_pallets: (detail as any).rejected_pallets ?? 0,
         load_sheet_notes: (detail as any).load_sheet_notes ?? null,
         bol_notes: (detail as any).bol_notes ?? null,
+        notes: detail.notes ?? null,
       })
     } else {
       setEditingData({
@@ -443,6 +459,20 @@ export function DetailTable({
           }
         }
         
+        // 备注存于 order_detail，若修改了备注则单独更新订单明细
+        const currentDetail = orderDetails.find((d: any) => String(d.id) === String(editingRowId))
+        if (editingData.notes !== undefined && currentDetail?.order_detail_id) {
+          const odRes = await fetch(`/api/order-details/${currentDetail.order_detail_id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notes: editingData.notes }),
+          })
+          if (!odRes.ok) {
+            const errData = await odRes.json().catch(() => ({}))
+            throw new Error(errData.error || errData.message || '更新订单明细备注失败')
+          }
+        }
+
         // 先清除编辑状态
         setEditingRowId(null)
         setEditingData(null)
@@ -1013,9 +1043,9 @@ export function DetailTable({
                   case 'totalPallets':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">总板数</th>
                   case 'estimatedPallets':
-                    return <th key={col} className="text-left p-2 font-semibold text-sm">预计板数</th>
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[100px]">预计板数</th>
                   case 'rejectedPallets':
-                    return <th key={col} className="text-left p-2 font-semibold text-sm">拒收板数</th>
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[100px]">拒收板数</th>
                   case 'unloadTime':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">拆柜时间</th>
                   case 'volumePercentage':
@@ -1281,7 +1311,7 @@ export function DetailTable({
                               ? (batchEditValues[detailId]?.estimated_pallets ?? detail.estimated_pallets ?? '')
                               : (editingData!.estimated_pallets !== null && editingData!.estimated_pallets !== undefined ? editingData!.estimated_pallets : '')
                             return (
-                              <td key={col} className="p-2 text-sm">
+                              <td key={col} className="p-2 text-sm min-w-[100px]">
                                 <Input
                                   type="number"
                                   value={currentValue}
@@ -1296,7 +1326,7 @@ export function DetailTable({
                                       setEditingData({ ...editingData!, estimated_pallets: value })
                                     }
                                   }}
-                                  className="w-full"
+                                  className="w-full min-w-[80px]"
                                   min="0"
                                   max={maxPallets}
                                   placeholder={`0-${maxPallets}`}
@@ -1304,7 +1334,7 @@ export function DetailTable({
                               </td>
                             )
                           }
-                          return <td key={col} className="p-2 text-sm">{formatInteger(detail.estimated_pallets)}</td>
+                          return <td key={col} className="p-2 text-sm min-w-[100px]">{formatInteger(detail.estimated_pallets)}</td>
                         case 'rejectedPallets':
                           // 拒收板数（仅预约明细）：可编辑，且不能超过预计板数（单行或批量）
                           if (appointmentId && (isBatchEditMode || (editingRowId === detailId && editingData))) {
@@ -1316,7 +1346,7 @@ export function DetailTable({
                               ? (batchEditValues[detailId]?.rejected_pallets ?? (detail as any).rejected_pallets ?? 0)
                               : (editingData!.rejected_pallets ?? 0)
                             return (
-                              <td key={col} className="p-2 text-sm">
+                              <td key={col} className="p-2 text-sm min-w-[100px]">
                                 <Input
                                   type="number"
                                   value={val}
@@ -1332,7 +1362,7 @@ export function DetailTable({
                                       setEditingData({ ...editingData!, rejected_pallets: clamped })
                                     }
                                   }}
-                                  className="w-full"
+                                  className="w-full min-w-[80px]"
                                   min={0}
                                   max={maxRejected}
                                   placeholder={`0-${maxRejected}`}
@@ -1340,7 +1370,7 @@ export function DetailTable({
                               </td>
                             )
                           }
-                          return <td key={col} className="p-2 text-sm">{formatInteger((detail as any).rejected_pallets ?? 0)}</td>
+                          return <td key={col} className="p-2 text-sm min-w-[100px]">{formatInteger((detail as any).rejected_pallets ?? 0)}</td>
                         case 'unloadTime': {
                           const unloadTime = (detail as any).unload_time
                           return (
@@ -1392,8 +1422,8 @@ export function DetailTable({
                           }
                           return <td key={col} className="p-2 text-sm whitespace-pre-wrap break-words">{detail.fba || '-'}</td>
                         case 'notes':
-                          // 订单明细可以编辑备注，预约明细不允许编辑
-                          if ((isBatchEditMode || editingRowId === detailId) && !appointmentId) {
+                          // 订单明细与预约明细均可编辑备注（预约明细的备注存于 order_detail）
+                          if ((isBatchEditMode || editingRowId === detailId)) {
                             const currentValue = isBatchEditMode
                               ? (batchEditValues[detailId]?.notes ?? detail.notes)
                               : (editingData?.notes ?? detail.notes)

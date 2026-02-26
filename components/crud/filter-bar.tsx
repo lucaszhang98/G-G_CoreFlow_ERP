@@ -6,9 +6,8 @@
  */
 
 import * as React from "react"
-import { X, Filter } from "lucide-react"
+import { X, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -17,7 +16,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { FilterFieldConfig } from "@/lib/crud/types"
+import { cn } from "@/lib/utils"
 
 interface FilterBarProps {
   filters: FilterFieldConfig[]
@@ -39,6 +45,70 @@ export function FilterBar({ filters, filterValues, onFilterChange, onClearFilter
   return (
     <div className="flex flex-wrap items-center gap-2">
       {filters.map((filter) => {
+        if (filter.type === 'select' && filter.multiple) {
+          // 多选：Popover + Checkbox
+          const raw = filterValues[filter.field]
+          const selectedArr: string[] = Array.isArray(raw)
+            ? raw
+            : typeof raw === 'string' && raw
+              ? raw.split(',').map((s) => s.trim()).filter(Boolean)
+              : []
+          const displayText =
+            selectedArr.length === 0
+              ? filter.label
+              : selectedArr.length === (filter.options?.length ?? 0)
+                ? '全部'
+                : `${filter.label} (${selectedArr.length})`
+          return (
+            <Popover key={filter.field}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-9 min-w-[100px] justify-between text-sm font-normal",
+                    selectedArr.length > 0 && "border-primary/50 text-primary"
+                  )}
+                >
+                  <span className="truncate">{displayText}</span>
+                  <ChevronDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-2" align="start">
+                <div className="space-y-1.5">
+                  {filter.options?.map((option) => (
+                    <label
+                      key={option.value}
+                      className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5 hover:bg-muted/50 text-sm"
+                    >
+                      <Checkbox
+                        checked={selectedArr.includes(option.value)}
+                        onCheckedChange={(checked) => {
+                          const next = checked
+                            ? [...selectedArr, option.value]
+                            : selectedArr.filter((v) => v !== option.value)
+                          onFilterChange(filter.field, next.length > 0 ? next : null)
+                        }}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {selectedArr.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full mt-2 h-8 text-xs"
+                    onClick={() => onFilterChange(filter.field, null)}
+                  >
+                    清除
+                  </Button>
+                )}
+              </PopoverContent>
+            </Popover>
+          )
+        }
+
         if (filter.type === 'select') {
           const currentValue = filterValues[filter.field]
           return (

@@ -127,6 +127,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       label: '状态',
       type: 'select',
       sortable: true,
+      filterMultiple: true, // 预约管理状态筛选支持多选
       options: [
         { label: '待处理', value: '待处理' },
         { label: '已校验PO', value: '已校验PO' },

@@ -40,6 +40,7 @@ type RowData = {
   order_number?: string | null
   delivery_location_code?: string | null
   estimated_pallets?: number
+  remaining_pallets?: number | null
   unbooked_pallets?: number
   container_number?: string | null
 }
@@ -80,10 +81,11 @@ export function NewAppointmentDialog({
     if (!open || selectedRows.length === 0) return
     const next: Record<string, number> = {}
     selectedRows.forEach((row) => {
-      next[row.id] = row.estimated_pallets ?? 0
+      // 默认使用剩余板数（未约板数），其次预计板数
+      next[row.id] = row.remaining_pallets ?? row.unbooked_pallets ?? row.estimated_pallets ?? 0
     })
     setLinePallets(next)
-  }, [open])
+  }, [open, selectedRows])
 
   // 打开弹窗时：重置表单，PO 自动填为预约明细中的柜号（逗号分隔），并自动拉取起始地 GG
   React.useEffect(() => {
@@ -166,7 +168,7 @@ export function NewAppointmentDialog({
       const appointment = await res.json()
       const appointmentId = String(appointment.appointment_id ?? appointment.id)
       for (const row of linesForAppointment) {
-        const pallets = linePallets[row.id] ?? row.estimated_pallets ?? 0
+        const pallets = linePallets[row.id] ?? row.remaining_pallets ?? row.unbooked_pallets ?? row.estimated_pallets ?? 0
         const lineRes = await fetch("/api/oms/appointment-detail-lines", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

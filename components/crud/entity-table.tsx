@@ -350,8 +350,10 @@ export function EntityTable<T = any>({
     
     // 筛选条件
     Object.entries(filterValues).forEach(([key, value]) => {
-      if (value !== null && value !== undefined && value !== '') {
-        params.set(`filter_${key}`, String(value))
+      const isEmpty = value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)
+      if (!isEmpty) {
+        const paramValue = Array.isArray(value) ? value.join(',') : String(value)
+        params.set(`filter_${key}`, paramValue)
       }
     })
     
@@ -431,10 +433,10 @@ export function EntityTable<T = any>({
       // 添加筛选参数
       if (currentFilters) {
         Object.entries(currentFilters).forEach(([key, value]) => {
-          if (value !== null && value !== undefined && value !== '') {
-            // 日期范围筛选的参数名已经包含 _from 或 _to，直接使用
-            // 例如：order_date_from, order_date_to
-            params.append(`filter_${key}`, String(value))
+          const isEmpty = value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)
+          if (!isEmpty) {
+            const paramValue = Array.isArray(value) ? value.join(',') : String(value)
+            params.append(`filter_${key}`, paramValue)
           }
         })
       }

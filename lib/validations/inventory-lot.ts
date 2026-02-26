@@ -17,7 +17,23 @@ export const inventoryLotCreateSchema = z.object({
   received_date: z.string().optional().nullable(), // YYYY-MM-DD format
 });
 
-export const inventoryLotUpdateSchema = inventoryLotCreateSchema.partial();
+// 更新 schema：全部可选，且板数相关字段不加 default，避免只改仓库位置时被解析成 pallet_count:1 / remaining:0
+export const inventoryLotUpdateSchema = z.object({
+  order_id: z.string().min(1).optional(),
+  order_detail_id: z.string().min(1).optional(),
+  warehouse_id: z.string().min(1).optional(),
+  inbound_receipt_id: z.string().optional().nullable(),
+  storage_location_code: z.string().max(100).optional().nullable(),
+  pallet_count: z.number().int().min(0).optional(),
+  remaining_pallet_count: z.number().int().min(0).optional().nullable(),
+  unbooked_pallet_count: z.number().int().min(0).optional().nullable(),
+  delivery_progress: z.number().min(0).max(100).optional().nullable(),
+  unload_transfer_notes: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  status: z.enum(['available', 'allocated', 'shipped', 'reserved']).optional(),
+  lot_number: z.string().max(50).optional().nullable(),
+  received_date: z.string().optional().nullable(),
+});
 
 export type InventoryLotCreateInput = z.infer<typeof inventoryLotCreateSchema>;
 export type InventoryLotUpdateInput = z.infer<typeof inventoryLotUpdateSchema>;
