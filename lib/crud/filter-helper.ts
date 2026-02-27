@@ -172,9 +172,9 @@ export function buildFilterConditions(
           dateCondition.gte = new Date(dateFrom)
         }
         if (dateTo) {
-          // 结束日期应该包含整天，所以设置为当天的 23:59:59
+          // 结束日期包含整天：使用 UTC 当天 23:59:59.999，不做本地时区转换，与系统日期一致
           const endDate = new Date(dateTo)
-          endDate.setHours(23, 59, 59, 999)
+          endDate.setUTCHours(23, 59, 59, 999)
           dateCondition.lte = endDate
         }
         // 如果指定了多个日期字段，使用 OR 逻辑（同一筛选条件的多个字段）

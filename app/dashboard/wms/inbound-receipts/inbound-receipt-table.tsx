@@ -9,28 +9,47 @@ import { Button } from "@/components/ui/button"
 import { RefreshCw, Printer, FileText } from "lucide-react"
 import { toast } from "sonner"
 
-/** 获取当前工作周（周一至周日）的起止日期，格式 YYYY-MM-DD */
+/** 按 UTC 格式化为 YYYY-MM-DD */
+function formatDateUTC(d: Date): string {
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** 按本地日期格式化为 YYYY-MM-DD（你看到的「今天几号」就用这个日期） */
+function formatDateLocal(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** 获取当前工作周（周一至周日）的起止日期，格式 YYYY-MM-DD，按 UTC 计算，不做本地时区转换 */
 function getThisWeekDateRange(): { planned_unload_at_from: string; planned_unload_at_to: string } {
   const now = new Date()
-  const day = now.getDay() // 0=周日, 1=周一, ..., 6=周六
+  const day = now.getUTCDay() // 0=周日, 1=周一, ..., 6=周六
   const mondayOffset = day === 0 ? -6 : 1 - day
-  const monday = new Date(now)
-  monday.setDate(now.getDate() + mondayOffset)
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-  const fmt = (d: Date) => d.toISOString().slice(0, 10)
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + mondayOffset))
+  const sunday = new Date(Date.UTC(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate() + 6))
   return {
-    planned_unload_at_from: fmt(monday),
-    planned_unload_at_to: fmt(sunday),
+    planned_unload_at_from: formatDateUTC(monday),
+    planned_unload_at_to: formatDateUTC(sunday),
   }
 }
 
-/** 获取「最近一月及未来」的拆柜日期筛选：仅设置起始日为 30 天前，不设结束日 */
+/** 获取「最近一月及未来」的拆柜日期筛选：仅设置起始日为 30 天前（UTC），不设结束日，不做时区转换 */
 function getLastMonthAndFuture(): { planned_unload_at_from: string } {
   const d = new Date()
-  d.setDate(d.getDate() - 30)
-  d.setHours(0, 0, 0, 0)
-  return { planned_unload_at_from: d.toISOString().slice(0, 10) }
+  const past = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 30))
+  return { planned_unload_at_from: formatDateUTC(past) }
+}
+
+/** 获取「当天」的拆柜日期筛选：起止均为你本机显示的「今天」日期，点进去就是今天几号 */
+function getTodayDateRange(): { planned_unload_at_from: string; planned_unload_at_to: string } {
+  const today = new Date()
+  const fmt = formatDateLocal(today)
+  return { planned_unload_at_from: fmt, planned_unload_at_to: fmt }
 }
 
 const INBOUND_ID_FIELD = 'inbound_receipt_id'
@@ -366,10 +385,18 @@ export function InboundReceiptTable() {
     </div>
   ), [handleSyncMissingRecords, handleFixPlannedUnloadDates, isSyncing, isFixingDates])
 
-  // 快速筛选区两个按钮：显示本周 / 显示最近一月
+  // 快速筛选区：显示当天 / 显示本周 / 显示最近一月
   const customFilterContent = React.useCallback(
     (applyFilterValues: (v: Record<string, any>) => void) => (
       <>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 rounded-lg"
+          onClick={() => applyFilterValues(getTodayDateRange())}
+        >
+          显示当天数据
+        </Button>
         <Button
           variant="outline"
           size="sm"

@@ -128,7 +128,7 @@ export function NewAppointmentDialog({
             }))
           }
         })
-        .catch(() => toast.error("加载起始地失败"))
+        .catch(() => { toast.error("加载起始地失败") })
     )
     // 目的地：按第一个明细的仓点编码解析为 location_id（避免提交时 cannot convert to int）
     if (firstRowLocationCode) {
