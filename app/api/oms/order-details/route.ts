@@ -278,17 +278,19 @@ export async function GET(request: NextRequest) {
       const totalExpiredEffectivePallets = expiredAppointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
 
       // 计算剩余板数（实时计算，不依赖数据库字段，确保准确性）
-      // 已入库：实时计算 = 实际板数 - 已过期预约板数之和
-      // 未入库：返回 null（对于未入库的数据，我们不关心他的剩余板数）
+      // 已入库：实时计算 = 实际板数 - 已过期预约板数之和（允许负数，实际为 0 且已有预约时表示超送）
+      // 未入库：返回 null
       const remaining_pallets: number | null = il
-        ? Math.max(0, (il.pallet_count || 0) - totalExpiredEffectivePallets)
+        ? (il.pallet_count || 0) - totalExpiredEffectivePallets
         : null
 
       // 计算送货进度（使用实时计算的剩余板数）
       let delivery_progress = 0
       if (il?.pallet_count && il.pallet_count > 0) {
         const shipped = il.pallet_count - (remaining_pallets || 0)
-        delivery_progress = Math.round((shipped / il.pallet_count) * 100)
+        delivery_progress = Math.round(Math.min(100, (shipped / il.pallet_count) * 100))
+      } else if (il?.pallet_count === 0) {
+        delivery_progress = 100 // 实际板数为 0 视为已送完
       }
 
       // 计算未约板数

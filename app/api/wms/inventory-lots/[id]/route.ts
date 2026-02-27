@@ -200,7 +200,7 @@ export async function PUT(
     // 应用审计字段
     await addSystemFields(updateData, currentUser, false);
 
-    // 更新记录
+    // 更新记录（include 与列表 API 一致，含仓点与预约明细，避免前端用返回值替换行数据后仓点/预约消失）
     const updated = await prisma.inventory_lots.update({
       where: { inventory_lot_id: id },
       data: updateData,
@@ -227,6 +227,32 @@ export async function PUT(
             volume: true,
             estimated_pallets: true,
             delivery_nature: true,
+            delivery_location_id: true,
+            locations_order_detail_delivery_location_idTolocations: {
+              select: {
+                location_id: true,
+                location_code: true,
+                name: true,
+              },
+            },
+            appointment_detail_lines: {
+              select: {
+                id: true,
+                estimated_pallets: true,
+                rejected_pallets: true,
+                appointment_id: true,
+                delivery_appointments: {
+                  select: {
+                    appointment_id: true,
+                    reference_number: true,
+                    confirmed_start: true,
+                    location_id: true,
+                    status: true,
+                    order_id: true,
+                  },
+                },
+              },
+            },
           },
         },
         inbound_receipt: {

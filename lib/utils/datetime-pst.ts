@@ -26,16 +26,16 @@ export function parseDateTimeAsUTC(dateTimeString: string): Date {
     throw new Error('时间字符串不能为空')
   }
 
-  // 解析时间字符串
-  const match = dateTimeString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{3}))?$/)
+  // 兼容 ISO 格式（如 2026-03-22T10:00:00.000Z）：去掉末尾 Z 再匹配
+  const normalized = dateTimeString.trim().replace(/Z$/i, '')
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{3}))?$/)
   if (!match) {
     throw new Error(`无效的时间格式: ${dateTimeString}，期望格式: YYYY-MM-DDTHH:mm`)
   }
 
   const [, year, month, day, hours, minutes, seconds = '0', milliseconds = '0'] = match
-  
+
   // 直接使用 UTC 方法创建 Date 对象，不做任何时区转换
-  // 用户输入什么时间，就当作 UTC 的什么时间
   return new Date(Date.UTC(
     parseInt(year, 10),
     parseInt(month, 10) - 1,

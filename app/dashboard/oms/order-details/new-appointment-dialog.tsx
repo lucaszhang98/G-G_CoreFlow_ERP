@@ -87,7 +87,7 @@ export function NewAppointmentDialog({
     setLinePallets(next)
   }, [open, selectedRows])
 
-  // 打开弹窗时：重置表单，PO 自动填为预约明细中的柜号（逗号分隔），目的地自动填为第一个明细的仓点，并自动拉取起始地 GG
+  // 打开弹窗时：重置表单，PO 自动填为柜号（逗号分隔），目的地按第一个明细的仓点解析为 location_id，起始地拉取 GG
   React.useEffect(() => {
     if (!open) return
     const poFromContainerNumbers =
@@ -98,7 +98,7 @@ export function NewAppointmentDialog({
       selectedRows.length > 0 ? (selectedRows[0].delivery_location_code ?? "").toString().trim() : ""
     setForm({
       origin_location_id: "",
-      location_id: firstRowLocationCode || "",
+      location_id: "",
       delivery_method: "卡派",
       reference_number: "",
       appointment_type: "卡板",
@@ -110,23 +110,44 @@ export function NewAppointmentDialog({
       notes: "",
     })
     setInitLoading(true)
-    fetch("/api/locations/by-type?type=warehouse")
-      .then((r) => r.json())
-      .then((res) => {
-        const list = res.data ?? []
-        const gg = list.find(
-          (loc: { location_code?: string }) =>
-            (loc.location_code || "").toUpperCase() === "GG"
-        )
-        if (gg) {
-          setForm((prev) => ({
-            ...prev,
-            origin_location_id: String(gg.location_id),
-          }))
-        }
-      })
-      .catch(() => toast.error("加载起始地失败"))
-      .finally(() => setInitLoading(false))
+    const requests: Promise<void>[] = []
+    // 起始地 GG
+    requests.push(
+      fetch("/api/locations/by-type?type=warehouse")
+        .then((r) => r.json())
+        .then((res) => {
+          const list = res.data ?? []
+          const gg = list.find(
+            (loc: { location_code?: string }) =>
+              (loc.location_code || "").toUpperCase() === "GG"
+          )
+          if (gg) {
+            setForm((prev) => ({
+              ...prev,
+              origin_location_id: String(gg.location_id),
+            }))
+          }
+        })
+        .catch(() => toast.error("加载起始地失败"))
+    )
+    // 目的地：按第一个明细的仓点编码解析为 location_id（避免提交时 cannot convert to int）
+    if (firstRowLocationCode) {
+      requests.push(
+        fetch(`/api/locations/by-code?code=${encodeURIComponent(firstRowLocationCode)}`)
+          .then((r) => r.json())
+          .then((res) => {
+            const loc = res.data
+            if (loc?.location_id != null) {
+              setForm((prev) => ({
+                ...prev,
+                location_id: String(loc.location_id),
+              }))
+            }
+          })
+          .catch(() => { /* 未解析到则保持为空，用户手动选择 */ })
+      )
+    }
+    Promise.all(requests).finally(() => setInitLoading(false))
   }, [open])
 
   const handleSubmit = async () => {

@@ -45,9 +45,13 @@ export function InlineEditCell({
 }: InlineEditCellProps) {
   // 使用内部状态管理输入值，避免每次输入都触发外部状态更新
   // 对于 boolean 字段，需要特殊处理：false 是有效值，不应该被转换为 ''
+  // 对于 number/currency 字段，0 是有效值（与入库管理详情页实际板数一致），不应被当作空
   const getInitialValue = () => {
     if (fieldConfig.type === 'boolean') {
       return value !== undefined && value !== null ? Boolean(value) : false
+    }
+    if (fieldConfig.type === 'number' || fieldConfig.type === 'currency') {
+      return value !== undefined && value !== null ? value : ''
     }
     return value || ''
   }
@@ -61,6 +65,8 @@ export function InlineEditCell({
   React.useEffect(() => {
     if (fieldConfig.type === 'boolean') {
       setInternalValue(value !== undefined && value !== null ? Boolean(value) : false)
+    } else if (fieldConfig.type === 'number' || fieldConfig.type === 'currency') {
+      setInternalValue(value !== undefined && value !== null ? value : '')
     } else {
       setInternalValue(value || '')
     }
@@ -134,13 +140,15 @@ export function InlineEditCell({
 
     case 'number':
     case 'currency':
+      // 0 为有效值，展示与入库管理详情页一致；空输入用 ''
+      const numDisplayValue = internalValue === '' || internalValue === undefined || internalValue === null ? '' : internalValue
       return (
         <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
           <Input
             type="number"
             step={fieldConfig.type === 'currency' ? '0.01' : '1'}
-            value={internalValue || ''}
-            onChange={(e) => handleInternalChange(e.target.value ? Number(e.target.value) : '')}
+            value={numDisplayValue}
+            onChange={(e) => handleInternalChange(e.target.value === '' ? '' : Number(e.target.value))}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
             className={cn("h-10 text-sm min-w-[100px] w-full", className)}

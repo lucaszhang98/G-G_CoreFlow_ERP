@@ -1,8 +1,8 @@
 /**
  * 批量修复入库管理拆柜日期 API
  * 
- * 为所有拆柜日期为空的入库管理记录重新计算拆柜日期
- * 根据订单的 pickup_date 和 eta_date 计算
+ * 为拆柜日期为空且未录入拆柜人员的记录重新计算拆柜日期（根据 pickup_date / eta_date）。
+ * 拆柜人员有值的行视为已录入，不再参与计算。
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,17 +12,18 @@ import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 
 /**
  * POST /api/wms/inbound-receipts/fix-planned-unload-dates
- * 批量修复拆柜日期为空的入库管理记录
+ * 批量修复拆柜日期为空的入库管理记录（排除已填拆柜人员的记录）
  */
 export async function POST(request: NextRequest) {
   try {
     const authResult = await checkAuth()
     if (authResult.error) return authResult.error
 
-    // 查找所有拆柜日期为空的入库管理记录（只修复空值，不覆盖已有值）
+    // 只修复：拆柜日期为空 且 拆柜人员为空（拆柜人员有值视为已录入，不再计算）
     const inboundReceipts = await prisma.inbound_receipt.findMany({
       where: {
-        planned_unload_at: null, // 只修复空值，不会覆盖已有值
+        planned_unload_at: null,
+        unloaded_by: null,
       },
       include: {
         orders: {

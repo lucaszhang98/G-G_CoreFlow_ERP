@@ -316,9 +316,16 @@ function getModuleFromPath(pathname: string): string | null {
   return null
 }
 
+// 判断某 href 是否为当前路径或当前路径的“父级”（列表页 href 匹配详情页 pathname）
+function isPathActive(href: string, pathname: string): boolean {
+  if (pathname === href) return true
+  if (pathname.startsWith(href + '/')) return true // 详情页、new 等子路径仍算在该主表下
+  return false
+}
+
 // 检查路径是否匹配菜单项或其子项
 function isPathMatch(item: MenuItem, pathname: string): boolean {
-  if (item.href && pathname === item.href) return true
+  if (item.href && isPathActive(item.href, pathname)) return true
   if (item.children) {
     return item.children.some(child => isPathMatch(child, pathname))
   }
@@ -445,15 +452,15 @@ export function Sidebar({ userRole = "user" }: SidebarProps) {
     // 在函数内部处理点击事件，使用闭包访问 router
     if (!hasPermission(item.roles)) return null
 
-    const isActive = item.href && pathname === item.href
+    const isActive = item.href ? isPathActive(item.href, pathname) : false
     const hasChildren = item.children && item.children.length > 0
     const isOpen = openMenus.includes(item.title)
     
-    // 检查是否有子项处于激活状态
+    // 检查是否有子项处于激活状态（含详情页等子路径）
     const hasActiveChild = item.children?.some(child => {
-      if (child.href && pathname === child.href) return true
+      if (child.href && isPathActive(child.href, pathname)) return true
       if (child.children) {
-        return child.children.some(grandChild => grandChild.href && pathname === grandChild.href)
+        return child.children.some(grandChild => grandChild.href && isPathActive(grandChild.href, pathname))
       }
       return false
     })

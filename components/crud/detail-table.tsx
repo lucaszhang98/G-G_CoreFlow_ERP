@@ -85,6 +85,8 @@ export interface DetailData {
   order_number?: string | null
   /** 拆柜时间：来自入库管理（inbound_receipt.planned_unload_at），按明细对应订单关联 */
   unload_time?: string | Date | null
+  /** 忽略：为 true 时柜号强制绿色，与拒收等字段一样需点铅笔编辑后保存 */
+  ignore_unload_time_check?: boolean | null
 }
 
 export interface DetailTableConfig {
@@ -106,8 +108,9 @@ export interface DetailTableConfig {
     po?: boolean // PO
     loadSheetNotes?: boolean // 装车单明细备注（出库详情）
     bolNotes?: boolean // BOL 明细备注（出库详情）
+    ignoreUnloadTimeCheck?: boolean // 忽略（预约明细：勾选后柜号强制绿色）
     windowPeriod?: boolean // 窗口期
-        detailId?: boolean // 仓点ID（隐藏）
+    detailId?: boolean // 仓点ID（隐藏）
     quantity?: boolean // 数量
     volume?: boolean // 体积
     createdAt?: boolean // 创建时间（隐藏）
@@ -192,6 +195,7 @@ export function DetailTable({
         })
     }
   }, [appointmentId, orderId, initialOrderDetails])
+
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set())
   const [editingRowId, setEditingRowId] = React.useState<string | number | null>(null)
   const [editingData, setEditingData] = React.useState<Partial<DetailData> | null>(null)
@@ -202,6 +206,8 @@ export function DetailTable({
   const [batchMoveDialogOpen, setBatchMoveDialogOpen] = React.useState(false) // 批量转到其他预约
   const [targetReferenceNumber, setTargetReferenceNumber] = React.useState('')
   const [isBatchMoving, setIsBatchMoving] = React.useState(false)
+  const [batchMoveCandidates, setBatchMoveCandidates] = React.useState<Array<{ appointment_id: string; reference_number: string; delivery_time: string | null; total_pallets: number; location_name: string; location_code: string }>>([])
+  const [batchMoveCandidatesLoading, setBatchMoveCandidatesLoading] = React.useState(false)
   const [addDetailDialogOpen, setAddDetailDialogOpen] = React.useState(false)
   const [editSkuDialogOpen, setEditSkuDialogOpen] = React.useState(false)
   const [editingSku, setEditingSku] = React.useState<any | null>(null)
@@ -217,6 +223,27 @@ export function DetailTable({
       setOrderDetails(initialOrderDetails)
     }
   }, [initialOrderDetails])
+
+  // 批量转到其他预约：打开弹窗时拉取可选目标预约列表（同仓点、送货时间晚于选中柜号拆柜时间）
+  React.useEffect(() => {
+    if (!batchMoveDialogOpen || !appointmentId || selectedRows.size === 0) {
+      setBatchMoveCandidates([])
+      return
+    }
+    setBatchMoveCandidatesLoading(true)
+    const lineIds = Array.from(selectedRows).map(String)
+    fetch(`/api/oms/appointment-detail-lines/batch-move/candidates?lineIds=${encodeURIComponent(lineIds.join(','))}&currentAppointmentId=${encodeURIComponent(String(appointmentId))}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setBatchMoveCandidates(data.data)
+        } else {
+          setBatchMoveCandidates([])
+        }
+      })
+      .catch(() => setBatchMoveCandidates([]))
+      .finally(() => setBatchMoveCandidatesLoading(false))
+  }, [batchMoveDialogOpen, appointmentId, selectedRows])
 
   const formatNumber = (value: number | null | string) => {
     if (!value && value !== 0) return "-"
@@ -273,6 +300,7 @@ export function DetailTable({
         values[detail.id] = {
           estimated_pallets: detail.estimated_pallets ?? 0,
           rejected_pallets: (detail.rejected_pallets ?? 0) as number | null,
+          ignore_unload_time_check: detail.ignore_unload_time_check === true,
           ...(withLineNotes && {
             load_sheet_notes: (detail.load_sheet_notes ?? '') || null,
             bol_notes: (detail.bol_notes ?? '') || null,
@@ -324,6 +352,7 @@ export function DetailTable({
             body: JSON.stringify({
               estimated_pallets: values?.estimated_pallets,
               rejected_pallets: values?.rejected_pallets,
+              ignore_unload_time_check: values?.ignore_unload_time_check,
               load_sheet_notes: values?.load_sheet_notes,
               bol_notes: values?.bol_notes,
             }),
@@ -387,6 +416,7 @@ export function DetailTable({
       setEditingData({
         estimated_pallets: detail.estimated_pallets,
         rejected_pallets: (detail as any).rejected_pallets ?? 0,
+        ignore_unload_time_check: (detail as any).ignore_unload_time_check === true,
         load_sheet_notes: (detail as any).load_sheet_notes ?? null,
         bol_notes: (detail as any).bol_notes ?? null,
         notes: detail.notes ?? null,
@@ -426,6 +456,7 @@ export function DetailTable({
             body: JSON.stringify({
               estimated_pallets: editingData.estimated_pallets,
               rejected_pallets: editingData.rejected_pallets,
+              ignore_unload_time_check: editingData.ignore_unload_time_check,
               load_sheet_notes: editingData.load_sheet_notes,
               bol_notes: editingData.bol_notes,
             }),
@@ -880,28 +911,28 @@ export function DetailTable({
     }
   }
 
-  // 获取显示的列（按照指定顺序：送仓地点-性质-数量-体积-预计板数-分仓占比-FBA-备注）
+  // 获取显示的列（预约明细子表：柜号 → 拆柜时间 → 预计板数 → 其余字段）
   const getVisibleColumns = () => {
     const cols: string[] = []
-    // 预约明细时显示 checkbox 列用于批量删除
     if (appointmentId) cols.push('checkbox')
     if (config.showExpandable) cols.push('expand')
+    // 预约明细子表前三位：柜号、拆柜时间、预计板数
     if (config.showColumns?.orderNumber) cols.push('orderNumber')
+    if (appointmentId && config.showColumns?.unloadTime) cols.push('unloadTime')
+    if (appointmentId && config.showColumns?.ignoreUnloadTimeCheck) cols.push('ignoreUnloadTimeCheck')
+    if (config.showColumns?.estimatedPallets) cols.push('estimatedPallets')
+    if (appointmentId && config.showColumns?.estimatedPallets) cols.push('rejectedPallets')
+    // 其余字段
     if (config.showColumns?.location) cols.push('location')
-    // 按照要求的顺序添加字段
-    if (config.showColumns?.deliveryLocation) cols.push('deliveryLocation') // 送仓地点
-    if (config.showColumns?.locationType) cols.push('locationType') // 性质
-    if (config.showColumns?.quantity) cols.push('quantity') // 数量
-    if (config.showColumns?.volume) cols.push('volume') // 体积
-    if (config.showColumns?.estimatedPallets) cols.push('estimatedPallets') // 预计板数
-    if (appointmentId && config.showColumns?.estimatedPallets) cols.push('rejectedPallets') // 预约明细：拒收板数
-    if (appointmentId && config.showColumns?.unloadTime) cols.push('unloadTime') // 预约明细：拆柜时间（来自入库管理）
-    if (config.showColumns?.volumePercentage) cols.push('volumePercentage') // 分仓占比
-    if (config.showColumns?.unloadType) cols.push('unloadType') // FBA
-    if (config.showColumns?.notes) cols.push('notes') // 备注
-    if (config.showColumns?.loadSheetNotes) cols.push('loadSheetNotes') // 装车单明细备注（出库详情）
-    if (config.showColumns?.bolNotes) cols.push('bolNotes') // BOL 明细备注（出库详情）
-    // 其他可选字段
+    if (config.showColumns?.deliveryLocation) cols.push('deliveryLocation')
+    if (config.showColumns?.locationType) cols.push('locationType')
+    if (config.showColumns?.quantity) cols.push('quantity')
+    if (config.showColumns?.volume) cols.push('volume')
+    if (config.showColumns?.volumePercentage) cols.push('volumePercentage')
+    if (config.showColumns?.unloadType) cols.push('unloadType')
+    if (config.showColumns?.notes) cols.push('notes')
+    if (config.showColumns?.loadSheetNotes) cols.push('loadSheetNotes')
+    if (config.showColumns?.bolNotes) cols.push('bolNotes')
     if (config.showColumns?.totalVolume) cols.push('totalVolume')
     if (config.showColumns?.totalPallets) cols.push('totalPallets')
     if (config.showColumns?.po) cols.push('po')
@@ -909,10 +940,7 @@ export function DetailTable({
     if (config.showColumns?.detailId) cols.push('detailId')
     if (config.showColumns?.createdAt) cols.push('createdAt')
     if (config.showColumns?.updatedAt) cols.push('updatedAt')
-    // 批量编辑模式下不显示操作列
-    if (!isBatchEditMode) {
-      cols.push('actions')
-    }
+    if (!isBatchEditMode) cols.push('actions')
     return cols
   }
 
@@ -1058,6 +1086,8 @@ export function DetailTable({
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[180px]">装车单明细备注</th>
                   case 'bolNotes':
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[180px]">BOL明细备注</th>
+                  case 'ignoreUnloadTimeCheck':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm w-14" title="勾选后柜号强制绿色">忽略</th>
                   case 'po':
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[200px]">PO</th>
                   case 'windowPeriod':
@@ -1144,8 +1174,34 @@ export function DetailTable({
                               </Button>
                             </td>
                           ) : null
-                        case 'orderNumber':
-                          return <td key={col} className="p-2 text-sm">{orderNumber}</td>
+                        case 'orderNumber': {
+                          // 预约明细：拆柜时间与送货时间对比，柜号红/黄/绿；忽略勾选时强制绿
+                          let orderNumberColorClass = ''
+                          if (appointmentId && (detail as any).unload_time != null && (detail as any).delivery_time != null) {
+                            const ignore = (detail as any).ignore_unload_time_check === true
+                            if (ignore) {
+                              orderNumberColorClass = 'text-green-600 dark:text-green-400 font-medium'
+                            } else {
+                              const unload = new Date((detail as any).unload_time)
+                              const delivery = new Date((detail as any).delivery_time)
+                              const unloadDay = new Date(Date.UTC(unload.getUTCFullYear(), unload.getUTCMonth(), unload.getUTCDate())).getTime()
+                              const deliveryDay = new Date(Date.UTC(delivery.getUTCFullYear(), delivery.getUTCMonth(), delivery.getUTCDate())).getTime()
+                              const diffDays = (deliveryDay - unloadDay) / (24 * 60 * 60 * 1000)
+                              if (unloadDay > deliveryDay) {
+                                orderNumberColorClass = 'text-red-600 dark:text-red-400 font-medium'
+                              } else if (diffDays >= 4) {
+                                orderNumberColorClass = 'text-amber-600 dark:text-amber-400 font-medium'
+                              } else {
+                                orderNumberColorClass = 'text-green-600 dark:text-green-400 font-medium'
+                              }
+                            }
+                          }
+                          return (
+                            <td key={col} className="p-2 text-sm">
+                              <span className={orderNumberColorClass || undefined}>{orderNumber}</span>
+                            </td>
+                          )
+                        }
                         case 'location':
                           // 仓点：显示 location_code（从 delivery_location 转换而来）
                           return <td key={col} className="p-2 text-sm">{locationCode}</td>
@@ -1513,6 +1569,38 @@ export function DetailTable({
                             )
                           }
                           return <td key={col} className="p-2 text-sm min-w-[180px] whitespace-pre-wrap break-words">{(detail as any).bol_notes || '-'}</td>
+                        case 'ignoreUnloadTimeCheck':
+                          // 与拒收板数一致：仅点铅笔编辑时可改，保存时写入数据库
+                          if (appointmentId && (isBatchEditMode || editingRowId === detailId)) {
+                            const checked = isBatchEditMode
+                              ? (batchEditValues[detailId]?.ignore_unload_time_check === true)
+                              : (editingData?.ignore_unload_time_check === true)
+                            return (
+                              <td key={col} className="p-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={!!checked}
+                                  onChange={() => {
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: { ...prev[detailId], ignore_unload_time_check: !checked },
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData!, ignore_unload_time_check: !checked })
+                                    }
+                                  }}
+                                  className="cursor-pointer h-4 w-4"
+                                  title="勾选后柜号强制绿色"
+                                />
+                              </td>
+                            )
+                          }
+                          return (
+                            <td key={col} className="p-2 text-sm">
+                              {(detail as any).ignore_unload_time_check === true ? '是' : '否'}
+                            </td>
+                          )
                         case 'totalVolume':
                           return <td key={col} className="p-2 text-sm">{formatVolume(detail.volume)}</td>
                         case 'totalPallets':
@@ -1827,17 +1915,55 @@ export function DetailTable({
       </Dialog>
 
       {/* 批量转到其他预约对话框 */}
-      <Dialog open={batchMoveDialogOpen} onOpenChange={(open) => { setBatchMoveDialogOpen(open); if (!open) setTargetReferenceNumber('') }}>
-        <DialogContent>
+      <Dialog open={batchMoveDialogOpen} onOpenChange={(open) => { setBatchMoveDialogOpen(open); if (!open) { setTargetReferenceNumber(''); setBatchMoveCandidates([]) } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>批量转到其他预约</DialogTitle>
             <DialogDescription>
-              将选中的 {selectedRows.size} 条明细转到目标预约。请输入目标预约的预约号码（粘贴或输入后即可转移）。
+              将选中的 {selectedRows.size} 条明细转到目标预约。下表为与当前选中明细同仓点且送货时间晚于选中柜号拆柜时间的预约，可点击选择；也可在下方输入/粘贴预约号码。
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 overflow-hidden flex flex-col min-h-0">
+            <div className="grid gap-2 flex-1 min-h-0 flex flex-col">
+              <Label>选择目标预约</Label>
+              {batchMoveCandidatesLoading ? (
+                <p className="text-sm text-muted-foreground py-4">加载中…</p>
+              ) : batchMoveCandidates.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">暂无符合条件的预约，请直接在下方输入预约号码。</p>
+              ) : (
+                <div className="border rounded-md overflow-auto max-h-[280px]">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-2 font-medium">仓点</th>
+                        <th className="text-left p-2 font-medium">预约号码</th>
+                        <th className="text-left p-2 font-medium">送货时间</th>
+                        <th className="text-right p-2 font-medium">已有板数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchMoveCandidates.map((row) => (
+                        <tr
+                          key={row.appointment_id}
+                          className={cn(
+                            'border-b cursor-pointer hover:bg-muted/50',
+                            targetReferenceNumber === row.reference_number && 'bg-primary/10'
+                          )}
+                          onClick={() => setTargetReferenceNumber(row.reference_number)}
+                        >
+                          <td className="p-2">{row.location_name || row.location_code || '-'}</td>
+                          <td className="p-2">{row.reference_number || '-'}</td>
+                          <td className="p-2">{row.delivery_time ? new Date(row.delivery_time).toLocaleString('zh-CN') : '-'}</td>
+                          <td className="p-2 text-right">{row.total_pallets}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
             <div className="grid gap-2">
-              <Label htmlFor="target-ref">目标预约号码</Label>
+              <Label htmlFor="target-ref">或直接输入/粘贴预约号码</Label>
               <Input
                 id="target-ref"
                 placeholder="请输入或粘贴预约号码"
@@ -2085,16 +2211,15 @@ function AddDetailDialog({
   orderId?: string | number
   appointmentId?: string | number
 }) {
-  // 步骤状态：1-选择柜号，2-选择明细行，3-填写预计板数
+  // 步骤状态：1-输入柜号，2-选择明细行，3-填写预计板数
   const [step, setStep] = React.useState<1 | 2 | 3>(1)
   
-  // 第一步：选择柜号
-  const [orderSearchOpen, setOrderSearchOpen] = React.useState(false)
-  const [orderSearch, setOrderSearch] = React.useState('')
+  // 第一步：模糊搜索柜号（两步流程：先选柜号，再选择明细）
   const [orders, setOrders] = React.useState<Array<{ order_id: string; order_number: string }>>([])
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null)
   const [selectedOrderNumber, setSelectedOrderNumber] = React.useState<string>('')
   const [inboundReceiptId, setInboundReceiptId] = React.useState<string | null>(null) // 入库管理记录ID
+  const [isLoadingOrders, setIsLoadingOrders] = React.useState(false) // 第一步模糊搜索柜号加载中
   
   // 第二步：选择明细行
   const [orderDetails, setOrderDetails] = React.useState<Array<{
@@ -2127,7 +2252,6 @@ function AddDetailDialog({
   const [po, setPo] = React.useState<string>('')
   
   const [isSaving, setIsSaving] = React.useState(false)
-  const [isLoadingOrders, setIsLoadingOrders] = React.useState(false)
   const [isLoadingDetails, setIsLoadingDetails] = React.useState(false)
   const [isLoadingShipment, setIsLoadingShipment] = React.useState(false)
 
@@ -2223,7 +2347,6 @@ function AddDetailDialog({
   // 重置状态
   React.useEffect(() => {
     if (!open) {
-      // 确保所有状态都被重置，包括保存状态
       setIsSaving(false)
       setStep(1)
       setOrders([])
@@ -2241,7 +2364,7 @@ function AddDetailDialog({
     }
   }, [open])
 
-  // 选择订单
+  // 选择订单（第一步选柜号后点下一步进入第二步）
   const handleSelectOrder = (orderId: string, orderNumber: string) => {
     setSelectedOrderId(orderId)
     setSelectedOrderNumber(orderNumber)
@@ -2359,8 +2482,9 @@ function AddDetailDialog({
     }
   }
 
-  // 如果是 order_detail（有 orderId），显示简单表单
-  if (orderId) {
+  // 有 appointmentId 时一定是「添加预约明细」（两步：输入柜号 → 选择明细），走上面的多步骤表单
+  // 仅当有 orderId 且无 appointmentId 时，才是「添加仓点明细」简单表单
+  if (orderId && !appointmentId) {
     const [formData, setFormData] = React.useState({
       quantity: 0,
       volume: '',
@@ -2544,33 +2668,33 @@ function AddDetailDialog({
             添加预约明细
           </DialogTitle>
           <DialogDescription className="text-base">
-            {step === 1 && '第一步：搜索并选择柜号'}
+            {step === 1 && '第一步：模糊搜索并选择柜号（订单号），下一步后选择明细'}
             {step === 2 && '第二步：从明细行中选择一个仓点'}
             {step === 3 && (appointmentId ? '第三步：填写预计板数和PO' : '第三步：填写预计板数（PO从订单明细读取，不可编辑）')}
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
-          {/* 步骤1：选择柜号 */}
+          {/* 步骤1：模糊搜索柜号（两步流程：先选柜号，再选择明细） */}
           {step === 1 && (
             <div className="space-y-2">
-              <Label>柜号 *</Label>
+              <Label>柜号（订单号）*</Label>
               <FuzzySearchSelect
                 value={selectedOrderId}
                 onChange={(value) => {
                   if (value) {
                     const order = orders.find(o => String(o.order_id) === String(value))
                     if (order) {
-                      handleSelectOrder(order.order_id, order.order_number)
-                    } else {
-                      // 如果 orders 中没有，可能是新搜索的结果，需要重新加载
-                      // 这种情况不应该发生，因为 loadOptions 会更新 orders
-                      console.warn('未找到对应的订单:', value)
+                      setSelectedOrderId(order.order_id)
+                      setSelectedOrderNumber(order.order_number)
                     }
+                  } else {
+                    setSelectedOrderId(null)
+                    setSelectedOrderNumber('')
                   }
                 }}
-                placeholder="搜索并选择柜号..."
-                searchPlaceholder="搜索柜号..."
+                placeholder="搜索并选择柜号（支持模糊搜索）..."
+                searchPlaceholder="输入柜号或订单号搜索..."
                 emptyText="未找到订单"
                 loadingText="搜索中..."
                 loadOptions={async (search: string) => {
@@ -2579,20 +2703,19 @@ function AddDetailDialog({
                   }
                   setIsLoadingOrders(true)
                   try {
-                    const response = await fetch(`/api/oms/appointments/order-options?search=${encodeURIComponent(search)}`)
+                    const response = await fetch(`/api/oms/appointments/order-options?search=${encodeURIComponent(search.trim())}`)
                     if (response.ok) {
                       const data = await response.json()
-                      const loadedOrders = (data.data || []).map((order: any) => ({
+                      const list = (data.data || []).map((order: any) => ({
                         value: order.order_id,
                         label: order.order_number,
                       }))
-                      // 更新 orders 状态，以便 onChange 可以找到对应的订单
                       setOrders(data.data || [])
-                      return loadedOrders
+                      return list
                     }
                     return []
                   } catch (error) {
-                    console.error('搜索订单失败:', error)
+                    console.error('搜索柜号失败:', error)
                     return []
                   } finally {
                     setIsLoadingOrders(false)
@@ -2636,7 +2759,7 @@ function AddDetailDialog({
                   }}
                   className="text-xs"
                 >
-                  重新选择
+                  重新选择柜号
                 </Button>
               </div>
               {isLoadingDetails ? (
@@ -2857,7 +2980,7 @@ function AddDetailDialog({
               if (step > 1) {
                 // 返回到上一步时，清除当前步骤及后续步骤的状态
                 if (step === 2) {
-                  // 从第二步返回到第一步：清空所有选择，与"重新选择"按钮逻辑一致
+                  // 从第二步返回到第一步：清空柜号与明细选择
                   setStep(1)
                   setSelectedOrderId(null)
                   setSelectedOrderNumber('')
@@ -2884,16 +3007,19 @@ function AddDetailDialog({
           {step < 3 ? (
             <Button 
               onClick={() => {
-                if (isSaving) return // 保存中不允许操作
+                if (isSaving) return
                 if (step === 1 && selectedOrderId) {
-                  // 已经在handleSelectOrder中处理
-                } else if (step === 2 && selectedDetailId) {
-                  // 已经在handleSelectDetail中处理
+                  setStep(2)
                 }
+                // step 2 的下一步仅做展示，实际选明细后 handleSelectDetail 会跳到 step 3
               }}
-              disabled={isSaving || !selectedOrderId || (step === 2 && !selectedDetailId)}
+              disabled={
+                isSaving ||
+                (step === 1 && !selectedOrderId) ||
+                (step === 2 && !selectedDetailId)
+              }
             >
-              下一步
+              {step === 1 && isLoadingOrders ? '搜索中...' : '下一步'}
             </Button>
           ) : (
             <Button onClick={handleSubmit} disabled={isSaving}>

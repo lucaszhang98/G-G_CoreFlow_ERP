@@ -3,10 +3,11 @@
  *
  * 公式（含拒收板数）：
  * - 有效占用 = estimated_pallets - (rejected_pallets ?? 0)
- * - 未约板数 = 预计/实际板数 - sum(有效占用)
- * - 剩余板数 = 实际板数 - sum(已过期预约的有效占用)
+ * - 未约板数 = 预计/实际板数 - sum(有效占用)（允许负数，表示已超约）
+ * - 剩余板数 = 实际板数 - sum(已过期预约的有效占用)（允许负数，表示已超送）
  *
  * 在预约明细增/改/删或拒收板数变更后调用，保证 DB 存库与公式一致。
+ * 当用户将实际板数改为 0 且仍有预约时，未约/剩余会为负，正常落库并展示。
  */
 
 import prisma from '@/lib/prisma'
@@ -66,8 +67,8 @@ export async function recalcUnbookedRemainingForOrderDetail(
       await tx.inventory_lots.update({
         where: { inventory_lot_id: lot.inventory_lot_id },
         data: {
-          unbooked_pallet_count: Math.max(0, unbooked),
-          remaining_pallet_count: Math.max(0, remaining),
+          unbooked_pallet_count: unbooked,
+          remaining_pallet_count: remaining,
         },
       })
     }
@@ -78,7 +79,7 @@ export async function recalcUnbookedRemainingForOrderDetail(
     })
     if (detail) {
       const estimated = detail.estimated_pallets ?? 0
-      const newRemaining = Math.max(0, estimated - totalEffective)
+      const newRemaining = estimated - totalEffective
       await tx.order_detail.update({
         where: { id: orderDetailId },
         data: { remaining_pallets: newRemaining },

@@ -259,16 +259,16 @@ export const inventoryLotConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['status'],
+        fields: ['storage_location_code', 'pallet_count', 'status'],
       },
       delete: {
         enabled: true,
       },
     },
-    // 行内编辑配置：仅允许编辑「位置」字段
+    // 行内编辑配置：允许编辑「位置」「实际板数」
     inlineEdit: {
       enabled: true,
-      fields: ['storage_location_code'],
+      fields: ['storage_location_code', 'pallet_count'],
     },
   },
   

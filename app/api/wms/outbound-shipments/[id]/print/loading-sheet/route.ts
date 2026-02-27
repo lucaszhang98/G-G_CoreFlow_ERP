@@ -131,7 +131,9 @@ export async function GET(
       return NextResponse.json({ error: '生成装车单失败：PDF 内容异常' }, { status: 500 })
     }
 
-    const filename = `装车单-${detail.reference_number || appointmentId}.pdf`
+    const numberPart = detail.reference_number || appointmentId
+    const destPart = (detail.destination_location ?? '').trim()
+    const filename = destPart ? `${numberPart} ${destPart}.pdf` : `${numberPart}.pdf`
     return new NextResponse(pdfBuffer as any, {
       headers: {
         'Content-Type': 'application/pdf',

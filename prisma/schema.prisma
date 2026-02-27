@@ -56,6 +56,7 @@ model appointment_detail_lines {
   total_pallets_at_time                            Int? // 总板数快照（创建/更新时的总板数，用于审计和历史追溯）
   load_sheet_notes                                 String?                @db.VarChar(2000) // 装车单明细备注（操作员写给仓库）
   bol_notes                                        String?                @db.VarChar(2000) // BOL 明细备注（操作员写给仓库）
+  ignore_unload_time_check                         Boolean?               @default(false) // 忽略：为 true 时柜号强制显示绿色，不参与拆柜时间与送货时间对比
   // po 字段已移除，PO 应该从 order_detail.po 读取
   created_at                                       DateTime?             @default(now()) @db.Timestamptz(6)
   updated_at                                       DateTime?             @default(now()) @db.Timestamptz(6)

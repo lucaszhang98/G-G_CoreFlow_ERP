@@ -266,7 +266,8 @@ export function DeliveryAppointmentTable() {
       locationType: true,
       estimatedPallets: true,
       unloadTime: true, // 拆柜时间（来自入库管理，按明细对应订单关联）
-      po: true,
+      ignoreUnloadTimeCheck: true, // 忽略：勾选后柜号强制绿色
+      po: false, // 主表明细下拉子表内不显示 PO
       notes: true,
     },
     getLocationName: (detail, context) => {

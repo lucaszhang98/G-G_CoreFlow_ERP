@@ -324,14 +324,13 @@ async function updatePickupManagement(
               updatedOrder.eta_date
             )
 
-            // 查找对应的入库管理记录
+            // 查找对应的入库管理记录；仅当未录入拆柜人员时才同步（拆柜人员有值视为已录入，不再覆盖）
             const inboundReceipt = await prisma.inbound_receipt.findUnique({
               where: { order_id: pickup.order_id },
-              select: { inbound_receipt_id: true },
+              select: { inbound_receipt_id: true, unloaded_by: true },
             })
 
-            if (inboundReceipt && calculatedUnloadDate) {
-              // 更新入库管理的拆柜日期
+            if (inboundReceipt && calculatedUnloadDate && inboundReceipt.unloaded_by == null) {
               await prisma.inbound_receipt.update({
                 where: { inbound_receipt_id: inboundReceipt.inbound_receipt_id },
                 data: {

@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
         delivery_appointments: {
           select: {
             reference_number: true,
+            confirmed_start: true, // 送货时间，用于与拆柜时间对比
           },
         },
       },
@@ -165,6 +166,10 @@ export async function GET(request: NextRequest) {
         order_number: orderDetailOrders?.order_number || null,
         // 拆柜时间：根据明细对应订单，从入库管理（inbound_receipt）取该订单的 planned_unload_at
         unload_time: orderDetail.order_id != null ? unloadTimeMap.get(String(orderDetail.order_id)) ?? null : null,
+        // 送货时间：预约的确认开始时间，用于与拆柜时间对比（柜号红/黄/绿）
+        delivery_time: deliveryAppointment.confirmed_start ?? null,
+        // 忽略：为 true 时柜号强制绿色
+        ignore_unload_time_check: (serialized as any).ignore_unload_time_check === true,
         // 装车单/BOL 明细备注（出库详情中每条明细可编辑）
         load_sheet_notes: (serialized as any).load_sheet_notes ?? null,
         bol_notes: (serialized as any).bol_notes ?? null,

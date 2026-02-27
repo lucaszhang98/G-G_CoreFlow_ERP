@@ -390,12 +390,12 @@ export async function GET(request: NextRequest) {
         const totalExpiredEffectivePallets = expiredAppointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
 
         // 实时计算剩余板数（不依赖数据库字段，确保准确性）
-        // 公式：剩余板数 = 实际板数 - 已过期预约有效板数之和
+        // 公式：剩余板数 = 实际板数 - 已过期预约有效板数之和（允许负数，实际为 0 且已有预约时显示超约）
         const palletCount = serialized.pallet_count ?? 0
-        const remaining_pallet_count = Math.max(0, palletCount - totalExpiredEffectivePallets)
+        const remaining_pallet_count = palletCount - totalExpiredEffectivePallets
 
         // 实时计算未约板数（不依赖数据库字段，确保一致性）
-        // 公式：未约板数 = 实际板数 - 所有预约有效板数之和
+        // 公式：未约板数 = 实际板数 - 所有预约有效板数之和（允许负数）
         const unbooked_pallet_count = palletCount - totalEffectivePallets
 
         // 计算送货进度（使用实时计算的剩余板数）

@@ -2495,6 +2495,14 @@ export function EntityTable<T = any>({
                 }
                 return undefined
               }
+            : config.name === 'inbound_receipt'
+            ? (row: any) => {
+                // 拆柜人员有值视为已录入，与提柜管理一致的浅绿色
+                if (row.unloaded_by != null && row.unloaded_by !== '' || row.unloaded_by_id != null) {
+                  return "bg-gradient-to-r from-green-100 via-emerald-50/80 to-green-100 dark:from-green-900/40 dark:via-emerald-900/30 dark:to-green-900/40 hover:from-green-200 hover:via-emerald-100/80 hover:to-green-200 dark:hover:from-green-800/50 dark:hover:via-emerald-800/40 dark:hover:to-green-800/50"
+                }
+                return undefined
+              }
             : undefined
         }
       />
