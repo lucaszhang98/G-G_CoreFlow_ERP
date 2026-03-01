@@ -6,8 +6,16 @@ import { EntityTable } from "@/components/crud/entity-table"
 import { inboundReceiptConfig } from "@/lib/crud/configs/inbound-receipts"
 import type { ClickableColumnConfig } from "@/lib/table/config"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Printer, FileText } from "lucide-react"
+import { RefreshCw, Printer, FileText, Copy } from "lucide-react"
 import { toast } from "sonner"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 /** 按 UTC 格式化为 YYYY-MM-DD */
 function formatDateUTC(d: Date): string {
@@ -38,17 +46,29 @@ function getThisWeekDateRange(): { planned_unload_at_from: string; planned_unloa
   }
 }
 
-/** 获取「最近一月及未来」的拆柜日期筛选：仅设置起始日为 30 天前（UTC），不设结束日，不做时区转换 */
-function getLastMonthAndFuture(): { planned_unload_at_from: string } {
+/** 获取「本月」的拆柜日期筛选：当月 1 号到当月最后一天（UTC） */
+function getThisMonthDateRange(): { planned_unload_at_from: string; planned_unload_at_to: string } {
   const d = new Date()
-  const past = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 30))
-  return { planned_unload_at_from: formatDateUTC(past) }
+  const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))
+  return {
+    planned_unload_at_from: formatDateUTC(first),
+    planned_unload_at_to: formatDateUTC(last),
+  }
 }
 
 /** 获取「当天」的拆柜日期筛选：起止均为你本机显示的「今天」日期，点进去就是今天几号 */
 function getTodayDateRange(): { planned_unload_at_from: string; planned_unload_at_to: string } {
   const today = new Date()
   const fmt = formatDateLocal(today)
+  return { planned_unload_at_from: fmt, planned_unload_at_to: fmt }
+}
+
+/** 获取「明天」的拆柜日期筛选：起止均为本机显示的「明天」日期 */
+function getTomorrowDateRange(): { planned_unload_at_from: string; planned_unload_at_to: string } {
+  const today = new Date()
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+  const fmt = formatDateLocal(tomorrow)
   return { planned_unload_at_from: fmt, planned_unload_at_to: fmt }
 }
 
@@ -88,6 +108,36 @@ export function InboundReceiptTable() {
     toast.success(`已打开 ${ids.length} 个 Label 打印页`)
   }, [selectedInboundRows])
 
+  // 复制柜号（按选中顺序）
+  const handleCopyContainerNumbers = React.useCallback((format: 'line' | 'comma' | 'space') => {
+    if (selectedInboundRows.length === 0) {
+      toast.error('请先选择要复制的记录')
+      return
+    }
+    const containerNumbers = selectedInboundRows
+      .map((r: any) => r.container_number ?? r.order_number ?? '')
+      .filter(Boolean)
+    if (containerNumbers.length === 0) {
+      toast.error('选中的记录中没有柜号')
+      return
+    }
+    let textToCopy = ''
+    switch (format) {
+      case 'line':
+        textToCopy = containerNumbers.join('\n')
+        break
+      case 'comma':
+        textToCopy = containerNumbers.join(', ')
+        break
+      case 'space':
+        textToCopy = containerNumbers.join(' ')
+        break
+    }
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => toast.success(`已复制 ${containerNumbers.length} 个柜号到剪贴板`))
+      .catch(() => toast.error('复制失败，请重试'))
+  }, [selectedInboundRows])
+
   const customBatchActions = React.useMemo(() => (
     <>
       <Button size="sm" variant="outline" onClick={openBatchUnloadSheet} className="min-w-[100px]">
@@ -98,8 +148,38 @@ export function InboundReceiptTable() {
         <FileText className="mr-2 h-4 w-4" />
         批量生成 Label
       </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="min-w-[100px]">
+            <Copy className="mr-2 h-4 w-4" />
+            复制柜号
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuLabel>选择复制格式</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => handleCopyContainerNumbers('line')}>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">换行分隔</span>
+              <span className="text-xs text-muted-foreground">每个柜号一行</span>
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleCopyContainerNumbers('comma')}>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">逗号分隔</span>
+              <span className="text-xs text-muted-foreground">A, B, C</span>
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleCopyContainerNumbers('space')}>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">空格分隔</span>
+              <span className="text-xs text-muted-foreground">A B C</span>
+            </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </>
-  ), [openBatchUnloadSheet, openBatchLabels])
+  ), [openBatchUnloadSheet, openBatchLabels, handleCopyContainerNumbers])
 
   // 可点击列配置：柜号列可点击跳转到入库管理详情
   const customClickableColumns: ClickableColumnConfig<any>[] = React.useMemo(() => [
@@ -385,7 +465,7 @@ export function InboundReceiptTable() {
     </div>
   ), [handleSyncMissingRecords, handleFixPlannedUnloadDates, isSyncing, isFixingDates])
 
-  // 快速筛选区：显示当天 / 显示本周 / 显示最近一月
+  // 快速筛选区：显示当天 / 显示明天 / 显示本周 / 显示本月 / 显示已放柜子
   const customFilterContent = React.useCallback(
     (applyFilterValues: (v: Record<string, any>) => void) => (
       <>
@@ -401,6 +481,14 @@ export function InboundReceiptTable() {
           variant="outline"
           size="sm"
           className="h-9 rounded-lg"
+          onClick={() => applyFilterValues(getTomorrowDateRange())}
+        >
+          显示明天数据
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 rounded-lg"
           onClick={() => applyFilterValues(getThisWeekDateRange())}
         >
           显示本周数据
@@ -409,9 +497,17 @@ export function InboundReceiptTable() {
           variant="outline"
           size="sm"
           className="h-9 rounded-lg"
-          onClick={() => applyFilterValues(getLastMonthAndFuture())}
+          onClick={() => applyFilterValues(getThisMonthDateRange())}
         >
-          显示最近一月数据
+          显示本月数据
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 rounded-lg"
+          onClick={() => applyFilterValues({ released_containers: '1' })}
+        >
+          显示已放柜子
         </Button>
       </>
     ),

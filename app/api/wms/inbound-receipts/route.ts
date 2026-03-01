@@ -37,9 +37,25 @@ export async function GET(request: NextRequest) {
     const filterConditions = buildFilterConditions(enhancedConfig, searchParams)
     
     // 分离主表字段和关联表字段的筛选条件
+    const mainTableFilterFields = ['inbound_receipt_id', 'order_id', 'status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes']
     const mainTableConditions: any[] = []
     const ordersConditions: any = {}
-    
+
+    const isMainTableCondition = (cond: any): boolean => {
+      if (!cond || typeof cond !== 'object') return false
+      const keys = Object.keys(cond)
+      if (keys.length === 1 && keys[0] === 'OR' && Array.isArray(cond.OR) && cond.OR.length > 0) {
+        const first = cond.OR[0]
+        if (first && typeof first === 'object') {
+          const innerKeys = Object.keys(first)
+          const innerKey = innerKeys[0]
+          return innerKey != null && mainTableFilterFields.includes(innerKey)
+        }
+        return false
+      }
+      return keys.some((k) => mainTableFilterFields.includes(k))
+    }
+
     filterConditions.forEach((condition) => {
       // 整条 condition 若包含 delivery_progress（含 OR: [{ delivery_progress: ... }] 形式），不参与主表/orders 合并，由下面单独用 inventory_lots 处理
       const hasDeliveryProgress = (obj: any): boolean => {
@@ -49,14 +65,11 @@ export async function GET(request: NextRequest) {
       }
       if (hasDeliveryProgress(condition)) return
 
-      Object.keys(condition).forEach((fieldName) => {
-        const mainTableFields = ['inbound_receipt_id', 'order_id', 'status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes']
-        if (mainTableFields.includes(fieldName)) {
-          mainTableConditions.push(condition)
-        } else {
-          Object.assign(ordersConditions, condition)
-        }
-      })
+      if (isMainTableCondition(condition)) {
+        mainTableConditions.push(condition)
+      } else {
+        Object.assign(ordersConditions, condition)
+      }
     })
 
     // 送仓进度筛选：按「送货进度」字段是否 100% 区分。已完成=该字段为 100%，未完成=该字段不是 100%
@@ -121,6 +134,19 @@ export async function GET(request: NextRequest) {
         }
       } else {
         where.orders = ordersConditions
+      }
+    }
+
+    // 「显示已放柜子」：拆柜日期晚于今天，且已有提柜日期
+    if (searchParams.get('filter_released_containers') === '1') {
+      const today = new Date()
+      const startOfTomorrow = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1))
+      where.AND = where.AND || []
+      where.AND.push({ planned_unload_at: { gte: startOfTomorrow } })
+      where.orders = {
+        ...where.orders,
+        operation_mode: 'unload',
+        pickup_date: { not: null },
       }
     }
 

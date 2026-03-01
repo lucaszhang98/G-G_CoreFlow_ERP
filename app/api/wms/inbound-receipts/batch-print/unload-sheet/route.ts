@@ -40,7 +40,10 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const merged = await mergePdfBuffers(buffers)
+    // 每份单据在同一 PDF 中生成 3 份相同页（1 页变 3 页）
+    const COPIES_PER_SHEET = 3
+    const tripled = buffers.flatMap((b) => Array(COPIES_PER_SHEET).fill(b) as Buffer[])
+    const merged = await mergePdfBuffers(tripled)
     const filename = `批量-拆柜单据-${ids.length}份.pdf`
     return new NextResponse(merged as any, {
       headers: {

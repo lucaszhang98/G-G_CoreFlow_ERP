@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth, checkPermission, handleError } from '@/lib/api/helpers'
 import { inboundReceiptConfig } from '@/lib/crud/configs/inbound-receipts'
+import { mergePdfBuffers } from '@/lib/services/print/merge-pdf'
 import { generateUnloadSheetPDF } from '@/lib/services/print/unload-sheet.service'
 import { UnloadSheetData } from '@/lib/services/print/types'
 import { loadInboundReceiptForPrint } from '../load-receipt-for-print'
@@ -89,14 +90,16 @@ export async function GET(
       })),
     }
 
-    // 生成 PDF
+    // 生成 PDF（同一内容在 PDF 中重复 3 页）
     console.log('[Unload Sheet API] 调用PDF生成服务...')
     const pdfBuffer = await generateUnloadSheetPDF(unloadSheetData)
-    console.log('[Unload Sheet API] PDF生成成功，准备返回响应')
+    const buf = Buffer.isBuffer(pdfBuffer) ? pdfBuffer : Buffer.from(pdfBuffer as ArrayBuffer)
+    const merged = await mergePdfBuffers([buf, buf, buf])
+    console.log('[Unload Sheet API] PDF生成成功（3 页），准备返回响应')
 
     // 返回 PDF（文件名格式：{柜号}-拆柜单据.pdf）
     const filename = `${containerNumber}-拆柜单据.pdf`
-    return new NextResponse(pdfBuffer as any, {
+    return new NextResponse(merged as any, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${encodeURIComponent(filename)}"`,

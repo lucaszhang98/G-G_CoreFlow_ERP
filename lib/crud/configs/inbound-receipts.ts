@@ -183,11 +183,12 @@ export const inboundReceiptConfig: EntityConfig = {
     pageSize: 20,
     // 筛选配置（快速筛选）- 手动定义，排除 warehouse_id 和 created_at
     filterFields: [
-      // 状态筛选
+      // 状态筛选（多选）
       {
         field: 'status',
         label: '状态',
         type: 'select',
+        multiple: true,
         options: [
           { label: '待处理', value: 'pending' },
           { label: '已到仓', value: 'arrived' },
