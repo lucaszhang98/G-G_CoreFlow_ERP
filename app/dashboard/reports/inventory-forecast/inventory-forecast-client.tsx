@@ -142,7 +142,7 @@ export function InventoryForecastClient() {
       return {
         date: dateString,
         dayNumber: i + 1,
-        dateLabel: `${month}-${day}`,
+        dateLabel: `${month}/${day}`,
         weekdayLabel: `星期${weekday}`,
         isToday: i === 0,
         isWeekend: date.getUTCDay() === 0 || date.getUTCDay() === 6,

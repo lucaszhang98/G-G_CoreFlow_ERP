@@ -25,7 +25,9 @@ model delivery_appointments {
   appointment_account                                           String?                    @db.VarChar(100)
   rejected                                                      Boolean?                   @default(false)
   verify_po                                                     Boolean?                   @default(false) // 校验PO
-  verify_loading_sheet                                           Boolean?                   @default(false) // 校验装车单
+  verify_loading_sheet                                           Boolean?                   @default(false) // 校验装车单（出库管理中可编辑，预约管理和订单明细中只读）
+  can_create_sheet                                               Boolean?                   @default(false) // 可做单（预约管理中可编辑，出库管理中只读）
+  has_created_sheet                                              Boolean?                   @default(false) // 已做单（出库管理中可编辑，预约管理中只读）
   total_pallets                                                 Int                        @default(0) // 预约总板数（累加所有预约明细的estimated_pallets）
   po                                                            String?                    @db.VarChar(2000)
   notes                                                         String?

@@ -28,7 +28,7 @@ export function OrderDetailPageClient({
     if (isNaN(d.getTime())) return "-"
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
-    return `${month}-${day}`
+    return `${month}/${day}`
   }
 
   const formatCurrency = (amount: string | number | null | any) => {

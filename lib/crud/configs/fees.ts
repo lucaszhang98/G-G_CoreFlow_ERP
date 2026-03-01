@@ -116,10 +116,10 @@ export const feeConfig: EntityConfig = {
   formFields: ['fee_code', 'fee_name', 'unit', 'unit_price', 'currency', 'scope_type', 'container_type', 'description', 'is_active'],
 
   permissions: {
-    list: ['admin', 'oms_manager', 'employee', 'user'],
-    create: ['admin', 'oms_manager'],
-    update: ['admin', 'oms_manager'],
-    delete: ['admin'],
+    list: ['admin', 'oms_manager', 'employee', 'user', 'oms_operator'],
+    create: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以创建费用
+    update: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以编辑费用
+    delete: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以删除费用
   },
 
   prisma: {

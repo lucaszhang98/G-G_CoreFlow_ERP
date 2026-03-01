@@ -68,12 +68,13 @@ const menuItems: MenuItem[] = [
     {
       title: "基础数据",
       icon: Package2,
-      roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user"],
+      roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user", "oms_operator", "wms_operator"],
       children: [
         {
           title: "客户管理",
           icon: Users,
           href: "/dashboard/customers",
+          roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user", "oms_operator", "wms_operator"], // 仓库部门可以访问
         },
         {
           title: "用户管理",
@@ -85,58 +86,62 @@ const menuItems: MenuItem[] = [
           title: "仓库管理",
           icon: Building2,
           href: "/dashboard/warehouses",
-          roles: ["admin", "wms_manager", "tms_manager"], // 排除 oms_manager
+          roles: ["admin", "wms_manager", "tms_manager", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
         },
         {
           title: "部门管理",
           icon: Building2,
           href: "/dashboard/settings/departments",
-          roles: ["admin"], // 只有 admin 可以访问
+          roles: ["admin", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
         },
         {
           title: "位置管理",
           icon: MapPin,
           href: "/dashboard/settings/locations",
+          roles: ["admin", "oms_manager", "tms_manager", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
         },
         {
           title: "承运商管理",
           icon: TruckIcon,
           href: "/dashboard/settings/carriers",
-          roles: ["admin", "tms_manager"], // 排除 oms_manager
+          roles: ["admin", "tms_manager", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
         },
         {
           title: "车辆管理",
           icon: Car,
           href: "/dashboard/settings/vehicles",
-          roles: ["admin", "tms_manager"], // 排除 oms_manager
+          roles: ["admin", "tms_manager", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
         },
         {
           title: "货柜管理",
           icon: Container,
           href: "/dashboard/settings/trailers",
-          roles: ["admin", "tms_manager", "wms_manager"], // 排除 oms_manager
+          roles: ["admin", "tms_manager", "wms_manager", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
         },
       ],
     },
     {
     title: "订单管理 (OMS)",
     icon: ShoppingCart,
-    roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user"],
+    roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user", "oms_operator", "wms_operator"], // 仓库部门也可以访问
     children: [
       {
         title: "订单管理",
         icon: FileText,
         href: "/dashboard/oms/orders",
+        roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user", "oms_operator", "wms_operator"], // 仓库部门也可以访问
       },
       {
         title: "订单明细",
         icon: ClipboardList,
         href: "/dashboard/oms/order-details",
+        roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user", "oms_operator", "wms_operator"], // 仓库部门也可以访问
       },
       {
         title: "预约管理",
         icon: Calendar,
         href: "/dashboard/oms/appointments",
+        roles: ["admin", "oms_manager", "tms_manager", "wms_manager", "employee", "user", "oms_operator", "wms_operator"], // 仓库部门也可以访问
       },
     ],
   },
@@ -160,7 +165,7 @@ const menuItems: MenuItem[] = [
   {
     title: "仓库管理 (WMS)",
     icon: Warehouse,
-    roles: ["admin", "wms_manager", "tms_manager", "employee", "user"], // 排除 oms_manager
+    roles: ["admin", "wms_manager", "tms_manager", "employee", "user", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
     children: [
       {
         title: "入库管理",
@@ -182,7 +187,7 @@ const menuItems: MenuItem[] = [
   {
     title: "财务管理",
     icon: Banknote,
-    roles: ["admin", "oms_manager", "employee", "user"],
+    roles: ["admin", "oms_manager", "employee", "user", "oms_operator"],
     children: [
       {
         title: "直送账单",

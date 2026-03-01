@@ -130,10 +130,12 @@ export async function GET(
       ? formatUTCDateTimeString(serialized.confirmed_end) 
       : null
     
-    // 拒收、校验PO、校验装车单
+    // 拒收、校验PO、校验装车单、可做单、已做单
     const rejected = serialized.rejected ?? false;
     const verify_po = serialized.verify_po ?? false;
     const verify_loading_sheet = serialized.verify_loading_sheet ?? false;
+    const can_create_sheet = serialized.can_create_sheet ?? false;
+    const has_created_sheet = serialized.has_created_sheet ?? false;
 
     // ETA：仅当派送方式为直送时，取第一个明细对应订单的 eta_date，否则为空
     let eta: string | null = null;
@@ -166,6 +168,8 @@ export async function GET(
       rejected: rejected,
       verify_po: verify_po,
       verify_loading_sheet: verify_loading_sheet,
+      can_create_sheet: can_create_sheet,
+      has_created_sheet: has_created_sheet,
     });
   } catch (error: any) {
     console.error('获取预约管理记录失败:', error);
@@ -269,14 +273,27 @@ export async function PUT(
     // 导入时间解析函数（直接当作 UTC 时间处理，不做时区转换）
     const { parseDateTimeAsUTC } = await import('@/lib/utils/datetime-pst')
     
-    const parseDateTimeWithoutTimezone = (value: string): Date => {
+    const parseDateTimeWithoutTimezone = (value: string, ensureHourOnly: boolean = false): Date => {
       // 用户输入的时间直接当作 UTC 时间处理，不做任何时区转换
       // 格式：YYYY-MM-DDTHH:mm 或 YYYY-MM-DDTHH:mm:ss 或 YYYY-MM-DD（只有日期时自动添加时间 00:00）
       if (value.match(/^\d{4}-\d{2}-\d{2}$/)) {
         // 如果只有日期（YYYY-MM-DD），自动添加时间 00:00
         return parseDateTimeAsUTC(`${value}T00:00`)
       }
-      return parseDateTimeAsUTC(value)
+      const date = parseDateTimeAsUTC(value)
+      // 如果 ensureHourOnly 为 true，确保分钟数、秒数、毫秒数都是0（用于送货时间，必须是整点）
+      if (ensureHourOnly) {
+        return new Date(Date.UTC(
+          date.getUTCFullYear(),
+          date.getUTCMonth(),
+          date.getUTCDate(),
+          date.getUTCHours(), // 保留用户输入的小时数
+          0, // 分钟数强制设为0
+          0, // 秒数强制设为0
+          0  // 毫秒数强制设为0
+        ))
+      }
+      return date
     }
     
     if (data.requested_start !== undefined) {
@@ -301,7 +318,20 @@ export async function PUT(
       if (data.confirmed_start === null || data.confirmed_start === '') {
         updateData.confirmed_start = null;
       } else if (typeof data.confirmed_start === 'string') {
-        updateData.confirmed_start = parseDateTimeWithoutTimezone(data.confirmed_start);
+        // 送货时间必须是整点：保留用户输入的小时数，但将分钟数、秒数、毫秒数强制设为0
+        // 使用UTC方法，不做任何时区转换
+        updateData.confirmed_start = parseDateTimeWithoutTimezone(data.confirmed_start, true);
+      } else if (data.confirmed_start instanceof Date) {
+        // 如果是Date对象，也确保分钟数为0，使用UTC方法不做时区转换
+        updateData.confirmed_start = new Date(Date.UTC(
+          data.confirmed_start.getUTCFullYear(),
+          data.confirmed_start.getUTCMonth(),
+          data.confirmed_start.getUTCDate(),
+          data.confirmed_start.getUTCHours(), // 保留小时数
+          0, // 分钟数强制设为0
+          0, // 秒数强制设为0
+          0  // 毫秒数强制设为0
+        ));
       } else {
         updateData.confirmed_start = data.confirmed_start;
       }
@@ -310,7 +340,20 @@ export async function PUT(
       if (data.confirmed_end === null || data.confirmed_end === '') {
         updateData.confirmed_end = null;
       } else if (typeof data.confirmed_end === 'string') {
-        updateData.confirmed_end = parseDateTimeWithoutTimezone(data.confirmed_end);
+        // 送货时间必须是整点：保留用户输入的小时数，但将分钟数、秒数、毫秒数强制设为0
+        // 使用UTC方法，不做任何时区转换
+        updateData.confirmed_end = parseDateTimeWithoutTimezone(data.confirmed_end, true);
+      } else if (data.confirmed_end instanceof Date) {
+        // 如果是Date对象，也确保分钟数为0，使用UTC方法不做时区转换
+        updateData.confirmed_end = new Date(Date.UTC(
+          data.confirmed_end.getUTCFullYear(),
+          data.confirmed_end.getUTCMonth(),
+          data.confirmed_end.getUTCDate(),
+          data.confirmed_end.getUTCHours(), // 保留小时数
+          0, // 分钟数强制设为0
+          0, // 秒数强制设为0
+          0  // 毫秒数强制设为0
+        ));
       } else {
         updateData.confirmed_end = data.confirmed_end;
       }
@@ -337,6 +380,12 @@ export async function PUT(
     }
     if (data.verify_loading_sheet !== undefined) {
       updateData.verify_loading_sheet = Boolean(data.verify_loading_sheet);
+    }
+    if (data.can_create_sheet !== undefined) {
+      updateData.can_create_sheet = Boolean(data.can_create_sheet);
+    }
+    if (data.has_created_sheet !== undefined) {
+      updateData.has_created_sheet = Boolean(data.has_created_sheet);
     }
     if (data.po !== undefined) {
       updateData.po = data.po;
@@ -511,8 +560,15 @@ export async function PUT(
       }
     }
 
+    // 确保返回三个 Boolean 字段
+    const verify_loading_sheet = serialized.verify_loading_sheet ?? false;
+    const can_create_sheet = serialized.can_create_sheet ?? false;
+    const has_created_sheet = serialized.has_created_sheet ?? false;
+    const rejected = serialized.rejected ?? false;
+    
     return NextResponse.json({
       success: true,
+      message: '更新成功',
       data: {
         ...serialized,
         // 返回location_id用于表单字段绑定
@@ -526,6 +582,11 @@ export async function PUT(
         requested_end: requestedEnd,
         confirmed_start: confirmedStart,
         confirmed_end: confirmedEnd,
+        // 确保返回三个 Boolean 字段
+        verify_loading_sheet: verify_loading_sheet,
+        can_create_sheet: can_create_sheet,
+        has_created_sheet: has_created_sheet,
+        rejected: rejected,
       }
     });
   } catch (error: any) {

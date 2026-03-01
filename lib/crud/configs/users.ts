@@ -51,6 +51,8 @@ export const userConfig: EntityConfig = {
         { label: 'WMS经理', value: 'wms_manager' },
         { label: '叉车工', value: 'wms_outbound_worker' },
         { label: '力工', value: 'wms_inbound_worker' },
+        { label: '操作部门', value: 'oms_operator' },
+        { label: '仓库部门', value: 'wms_operator' },
       ],
     },
     status: {
@@ -163,7 +165,7 @@ export const userConfig: EntityConfig = {
   formFields: ['username', 'password', 'full_name', 'role', 'status', 'department_id', 'phone'],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'], // 允许所有登录用户查看用户列表（用于关系字段）
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'], // 允许所有登录用户查看用户列表（用于关系字段）
     create: ['admin'],
     update: ['admin'],
     delete: ['admin'],

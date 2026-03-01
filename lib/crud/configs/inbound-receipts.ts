@@ -296,10 +296,10 @@ export const inboundReceiptConfig: EntityConfig = {
   ],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: [], // 禁用创建功能
-    update: ['admin', 'wms_manager'],
-    delete: [], // 禁用删除功能
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
+    create: ['admin', 'wms_manager', 'oms_operator'], // 操作部门可以创建入库（虽然通常通过订单创建）
+    update: ['admin', 'wms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以编辑入库
+    delete: ['admin', 'wms_manager', 'oms_operator'], // 操作部门可以删除入库
   },
   
   prisma: {

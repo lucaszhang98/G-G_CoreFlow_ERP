@@ -162,10 +162,10 @@ export const locationConfig: EntityConfig = {
   formFields: ['location_code', 'name', 'location_type', 'notes', 'address_line1', 'address_line2', 'city', 'state', 'postal_code', 'country'],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: ['admin', 'oms_manager', 'tms_manager'],
-    update: ['admin', 'oms_manager', 'tms_manager'],
-    delete: ['admin'],
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
+    create: ['admin', 'oms_manager', 'tms_manager', 'oms_operator', 'wms_operator'],
+    update: ['admin', 'oms_manager', 'tms_manager', 'oms_operator', 'wms_operator'],
+    delete: ['admin', 'oms_manager', 'tms_manager', 'oms_operator', 'wms_operator'],
   },
   
   prisma: {

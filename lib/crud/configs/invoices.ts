@@ -146,10 +146,10 @@ export const invoiceConfig: EntityConfig = {
   formFields: ['invoice_number', 'invoice_type', 'customer_id', 'order_id', 'total_amount', 'tax_amount', 'currency', 'invoice_date', 'status', 'notes'],
 
   permissions: {
-    list: ['admin', 'oms_manager', 'employee', 'user'],
-    create: ['admin', 'oms_manager'],
-    update: ['admin', 'oms_manager'],
-    delete: ['admin'],
+    list: ['admin', 'oms_manager', 'employee', 'user', 'oms_operator'],
+    create: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以创建账单
+    update: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以编辑账单
+    delete: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以删除账单
   },
 
   prisma: {

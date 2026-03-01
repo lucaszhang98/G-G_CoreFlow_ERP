@@ -102,10 +102,10 @@ export const departmentConfig: EntityConfig = {
   formFields: ['code', 'name', 'parent_id', 'manager_id', 'description'],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: ['admin'],
-    update: ['admin'],
-    delete: ['admin'],
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
+    create: ['admin', 'oms_operator', 'wms_operator'],
+    update: ['admin', 'oms_operator', 'wms_operator'],
+    delete: ['admin', 'oms_operator', 'wms_operator'],
   },
   
   prisma: {

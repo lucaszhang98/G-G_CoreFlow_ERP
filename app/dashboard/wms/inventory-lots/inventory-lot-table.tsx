@@ -98,7 +98,7 @@ export function InventoryLotTable() {
       if (isNaN(date.getTime())) return "-"
       const month = String(date.getUTCMonth() + 1).padStart(2, '0')
       const day = String(date.getUTCDate()).padStart(2, '0')
-      return `${month}-${day}`
+      return `${month}/${day}`
     } catch {
       return "-"
     }

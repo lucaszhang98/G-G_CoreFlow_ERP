@@ -29,7 +29,8 @@ export async function recalcUnbookedRemainingForOrderDetail(
   today.setHours(0, 0, 0, 0)
 
   // 1. 该 order_detail 下所有预约明细（含有效占用、是否过期）
-  const lines = await tx.appointment_detail_lines.findMany({
+  // 只包含有效的预约（delivery_appointments 不为 null），过滤掉孤立的记录
+  const allLines = await tx.appointment_detail_lines.findMany({
     where: { order_detail_id: orderDetailId },
     select: {
       estimated_pallets: true,
@@ -40,11 +41,14 @@ export async function recalcUnbookedRemainingForOrderDetail(
     },
   })
 
-  const totalEffective = lines.reduce((sum, line) => {
+  // 过滤掉孤立的 appointment_detail_lines 记录（关联的预约已被删除）
+  const validLines = allLines.filter((line) => line.delivery_appointments !== null)
+
+  const totalEffective = validLines.reduce((sum, line) => {
     return sum + getEffectivePallets(line.estimated_pallets, line.rejected_pallets)
   }, 0)
 
-  const expiredEffective = lines.reduce((sum, line) => {
+  const expiredEffective = validLines.reduce((sum, line) => {
     const start = line.delivery_appointments?.confirmed_start
     if (!start) return sum
     const d = new Date(start)
@@ -52,6 +56,17 @@ export async function recalcUnbookedRemainingForOrderDetail(
     if (d < today) return sum + getEffectivePallets(line.estimated_pallets, line.rejected_pallets)
     return sum
   }, 0)
+
+  // 调试日志：如果存在孤立的记录，记录警告
+  if (allLines.length > validLines.length) {
+    const orphanedCount = allLines.length - validLines.length
+    const orphanedPallets = allLines
+      .filter((line) => line.delivery_appointments === null)
+      .reduce((sum, line) => sum + getEffectivePallets(line.estimated_pallets, line.rejected_pallets), 0)
+    console.warn(
+      `[重算服务] 订单明细 ${orderDetailId} 存在 ${orphanedCount} 条孤立的预约明细记录（关联的预约已被删除），共 ${orphanedPallets} 个有效板数。这些板数不会被计入未约板数计算。`
+    )
+  }
 
   // 2. 是否已入库
   const lots = await tx.inventory_lots.findMany({

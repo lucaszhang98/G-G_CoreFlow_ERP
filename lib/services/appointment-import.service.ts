@@ -493,7 +493,18 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
             try {
               // 将 "YYYY-MM-DD HH:mm" 格式转换为 "YYYY-MM-DDTHH:mm"
               const timeString = String(firstRow.confirmed_start).replace(' ', 'T')
-              confirmedStart = parseDateTimeAsUTC(timeString)
+              const parsedDate = parseDateTimeAsUTC(timeString)
+              // 送货时间必须是整点：保留用户输入的小时数，但将分钟数、秒数、毫秒数强制设为0
+              // 使用UTC方法，不做任何时区转换
+              confirmedStart = new Date(Date.UTC(
+                parsedDate.getUTCFullYear(),
+                parsedDate.getUTCMonth(),
+                parsedDate.getUTCDate(),
+                parsedDate.getUTCHours(), // 保留用户输入的小时数
+                0, // 分钟数强制设为0
+                0, // 秒数强制设为0
+                0  // 毫秒数强制设为0
+              ))
             } catch (error) {
               throw new Error(`预约"${referenceNumber}"的送货时间格式错误：${firstRow.confirmed_start}`)
             }

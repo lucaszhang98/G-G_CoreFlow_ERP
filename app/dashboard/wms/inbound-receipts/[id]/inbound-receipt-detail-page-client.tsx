@@ -32,7 +32,7 @@ export function InboundReceiptDetailPageClient({
     if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(date)) {
       const dateStr = date.split('T')[0] // 只取日期部分，忽略时间
       const [year, month, day] = dateStr.split('-').map(Number)
-      return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`
     }
     
     // 如果是 Date 对象，使用本地时间
@@ -40,7 +40,7 @@ export function InboundReceiptDetailPageClient({
     if (isNaN(d.getTime())) return "-"
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
-    return `${month}-${day}`
+    return `${month}/${day}`
   }
 
   const formatNumber = (value: number | null | string | any) => {

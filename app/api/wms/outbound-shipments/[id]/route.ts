@@ -109,10 +109,17 @@ export async function PUT(
       updateData.contact_phone = body.contact_phone || null;
     }
 
-    // rejected 字段在 delivery_appointments 表中，需要单独更新
+    // rejected、verify_loading_sheet、has_created_sheet 字段在 delivery_appointments 表中，需要单独更新
+    // 注意：can_create_sheet 在出库管理中只读，不允许更新
     const appointmentUpdateData: any = {}
     if (body.rejected !== undefined) {
       appointmentUpdateData.rejected = Boolean(body.rejected)
+    }
+    if (body.verify_loading_sheet !== undefined) {
+      appointmentUpdateData.verify_loading_sheet = Boolean(body.verify_loading_sheet)
+    }
+    if (body.has_created_sheet !== undefined) {
+      appointmentUpdateData.has_created_sheet = Boolean(body.has_created_sheet)
     }
 
     // 检查 delivery_appointment 是否存在且非直送
@@ -294,28 +301,44 @@ export async function PUT(
       }
     }
 
-    // 重新查询以获取完整的关联数据用于返回
-    const finalOutboundShipmentRaw = await prisma.outbound_shipments.findUnique({
+    // 重新查询以获取完整的关联数据用于返回（包括 delivery_appointments 中的字段）
+    const finalAppointment = await prisma.delivery_appointments.findUnique({
       where: { appointment_id: BigInt(appointmentId) },
-      select: {
-        outbound_shipment_id: true,
-        trailer_id: true,
-        trailer_code: true,
-        loaded_by: true,
-        notes: true,
-        delivery_address: true,
-        contact_name: true,
-        contact_phone: true,
-        users_outbound_shipments_loaded_byTousers: {
+      include: {
+        outbound_shipments: {
           select: {
-            id: true,
-            username: true,
-          },
+            outbound_shipment_id: true,
+            trailer_id: true,
+            trailer_code: true,
+            loaded_by: true,
+            notes: true,
+            delivery_address: true,
+            contact_name: true,
+            contact_phone: true,
+            users_outbound_shipments_loaded_byTousers: {
+              select: {
+                id: true,
+                username: true,
+              },
+            },
+          } as any,
         },
-      } as any,
+      },
     });
-    // 序列化 BigInt 字段
-    const finalOutboundShipment = finalOutboundShipmentRaw ? serializeBigInt(finalOutboundShipmentRaw) : null;
+    
+    // 序列化 BigInt 字段并合并数据
+    const finalOutboundShipment = finalAppointment?.outbound_shipments 
+      ? serializeBigInt(finalAppointment.outbound_shipments) 
+      : null;
+    
+    // 合并 delivery_appointments 中的字段
+    if (finalOutboundShipment && finalAppointment) {
+      (finalOutboundShipment as any).verify_loading_sheet = finalAppointment.verify_loading_sheet === true;
+      (finalOutboundShipment as any).has_created_sheet = finalAppointment.has_created_sheet === true;
+      (finalOutboundShipment as any).can_create_sheet = finalAppointment.can_create_sheet === true;
+      (finalOutboundShipment as any).rejected = finalAppointment.rejected === true;
+    }
+    
     console.log(`[OutboundShipments] 最终查询结果 - loaded_by:`, finalOutboundShipment?.loaded_by, `loaded_by_name:`, finalOutboundShipment?.users_outbound_shipments_loaded_byTousers?.username)
 
     if (!finalOutboundShipment) {

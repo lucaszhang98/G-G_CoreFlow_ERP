@@ -40,6 +40,7 @@ type RowData = {
   remaining_pallets?: number | null
   unbooked_pallets?: number
   container_number?: string | null
+  planned_unload_at?: string | null
 }
 
 type AppointmentOption = {
@@ -47,6 +48,8 @@ type AppointmentOption = {
   reference_number: string | null
   confirmed_start: string | null
   destination_location?: string | null
+  total_pallets?: number | null
+  delivery_method?: string | null
 }
 
 export function AddToExistingAppointmentDialog({
@@ -62,7 +65,8 @@ export function AddToExistingAppointmentDialog({
 }) {
   const router = useRouter()
   const [loadingAppointments, setLoadingAppointments] = React.useState(false)
-  const [appointments, setAppointments] = React.useState<AppointmentOption[]>([])
+  const [allAppointments, setAllAppointments] = React.useState<AppointmentOption[]>([])
+  const [candidateAppointments, setCandidateAppointments] = React.useState<AppointmentOption[]>([])
   const [appointmentSearch, setAppointmentSearch] = React.useState("")
   const [selectedAppointmentId, setSelectedAppointmentId] = React.useState<string>("")
   const [linePallets, setLinePallets] = React.useState<Record<string, number>>({})
@@ -76,9 +80,76 @@ export function AddToExistingAppointmentDialog({
 
   /** 当前选中的预约信息（含目的地） */
   const selectedAppointment = React.useMemo(
-    () => appointments.find((a) => a.appointment_id === selectedAppointmentId),
-    [appointments, selectedAppointmentId]
+    () => candidateAppointments.find((a) => a.appointment_id === selectedAppointmentId) || allAppointments.find((a) => a.appointment_id === selectedAppointmentId),
+    [candidateAppointments, allAppointments, selectedAppointmentId]
   )
+
+  /** 根据选中明细的仓点、预计拆柜日期和派送方式筛选匹配的预约 */
+  React.useEffect(() => {
+    if (!open || selectedRows.length === 0 || allAppointments.length === 0) {
+      setCandidateAppointments([])
+      return
+    }
+
+    // 收集所有选中明细的仓点代码
+    const detailLocationCodes = selectedRows
+      .map((row) => (row.delivery_location_code ?? "").trim())
+      .filter(Boolean)
+    
+    // 收集所有选中明细的预计拆柜日期（取最早的日期作为基准）
+    const plannedUnloadDates = selectedRows
+      .map((row) => row.planned_unload_at)
+      .filter(Boolean)
+      .map((dateStr) => new Date(dateStr!))
+      .filter((date) => !isNaN(date.getTime()))
+    
+    const earliestPlannedUnloadDate = plannedUnloadDates.length > 0
+      ? new Date(Math.min(...plannedUnloadDates.map(d => d.getTime())))
+      : null
+
+    if (detailLocationCodes.length === 0) {
+      setCandidateAppointments(allAppointments)
+      return
+    }
+
+    // 筛选出符合条件的预约：
+    // 1. 目的地与明细仓点匹配
+    // 2. 送货时间晚于预计拆柜日期（如果有预计拆柜日期）
+    // 3. 派送方式不能是"直送"
+    const candidates = allAppointments.filter((appt) => {
+      const appointmentDestination = (appt.destination_location ?? "").trim()
+      // 如果预约目的地为空，不匹配
+      if (!appointmentDestination) return false
+      // 如果预约目的地与任意一个明细的仓点不匹配，不显示
+      if (!detailLocationCodes.includes(appointmentDestination)) return false
+      
+      // 派送方式不能是"直送"
+      if (appt.delivery_method === "直送") return false
+      
+      // 如果有预计拆柜日期，预约的送货时间必须晚于预计拆柜日期
+      if (earliestPlannedUnloadDate && appt.confirmed_start) {
+        const appointmentDate = new Date(appt.confirmed_start)
+        // 只比较日期部分（忽略时间）
+        appointmentDate.setHours(0, 0, 0, 0)
+        const plannedDate = new Date(earliestPlannedUnloadDate)
+        plannedDate.setHours(0, 0, 0, 0)
+        // 预约日期必须晚于或等于预计拆柜日期（>=）
+        if (appointmentDate < plannedDate) return false
+      }
+      
+      return true
+    })
+
+    setCandidateAppointments(candidates.length > 0 ? candidates : allAppointments)
+    
+    // 如果当前选中的预约不在候选列表中，自动选择第一个候选预约
+    if (candidates.length > 0) {
+      const currentSelectedExists = candidates.some((a) => a.appointment_id === selectedAppointmentId)
+      if (!currentSelectedExists) {
+        setSelectedAppointmentId(candidates[0].appointment_id)
+      }
+    }
+  }, [open, selectedRows, allAppointments, selectedAppointmentId])
 
   React.useEffect(() => {
     if (!open || selectedRows.length === 0) return
@@ -94,7 +165,7 @@ export function AddToExistingAppointmentDialog({
   React.useEffect(() => {
     if (!open) return
     setLoadingAppointments(true)
-    const params = new URLSearchParams({ limit: "50", page: "1" })
+    const params = new URLSearchParams({ limit: "100", page: "1" })
     if (appointmentSearch.trim()) params.set("search", appointmentSearch.trim())
     fetch(`/api/oms/appointments?${params}`)
       .then((r) => r.json())
@@ -105,14 +176,10 @@ export function AddToExistingAppointmentDialog({
             reference_number: a.reference_number ?? null,
             confirmed_start: a.confirmed_start ?? null,
             destination_location: a.destination_location ?? null,
+            total_pallets: a.total_pallets ?? null,
+            delivery_method: a.delivery_method ?? null,
           }))
-        setAppointments(options)
-        if (options.length > 0) {
-          setSelectedAppointmentId((prev) => {
-            const exists = options.some((o: AppointmentOption) => o.appointment_id === prev)
-            return exists ? prev : options[0].appointment_id
-          })
-        }
+        setAllAppointments(options)
       })
       .catch(() => toast.error("加载预约列表失败"))
       .finally(() => setLoadingAppointments(false))
@@ -218,31 +285,80 @@ export function AddToExistingAppointmentDialog({
           <div className="flex-1 overflow-y-auto space-y-4 py-2">
             {/* 预约选择 */}
             <div className="grid gap-2">
-              <Label>选择预约</Label>
-              <div className="flex gap-2">
+              <div className="flex items-center justify-between">
+                <Label>可选预约（根据选中明细的仓点自动筛选）</Label>
                 <Input
                   placeholder="搜索预约号码（可选）"
                   value={appointmentSearch}
                   onChange={(e) => setAppointmentSearch(e.target.value)}
                   className="max-w-[200px]"
                 />
-                <Select
-                  value={selectedAppointmentId}
-                  onValueChange={setSelectedAppointmentId}
-                  disabled={loadingAppointments}
-                >
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder={loadingAppointments ? "加载中…" : "请选择预约"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {appointments.map((a) => (
-                      <SelectItem key={a.appointment_id} value={a.appointment_id}>
-                        {a.reference_number || a.appointment_id} {a.confirmed_start ? ` (${a.confirmed_start})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
+              {loadingAppointments ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">加载预约列表中…</span>
+                </div>
+              ) : candidateAppointments.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  暂无匹配的预约
+                </div>
+              ) : (
+                <div className="rounded-md border max-h-[300px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">选择</TableHead>
+                        <TableHead>预约号码</TableHead>
+                        <TableHead>送货时间</TableHead>
+                        <TableHead>目的地</TableHead>
+                        <TableHead>板数</TableHead>
+                        <TableHead>派送方式</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {candidateAppointments.map((a) => (
+                        <TableRow
+                          key={a.appointment_id}
+                          className={`cursor-pointer ${
+                            selectedAppointmentId === a.appointment_id
+                              ? "bg-muted"
+                              : "hover:bg-muted/50"
+                          }`}
+                          onClick={() => setSelectedAppointmentId(a.appointment_id)}
+                        >
+                          <TableCell>
+                            <input
+                              type="radio"
+                              checked={selectedAppointmentId === a.appointment_id}
+                              onChange={() => setSelectedAppointmentId(a.appointment_id)}
+                              className="cursor-pointer"
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {a.reference_number || a.appointment_id}
+                          </TableCell>
+                          <TableCell>
+                            {a.confirmed_start
+                              ? new Date(a.confirmed_start).toLocaleDateString("zh-CN", {
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                })
+                              : "-"}
+                          </TableCell>
+                          <TableCell>{a.destination_location || "-"}</TableCell>
+                          <TableCell>
+                            {a.total_pallets !== null && a.total_pallets !== undefined
+                              ? Math.round(a.total_pallets).toLocaleString()
+                              : "-"}
+                          </TableCell>
+                          <TableCell>{a.delivery_method || "-"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </div>
 
             {/* 明细与预计板数 */}

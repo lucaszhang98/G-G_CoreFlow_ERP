@@ -14,7 +14,7 @@ export const userCreateSchema = z.object({
     .int('部门ID必须是整数')
     .positive('部门ID必须是正数')
     .optional(),
-  role: z.enum(['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'wms_outbound_worker', 'wms_inbound_worker'])
+  role: z.enum(['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'wms_outbound_worker', 'wms_inbound_worker', 'oms_operator', 'wms_operator'])
     .default('wms_inbound_worker'),  // 默认力工
   status: z.enum(['active', 'inactive'])
     .default('active'),
@@ -29,7 +29,7 @@ export const userCreateSchema = z.object({
 export const userUpdateSchema = z.object({
   full_name: z.string().max(100).optional(),
   department_id: z.number().int().positive().optional(),
-  role: z.enum(['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'wms_outbound_worker', 'wms_inbound_worker']).optional(),
+  role: z.enum(['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'wms_outbound_worker', 'wms_inbound_worker', 'oms_operator', 'wms_operator']).optional(),
   status: z.enum(['active', 'inactive']).optional(),
   phone: z.string().max(20).optional(),
   avatar_url: z.string().url().optional()

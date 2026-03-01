@@ -113,10 +113,10 @@ export const receivableConfig: EntityConfig = {
   formFields: ['invoice_id', 'customer_id', 'receivable_amount', 'allocated_amount', 'balance', 'due_date', 'status', 'notes'],
 
   permissions: {
-    list: ['admin', 'oms_manager', 'employee', 'user'],
-    create: ['admin', 'oms_manager'],
-    update: ['admin', 'oms_manager'],
-    delete: ['admin'],
+    list: ['admin', 'oms_manager', 'employee', 'user', 'oms_operator'],
+    create: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以创建应收
+    update: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以编辑应收
+    delete: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以删除应收
   },
 
   prisma: {

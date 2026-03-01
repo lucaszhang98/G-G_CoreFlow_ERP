@@ -21,24 +21,12 @@ export async function GET(request: NextRequest) {
     // 增强配置，确保 filterFields 已生成
     const enhancedConfig = enhanceConfigWithSearchFields(outboundShipmentConfig)
 
-    // 构建查询条件：只显示非直送的预约
-    // 直接从 delivery_appointments 查询非直送的预约，然后关联 outbound_shipments
-    // 这样即使 outbound_shipments 记录不存在，也能显示所有非直送预约
-    const where: any = {
-      delivery_appointments: {
-        delivery_method: {
-          not: '直送',
-        },
-      },
-    };
-
     // 使用统一的筛选逻辑
     const filterConditions = buildFilterConditions(enhancedConfig, searchParams)
     
     // 注意：出库管理实际查询的是 delivery_appointments 表，所以筛选条件应该直接应用到 appointmentWhere
     // 分离主表字段和关联表字段的筛选条件
     const appointmentsConditions: any = {}
-    const dateConditions: any[] = [] // 用于存储 delivery_date 和 appointment_time 的日期筛选条件
     let outboundShipmentsWhere: any = null // 用于存储 outbound_shipments 的筛选条件
     
     filterConditions.forEach((condition) => {
@@ -143,7 +131,10 @@ export async function GET(request: NextRequest) {
     
     // 如果有 loaded_by_name 筛选，需要在 where 条件中添加 outbound_shipments 关联筛选
     if (outboundShipmentsWhere) {
-      appointmentWhere.outbound_shipments = outboundShipmentsWhere
+      // 使用 Prisma 的一对一关系查询语法：is 表示关联记录存在且满足条件
+      appointmentWhere.outbound_shipments = {
+        is: outboundShipmentsWhere
+      }
     }
     
     try {
@@ -203,10 +194,12 @@ export async function GET(request: NextRequest) {
       ]);
     } catch (queryError: any) {
       console.error('Prisma 查询错误:', queryError);
+      console.error('查询条件:', JSON.stringify(appointmentWhere, null, 2));
       return NextResponse.json(
         {
           error: '获取出库管理列表失败',
-          message: queryError.message,
+          message: queryError.message || '数据库查询失败',
+          details: process.env.NODE_ENV === 'development' ? queryError.stack : undefined,
         },
         { status: 500 }
       );
@@ -249,6 +242,10 @@ export async function GET(request: NextRequest) {
         destination_location: serializedAppointment.locations?.location_code || null,
         confirmed_start: serializedAppointment.confirmed_start || null,
         total_pallets: totalPallets, // 从 appointment_detail_lines.estimated_pallets 累加
+        // 三个 Boolean 字段（从预约中读取）
+        verify_loading_sheet: serializedAppointment.verify_loading_sheet ?? false,
+        can_create_sheet: serializedAppointment.can_create_sheet ?? false,
+        has_created_sheet: serializedAppointment.has_created_sheet ?? false,
         
         // 从 outbound_shipments 获取的字段（已序列化）
         outbound_shipment_id: shipment?.outbound_shipment_id?.toString() || null,

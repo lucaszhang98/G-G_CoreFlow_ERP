@@ -221,10 +221,10 @@ export const orderDetailConfig: EntityConfig = {
   formFields: [],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: [],
-    update: [],
-    delete: [],
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
+    create: ['admin', 'oms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以创建订单明细
+    update: ['admin', 'oms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以编辑订单明细
+    delete: ['admin', 'oms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以删除订单明细
   },
   
   prisma: {

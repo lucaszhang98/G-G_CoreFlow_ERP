@@ -201,6 +201,9 @@ export async function GET(request: NextRequest) {
                   requested_start: true,
                   confirmed_start: true,
                   status: true,
+                  verify_loading_sheet: true, // 校验装车单
+                  can_create_sheet: true, // 可做单
+                  has_created_sheet: true, // 已做单
                 },
               },
             } as import('@prisma/client').Prisma.appointment_detail_linesSelect,
@@ -232,28 +235,43 @@ export async function GET(request: NextRequest) {
       
       // 有效占用 = estimated_pallets - rejected_pallets
       const effective = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
-      const appointments = item.appointment_detail_lines?.map((adl: any) => ({
-        appointment_id: adl.delivery_appointments?.appointment_id ? String(adl.delivery_appointments.appointment_id) : null,
-        reference_number: adl.delivery_appointments?.reference_number || null,
-        requested_start: adl.delivery_appointments?.requested_start || null,
-        confirmed_start: adl.delivery_appointments?.confirmed_start || null,
-        estimated_pallets: adl.estimated_pallets || 0,
-        rejected_pallets: adl.rejected_pallets ?? 0,
-        status: adl.delivery_appointments?.status || null,
-      })) || []
-
-      // 最早预约：未过期的预约中，取日期最早的那条的预约号码和预约时间
-      const todayStart = new Date()
-      todayStart.setHours(0, 0, 0, 0)
-      const nonExpiredAppointments = appointments.filter((appt: any) => {
-        const start = appt.confirmed_start || appt.requested_start
-        if (!start) return false
-        const d = new Date(start)
-        d.setHours(0, 0, 0, 0)
-        return d >= todayStart
+      // 只包含有效的预约（delivery_appointments 不为 null）
+      // 过滤掉孤立的 appointment_detail_lines 记录（关联的预约已被删除）
+      const allAppointmentLines = item.appointment_detail_lines || []
+      const validAppointmentLines = allAppointmentLines.filter((adl: any) => adl.delivery_appointments !== null)
+      
+      const appointments = validAppointmentLines.map((adl: any) => {
+        const appointment = adl.delivery_appointments
+        return {
+          appointment_id: appointment?.appointment_id ? String(appointment.appointment_id) : null,
+          reference_number: appointment?.reference_number || null,
+          requested_start: appointment?.requested_start || null,
+          confirmed_start: appointment?.confirmed_start || null,
+          estimated_pallets: adl.estimated_pallets || 0,
+          rejected_pallets: adl.rejected_pallets ?? 0,
+          status: appointment?.status || null,
+          // 三个 Boolean 字段（从预约中读取）
+          verify_loading_sheet: appointment?.verify_loading_sheet === true || false,
+          can_create_sheet: appointment?.can_create_sheet === true || false,
+          has_created_sheet: appointment?.has_created_sheet === true || false,
+        }
       })
-      const earliestAppointment = nonExpiredAppointments.length > 0
-        ? nonExpiredAppointments.reduce((earliest: any, appt: any) => {
+      
+      // 调试日志：如果存在孤立的 appointment_detail_lines 记录，记录警告
+      if (allAppointmentLines.length > validAppointmentLines.length) {
+        const orphanedCount = allAppointmentLines.length - validAppointmentLines.length
+        const orphanedPallets = allAppointmentLines
+          .filter((adl: any) => adl.delivery_appointments === null)
+          .reduce((sum: number, adl: any) => sum + (adl.estimated_pallets || 0), 0)
+        console.warn(
+          `[订单明细API] 订单明细 ${item.id} (订单号: ${item.orders?.order_number || 'N/A'}, 仓点: ${item.locations_order_detail_delivery_location_idTolocations?.location_code || 'N/A'}, 性质: ${item.delivery_nature || 'N/A'}) ` +
+          `存在 ${orphanedCount} 条孤立的预约明细记录（关联的预约已被删除），共 ${orphanedPallets} 个板数。这些板数不会被计入未约板数计算。`
+        )
+      }
+
+      // 最早预约：直接取所有预约中日期最早的那条的预约号码和预约时间
+      const earliestAppointment = appointments.length > 0
+        ? appointments.reduce((earliest: any, appt: any) => {
             const start = appt.confirmed_start || appt.requested_start
             const earliestStart = earliest.confirmed_start || earliest.requested_start
             if (!start) return earliest

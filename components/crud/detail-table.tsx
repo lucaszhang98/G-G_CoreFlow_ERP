@@ -99,7 +99,8 @@ export interface DetailTableConfig {
     deliveryLocation?: boolean // 送仓地点
     totalVolume?: boolean // 总方数
     totalPallets?: boolean // 总板数
-    estimatedPallets?: boolean // 预计板数
+    estimatedPallets?: boolean // 排车板数（原预计板数）
+    actualPallets?: boolean // 实际板数（入库对应的实际板数）
     rejectedPallets?: boolean // 拒收板数（预约明细）
     unloadTime?: boolean // 拆柜时间（预约明细，来自入库管理）
     volumePercentage?: boolean // 分仓占比
@@ -274,7 +275,7 @@ export function DetailTable({
     if (isNaN(d.getTime())) return "-"
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
-    return `${month}-${day}`
+    return `${month}/${day}`
   }
 
   const toggleExpand = (detailId: string | number) => {
@@ -346,17 +347,20 @@ export function DetailTable({
       if (appointmentId) {
         for (const detailId of Object.keys(batchEditValues)) {
           const values = batchEditValues[detailId]
+          const requestBody: any = {
+            estimated_pallets: values?.estimated_pallets,
+            rejected_pallets: values?.rejected_pallets,
+            ignore_unload_time_check: values?.ignore_unload_time_check,
+            load_sheet_notes: values?.load_sheet_notes,
+            bol_notes: values?.bol_notes,
+          }
+          
           const response = await fetch(`/api/oms/appointment-detail-lines/${detailId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              estimated_pallets: values?.estimated_pallets,
-              rejected_pallets: values?.rejected_pallets,
-              ignore_unload_time_check: values?.ignore_unload_time_check,
-              load_sheet_notes: values?.load_sheet_notes,
-              bol_notes: values?.bol_notes,
-            }),
+            body: JSON.stringify(requestBody),
           })
+          
           if (!response.ok) {
             const errorData = await response.json()
             throw new Error(`更新明细 ${detailId} 失败: ${errorData.error || errorData.message || '未知错误'}`)
@@ -444,22 +448,24 @@ export function DetailTable({
     if (!editingRowId || !editingData) return
 
     try {
-      // 如果是预约明细，使用 appointment_detail_lines API
+      // 如果是预约明细或出库明细，使用对应的 API
       if (appointmentId) {
         let response: Response
         let responseText: string = ''
+        
+        const requestBody: any = {
+          estimated_pallets: editingData.estimated_pallets,
+          rejected_pallets: editingData.rejected_pallets,
+          ignore_unload_time_check: editingData.ignore_unload_time_check,
+          load_sheet_notes: editingData.load_sheet_notes,
+          bol_notes: editingData.bol_notes,
+        }
         
         try {
           response = await fetch(`/api/oms/appointment-detail-lines/${editingRowId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              estimated_pallets: editingData.estimated_pallets,
-              rejected_pallets: editingData.rejected_pallets,
-              ignore_unload_time_check: editingData.ignore_unload_time_check,
-              load_sheet_notes: editingData.load_sheet_notes,
-              bol_notes: editingData.bol_notes,
-            }),
+            body: JSON.stringify(requestBody),
           })
 
           // 先读取响应文本（只能读取一次）
@@ -516,7 +522,7 @@ export function DetailTable({
             throw new Error(`刷新失败: ${refreshResponse.status}`)
           }
           const refreshData = await refreshResponse.json()
-          console.log('[DetailTable] 刷新预约明细响应:', refreshData)
+          console.log('[DetailTable] 刷新明细响应:', refreshData)
           if (refreshData.success && refreshData.data) {
             setOrderDetails(refreshData.data)
             console.log('[DetailTable] 数据已更新，明细数量:', refreshData.data.length)
@@ -524,7 +530,7 @@ export function DetailTable({
             console.warn('[DetailTable] 刷新响应格式异常:', refreshData)
           }
         } catch (error) {
-          console.error('[DetailTable] 刷新预约明细失败:', error)
+          console.error('[DetailTable] 刷新明细失败:', error)
           // 即使刷新失败，也继续执行（数据可能已经更新）
         } finally {
           setIsLoading(false)
@@ -911,15 +917,16 @@ export function DetailTable({
     }
   }
 
-  // 获取显示的列（预约明细子表：柜号 → 拆柜时间 → 预计板数 → 其余字段）
+  // 获取显示的列（预约明细子表：柜号 → 拆柜时间 → 排车板数 → 实际板数 → 其余字段）
   const getVisibleColumns = () => {
     const cols: string[] = []
     if (appointmentId) cols.push('checkbox')
     if (config.showExpandable) cols.push('expand')
-    // 预约明细子表前三位：柜号、拆柜时间、预计板数
+    // 预约明细子表前几位：柜号、拆柜时间、实际板数、排车板数
     if (config.showColumns?.orderNumber) cols.push('orderNumber')
     if (appointmentId && config.showColumns?.unloadTime) cols.push('unloadTime')
     if (appointmentId && config.showColumns?.ignoreUnloadTimeCheck) cols.push('ignoreUnloadTimeCheck')
+    if (config.showColumns?.actualPallets) cols.push('actualPallets')
     if (config.showColumns?.estimatedPallets) cols.push('estimatedPallets')
     if (appointmentId && config.showColumns?.estimatedPallets) cols.push('rejectedPallets')
     // 其余字段
@@ -1071,7 +1078,9 @@ export function DetailTable({
                   case 'totalPallets':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">总板数</th>
                   case 'estimatedPallets':
-                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[100px]">预计板数</th>
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[100px]">排车板数</th>
+                  case 'actualPallets':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[100px]">实际板数</th>
                   case 'rejectedPallets':
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[100px]">拒收板数</th>
                   case 'unloadTime':
@@ -1360,7 +1369,7 @@ export function DetailTable({
                         }
                           return <td key={col} className="p-2 text-sm">{formatVolume(detail.volume)}</td>
                         case 'estimatedPallets':
-                          // 预计板数：预约明细可编辑（单行或批量）；订单明细仅单行/批量用其他分支
+                          // 排车板数（原预计板数）：预约明细可编辑（单行或批量）；订单明细仅单行/批量用其他分支
                           if (appointmentId && (isBatchEditMode || (editingRowId === detailId && editingData))) {
                             const maxPallets = detail.remaining_pallets ?? detail.estimated_pallets ?? 0
                             const currentValue = isBatchEditMode
@@ -1391,8 +1400,15 @@ export function DetailTable({
                             )
                           }
                           return <td key={col} className="p-2 text-sm min-w-[100px]">{formatInteger(detail.estimated_pallets)}</td>
+                        case 'actualPallets':
+                          // 实际板数：显示入库对应的实际板数（inventory_pallets）
+                          const actualPallets = (detail as any).inventory_pallets
+                          // 如果值为 null 或 undefined，显示 "-"，否则显示数值（包括 0）
+                          return <td key={col} className="p-2 text-sm min-w-[100px]">
+                            {actualPallets !== null && actualPallets !== undefined ? formatInteger(actualPallets) : '-'}
+                          </td>
                         case 'rejectedPallets':
-                          // 拒收板数（仅预约明细）：可编辑，且不能超过预计板数（单行或批量）
+                          // 拒收板数（仅预约明细）：可编辑，且不能超过排车板数（单行或批量）
                           if (appointmentId && (isBatchEditMode || (editingRowId === detailId && editingData))) {
                             const estPallets = isBatchEditMode
                               ? (batchEditValues[detailId]?.estimated_pallets ?? detail.estimated_pallets ?? 0)

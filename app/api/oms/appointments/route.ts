@@ -48,8 +48,9 @@ export async function GET(request: NextRequest) {
 
     // 排序
     const orderBy: any = {};
-    if (sort === 'appointment_type' || sort === 'total_pallets') {
-      // 这些字段来自关联表或计算字段，先按创建时间排序
+    const needsMemorySort = sort === 'appointment_type' || sort === 'total_pallets';
+    if (needsMemorySort) {
+      // 这些字段来自关联表或计算字段，先按创建时间排序（后续在内存中重新排序）
       orderBy.created_at = 'desc';
     } else {
       orderBy[sort] = order;
@@ -255,10 +256,12 @@ export async function GET(request: NextRequest) {
       const po = serialized.po || null;
       const notes = serialized.notes || null;
       
-      // 拒收、校验PO、校验装车单
+      // 拒收、校验PO、校验装车单、可做单、已做单
       const rejected = serialized.rejected ?? false;
       const verify_po = serialized.verify_po ?? false;
       const verify_loading_sheet = serialized.verify_loading_sheet ?? false;
+      const can_create_sheet = serialized.can_create_sheet ?? false;
+      const has_created_sheet = serialized.has_created_sheet ?? false;
 
       // ETA：仅当派送方式为直送时，取第一个明细行对应订单的 eta_date，否则为空
       let eta: string | null = null;
@@ -293,12 +296,37 @@ export async function GET(request: NextRequest) {
         rejected: rejected,
         verify_po: verify_po,
         verify_loading_sheet: verify_loading_sheet,
+        can_create_sheet: can_create_sheet,
+        has_created_sheet: has_created_sheet,
         po: po,
         notes: notes,
         // 保留 orders 对象，用于展开行获取 order_detail
         orders: serialized.orders || null,
       };
     }))
+
+    // 如果需要对计算字段进行排序，在内存中排序
+    if (needsMemorySort && sort === 'total_pallets') {
+      serializedItems.sort((a: any, b: any) => {
+        const aValue = a.total_pallets || 0
+        const bValue = b.total_pallets || 0
+        if (order === 'asc') {
+          return aValue - bValue
+        } else {
+          return bValue - aValue
+        }
+      })
+    } else if (needsMemorySort && sort === 'appointment_type') {
+      serializedItems.sort((a: any, b: any) => {
+        const aValue = a.appointment_type || ''
+        const bValue = b.appointment_type || ''
+        if (order === 'asc') {
+          return aValue.localeCompare(bValue)
+        } else {
+          return bValue.localeCompare(aValue)
+        }
+      })
+    }
 
     return NextResponse.json({
       data: serializedItems,
@@ -350,6 +378,9 @@ export async function POST(request: NextRequest) {
     // 获取当前用户（用于审计字段）
     const currentUser = authResult;
 
+    // 导入时间解析函数
+    const { parseDateTimeAsUTC } = await import('@/lib/utils/datetime-pst')
+
     // 构建创建数据
     const createData: any = {
       reference_number: data.reference_number || null,
@@ -360,10 +391,34 @@ export async function POST(request: NextRequest) {
       delivery_method: data.delivery_method || null,
       appointment_account: data.appointment_account || null,
       // 用户输入的时间直接当作 UTC 时间处理，不做任何时区转换
-      requested_start: data.requested_start ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.requested_start) : null,
-      requested_end: data.requested_end ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.requested_end) : null,
-      confirmed_start: data.confirmed_start ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.confirmed_start) : null,
-      confirmed_end: data.confirmed_end ? (await import('@/lib/utils/datetime-pst')).parseDateTimeAsUTC(data.confirmed_end) : null,
+      requested_start: data.requested_start ? parseDateTimeAsUTC(data.requested_start) : null,
+      requested_end: data.requested_end ? parseDateTimeAsUTC(data.requested_end) : null,
+      // 送货时间必须是整点：保留用户输入的小时数，但将分钟数、秒数、毫秒数强制设为0
+      // 使用UTC方法，不做任何时区转换
+      confirmed_start: data.confirmed_start ? (() => {
+        const date = parseDateTimeAsUTC(data.confirmed_start)
+        return new Date(Date.UTC(
+          date.getUTCFullYear(),
+          date.getUTCMonth(),
+          date.getUTCDate(),
+          date.getUTCHours(), // 保留用户输入的小时数
+          0, // 分钟数强制设为0
+          0, // 秒数强制设为0
+          0  // 毫秒数强制设为0
+        ))
+      })() : null,
+      confirmed_end: data.confirmed_end ? (() => {
+        const date = parseDateTimeAsUTC(data.confirmed_end)
+        return new Date(Date.UTC(
+          date.getUTCFullYear(),
+          date.getUTCMonth(),
+          date.getUTCDate(),
+          date.getUTCHours(), // 保留用户输入的小时数
+          0, // 分钟数强制设为0
+          0, // 秒数强制设为0
+          0  // 毫秒数强制设为0
+        ))
+      })() : null,
       status: data.status || '待处理',
       rejected: data.rejected !== undefined ? Boolean(data.rejected) : false,
       verify_po: data.verify_po !== undefined ? Boolean(data.verify_po) : false,

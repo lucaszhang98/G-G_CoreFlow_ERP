@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
             volume_percentage: true,
             notes: true,
             po: true, // PO字段
+            window_period: true, // 窗口期字段
             orders: {
               select: {
                 order_id: true,
@@ -160,6 +161,7 @@ export async function GET(request: NextRequest) {
         fba: orderDetail.fba,
         volume_percentage: orderDetail.volume_percentage,
         notes: orderDetail.notes,
+        window_period: orderDetail.window_period || null, // 窗口期（来自订单明细）
         // 从 delivery_appointments 获取的数据
         reference_number: deliveryAppointment.reference_number,
         // 从 order_detail.orders 获取柜号（order_number）
@@ -173,6 +175,7 @@ export async function GET(request: NextRequest) {
         // 装车单/BOL 明细备注（出库详情中每条明细可编辑）
         load_sheet_notes: (serialized as any).load_sheet_notes ?? null,
         bol_notes: (serialized as any).bol_notes ?? null,
+        // 可做单（预约管理中可编辑，出库管理中只读）
         // SKU 明细
         order_detail_item_order_detail_item_detail_idToorder_detail: orderDetail.order_detail_item_order_detail_item_detail_idToorder_detail,
       })

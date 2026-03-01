@@ -594,7 +594,11 @@ export function EntityTable<T = any>({
   const batchOpsEnabled = config.list.batchOperations?.enabled !== false
   // 如果批量操作启用，默认显示批量编辑和批量删除（除非明确禁用）
   const batchEditEnabled = batchOpsEnabled && (config.list.batchOperations?.edit?.enabled !== false)
-  const batchDeleteEnabled = batchOpsEnabled && (config.list.batchOperations?.delete?.enabled !== false)
+  // 批量删除需要同时满足：1. 批量操作启用 2. 删除功能未禁用 3. 有删除权限
+  const hasDeletePermission = config.permissions.delete && config.permissions.delete.length > 0
+  const batchDeleteEnabled = batchOpsEnabled && 
+    (config.list.batchOperations?.delete?.enabled !== false) && 
+    hasDeletePermission
   
   // 检查是否启用行内编辑（默认启用，如果有 update 权限）
   const inlineEditEnabled = config.list.inlineEdit?.enabled !== false && 
@@ -1123,6 +1127,19 @@ export function EntityTable<T = any>({
                         updatedItem[key] = responseData.data[key]
                       }
                     })
+                    // 特别处理 boolean 字段，确保正确更新
+                    if (responseData.data.verify_loading_sheet !== undefined) {
+                      updatedItem.verify_loading_sheet = responseData.data.verify_loading_sheet === true
+                    }
+                    if (responseData.data.has_created_sheet !== undefined) {
+                      updatedItem.has_created_sheet = responseData.data.has_created_sheet === true
+                    }
+                    if (responseData.data.can_create_sheet !== undefined) {
+                      updatedItem.can_create_sheet = responseData.data.can_create_sheet === true
+                    }
+                    if (responseData.data.rejected !== undefined) {
+                      updatedItem.rejected = responseData.data.rejected === true
+                    }
                     // 更新 received_by 和 unloaded_by（API返回的是ID）
                     if (responseData.data.received_by !== undefined) {
                       updatedItem.received_by = responseData.data.received_by // ID
@@ -1151,6 +1168,16 @@ export function EntityTable<T = any>({
                     // 更新 rejected（拒收字段）
                     if (responseData.data.rejected !== undefined) {
                       updatedItem.rejected = responseData.data.rejected
+                    }
+                    // 更新三个 Boolean 字段（出库管理和预约管理）
+                    if (responseData.data.verify_loading_sheet !== undefined) {
+                      updatedItem.verify_loading_sheet = responseData.data.verify_loading_sheet === true
+                    }
+                    if (responseData.data.has_created_sheet !== undefined) {
+                      updatedItem.has_created_sheet = responseData.data.has_created_sheet === true
+                    }
+                    if (responseData.data.can_create_sheet !== undefined) {
+                      updatedItem.can_create_sheet = responseData.data.can_create_sheet === true
                     }
                     // 更新 location 字段（预约管理）
                     if (responseData.data.location_id !== undefined) {
@@ -1183,7 +1210,9 @@ export function EntityTable<T = any>({
               setEditingValues({})
               editingValuesRef.current = {}
               toast.success(responseData.message || `更新${config.displayName}成功`)
-              return // 直接返回，不刷新整个列表
+              // 刷新数据以显示最新状态
+              await fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
+              return
             }
           }
         } catch (e) {
@@ -1818,7 +1847,8 @@ export function EntityTable<T = any>({
         const rowIsEditing = isMounted && isEditable && isRowEditing(row.original)
         
         // 如果正在编辑且字段可编辑，使用 InlineEditCell
-        if (rowIsEditing) {
+        // 但如果字段是只读的，直接显示值，不使用 InlineEditCell
+        if (rowIsEditing && !fieldConfig.readonly) {
           // 使用初始值或 ref 中的值（编辑时主要使用内部状态，这里只是初始值）
           let initialValue = editingValues[fieldKey] !== undefined 
             ? editingValues[fieldKey] 
@@ -2003,7 +2033,14 @@ export function EntityTable<T = any>({
         if (fieldConfig.type === 'select') {
           const value = row.getValue(fieldKey) as string
           const option = fieldConfig.options?.find(opt => opt.value === value)
-          return <div>{option?.label || value || '-'}</div>
+          const displayText = option?.label || value || '-'
+          // 送仓性质为"扣货"时显示红色
+          const isRedText = fieldKey === 'delivery_nature' && value === '扣货'
+          return (
+            <div className={isRedText ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+              {displayText}
+            </div>
+          )
         }
         if (fieldConfig.type === 'currency') {
           const value = row.getValue(fieldKey)
@@ -2114,6 +2151,11 @@ export function EntityTable<T = any>({
         if (fieldConfig.type === 'boolean') {
           const value = row.getValue(fieldKey)
           const boolValue = value === true || value === 'true' || value === 1 || value === '1'
+          // 如果正在编辑但字段是只读的，显示为只读文本
+          if (rowIsEditing && fieldConfig.readonly) {
+            return <div className="text-sm">{boolValue ? '是' : '否'}</div>
+          }
+          // 正常显示模式：使用图标
           return (
             <div className="flex items-center justify-center">
               {boolValue ? (

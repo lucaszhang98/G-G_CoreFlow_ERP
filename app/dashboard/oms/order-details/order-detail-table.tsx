@@ -57,7 +57,7 @@ export function OrderDetailTable() {
     return row.appointments || []
   }
 
-  // 格式化日期（送仓日隐藏年份，只显示月-日）
+  // 格式化日期（送仓日隐藏年份，只显示月/日）
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "-"
     try {
@@ -65,7 +65,7 @@ export function OrderDetailTable() {
       if (isNaN(date.getTime())) return "-"
       const month = String(date.getUTCMonth() + 1).padStart(2, '0')
       const day = String(date.getUTCDate()).padStart(2, '0')
-      return `${month}-${day}`
+      return `${month}/${day}`
     } catch {
       return "-"
     }
@@ -349,6 +349,9 @@ export function OrderDetailTable() {
                     <TableHead>预计板数</TableHead>
                     <TableHead>拒收板数</TableHead>
                     <TableHead>有效板数</TableHead>
+                    <TableHead>校验装车单</TableHead>
+                    <TableHead>可做单</TableHead>
+                    <TableHead>已做单</TableHead>
                     <TableHead>状态</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -382,6 +385,9 @@ export function OrderDetailTable() {
                         <TableCell>{formatInteger(est)}</TableCell>
                         <TableCell>{formatInteger(rej)}</TableCell>
                         <TableCell>{formatInteger(effective)}</TableCell>
+                        <TableCell>{appt.verify_loading_sheet === true ? '是' : '否'}</TableCell>
+                        <TableCell>{appt.can_create_sheet === true ? '是' : '否'}</TableCell>
+                        <TableCell>{appt.has_created_sheet === true ? '是' : '否'}</TableCell>
                         <TableCell>
                           <Badge variant={appt.status === 'confirmed' ? 'default' : 'secondary'}>
                             {appt.status === 'confirmed' ? '已确认' : appt.status || '待确认'}

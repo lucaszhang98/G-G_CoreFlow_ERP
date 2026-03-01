@@ -328,9 +328,9 @@ export const orderConfig: EntityConfig = {
   formFields: ['order_number', 'customer_id', 'order_date', 'status', 'operation_mode', 'delivery_location_id', 'total_amount', 'container_type', 'notes'],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: ['admin', 'oms_manager'],
-    update: ['admin', 'oms_manager'],
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
+    create: ['admin', 'oms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以创建订单
+    update: ['admin', 'oms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以编辑订单
     delete: [], // 订单管理不允许删除
   },
   

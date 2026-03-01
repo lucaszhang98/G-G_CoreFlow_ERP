@@ -174,7 +174,7 @@ export function formatDateForDisplay(dateString: string): string {
   }
   
   const [, month, day] = dateString.split('-')
-  return `${month}-${day}`
+  return `${month}/${day}`
 }
 
 // ============================================

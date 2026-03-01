@@ -1159,6 +1159,32 @@ export function DataTable<TData, TValue>({
                               }
                               return JSON.stringify(cellValue)
                             }
+                            
+                            // 检查是否是日期字段（通过列ID判断）
+                            const columnId = cell.column.id
+                            if (columnId && typeof cellValue === 'string') {
+                              // 检查是否是日期格式字符串（YYYY-MM-DD 或 ISO 格式）
+                              const dateMatch = cellValue.match(/^(\d{4})-(\d{2})-(\d{2})/)
+                              if (dateMatch) {
+                                const [, year, month, day] = dateMatch
+                                return `${year}/${month}/${day}`
+                              }
+                              // 检查是否是 ISO 日期时间格式
+                              const isoMatch = cellValue.match(/^(\d{4})-(\d{2})-(\d{2})T/)
+                              if (isoMatch) {
+                                const [, year, month, day] = isoMatch
+                                return `${year}/${month}/${day}`
+                              }
+                            }
+                            
+                            // 如果是 Date 对象
+                            if (cellValue instanceof Date) {
+                              const year = String(cellValue.getUTCFullYear())
+                              const month = String(cellValue.getUTCMonth() + 1).padStart(2, '0')
+                              const day = String(cellValue.getUTCDate()).padStart(2, '0')
+                              return `${year}/${month}/${day}`
+                            }
+                            
                             return String(cellValue)
                           }
                           

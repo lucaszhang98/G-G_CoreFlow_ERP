@@ -24,9 +24,11 @@ export function AppointmentDetailClient({ appointmentId, appointment, showOutbou
       orderNumber: true,
       location: true,
       locationType: true,
-      estimatedPallets: true,
+      estimatedPallets: true, // 排车板数（原预计板数）
+      actualPallets: true, // 实际板数（入库对应的实际板数）
       unloadTime: true, // 拆柜时间（来自入库管理，按明细对应订单关联）
       ignoreUnloadTimeCheck: true, // 忽略：勾选后柜号强制绿色
+      windowPeriod: true, // 窗口期（来自订单明细）
       po: false, // 预约明细子表内不显示 PO
       notes: true,
       ...(showOutboundLineNotes && { loadSheetNotes: true, bolNotes: true }),
@@ -42,6 +44,16 @@ export function AppointmentDetailClient({ appointmentId, appointment, showOutbou
       return detail.order_number || context.orderNumber || '-'
     },
   }
+  
+  // 调试：打印配置
+  React.useEffect(() => {
+    console.log('[AppointmentDetailClient] 配置:', {
+      showOutboundLineNotes,
+      verifyLoadingSheet: appointmentDetailConfig.showColumns?.verifyLoadingSheet,
+      canCreateSheet: appointmentDetailConfig.showColumns?.canCreateSheet,
+      hasCreatedSheet: appointmentDetailConfig.showColumns?.hasCreatedSheet,
+    })
+  }, [showOutboundLineNotes, appointmentDetailConfig])
 
   return (
     <Card className="border-0 shadow-lg">

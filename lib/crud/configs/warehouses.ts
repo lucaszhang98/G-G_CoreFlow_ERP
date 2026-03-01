@@ -102,10 +102,10 @@ export const warehouseConfig: EntityConfig = {
   formFields: ['warehouse_code', 'name', 'location_id', 'capacity_cbm', 'contact_user_id', 'notes'],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: ['admin', 'wms_manager'],
-    update: ['admin', 'wms_manager'],
-    delete: ['admin'],
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
+    create: ['admin', 'wms_manager', 'oms_operator', 'wms_operator'],
+    update: ['admin', 'wms_manager', 'oms_operator', 'wms_operator'],
+    delete: ['admin', 'wms_manager', 'oms_operator', 'wms_operator'],
   },
   
   prisma: {

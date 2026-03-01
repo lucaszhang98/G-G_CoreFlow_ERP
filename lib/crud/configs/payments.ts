@@ -97,10 +97,10 @@ export const paymentConfig: EntityConfig = {
   formFields: ['customer_id', 'payment_date', 'amount', 'currency', 'payment_method', 'bank_reference', 'notes'],
 
   permissions: {
-    list: ['admin', 'oms_manager', 'employee', 'user'],
-    create: ['admin', 'oms_manager'],
-    update: ['admin', 'oms_manager'],
-    delete: ['admin'],
+    list: ['admin', 'oms_manager', 'employee', 'user', 'oms_operator'],
+    create: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以创建收款
+    update: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以编辑收款
+    delete: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以删除收款
   },
 
   prisma: {

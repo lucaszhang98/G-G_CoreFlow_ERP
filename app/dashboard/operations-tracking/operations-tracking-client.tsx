@@ -360,7 +360,7 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
         if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
           const parts = datePart.split('-')
           if (parts.length === 3) {
-            return `${parts[1]}-${parts[2]}`
+            return `${parts[1]}/${parts[2]}`
           }
         }
       }
@@ -370,7 +370,7 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
       // 使用本地日期，不做时区转换（与订单详情页保持一致）
       const month = String(date.getMonth() + 1).padStart(2, '0')
       const day = String(date.getDate()).padStart(2, '0')
-      return `${month}-${day}`
+      return `${month}/${day}`
     } catch {
       return dateString
     }
@@ -386,7 +386,7 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
         if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
           const parts = datePart.split('-')
           if (parts.length === 3) {
-            return `${parts[1]}-${parts[2]}`
+            return `${parts[1]}/${parts[2]}`
           }
         }
         // 如果是 ISO 格式（带时间），提取日期和时间部分
@@ -395,7 +395,7 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
           if (/^\d{4}-\d{2}-\d{2}$/.test(datePart) && timePart) {
             const parts = datePart.split('-')
             const time = timePart.split('.')[0].substring(0, 5) // 取 HH:mm
-            return `${parts[1]}-${parts[2]} ${time}`
+            return `${parts[1]}/${parts[2]} ${time}`
           }
         }
       }
@@ -407,7 +407,7 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
       const day = String(date.getDate()).padStart(2, '0')
       const hours = String(date.getHours()).padStart(2, '0')
       const minutes = String(date.getMinutes()).padStart(2, '0')
-      return `${month}-${day} ${hours}:${minutes}`
+      return `${month}/${day} ${hours}:${minutes}`
     } catch {
       return dateString
     }

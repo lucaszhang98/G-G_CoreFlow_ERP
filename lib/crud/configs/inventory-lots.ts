@@ -289,10 +289,10 @@ export const inventoryLotConfig: EntityConfig = {
   ],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: [], // WMS 模块不允许手动创建
-    update: ['admin', 'wms_manager'],
-    delete: [], // WMS 模块不允许删除
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
+    create: ['admin', 'wms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以创建库存
+    update: ['admin', 'wms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以编辑库存
+    delete: ['admin'], // 只有admin可以删除库存
   },
   
   prisma: {

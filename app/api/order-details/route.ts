@@ -110,14 +110,17 @@ export async function GET(request: NextRequest) {
       const il = ilWithPallets || inventoryLots[0] || null
 
       const effective = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
-      const appointments = serialized.appointment_detail_lines?.map((adl: any) => ({
+      // 只包含有效的预约（delivery_appointments 不为 null），过滤掉孤立的记录
+      const allAppointmentLines = serialized.appointment_detail_lines || []
+      const validAppointmentLines = allAppointmentLines.filter((adl: any) => adl.delivery_appointments !== null)
+      const appointments = validAppointmentLines.map((adl: any) => ({
         appointment_id: adl.delivery_appointments?.appointment_id ? String(adl.delivery_appointments.appointment_id) : null,
         reference_number: adl.delivery_appointments?.reference_number || null,
         confirmed_start: adl.delivery_appointments?.confirmed_start || null,
         estimated_pallets: adl.estimated_pallets || 0,
         rejected_pallets: adl.rejected_pallets ?? 0,
         status: adl.delivery_appointments?.status || null,
-      })) || []
+      }))
 
       const totalEffectivePallets = appointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
       const today = new Date()

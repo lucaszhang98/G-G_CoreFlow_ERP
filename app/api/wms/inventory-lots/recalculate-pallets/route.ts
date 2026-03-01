@@ -49,9 +49,11 @@ export async function POST(request: NextRequest) {
           } as import('@prisma/client').Prisma.appointment_detail_linesSelect,
         })
         type LineWithRej = { estimated_pallets: number; rejected_pallets?: number | null; delivery_appointments?: { confirmed_start: Date | null } | null }
+        // 只包含有效的预约（delivery_appointments 不为 null），过滤掉孤立的记录
+        const validAppointmentLines = allAppointmentLines.filter((line) => line.delivery_appointments !== null)
         const effective = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
-        const totalEffectivePallets = allAppointmentLines.reduce((sum, line) => sum + effective(line.estimated_pallets, (line as LineWithRej).rejected_pallets), 0)
-        const totalExpiredEffectivePallets = allAppointmentLines.reduce((sum, line) => {
+        const totalEffectivePallets = validAppointmentLines.reduce((sum, line) => sum + effective(line.estimated_pallets, (line as LineWithRej).rejected_pallets), 0)
+        const totalExpiredEffectivePallets = validAppointmentLines.reduce((sum, line) => {
           const start = (line as LineWithRej).delivery_appointments?.confirmed_start
           if (!start) return sum
           const d = new Date(start)

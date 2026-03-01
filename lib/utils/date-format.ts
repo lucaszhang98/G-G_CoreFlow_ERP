@@ -80,7 +80,7 @@ export function isDateTimeField(fieldKey: string, value: any): boolean {
 /**
  * 格式化日期显示（不包含年份，节省空间）
  * @param value 日期值（Date对象、ISO字符串或YYYY-MM-DD格式字符串）
- * @returns 格式化的日期字符串（MM-DD）或 "-"
+ * @returns 格式化的日期字符串（MM/DD）或 "-"
  * 注意：使用 UTC 方法避免时区转换问题，直接显示数据库存储的日期
  */
 export function formatDateDisplay(value: Date | string | null | undefined): string {
@@ -92,13 +92,13 @@ export function formatDateDisplay(value: Date | string | null | undefined): stri
     const dateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
     if (dateMatch) {
       const [, year, month, day] = dateMatch
-      return `${month}-${day}`
+      return `${month}/${day}`
     }
     // 如果是 ISO 格式（包含 T），提取日期部分
     const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})T/)
     if (isoMatch) {
       const [, year, month, day] = isoMatch
-      return `${month}-${day}`
+      return `${month}/${day}`
     }
   }
   
@@ -109,13 +109,13 @@ export function formatDateDisplay(value: Date | string | null | undefined): stri
   // 使用 UTC 方法，直接显示数据库存储的日期，不进行时区转换
   const month = String(date.getUTCMonth() + 1).padStart(2, '0')
   const day = String(date.getUTCDate()).padStart(2, '0')
-  return `${month}-${day}`
+  return `${month}/${day}`
 }
 
 /**
  * 格式化日期时间显示（不包含年份，节省空间）
  * @param value 日期时间值（Date对象、ISO字符串或datetime-local格式字符串）
- * @returns 格式化的日期时间字符串（MM-DD HH:mm）或 "-"
+ * @returns 格式化的日期时间字符串（MM/DD HH:mm）或 "-"
  * 注意：使用 UTC 方法避免时区转换问题，直接显示数据库存储的时间
  */
 export function formatDateTimeDisplay(value: Date | string | null | undefined): string {
@@ -127,19 +127,19 @@ export function formatDateTimeDisplay(value: Date | string | null | undefined): 
     const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{3})?(Z|[+-]\d{2}:\d{2})?/)
     if (isoMatch) {
       const [, year, month, day, hours, minutes] = isoMatch
-      return `${month}-${day} ${hours}:${minutes}`
+      return `${month}/${day} ${hours}:${minutes}`
     }
     // datetime-local 格式：2024-11-05T14:30
     const dateTimeMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
     if (dateTimeMatch) {
       const [, year, month, day, hours, minutes] = dateTimeMatch
-      return `${month}-${day} ${hours}:${minutes}`
+      return `${month}/${day} ${hours}:${minutes}`
     }
     // 日期时间字符串格式：2024-11-05 14:30:00
     const dateTimeStringMatch = value.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/)
     if (dateTimeStringMatch) {
       const [, year, month, day, hours, minutes] = dateTimeStringMatch
-      return `${month}-${day} ${hours}:${minutes}`
+      return `${month}/${day} ${hours}:${minutes}`
     }
   }
   
@@ -152,7 +152,7 @@ export function formatDateTimeDisplay(value: Date | string | null | undefined): 
   const day = String(date.getUTCDate()).padStart(2, '0')
   const hours = String(date.getUTCHours()).padStart(2, '0')
   const minutes = String(date.getUTCMinutes()).padStart(2, '0')
-  return `${month}-${day} ${hours}:${minutes}`
+  return `${month}/${day} ${hours}:${minutes}`
 }
 
 /**

@@ -16,6 +16,8 @@ export const deliveryAppointmentCreateSchema = z.object({
   rejected: z.boolean().optional().nullable(),
   verify_po: z.boolean().optional().nullable(),
   verify_loading_sheet: z.boolean().optional().nullable(),
+  can_create_sheet: z.boolean().optional().nullable(),
+  has_created_sheet: z.boolean().optional().nullable(),
   po: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   total_pallets: z.number().optional().nullable(), // 添加 total_pallets 支持（虽然它是计算字段）

@@ -150,10 +150,10 @@ export const trailerConfig: EntityConfig = {
   formFields: ['trailer_code', 'trailer_type', 'length_feet', 'capacity_weight', 'capacity_volume', 'status', 'department_id', 'notes'],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: ['admin', 'tms_manager', 'wms_manager'],
-    update: ['admin', 'tms_manager', 'wms_manager'],
-    delete: ['admin'],
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
+    create: ['admin', 'tms_manager', 'wms_manager', 'oms_operator', 'wms_operator'],
+    update: ['admin', 'tms_manager', 'wms_manager', 'oms_operator', 'wms_operator'],
+    delete: ['admin', 'tms_manager', 'wms_manager', 'oms_operator', 'wms_operator'],
   },
   
   prisma: {

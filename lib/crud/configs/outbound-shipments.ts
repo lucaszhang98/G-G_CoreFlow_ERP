@@ -37,15 +37,42 @@ export const outboundShipmentConfig: EntityConfig = {
     delivery_method: {
       key: 'delivery_method',
       label: '派送方式',
-      type: 'text',
+      type: 'select',
       sortable: true,
       searchable: true,
+      options: [
+        { label: '私仓', value: '私仓' },
+        { label: '自提', value: '自提' },
+        { label: '卡派', value: '卡派' },
+      ],
+      filterMultiple: true, // 支持多选
     },
     rejected: {
       key: 'rejected',
       label: '拒收',
       type: 'boolean',
       sortable: true,
+    },
+    verify_loading_sheet: {
+      key: 'verify_loading_sheet',
+      label: '校验装车单',
+      type: 'boolean',
+      sortable: true,
+      // 在出库管理中可编辑，在预约管理中只读
+    },
+    can_create_sheet: {
+      key: 'can_create_sheet',
+      label: '可做单',
+      type: 'boolean',
+      sortable: true,
+      readonly: true, // 在出库管理中只读，在预约管理中可编辑
+    },
+    has_created_sheet: {
+      key: 'has_created_sheet',
+      label: '已做单',
+      type: 'boolean',
+      sortable: true,
+      // 在出库管理中可编辑，在预约管理中只读
     },
     appointment_account: {
       key: 'appointment_account',
@@ -189,6 +216,9 @@ export const outboundShipmentConfig: EntityConfig = {
       'reference_number',
       'delivery_method',
       'rejected',
+      'verify_loading_sheet',
+      'can_create_sheet',
+      'has_created_sheet',
       'appointment_account',
       'appointment_type',
       'loaded_by_name',
@@ -211,8 +241,21 @@ export const outboundShipmentConfig: EntityConfig = {
       'updated_at',
     ],
     searchFields: ['reference_number'], // 只搜索预约号码（最重要的字段）
-    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
-    // filterFields 已由 search-config-generator 自动生成
+    // 筛选配置（快速筛选）- 手动覆盖 delivery_method 为多选
+    filterFields: [
+      {
+        field: 'delivery_method',
+        label: '派送方式',
+        type: 'select',
+        options: [
+          { label: '私仓', value: '私仓' },
+          { label: '自提', value: '自提' },
+          { label: '卡派', value: '卡派' },
+        ],
+        multiple: true, // 支持多选
+      },
+    ],
+    // 其他筛选字段已由 search-config-generator 自动生成
     // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
     // advancedSearchFields 已由 search-config-generator 自动生成
     // 批量操作配置：只允许批量修改 trailer_id, loaded_by, notes
@@ -229,7 +272,7 @@ export const outboundShipmentConfig: EntityConfig = {
     // 行内编辑配置：允许修改 loaded_by_name, trailer_code, rejected, notes
     inlineEdit: {
       enabled: true,
-      fields: ['loaded_by_name', 'trailer_code', 'rejected', 'delivery_address', 'contact_name', 'contact_phone', 'notes'],
+      fields: ['loaded_by_name', 'trailer_code', 'rejected', 'verify_loading_sheet', 'has_created_sheet', 'delivery_address', 'contact_name', 'contact_phone', 'notes'],
     },
   },
   
@@ -253,10 +296,10 @@ export const outboundShipmentConfig: EntityConfig = {
   ],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: [], // WMS 模块不允许手动创建
-    update: ['admin', 'wms_manager'],
-    delete: [], // WMS 模块不允许删除
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
+    create: ['admin', 'wms_manager', 'oms_operator'], // 操作部门可以创建出库
+    update: ['admin', 'wms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以编辑出库
+    delete: ['admin', 'wms_manager', 'oms_operator'], // 操作部门可以删除出库
   },
   
   // 注意：由于数据来自 delivery_appointments，这里不需要 prisma.include

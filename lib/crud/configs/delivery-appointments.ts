@@ -121,6 +121,21 @@ export const deliveryAppointmentConfig: EntityConfig = {
       label: '校验装车单',
       type: 'boolean',
       sortable: true,
+      readonly: true, // 在预约管理中只读，在出库管理中可编辑
+    },
+    can_create_sheet: {
+      key: 'can_create_sheet',
+      label: '可做单',
+      type: 'boolean',
+      sortable: true,
+      // 在预约管理中可编辑，在出库管理中只读
+    },
+    has_created_sheet: {
+      key: 'has_created_sheet',
+      label: '已做单',
+      type: 'boolean',
+      sortable: true,
+      readonly: true, // 在预约管理中只读，在出库管理中可编辑
     },
     po: {
       key: 'po',
@@ -164,12 +179,27 @@ export const deliveryAppointmentConfig: EntityConfig = {
       'rejected',
       'verify_po',
       'verify_loading_sheet',
+      'can_create_sheet',
+      'has_created_sheet',
       'po',
       'notes',
     ],
     searchFields: ['reference_number', 'po'], // 搜索预约号码和PO字段
-    // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
-    // filterFields 已由 search-config-generator 自动生成
+    // 筛选配置（快速筛选）- 手动覆盖 delivery_method 为多选
+    filterFields: [
+      {
+        field: 'delivery_method',
+        label: '派送方式',
+        type: 'select',
+        options: [
+          { label: '私仓', value: '私仓' },
+          { label: '自提', value: '自提' },
+          { label: '直送', value: '直送' },
+          { label: '卡派', value: '卡派' },
+        ],
+        multiple: true, // 启用多选
+      },
+    ],
     // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
     // advancedSearchFields 已由 search-config-generator 自动生成
     // 批量操作配置
@@ -177,7 +207,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'verify_po', 'verify_loading_sheet', 'po', 'notes'],
+        fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'verify_po', 'can_create_sheet', 'po', 'notes'],
       },
       delete: {
         enabled: true,
@@ -186,7 +216,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'verify_po', 'verify_loading_sheet', 'po', 'notes'],
+      fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'verify_po', 'can_create_sheet', 'po', 'notes'],
     },
   },
   
@@ -207,10 +237,10 @@ export const deliveryAppointmentConfig: EntityConfig = {
   ],
   
   permissions: {
-    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user'],
-    create: ['admin', 'oms_manager'],
-    update: ['admin', 'oms_manager'],
-    delete: ['admin', 'oms_manager'], // 预约管理允许OMS经理删除
+    list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
+    create: ['admin', 'oms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以创建预约
+    update: ['admin', 'oms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以编辑预约
+    delete: ['admin', 'oms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以删除预约
   },
   
   prisma: {
