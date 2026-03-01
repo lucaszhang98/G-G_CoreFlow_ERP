@@ -49,11 +49,8 @@ export function AppointmentDetailClient({ appointmentId, appointment, showOutbou
   React.useEffect(() => {
     console.log('[AppointmentDetailClient] 配置:', {
       showOutboundLineNotes,
-      verifyLoadingSheet: appointmentDetailConfig.showColumns?.verifyLoadingSheet,
-      canCreateSheet: appointmentDetailConfig.showColumns?.canCreateSheet,
-      hasCreatedSheet: appointmentDetailConfig.showColumns?.hasCreatedSheet,
     })
-  }, [showOutboundLineNotes, appointmentDetailConfig])
+  }, [showOutboundLineNotes])
 
   return (
     <Card className="border-0 shadow-lg">
