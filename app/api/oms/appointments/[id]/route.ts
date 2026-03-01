@@ -321,17 +321,6 @@ export async function PUT(
         // 送货时间必须是整点：保留用户输入的小时数，但将分钟数、秒数、毫秒数强制设为0
         // 使用UTC方法，不做任何时区转换
         updateData.confirmed_start = parseDateTimeWithoutTimezone(data.confirmed_start, true);
-      } else if (data.confirmed_start instanceof Date) {
-        // 如果是Date对象，也确保分钟数为0，使用UTC方法不做时区转换
-        updateData.confirmed_start = new Date(Date.UTC(
-          data.confirmed_start.getUTCFullYear(),
-          data.confirmed_start.getUTCMonth(),
-          data.confirmed_start.getUTCDate(),
-          data.confirmed_start.getUTCHours(), // 保留小时数
-          0, // 分钟数强制设为0
-          0, // 秒数强制设为0
-          0  // 毫秒数强制设为0
-        ));
       } else {
         updateData.confirmed_start = data.confirmed_start;
       }
@@ -343,17 +332,6 @@ export async function PUT(
         // 送货时间必须是整点：保留用户输入的小时数，但将分钟数、秒数、毫秒数强制设为0
         // 使用UTC方法，不做任何时区转换
         updateData.confirmed_end = parseDateTimeWithoutTimezone(data.confirmed_end, true);
-      } else if (data.confirmed_end instanceof Date) {
-        // 如果是Date对象，也确保分钟数为0，使用UTC方法不做时区转换
-        updateData.confirmed_end = new Date(Date.UTC(
-          data.confirmed_end.getUTCFullYear(),
-          data.confirmed_end.getUTCMonth(),
-          data.confirmed_end.getUTCDate(),
-          data.confirmed_end.getUTCHours(), // 保留小时数
-          0, // 分钟数强制设为0
-          0, // 秒数强制设为0
-          0  // 毫秒数强制设为0
-        ));
       } else {
         updateData.confirmed_end = data.confirmed_end;
       }
