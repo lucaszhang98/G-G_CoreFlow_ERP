@@ -87,6 +87,12 @@ export interface DetailData {
   unload_time?: string | Date | null
   /** 忽略：为 true 时柜号强制绿色，与拒收等字段一样需点铅笔编辑后保存 */
   ignore_unload_time_check?: boolean | null
+  /** 仓库位置（入库管理对应明细的 storage_location_code），出库详情中可编辑 */
+  storage_location_code?: string | null
+  /** 对应 inventory_lot_id，用于编辑仓库位置时 PATCH */
+  inventory_lot_id?: string | null
+  /** 未约板数（订单明细动态计算，只读） */
+  unbooked_pallets?: number | null
 }
 
 export interface DetailTableConfig {
@@ -109,6 +115,8 @@ export interface DetailTableConfig {
     po?: boolean // PO
     loadSheetNotes?: boolean // 装车单明细备注（出库详情）
     bolNotes?: boolean // BOL 明细备注（出库详情）
+    storageLocation?: boolean // 仓库位置（出库详情，对应入库明细，可编辑）
+    unbookedPallets?: boolean // 未约板数（订单明细动态计算，只读）
     ignoreUnloadTimeCheck?: boolean // 忽略（预约明细：勾选后柜号强制绿色）
     windowPeriod?: boolean // 窗口期
     detailId?: boolean // 仓点ID（隐藏）
@@ -291,12 +299,13 @@ export function DetailTable({
     })
   }
 
-  // 初始化批量编辑值（订单明细：多字段；预约明细：预计板数、拒收板数、装车单/BOL明细备注、备注）
+  // 初始化批量编辑值（订单明细：多字段；预约明细：预计板数、拒收板数、装车单/BOL明细备注、备注、仓库位置）
   const initializeBatchEditValues = () => {
     const values: Record<string | number, Partial<DetailData>> = {}
     if (appointmentId) {
       const withLineNotes = config.showColumns?.loadSheetNotes || config.showColumns?.bolNotes
       const withNotes = config.showColumns?.notes
+      const withStorageLocation = config.showColumns?.storageLocation
       orderDetails.forEach((detail: any) => {
         values[detail.id] = {
           estimated_pallets: detail.estimated_pallets ?? 0,
@@ -307,6 +316,7 @@ export function DetailTable({
             bol_notes: (detail.bol_notes ?? '') || null,
           }),
           ...(withNotes && { notes: detail.notes ?? null }),
+          ...(withStorageLocation && { storage_location_code: detail.storage_location_code ?? null }),
         }
       })
     } else {
@@ -378,6 +388,18 @@ export function DetailTable({
               throw new Error(`更新明细备注失败: ${errData.error || errData.message || '未知错误'}`)
             }
           }
+          // 仓库位置存于 inventory_lots，若有修改则 PATCH
+          if (values?.storage_location_code !== undefined && detail?.inventory_lot_id) {
+            const ilRes = await fetch(`/api/wms/inventory-lots/${detail.inventory_lot_id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ storage_location_code: values.storage_location_code || null }),
+            })
+            if (!ilRes.ok) {
+              const errData = await ilRes.json().catch(() => ({}))
+              throw new Error(`更新仓库位置失败: ${errData.error || errData.message || '未知错误'}`)
+            }
+          }
         }
       } else {
         const savePromises: Promise<void>[] = []
@@ -424,6 +446,7 @@ export function DetailTable({
         load_sheet_notes: (detail as any).load_sheet_notes ?? null,
         bol_notes: (detail as any).bol_notes ?? null,
         notes: detail.notes ?? null,
+        storage_location_code: (detail as any).storage_location_code ?? null,
       })
     } else {
       setEditingData({
@@ -507,6 +530,19 @@ export function DetailTable({
           if (!odRes.ok) {
             const errData = await odRes.json().catch(() => ({}))
             throw new Error(errData.error || errData.message || '更新订单明细备注失败')
+          }
+        }
+
+        // 仓库位置存于 inventory_lots，若修改了则 PATCH 对应库存明细
+        if (editingData.storage_location_code !== undefined && currentDetail?.inventory_lot_id) {
+          const ilRes = await fetch(`/api/wms/inventory-lots/${currentDetail.inventory_lot_id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storage_location_code: editingData.storage_location_code || null }),
+          })
+          if (!ilRes.ok) {
+            const errData = await ilRes.json().catch(() => ({}))
+            throw new Error(errData.error || errData.message || '更新仓库位置失败')
           }
         }
 
@@ -926,7 +962,9 @@ export function DetailTable({
     if (config.showColumns?.orderNumber) cols.push('orderNumber')
     if (appointmentId && config.showColumns?.unloadTime) cols.push('unloadTime')
     if (appointmentId && config.showColumns?.ignoreUnloadTimeCheck) cols.push('ignoreUnloadTimeCheck')
+    if (config.showColumns?.storageLocation) cols.push('storageLocation')
     if (config.showColumns?.actualPallets) cols.push('actualPallets')
+    if (config.showColumns?.unbookedPallets) cols.push('unbookedPallets')
     if (config.showColumns?.estimatedPallets) cols.push('estimatedPallets')
     if (appointmentId && config.showColumns?.estimatedPallets) cols.push('rejectedPallets')
     // 其余字段
@@ -1046,8 +1084,8 @@ export function DetailTable({
           )}
         </div>
       </div>
-      <div>
-        <table className="w-full border-collapse">
+      <div className="overflow-x-auto border border-border/60 rounded-md">
+        <table className="w-full border-collapse min-w-max">
           <thead>
             <tr className="bg-muted/50 border-b">
               {visibleColumns.map((col) => {
@@ -1095,6 +1133,10 @@ export function DetailTable({
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[180px]">装车单明细备注</th>
                   case 'bolNotes':
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[180px]">BOL明细备注</th>
+                  case 'storageLocation':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[120px]">仓库位置</th>
+                  case 'unbookedPallets':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[90px]">未约板数</th>
                   case 'ignoreUnloadTimeCheck':
                     return <th key={col} className="text-left p-2 font-semibold text-sm w-14" title="勾选后柜号强制绿色">忽略</th>
                   case 'po':
@@ -1119,7 +1161,7 @@ export function DetailTable({
                     return (
                       <th 
                         key={col} 
-                        className="text-left p-2 font-semibold text-sm w-24 sticky right-0 z-50 bg-muted/50"
+                        className="text-left p-2 font-semibold text-sm w-24 sticky right-0 z-[1] bg-muted/50 shrink-0"
                         style={{ 
                           boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)'
                         }}
@@ -1585,6 +1627,45 @@ export function DetailTable({
                             )
                           }
                           return <td key={col} className="p-2 text-sm min-w-[180px] whitespace-pre-wrap break-words">{(detail as any).bol_notes || '-'}</td>
+                        case 'storageLocation':
+                          // 仓库位置（对应入库明细），出库详情中可编辑
+                          if (appointmentId && (editingRowId === detailId || isBatchEditMode)) {
+                            const val = isBatchEditMode
+                              ? (batchEditValues[detailId]?.storage_location_code ?? (detail as any).storage_location_code ?? '')
+                              : (editingData?.storage_location_code ?? (detail as any).storage_location_code ?? '')
+                            return (
+                              <td key={col} className="p-2 text-sm min-w-[120px]">
+                                <Input
+                                  value={val || ''}
+                                  onChange={(e) => {
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues(prev => ({
+                                        ...prev,
+                                        [detailId]: { ...prev[detailId], storage_location_code: e.target.value || null },
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData, storage_location_code: e.target.value || null })
+                                    }
+                                  }}
+                                  className="w-full min-w-[100px]"
+                                  placeholder="仓库位置"
+                                />
+                              </td>
+                            )
+                          }
+                          return (
+                            <td key={col} className="p-2 text-sm min-w-[120px]">
+                              {(detail as any).storage_location_code || '-'}
+                            </td>
+                          )
+                        case 'unbookedPallets':
+                          // 未约板数（订单明细动态计算，只读）
+                          const unbooked = (detail as any).unbooked_pallets
+                          return (
+                            <td key={col} className="p-2 text-sm min-w-[90px]">
+                              {unbooked !== null && unbooked !== undefined ? formatInteger(unbooked) : '-'}
+                            </td>
+                          )
                         case 'ignoreUnloadTimeCheck':
                           // 与拒收板数一致：仅点铅笔编辑时可改，保存时写入数据库
                           if (appointmentId && (isBatchEditMode || editingRowId === detailId)) {
@@ -1710,9 +1791,8 @@ export function DetailTable({
                             return (
                               <td 
                                 key={col} 
-                                className="p-2 text-sm sticky right-0 z-50"
+                                className="p-2 text-sm sticky right-0 z-[1] bg-background shrink-0"
                                 style={{
-                                  backgroundColor: 'transparent',
                                   boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)'
                                 }}
                               >
@@ -1740,9 +1820,8 @@ export function DetailTable({
                           return (
                             <td 
                               key={col} 
-                              className="p-2 text-sm sticky right-0 z-50"
+                              className="p-2 text-sm sticky right-0 z-[1] bg-background shrink-0"
                               style={{
-                                backgroundColor: 'transparent',
                                 boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)'
                               }}
                             >

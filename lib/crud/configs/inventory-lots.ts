@@ -66,6 +66,13 @@ export const inventoryLotConfig: EntityConfig = {
       relationField: 'delivery_location_id', // 指向 order_detail 表中的实际字段名
       searchable: true,
     },
+    // 订单明细备注（来自 order_detail.notes，只读展示）
+    order_detail_notes: {
+      key: 'order_detail_notes',
+      label: '备注',
+      type: 'text',
+      searchable: true,
+    },
     // 表内自己的字段
     storage_location_code: {
       key: 'storage_location_code',
@@ -178,13 +185,14 @@ export const inventoryLotConfig: EntityConfig = {
       'planned_unload_at',
       'delivery_nature',
       'delivery_location',
+      'order_detail_notes',
       'storage_location_code',
       'pallet_count',
       'remaining_pallet_count',
       'unbooked_pallet_count',
       'delivery_progress',
     ],
-    searchFields: ['container_number'], // 只搜索柜号（最重要的字段）
+    searchFields: ['container_number', 'order_detail_notes'],
     pageSize: 20,
     // 筛选配置（快速筛选）- 手动定义，排除 warehouse_id，添加送仓性质、仓点、剩余板数、未约板数、送仓进度
     filterFields: [

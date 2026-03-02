@@ -31,7 +31,12 @@ export function AppointmentDetailClient({ appointmentId, appointment, showOutbou
       windowPeriod: true, // 窗口期（来自订单明细）
       po: false, // 预约明细子表内不显示 PO
       notes: true,
-      ...(showOutboundLineNotes && { loadSheetNotes: true, bolNotes: true }),
+      ...(showOutboundLineNotes && {
+        loadSheetNotes: true,
+        bolNotes: true,
+        storageLocation: true, // 仓库位置（对应入库明细，可编辑）
+        unbookedPallets: true, // 未约板数（订单明细动态计算，只读）
+      }),
     },
     getLocationName: (detail, context) => {
       return detail.order_detail_item_order_detail_item_detail_idToorder_detail?.[0]?.detail_name 

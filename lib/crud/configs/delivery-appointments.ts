@@ -181,6 +181,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       'appointment_type',
       'origin_location',
       'destination_location',
+      'notes', // 备注（与出库管理连通），放在前面便于查看
       'confirmed_start',
       'eta',
       'total_pallets',
@@ -191,7 +192,6 @@ export const deliveryAppointmentConfig: EntityConfig = {
       'has_created_sheet',
       'trailer',
       'po',
-      'notes',
     ],
     searchFields: ['reference_number', 'po'], // 搜索预约号码和PO字段
     // 筛选配置（快速筛选）- 手动覆盖 delivery_method 为多选

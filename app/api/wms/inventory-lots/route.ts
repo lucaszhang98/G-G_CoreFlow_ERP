@@ -161,12 +161,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 搜索条件
+    // 搜索条件（含订单明细备注模糊搜索）
     if (search && search.trim()) {
       const searchConditions: any[] = [
-        { orders: { customers: { name: { contains: search } } } },
-        { orders: { order_number: { contains: search } } },
-        { storage_location_code: { contains: search } }
+        { orders: { customers: { name: { contains: search, mode: 'insensitive' } } } },
+        { orders: { order_number: { contains: search, mode: 'insensitive' } } },
+        { storage_location_code: { contains: search, mode: 'insensitive' } },
+        { order_detail: { notes: { contains: search, mode: 'insensitive' } } },
       ];
       
       // 使用 AND 条件：必须满足 storage_location_code 不为空，并且满足搜索条件
@@ -263,6 +264,7 @@ export async function GET(request: NextRequest) {
             estimated_pallets: true,
             delivery_nature: true,
             delivery_location_id: true,
+            notes: true,
             locations_order_detail_delivery_location_idTolocations: {
               select: {
                 location_id: true,
@@ -421,6 +423,7 @@ export async function GET(request: NextRequest) {
           planned_unload_at: plannedUnloadAt,
           delivery_location: deliveryLocation,
           delivery_nature: deliveryNature,
+          order_detail_notes: orderDetail?.notes ?? null,
           // 使用实时计算的值，覆盖数据库字段
           remaining_pallet_count, // 实时计算的剩余板数
           unbooked_pallet_count, // 实时计算的未约板数
@@ -656,6 +659,7 @@ export async function POST(request: NextRequest) {
             estimated_pallets: true,
             delivery_nature: true,
             delivery_location_id: true,
+            notes: true,
             locations_order_detail_delivery_location_idTolocations: {
               select: {
                 location_id: true,

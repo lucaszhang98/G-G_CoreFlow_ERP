@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
       outbound_shipments: {
         select: {
           trailer_code: true,
+          notes: true,
         } as any,
       },
       appointment_detail_lines: {
@@ -257,9 +258,9 @@ export async function GET(request: NextRequest) {
         })))
       }
       
-      // PO和备注
+      // PO和备注（与出库管理连通：优先显示出库单备注，无出库单时显示预约表备注）
       const po = serialized.po || null;
-      const notes = serialized.notes || null;
+      const notes = serialized.outbound_shipments?.notes ?? serialized.notes ?? null;
       
       // 拒收、校验PO、校验装车单、可做单、已做单
       const rejected = serialized.rejected ?? false;

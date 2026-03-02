@@ -85,9 +85,11 @@ export async function GET(request: NextRequest) {
           order_detail_id: { in: orderDetailIds },
         },
         select: {
+          inventory_lot_id: true,
           order_detail_id: true,
           pallet_count: true,
           unbooked_pallet_count: true,
+          storage_location_code: true,
         },
       }),
       orderIds.length > 0
@@ -98,13 +100,17 @@ export async function GET(request: NextRequest) {
         : [],
     ])
 
-    // 创建库存映射（order_detail_id -> inventory_lot）
-    const inventoryMap = new Map<bigint, { pallet_count: number; unbooked_pallet_count: number | null }>()
+    // 创建库存映射（order_detail_id -> 第一个 inventory_lot，用于仓库位置与未约板数）
+    const inventoryMap = new Map<bigint, { inventory_lot_id: bigint; pallet_count: number; unbooked_pallet_count: number | null; storage_location_code: string | null }>()
     inventoryLots.forEach(lot => {
-      inventoryMap.set(lot.order_detail_id, {
-        pallet_count: lot.pallet_count,
-        unbooked_pallet_count: lot.unbooked_pallet_count,
-      })
+      if (!inventoryMap.has(lot.order_detail_id)) {
+        inventoryMap.set(lot.order_detail_id, {
+          inventory_lot_id: lot.inventory_lot_id,
+          pallet_count: lot.pallet_count,
+          unbooked_pallet_count: lot.unbooked_pallet_count,
+          storage_location_code: lot.storage_location_code,
+        })
+      }
     })
 
     // 创建入库拆柜时间映射（order_id -> planned_unload_at，来自入库管理）
@@ -155,6 +161,11 @@ export async function GET(request: NextRequest) {
         remaining_pallets: totalPallets, // 总板数（已入库用 unbooked_pallet_count，未入库用 remaining_pallets）- 这是实时值，用于显示和验证
         has_inventory: hasInventory, // 是否有库存
         inventory_pallets: hasInventory ? inventoryLot.pallet_count : null, // 库存板数
+        // 仓库位置（入库管理对应明细的 storage_location_code），可编辑
+        storage_location_code: hasInventory ? inventoryLot.storage_location_code : null,
+        inventory_lot_id: hasInventory ? String(inventoryLot.inventory_lot_id) : null, // 用于编辑仓库位置时 PATCH inventory-lots
+        // 未约板数（订单明细动态计算，只读）
+        unbooked_pallets: hasInventory ? (inventoryLot.unbooked_pallet_count ?? null) : (orderDetail.remaining_pallets ?? null),
         delivery_nature: orderDetail.delivery_nature,
         delivery_location: locationCode,
         delivery_location_code: locationCode,

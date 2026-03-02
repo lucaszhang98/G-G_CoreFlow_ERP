@@ -54,6 +54,7 @@ export async function GET(
           outbound_shipments: {
             select: {
               trailer_code: true,
+              notes: true,
             } as any,
           },
         },
@@ -91,6 +92,7 @@ export async function GET(
             outbound_shipments: {
               select: {
                 trailer_code: true,
+                notes: true,
               } as any,
             },
           },
@@ -149,6 +151,8 @@ export async function GET(
 
     // Trailer：从 outbound_shipments 获取，如果没有出库记录则返回 null
     const trailer = serialized.outbound_shipments?.trailer_code || null;
+    // 备注：与出库管理连通，优先显示出库单备注
+    const notes = serialized.outbound_shipments?.notes ?? serialized.notes ?? null;
 
     // ETA：仅当派送方式为直送时，取第一个明细对应订单的 eta_date，否则为空
     let eta: string | null = null;
@@ -184,6 +188,7 @@ export async function GET(
       can_create_sheet: can_create_sheet,
       has_created_sheet: has_created_sheet,
       trailer: trailer, // 从 outbound_shipments 获取
+      notes, // 与出库管理连通
     });
   } catch (error: any) {
     console.error('获取预约管理记录失败:', error);
@@ -385,6 +390,7 @@ export async function PUT(
     if (data.notes !== undefined) {
       updateData.notes = data.notes;
     }
+    const notesToSync = data.notes;
 
     // 应用系统字段
     const user = currentUser.user || null;
@@ -432,6 +438,24 @@ export async function PUT(
         },
       },
     });
+
+    // 备注与出库管理连通：若有出库单，同步更新出库单的 notes
+    if (notesToSync !== undefined) {
+      try {
+        const os = await prisma.outbound_shipments.findFirst({
+          where: { appointment_id: BigInt(id) },
+          select: { outbound_shipment_id: true },
+        });
+        if (os) {
+          await prisma.outbound_shipments.update({
+            where: { outbound_shipment_id: os.outbound_shipment_id },
+            data: { notes: notesToSync, updated_at: new Date(), updated_by: user?.id ? BigInt(user.id) : null },
+          });
+        }
+      } catch (syncErr: any) {
+        console.warn('同步预约备注到出库单失败:', syncErr);
+      }
+    }
 
     const serialized = serializeBigInt(updatedItem);
     
@@ -488,7 +512,7 @@ export async function PUT(
           `;
           
           if (existing && existing.length > 0) {
-            // 如果已存在，只更新 updated_by 和 updated_at
+            // 如果已存在，同步 updated_by、updated_at 和备注（与预约管理连通）
             await prisma.outbound_shipments.update({
               where: {
                 outbound_shipment_id: existing[0].outbound_shipment_id,
@@ -496,6 +520,7 @@ export async function PUT(
               data: {
                 updated_by: user?.id ? BigInt(user.id) : null,
                 updated_at: new Date(),
+                notes: (updatedItem as any).notes ?? null,
               },
             });
           } else {
@@ -505,6 +530,10 @@ export async function PUT(
               VALUES (${defaultWarehouseId}, ${appointmentId}, 'planned', NOW(), NOW(), ${user?.id ? BigInt(user.id) : null}, ${user?.id ? BigInt(user.id) : null})
               ON CONFLICT (appointment_id) DO NOTHING
             `;
+            await prisma.outbound_shipments.updateMany({
+              where: { appointment_id: appointmentId },
+              data: { notes: (updatedItem as any).notes ?? null },
+            });
           }
         } catch (outboundError: any) {
           console.warn('自动创建/更新 outbound_shipments 记录失败:', outboundError);
@@ -529,7 +558,7 @@ export async function PUT(
         `;
         
         if (existing && existing.length > 0) {
-          // 如果已存在，只更新 updated_by 和 updated_at
+          // 如果已存在，同步 updated_by、updated_at 和备注
           await prisma.outbound_shipments.update({
             where: {
               outbound_shipment_id: existing[0].outbound_shipment_id,
@@ -537,6 +566,7 @@ export async function PUT(
             data: {
               updated_by: user?.id ? BigInt(user.id) : null,
               updated_at: new Date(),
+              notes: (updatedItem as any).notes ?? null,
             },
           });
         } else {
@@ -546,6 +576,10 @@ export async function PUT(
             VALUES (${defaultWarehouseId}, ${appointmentId}, 'planned', NOW(), NOW(), ${user?.id ? BigInt(user.id) : null}, ${user?.id ? BigInt(user.id) : null})
             ON CONFLICT (appointment_id) DO NOTHING
           `;
+          await prisma.outbound_shipments.updateMany({
+            where: { appointment_id: appointmentId },
+            data: { notes: (updatedItem as any).notes ?? null },
+          });
         }
       } catch (outboundError: any) {
         console.warn('确保 outbound_shipments 记录存在失败:', outboundError);
