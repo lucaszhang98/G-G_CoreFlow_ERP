@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
         if (!appt.confirmed_start) return false
         const confirmedDate = new Date(appt.confirmed_start)
         confirmedDate.setHours(0, 0, 0, 0)
-        return confirmedDate < today
+        return confirmedDate <= today  // 包括今天，今天的预约也视为已过期
       })
       const totalExpiredEffectivePallets = expiredAppointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
 

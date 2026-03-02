@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
           if (!start) return sum
           const d = new Date(start)
           d.setHours(0, 0, 0, 0)
-          if (d < today) return sum + effective(line.estimated_pallets, (line as LineWithRej).rejected_pallets)
+          if (d <= today) return sum + effective(line.estimated_pallets, (line as LineWithRej).rejected_pallets)  // 包括今天，今天的预约也视为已过期
           return sum
         }, 0)
 

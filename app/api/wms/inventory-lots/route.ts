@@ -388,7 +388,7 @@ export async function GET(request: NextRequest) {
           if (!appt.confirmed_start) return false
           const confirmedDate = new Date(appt.confirmed_start)
           confirmedDate.setHours(0, 0, 0, 0)
-          return confirmedDate < today
+          return confirmedDate <= today  // 包括今天，今天的预约也视为已过期
         })
         const totalExpiredEffectivePallets = expiredAppointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
 
@@ -575,7 +575,7 @@ export async function POST(request: NextRequest) {
       if (!start) return sum;
       const d = new Date(start);
       d.setHours(0, 0, 0, 0);
-      return d < today ? sum + effective(line.estimated_pallets, line.rejected_pallets) : sum;
+      return d <= today ? sum + effective(line.estimated_pallets, line.rejected_pallets) : sum;  // 包括今天，今天的预约也视为已过期
     }, 0);
     const unbookedPalletCount = palletCount - totalEffectivePallets;
     const remainingPalletCount = palletCount - totalExpiredEffectivePallets;

@@ -413,10 +413,12 @@ export function DataTable<TData, TValue>({
     
     // 通知外部行选择变化
     if (onRowSelectionChange && getIdValue) {
-      const selectedRows = Object.keys(newSelection)
-        .filter(key => newSelection[key])
-        .map(key => data.find(row => String(getIdValue(row)) === key))
-        .filter(Boolean) as TData[]
+      // 按照 data 数组的顺序来构建 selectedRows，确保顺序正确
+      const selectedRows = data
+        .filter(row => {
+          const rowId = String(getIdValue(row))
+          return newSelection[rowId] === true
+        }) as TData[]
       onRowSelectionChange(selectedRows)
     }
   }, [rowSelection, onRowSelectionChange, getIdValue, data])

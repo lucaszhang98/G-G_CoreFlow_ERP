@@ -137,6 +137,14 @@ export const deliveryAppointmentConfig: EntityConfig = {
       sortable: true,
       readonly: true, // 在预约管理中只读，在出库管理中可编辑
     },
+    trailer: {
+      key: 'trailer',
+      label: 'Trailer',
+      type: 'text',
+      sortable: true,
+      searchable: true,
+      readonly: true, // 只读，从出库管理获取
+    },
     po: {
       key: 'po',
       label: 'PO',
@@ -181,6 +189,7 @@ export const deliveryAppointmentConfig: EntityConfig = {
       'verify_loading_sheet',
       'can_create_sheet',
       'has_created_sheet',
+      'trailer',
       'po',
       'notes',
     ],

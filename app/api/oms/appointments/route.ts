@@ -80,6 +80,11 @@ export async function GET(request: NextRequest) {
           location_code: true,
         },
       },
+      outbound_shipments: {
+        select: {
+          trailer_code: true,
+        } as any,
+      },
       appointment_detail_lines: {
         include: {
           order_detail: {
@@ -263,6 +268,9 @@ export async function GET(request: NextRequest) {
       const can_create_sheet = serialized.can_create_sheet ?? false;
       const has_created_sheet = serialized.has_created_sheet ?? false;
 
+      // Trailer：从 outbound_shipments 获取，如果没有出库记录则返回 null
+      const trailer = serialized.outbound_shipments?.trailer_code || null;
+
       // ETA：仅当派送方式为直送时，取第一个明细行对应订单的 eta_date，否则为空
       let eta: string | null = null;
       if (deliveryMethod === '直送' && serialized.appointment_detail_lines?.length > 0) {
@@ -298,6 +306,7 @@ export async function GET(request: NextRequest) {
         verify_loading_sheet: verify_loading_sheet,
         can_create_sheet: can_create_sheet,
         has_created_sheet: has_created_sheet,
+        trailer: trailer, // 从 outbound_shipments 获取
         po: po,
         notes: notes,
         // 保留 orders 对象，用于展开行获取 order_detail

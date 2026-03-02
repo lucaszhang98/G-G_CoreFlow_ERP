@@ -178,6 +178,123 @@ export function OrderDetailTable() {
       })
   }, [selectedRows])
 
+  // 复制预约号码功能
+  const handleCopyAppointmentNumbers = React.useCallback((format: 'line' | 'comma' | 'space') => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要复制的记录')
+      return
+    }
+
+    // 提取所有预约号码（按选中行的顺序，保持每个行内预约的顺序，不去重）
+    const appointmentNumbers: string[] = []
+    
+    selectedRows.forEach((row: any) => {
+      const appointments = row.appointments || []
+      appointments.forEach((appt: any) => {
+        if (appt.reference_number) {
+          appointmentNumbers.push(appt.reference_number)
+        }
+      })
+    })
+
+    if (appointmentNumbers.length === 0) {
+      toast.error('选中的记录中没有预约号码')
+      return
+    }
+
+    // 根据格式拼接
+    let textToCopy = ''
+    switch (format) {
+      case 'line':
+        textToCopy = appointmentNumbers.join('\n')
+        break
+      case 'comma':
+        textToCopy = appointmentNumbers.join(', ')
+        break
+      case 'space':
+        textToCopy = appointmentNumbers.join(' ')
+        break
+    }
+
+    // 复制到剪贴板
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        toast.success(`已复制 ${appointmentNumbers.length} 个预约号码到剪贴板`)
+      })
+      .catch((error) => {
+        console.error('复制失败:', error)
+        toast.error('复制失败，请重试')
+      })
+  }, [selectedRows])
+
+  // 复制预约时间功能
+  const handleCopyAppointmentTimes = React.useCallback((format: 'line' | 'comma' | 'space') => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要复制的记录')
+      return
+    }
+
+    // 提取所有预约时间（按选中行的顺序，保持每个行内预约的顺序，不去重）
+    const appointmentTimes: string[] = []
+    
+    selectedRows.forEach((row: any) => {
+      const appointments = row.appointments || []
+      appointments.forEach((appt: any) => {
+        // 优先使用 confirmed_start，如果没有则使用 requested_start
+        const time = appt.confirmed_start || appt.requested_start
+        if (time) {
+          // 格式化日期为 YYYY-MM-DD 格式
+          let formattedTime: string
+          try {
+            const date = new Date(time)
+            if (!isNaN(date.getTime())) {
+              const year = date.getUTCFullYear()
+              const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+              const day = String(date.getUTCDate()).padStart(2, '0')
+              formattedTime = `${year}-${month}-${day}`
+            } else {
+              formattedTime = String(time)
+            }
+          } catch {
+            // 如果解析失败，直接使用原始值
+            formattedTime = String(time)
+          }
+          
+          appointmentTimes.push(formattedTime)
+        }
+      })
+    })
+
+    if (appointmentTimes.length === 0) {
+      toast.error('选中的记录中没有预约时间')
+      return
+    }
+
+    // 根据格式拼接
+    let textToCopy = ''
+    switch (format) {
+      case 'line':
+        textToCopy = appointmentTimes.join('\n')
+        break
+      case 'comma':
+        textToCopy = appointmentTimes.join(', ')
+        break
+      case 'space':
+        textToCopy = appointmentTimes.join(' ')
+        break
+    }
+
+    // 复制到剪贴板
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        toast.success(`已复制 ${appointmentTimes.length} 个预约时间到剪贴板`)
+      })
+      .catch((error) => {
+        console.error('复制失败:', error)
+        toast.error('复制失败，请重试')
+      })
+  }, [selectedRows])
+
   // 计算选中行的未约板数合计
   const totalUnbookedPallets = React.useMemo(() => {
     return selectedRows.reduce((sum, row) => {
@@ -306,9 +423,83 @@ export function OrderDetailTable() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* 复制预约号码下拉菜单 */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-w-[120px] h-9"
+              disabled={selectedRows.length === 0}
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              复制预约号码
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>选择复制格式</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => handleCopyAppointmentNumbers('line')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">换行分隔</span>
+                <span className="text-xs text-muted-foreground">每个号码一行</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopyAppointmentNumbers('comma')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">逗号分隔</span>
+                <span className="text-xs text-muted-foreground">A, B, C</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopyAppointmentNumbers('space')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">空格分隔</span>
+                <span className="text-xs text-muted-foreground">A B C</span>
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* 复制预约时间下拉菜单 */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-w-[120px] h-9"
+              disabled={selectedRows.length === 0}
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              复制预约时间
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>选择复制格式</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => handleCopyAppointmentTimes('line')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">换行分隔</span>
+                <span className="text-xs text-muted-foreground">每个时间一行</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopyAppointmentTimes('comma')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">逗号分隔</span>
+                <span className="text-xs text-muted-foreground">2024-01-01, 2024-01-02</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopyAppointmentTimes('space')}>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">空格分隔</span>
+                <span className="text-xs text-muted-foreground">2024-01-01 2024-01-02</span>
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </>
     )
-  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets, totalUnbookedPallets, handleNewAppointment, setAddToExistingAppointmentOpen])
+  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets, handleCopyAppointmentNumbers, handleCopyAppointmentTimes, totalUnbookedPallets, handleNewAppointment, setAddToExistingAppointmentOpen])
 
   return (
     <>

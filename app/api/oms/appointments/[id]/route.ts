@@ -51,6 +51,11 @@ export async function GET(
               location_code: true,
             },
           },
+          outbound_shipments: {
+            select: {
+              trailer_code: true,
+            } as any,
+          },
         },
       });
     } catch (queryError: any) {
@@ -82,6 +87,11 @@ export async function GET(
                 name: true,
                 location_code: true,
               },
+            },
+            outbound_shipments: {
+              select: {
+                trailer_code: true,
+              } as any,
             },
           },
         });
@@ -137,6 +147,9 @@ export async function GET(
     const can_create_sheet = serialized.can_create_sheet ?? false;
     const has_created_sheet = serialized.has_created_sheet ?? false;
 
+    // Trailer：从 outbound_shipments 获取，如果没有出库记录则返回 null
+    const trailer = serialized.outbound_shipments?.trailer_code || null;
+
     // ETA：仅当派送方式为直送时，取第一个明细对应订单的 eta_date，否则为空
     let eta: string | null = null;
     if (deliveryMethod === '直送' && serialized.orders) {
@@ -170,6 +183,7 @@ export async function GET(
       verify_loading_sheet: verify_loading_sheet,
       can_create_sheet: can_create_sheet,
       has_created_sheet: has_created_sheet,
+      trailer: trailer, // 从 outbound_shipments 获取
     });
   } catch (error: any) {
     console.error('获取预约管理记录失败:', error);

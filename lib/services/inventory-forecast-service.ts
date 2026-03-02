@@ -20,6 +20,7 @@ interface LocationRow {
   location_id: bigint | null
   location_group: 'amazon' | 'fedex' | 'ups' | 'private_warehouse' | 'hold'
   location_name: string
+  location_code: string | null // 位置代码
 }
 
 /**
@@ -47,32 +48,53 @@ export async function getAllLocationRows(): Promise<LocationRow[]> {
       location_id: location.location_id,
       location_group: 'amazon',
       location_name: location.name,
+      location_code: location.location_code || location.name, // 优先使用 location_code，如果没有则使用 name
     })
   }
 
-  // 2. FedEx 仓点 (location_id = 31)
-  const fedexLocation = await prisma.locations.findUnique({
-    where: { location_id: BigInt(31) },
-    select: { location_id: true, name: true },
+  // 2. FedEx 仓点（统一成一行，合并所有以 fedex 开头的仓点）
+  const fedexLocations = await prisma.locations.findMany({
+    where: {
+      OR: [
+        { location_code: { startsWith: 'fedex', mode: 'insensitive' } },
+        { name: { startsWith: 'fedex', mode: 'insensitive' } },
+      ],
+    },
+    select: { location_id: true, location_code: true, name: true },
+    orderBy: { location_code: 'asc' },
   })
-  if (fedexLocation) {
+  // 如果有 FedEx 仓点，只添加一行（location_id 为 null，表示合并所有 FedEx 仓点）
+  if (fedexLocations.length > 0) {
+    // 使用第一个匹配的 location_code，或者使用 "FedEx"
+    const firstLocationCode = fedexLocations[0]?.location_code || 'FedEx'
     rows.push({
-      location_id: fedexLocation.location_id,
+      location_id: null, // 设为 null，表示合并所有 FedEx 仓点
       location_group: 'fedex',
-      location_name: fedexLocation.name,
+      location_name: 'FedEx', // 统一显示名称
+      location_code: firstLocationCode, // 使用第一个匹配的 location_code
     })
   }
 
-  // 3. UPS 仓点 (location_id = 30)
-  const upsLocation = await prisma.locations.findUnique({
-    where: { location_id: BigInt(30) },
-    select: { location_id: true, name: true },
+  // 3. UPS 仓点（统一成一行，合并所有以 ups 开头的仓点）
+  const upsLocations = await prisma.locations.findMany({
+    where: {
+      OR: [
+        { location_code: { startsWith: 'ups', mode: 'insensitive' } },
+        { name: { startsWith: 'ups', mode: 'insensitive' } },
+      ],
+    },
+    select: { location_id: true, location_code: true, name: true },
+    orderBy: { location_code: 'asc' },
   })
-  if (upsLocation) {
+  // 如果有 UPS 仓点，只添加一行（location_id 为 null，表示合并所有 UPS 仓点）
+  if (upsLocations.length > 0) {
+    // 使用第一个匹配的 location_code，或者使用 "UPS"
+    const firstLocationCode = upsLocations[0]?.location_code || 'UPS'
     rows.push({
-      location_id: upsLocation.location_id,
+      location_id: null, // 设为 null，表示合并所有 UPS 仓点
       location_group: 'ups',
-      location_name: upsLocation.name,
+      location_name: 'UPS', // 统一显示名称
+      location_code: firstLocationCode, // 使用第一个匹配的 location_code
     })
   }
 
@@ -81,6 +103,7 @@ export async function getAllLocationRows(): Promise<LocationRow[]> {
     location_id: null,
     location_group: 'private_warehouse',
     location_name: '私仓',
+    location_code: '私仓',
   })
 
   // 5. 扣货（所有 delivery_nature = '扣货' 的记录）
@@ -88,6 +111,7 @@ export async function getAllLocationRows(): Promise<LocationRow[]> {
     location_id: null,
     location_group: 'hold',
     location_name: '扣货',
+    location_code: '扣货',
   })
 
   return rows
@@ -102,35 +126,70 @@ export async function calculateHistoricalInventoryBatch(
   beforeDateString: string
 ): Promise<number> {
   const date = formatDateString(beforeDateString)
+  // 计算今天前7天的日期范围：从 (today - 7天) 到 (today - 1天)
+  const sevenDaysAgo = addDaysToDateString(date, -6) // 如果 date 是 today-1，那么 sevenDaysAgo 是 today-7
+  const endDate = date // beforeDateString 通常是 today-1
 
   if (locationRow.location_group === 'private_warehouse') {
-    // 私仓：按 delivery_nature 汇总
+    // 私仓：按 delivery_nature 汇总，排除 UPS 和 FedEx（通过 location_code 开头匹配）
+    // 只计算今天前7天内的剩余板数
     const result = await prisma.$queryRaw<Array<{ sum: bigint }>>`
       SELECT COALESCE(SUM(il.remaining_pallet_count), 0)::INTEGER as sum
       FROM wms.inventory_lots il
       INNER JOIN order_detail od ON il.order_detail_id = od.id
+      LEFT JOIN locations loc ON od.delivery_location_id = loc.location_id
       WHERE il.status = 'available'
         AND od.delivery_nature = '私仓'
-        AND od.delivery_location NOT IN ('30', '31', 'UPS', 'FEDEX')
-        AND il.received_date <= ${date}::DATE
+        AND (loc.location_code IS NULL OR (loc.location_code NOT ILIKE 'ups%' AND loc.location_code NOT ILIKE 'fedex%'))
+        AND (loc.name IS NULL OR (loc.name NOT ILIKE 'ups%' AND loc.name NOT ILIKE 'fedex%'))
+        AND il.received_date >= ${sevenDaysAgo}::DATE
+        AND il.received_date <= ${endDate}::DATE
     `
     return Number(result[0]?.sum || 0)
   }
 
   if (locationRow.location_group === 'hold') {
     // 扣货：按 delivery_nature 汇总
+    // 只计算今天前7天内的剩余板数
     const result = await prisma.$queryRaw<Array<{ sum: bigint }>>`
       SELECT COALESCE(SUM(il.remaining_pallet_count), 0)::INTEGER as sum
       FROM wms.inventory_lots il
       INNER JOIN order_detail od ON il.order_detail_id = od.id
       WHERE il.status = 'available'
         AND od.delivery_nature = '扣货'
-        AND il.received_date <= ${date}::DATE
+        AND il.received_date >= ${sevenDaysAgo}::DATE
+        AND il.received_date <= ${endDate}::DATE
     `
     return Number(result[0]?.sum || 0)
   }
 
-  // 亚马逊/FEDEX/UPS：按 location_id 匹配
+  // 根据 location_group 决定匹配方式
+  if (locationRow.location_group === 'ups' || locationRow.location_group === 'fedex') {
+    // UPS/FedEx：通过 location_code 开头匹配（不区分大小写），合并所有匹配的仓点
+    // 累加所有 UPS1-UPS7 或 FedEx1-FedEx7 的数据
+    // 只计算今天前7天内的剩余板数
+    const prefix = locationRow.location_group === 'ups' ? 'ups' : 'fedex'
+    const prefixPattern = `${prefix}%`
+    const result = await prisma.$queryRaw<Array<{ sum: bigint }>>`
+      SELECT COALESCE(SUM(il.remaining_pallet_count), 0)::INTEGER as sum
+      FROM wms.inventory_lots il
+      INNER JOIN order_detail od ON il.order_detail_id = od.id
+      INNER JOIN locations loc ON od.delivery_location_id = loc.location_id
+      WHERE il.status = 'available'
+        AND (
+          UPPER(loc.location_code) LIKE UPPER(${prefixPattern}) 
+          OR UPPER(loc.name) LIKE UPPER(${prefixPattern})
+        )
+        AND il.received_date >= ${sevenDaysAgo}::DATE
+        AND il.received_date <= ${endDate}::DATE
+    `
+    const sum = Number(result[0]?.sum || 0)
+    console.log(`[库存预测] ${locationRow.location_group.toUpperCase()} 历史库存（前7天 ${sevenDaysAgo} 到 ${endDate}）: ${sum}`)
+    return sum
+  }
+
+  // 亚马逊：按 location_id 精确匹配（必须有 location_id）
+  // 只计算今天前7天内的剩余板数
   if (!locationRow.location_id) return 0
 
   const result = await prisma.$queryRaw<Array<{ sum: bigint }>>`
@@ -138,8 +197,9 @@ export async function calculateHistoricalInventoryBatch(
     FROM wms.inventory_lots il
     INNER JOIN order_detail od ON il.order_detail_id = od.id
     WHERE il.status = 'available'
-      AND od.delivery_location = ${String(locationRow.location_id)}
-      AND il.received_date <= ${date}::DATE
+      AND od.delivery_location_id = ${locationRow.location_id}
+      AND il.received_date >= ${sevenDaysAgo}::DATE
+      AND il.received_date <= ${endDate}::DATE
   `
 
   return Number(result[0]?.sum || 0)
@@ -163,7 +223,7 @@ export async function calculatePlannedInboundBatch(
   const queryEndTimestamp = `${endDate}T23:59:59.999Z`
 
   if (locationRow.location_group === 'private_warehouse') {
-    // 私仓：按 delivery_nature 汇总
+    // 私仓：按 delivery_nature 汇总，排除 UPS 和 FedEx（通过 location_code 开头匹配）
     const rows = await prisma.$queryRaw<Array<{ date: Date; sum: bigint }>>`
       SELECT 
         DATE(ir.planned_unload_at) as date,
@@ -179,10 +239,12 @@ export async function calculatePlannedInboundBatch(
       LEFT JOIN wms.inventory_lots il ON il.order_detail_id = od.id 
         AND il.status = 'available'
         AND il.inbound_receipt_id = ir.inbound_receipt_id
+      LEFT JOIN locations loc ON od.delivery_location_id = loc.location_id
       WHERE ir.planned_unload_at >= ${queryStartTimestamp}::TIMESTAMPTZ
         AND ir.planned_unload_at <= ${queryEndTimestamp}::TIMESTAMPTZ
         AND od.delivery_nature = '私仓'
-        AND od.delivery_location NOT IN ('30', '31', 'UPS', 'FEDEX')
+        AND (loc.location_code IS NULL OR (loc.location_code NOT ILIKE 'ups%' AND loc.location_code NOT ILIKE 'fedex%'))
+        AND (loc.name IS NULL OR (loc.name NOT ILIKE 'ups%' AND loc.name NOT ILIKE 'fedex%'))
         AND ir.status != 'cancelled'
       GROUP BY DATE(ir.planned_unload_at)
     `
@@ -225,7 +287,47 @@ export async function calculatePlannedInboundBatch(
     return result
   }
 
-  // 亚马逊/FEDEX/UPS：按 location_id 匹配
+  // 根据 location_group 决定匹配方式
+  if (locationRow.location_group === 'ups' || locationRow.location_group === 'fedex') {
+    // UPS/FedEx：通过 location_code 开头匹配（不区分大小写），合并所有匹配的仓点
+    // 累加所有 UPS1-UPS7 或 FedEx1-FedEx7 的数据
+    const prefix = locationRow.location_group === 'ups' ? 'ups' : 'fedex'
+    const prefixPattern = `${prefix}%`
+    const rows = await prisma.$queryRaw<Array<{ date: Date; sum: bigint }>>`
+      SELECT 
+        DATE(ir.planned_unload_at) as date,
+        COALESCE(SUM(
+          CASE 
+            WHEN ir.status = 'received' AND il.remaining_pallet_count IS NOT NULL THEN il.remaining_pallet_count
+            ELSE COALESCE(od.estimated_pallets, 0)
+          END
+        ), 0)::INTEGER as sum
+      FROM wms.inbound_receipt ir
+      INNER JOIN orders o ON ir.order_id = o.order_id
+      INNER JOIN order_detail od ON o.order_id = od.order_id
+      LEFT JOIN wms.inventory_lots il ON il.order_detail_id = od.id 
+        AND il.status = 'available'
+        AND il.inbound_receipt_id = ir.inbound_receipt_id
+      INNER JOIN locations loc ON od.delivery_location_id = loc.location_id
+      WHERE ir.planned_unload_at >= ${queryStartTimestamp}::TIMESTAMPTZ
+        AND ir.planned_unload_at <= ${queryEndTimestamp}::TIMESTAMPTZ
+        AND (
+          UPPER(loc.location_code) LIKE UPPER(${prefixPattern}) 
+          OR UPPER(loc.name) LIKE UPPER(${prefixPattern})
+        )
+        AND ir.status != 'cancelled'
+      GROUP BY DATE(ir.planned_unload_at)
+    `
+    
+    for (const row of rows) {
+      const dateStr = formatDateString(row.date.toISOString().split('T')[0])
+      result.set(dateStr, Number(row.sum))
+    }
+    console.log(`[库存预测] ${locationRow.location_group.toUpperCase()} 入库数据: ${result.size} 个日期`)
+    return result
+  }
+
+  // 亚马逊：按 location_id 精确匹配（必须有 location_id）
   if (!locationRow.location_id) return result
 
   const rows = await prisma.$queryRaw<Array<{ date: Date; sum: bigint }>>`
@@ -245,7 +347,7 @@ export async function calculatePlannedInboundBatch(
       AND il.inbound_receipt_id = ir.inbound_receipt_id
     WHERE ir.planned_unload_at >= ${queryStartTimestamp}::TIMESTAMPTZ
       AND ir.planned_unload_at <= ${queryEndTimestamp}::TIMESTAMPTZ
-      AND od.delivery_location = ${String(locationRow.location_id)}
+      AND od.delivery_location_id = ${locationRow.location_id}
       AND ir.status != 'cancelled'
     GROUP BY DATE(ir.planned_unload_at)
   `
@@ -280,7 +382,7 @@ export async function calculatePlannedOutboundBatch(
   const queryEndTimestamp = `${appointmentEndDate}T00:00:00Z`
 
   if (locationRow.location_group === 'private_warehouse') {
-    // 私仓：按 delivery_nature 汇总，但排除 UPS 和 FEDEX
+    // 私仓：按 delivery_nature 汇总，排除 UPS 和 FedEx（通过 location_code 开头匹配）
     const rows = await prisma.$queryRaw<Array<{ date: Date; sum: bigint }>>`
       SELECT 
         (da.confirmed_start - INTERVAL '1 day')::DATE as date,
@@ -288,10 +390,12 @@ export async function calculatePlannedOutboundBatch(
       FROM oms.appointment_detail_lines adl
       INNER JOIN order_detail od ON adl.order_detail_id = od.id
       INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
+      LEFT JOIN locations loc ON od.delivery_location_id = loc.location_id
       WHERE da.confirmed_start >= ${queryStartTimestamp}::TIMESTAMPTZ
         AND da.confirmed_start < ${queryEndTimestamp}::TIMESTAMPTZ
         AND od.delivery_nature = '私仓'
-        AND od.delivery_location NOT IN ('30', '31', 'UPS', 'FEDEX')
+        AND (loc.location_code IS NULL OR (loc.location_code NOT ILIKE 'ups%' AND loc.location_code NOT ILIKE 'fedex%'))
+        AND (loc.name IS NULL OR (loc.name NOT ILIKE 'ups%' AND loc.name NOT ILIKE 'fedex%'))
         AND da.confirmed_start IS NOT NULL
         AND (da.rejected = false OR da.rejected IS NULL)
       GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
@@ -328,7 +432,40 @@ export async function calculatePlannedOutboundBatch(
     return result
   }
 
-  // 亚马逊/FEDEX/UPS：按 location_id 匹配
+  // 根据 location_group 决定匹配方式
+  if (locationRow.location_group === 'ups' || locationRow.location_group === 'fedex') {
+    // UPS/FedEx：通过 location_code 开头匹配（不区分大小写），合并所有匹配的仓点
+    // 累加所有 UPS1-UPS7 或 FedEx1-FedEx7 的数据
+    const prefix = locationRow.location_group === 'ups' ? 'ups' : 'fedex'
+    const prefixPattern = `${prefix}%`
+    const rows = await prisma.$queryRaw<Array<{ date: Date; sum: bigint }>>`
+      SELECT 
+        (da.confirmed_start - INTERVAL '1 day')::DATE as date,
+        COALESCE(SUM(adl.estimated_pallets), 0)::INTEGER as sum
+      FROM oms.appointment_detail_lines adl
+      INNER JOIN order_detail od ON adl.order_detail_id = od.id
+      INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
+      INNER JOIN locations loc ON od.delivery_location_id = loc.location_id
+      WHERE da.confirmed_start >= ${queryStartTimestamp}::TIMESTAMPTZ
+        AND da.confirmed_start < ${queryEndTimestamp}::TIMESTAMPTZ
+        AND (
+          UPPER(loc.location_code) LIKE UPPER(${prefixPattern}) 
+          OR UPPER(loc.name) LIKE UPPER(${prefixPattern})
+        )
+        AND da.confirmed_start IS NOT NULL
+        AND (da.rejected = false OR da.rejected IS NULL)
+      GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
+    `
+    
+    for (const row of rows) {
+      const dateStr = formatDateString(row.date.toISOString().split('T')[0])
+      result.set(dateStr, Number(row.sum))
+    }
+    console.log(`[库存预测] ${locationRow.location_group.toUpperCase()} 出库数据: ${result.size} 个日期`)
+    return result
+  }
+
+  // 亚马逊：按 location_id 精确匹配（必须有 location_id）
   if (!locationRow.location_id) return result
 
   const rows = await prisma.$queryRaw<Array<{ date: Date; sum: bigint }>>`
@@ -340,7 +477,7 @@ export async function calculatePlannedOutboundBatch(
     INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
     WHERE da.confirmed_start >= ${queryStartTimestamp}::TIMESTAMPTZ
       AND da.confirmed_start < ${queryEndTimestamp}::TIMESTAMPTZ
-      AND od.delivery_location = ${String(locationRow.location_id)}
+      AND od.delivery_location_id = ${locationRow.location_id}
       AND da.confirmed_start IS NOT NULL
       AND (da.rejected = false OR da.rejected IS NULL)
     GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
@@ -387,6 +524,7 @@ async function calculateSingleLocation(
     location_id: bigint | null
     location_group: string
     location_name: string
+    location_code: string | null
     forecast_date: string
     historical_inventory: number
     planned_inbound: number
@@ -406,6 +544,7 @@ async function calculateSingleLocation(
       location_id: locationRow.location_id,
       location_group: locationRow.location_group,
       location_name: locationRow.location_name,
+      location_code: locationRow.location_code,
       forecast_date: forecastDateString,
       historical_inventory: historicalInventory,
       planned_inbound: plannedInbound,
@@ -424,8 +563,9 @@ async function calculateSingleLocation(
     // 构建 VALUES 列表
     const values = batch.map(r => {
       const locationIdStr = r.location_id ? `${r.location_id}` : 'NULL'
-      const locationNameEscaped = r.location_name.replace(/'/g, "''")
-      return `(${locationIdStr}, '${r.location_group}', '${locationNameEscaped}', '${r.forecast_date}'::DATE, ${r.historical_inventory}, ${r.planned_inbound}, ${r.planned_outbound}, ${r.forecast_inventory}, '${calculatedTimestamp.toISOString()}'::TIMESTAMPTZ, 1)`
+      // 使用 location_code 作为 location_name 存储（前端显示位置代码）
+      const locationCodeEscaped = (r.location_code || r.location_name).replace(/'/g, "''")
+      return `(${locationIdStr}, '${r.location_group}', '${locationCodeEscaped}', '${r.forecast_date}'::DATE, ${r.historical_inventory}, ${r.planned_inbound}, ${r.planned_outbound}, ${r.forecast_inventory}, '${calculatedTimestamp.toISOString()}'::TIMESTAMPTZ, 1)`
     }).join(',')
     
     await prisma.$queryRawUnsafe(`
@@ -440,7 +580,8 @@ async function calculateSingleLocation(
         planned_inbound = EXCLUDED.planned_inbound,
         planned_outbound = EXCLUDED.planned_outbound,
         forecast_inventory = EXCLUDED.forecast_inventory,
-        calculated_at = EXCLUDED.calculated_at
+        calculated_at = EXCLUDED.calculated_at,
+        location_name = EXCLUDED.location_name
     `)
   }
 
