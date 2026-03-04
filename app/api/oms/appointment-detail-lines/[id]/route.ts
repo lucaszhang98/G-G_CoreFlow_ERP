@@ -3,6 +3,14 @@ import { auth } from '@/auth'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
 
+function pickPreferredInventoryLot<T extends { inbound_receipt_id: bigint | null; inventory_lot_id: bigint }>(
+  lots: T[]
+): T | null {
+  if (!lots.length) return null
+  const withInbound = lots.find((lot) => lot.inbound_receipt_id !== null)
+  return withInbound ?? lots[0]
+}
+
 // PUT - 更新预约明细
 export async function PUT(
   request: NextRequest,
@@ -18,7 +26,14 @@ export async function PUT(
     }
 
     body = await request.json()
-    const { estimated_pallets, rejected_pallets, load_sheet_notes, bol_notes, ignore_unload_time_check } = body
+    const {
+      estimated_pallets,
+      rejected_pallets,
+      load_sheet_notes,
+      bol_notes,
+      ignore_unload_time_check,
+      storage_location_code,
+    } = body
 
     // 获取当前预约明细（含 rejected_pallets）
     const currentLine = await prisma.appointment_detail_lines.findUnique({
@@ -51,10 +66,12 @@ export async function PUT(
     const newEffective = effective(newEstimated, newRejected)
 
     // 校验：新预计板数不能超过当前可约总板数（当前未约 + 本行旧有效占用）
-    const inventoryLot = await prisma.inventory_lots.findFirst({
+    const inventoryLots = await prisma.inventory_lots.findMany({
       where: { order_detail_id: orderDetailId },
-      select: { inventory_lot_id: true, pallet_count: true, unbooked_pallet_count: true },
+      orderBy: { inventory_lot_id: 'asc' },
+      select: { inventory_lot_id: true, inbound_receipt_id: true, pallet_count: true, unbooked_pallet_count: true },
     })
+    const inventoryLot = pickPreferredInventoryLot(inventoryLots)
     const allLines = await prisma.appointment_detail_lines.findMany({
       where: { order_detail_id: orderDetailId },
       select: { id: true, estimated_pallets: true, rejected_pallets: true } as { id: true; estimated_pallets: true; rejected_pallets: true },
@@ -95,6 +112,71 @@ export async function PUT(
         where: { id: BigInt(resolvedParams.id) },
         data: updateData,
       })
+
+      // 仓库位置与入库详情同源：inventory_lots.storage_location_code
+      // 在出库详情按 order_detail_id 定位同一条 lot（按 inventory_lot_id 升序第一条）
+      if (storage_location_code !== undefined) {
+        const normalizedStorageLocation =
+          storage_location_code == null || storage_location_code === ''
+            ? null
+            : String(storage_location_code)
+
+        const existingLots = await tx.inventory_lots.findMany({
+          where: { order_detail_id: orderDetailId },
+          orderBy: { inventory_lot_id: 'asc' },
+          select: { inventory_lot_id: true, inbound_receipt_id: true },
+        })
+        const existingLot = pickPreferredInventoryLot(existingLots)
+
+        if (existingLot) {
+          await tx.inventory_lots.update({
+            where: { inventory_lot_id: existingLot.inventory_lot_id },
+            data: {
+              storage_location_code: normalizedStorageLocation,
+              updated_by: session.user.id ? BigInt(session.user.id) : null,
+              updated_at: new Date(),
+            },
+          })
+        } else {
+          const orderDetail = await tx.order_detail.findUnique({
+            where: { id: orderDetailId },
+            select: { order_id: true },
+          })
+          if (!orderDetail?.order_id) {
+            throw new Error('订单明细缺少 order_id，无法创建库存批次')
+          }
+
+          const defaultWarehouse = await tx.warehouses.findFirst({
+            select: { warehouse_id: true },
+            orderBy: { warehouse_id: 'asc' },
+          })
+          if (!defaultWarehouse?.warehouse_id) {
+            throw new Error('系统中不存在仓库，无法创建库存批次')
+          }
+
+          const inboundReceipt = await tx.inbound_receipt.findFirst({
+            where: { order_id: orderDetail.order_id },
+            select: { inbound_receipt_id: true },
+            orderBy: { inbound_receipt_id: 'asc' },
+          })
+
+          await tx.inventory_lots.create({
+            data: {
+              order_id: orderDetail.order_id,
+              order_detail_id: orderDetailId,
+              warehouse_id: defaultWarehouse.warehouse_id,
+              inbound_receipt_id: inboundReceipt?.inbound_receipt_id ?? null,
+              storage_location_code: normalizedStorageLocation,
+              pallet_count: 0,
+              remaining_pallet_count: 0,
+              unbooked_pallet_count: 0,
+              status: 'available',
+              created_by: session.user.id ? BigInt(session.user.id) : null,
+              updated_by: session.user.id ? BigInt(session.user.id) : null,
+            } as any,
+          })
+        }
+      }
 
       await recalcUnbookedRemainingForOrderDetail(orderDetailId, tx)
 

@@ -554,13 +554,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '订单明细不存在' }, { status: 404 });
     }
 
-    // 检查仓库是否存在
-    const warehouse = await prisma.warehouses.findUnique({
+    // 检查仓库是否存在；若不存在则使用系统中第一个可用仓库（便于出库详情等场景仅填仓库位置时创建批次）
+    let warehouse = await prisma.warehouses.findUnique({
       where: { warehouse_id: BigInt(data.warehouse_id) },
     });
     if (!warehouse) {
-      return NextResponse.json({ error: '仓库不存在' }, { status: 404 });
+      warehouse = await prisma.warehouses.findFirst({
+        orderBy: { warehouse_id: 'asc' },
+      });
+      if (!warehouse) {
+        return NextResponse.json({ error: '仓库不存在' }, { status: 404 });
+      }
     }
+    const warehouseId = warehouse.warehouse_id;
 
     const orderDetailId = BigInt(data.order_detail_id);
     const palletCount = data.pallet_count || 1;
@@ -583,11 +589,11 @@ export async function POST(request: NextRequest) {
     const unbookedPalletCount = palletCount - totalEffectivePallets;
     const remainingPalletCount = palletCount - totalExpiredEffectivePallets;
 
-    // 构建创建数据
+    // 构建创建数据（使用解析后的 warehouseId，可能为传入值或回退的第一个仓库）
     const createData: any = {
       order_id: BigInt(data.order_id),
       order_detail_id: orderDetailId,
-      warehouse_id: BigInt(data.warehouse_id),
+      warehouse_id: warehouseId,
       storage_location_code: data.storage_location_code || null,
       pallet_count: palletCount,
       remaining_pallet_count: remainingPalletCount, // 自动计算

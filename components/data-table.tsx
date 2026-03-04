@@ -731,24 +731,25 @@ export function DataTable<TData, TValue>({
       </div>
       )}
 
-      {/* 表格 */}
-      <div className="border-0 bg-card overflow-hidden">
-        <div 
-          ref={scrollContainerRef}
-          className={cn(
-            "overflow-x-auto scroll-container",
-            isDraggingScroll && "dragging-scroll"
-          )}
-          onMouseDown={handleScrollMouseDown}
+      {/* 表格：数据少时高度随内容自适应，数据多时最大一屏并内部滚动，表头 sticky 吸顶 */}
+      <div
+        ref={scrollContainerRef}
+        onMouseDown={handleScrollMouseDown}
+        className={cn(
+          "border-0 bg-card overflow-auto scroll-container",
+          isDraggingScroll && "dragging-scroll"
+        )}
+        style={{ minHeight: '12rem', maxHeight: 'calc(100vh - 12rem)' }}
+      >
+        <Table 
+          noWrapper
+          className="border-collapse sticky-table"
+          style={{ 
+            width: table.getCenterTotalSize(),
+            minWidth: '100%'
+          }}
         >
-          <Table 
-            className="border-collapse sticky-table"
-            style={{ 
-              width: table.getCenterTotalSize(), // 使用列宽总和
-              minWidth: '100%' // 保证最小宽度为100%，防止右侧空白
-            }}
-          >
-            <TableHeader className="bg-gradient-to-r from-gray-50/80 to-gray-100/80 dark:from-gray-800/80 dark:to-gray-700/80">
+            <TableHeader className="sticky top-0 z-20 shadow-sm bg-card [&_tr]:bg-card [&_th]:bg-card">
             {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="hover:bg-transparent border-b-2 border-border/50 [&_th]:pb-3 [&_th]:pt-3 [&_th]:border-t-0 [&_th]:first:pl-4 [&_th]:last:pr-4">
                   {/* 展开图标列占位（如果启用展开行功能） */}
@@ -826,100 +827,14 @@ export function DataTable<TData, TValue>({
                         key={header.id} 
                         className={cn(
                           "font-semibold text-sm text-foreground/90 px-2 py-3 whitespace-nowrap relative",
-                          shouldSticky && stickyPosition === 'right' && "sticky right-0 z-20 bg-gradient-to-r from-transparent via-gray-50/95 to-gray-50/95 dark:via-gray-800/95 dark:to-gray-800/95"
+                          shouldSticky && stickyPosition === 'right' && "sticky right-0 z-20 bg-card"
                         )}
                         style={shouldSticky && stickyPosition === 'right' ? { 
                           boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
                         } : undefined}
                       >
-                        <div className="flex items-center justify-center gap-2">
-                          {showColumnToggle && mounted && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-accent">
-                                  <Columns3 className="h-4 w-4" />
-                                  <span className="sr-only">切换列</span>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent 
-                                align="end" 
-                                className="w-56 max-h-[400px] overflow-hidden"
-                              >
-                                <DropdownMenuLabel className="sticky top-0 bg-popover z-10 py-2 border-b">切换列显示</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {enableViewManager && viewManagerTableName && (
-                                  <>
-                                    <div className="px-2 py-1.5 border-b">
-                                      <TableViewManager
-                                        tableName={viewManagerTableName}
-                                        currentVisibility={currentColumnVisibility}
-                                        currentSizing={columnSizing}
-                                        currentOrder={columnOrder}
-                                        allColumns={(() => {
-                                          // 获取所有列ID（排除 select 列）
-                                          const allColumns = table.getAllColumns()
-                                          return allColumns
-                                            .map(col => col.id)
-                                            .filter((id): id is string => !!id && id !== 'select')
-                                        })()}
-                                        columnLabels={columnLabels}
-                                        onViewChange={(visibility, sizing, order) => {
-                                          // 直接更新列可见性、列宽和列顺序状态，react-table 会自动应用
-                                          setColumnVisibility(visibility)
-                                          if (sizing) setColumnSizing(sizing)
-                                          if (order) setColumnOrder(order)
-                                        }}
-                                      />
-                                    </div>
-                                    <DropdownMenuSeparator />
-                                  </>
-                                )}
-                                <div className="max-h-[320px] overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-border/80">
-                                  {table
-                                    .getAllColumns()
-                                    .filter((column) => column.getCanHide() && column.id !== 'actions')
-                                    .map((column) => {
-                                      const colId = column.id
-                                      const colLabel = columnLabels[colId] || colId
-                                      return (
-                                        <DropdownMenuCheckboxItem
-                                          key={colId}
-                                          checked={column.getIsVisible()}
-                                          onCheckedChange={(value) => {
-                                            // 阻止事件冒泡，防止页面刷新
-                                            const newValue = !!value
-                                            // 直接更新列可见性（不触发页面刷新）
-                                            column.toggleVisibility(newValue)
-                                            // 同步到视图管理器状态（但不保存，只有点击保存视图时才保存）
-                                            if (enableViewManager) {
-                                              setColumnVisibility(prev => ({
-                                                ...prev,
-                                                [colId]: newValue
-                                              }))
-                                            }
-                                          }}
-                                          onSelect={(e) => {
-                                            // 阻止默认选择行为，防止下拉菜单关闭
-                                            e.preventDefault()
-                                          }}
-                                          className="capitalize"
-                                        >
-                                          {colLabel}
-                                        </DropdownMenuCheckboxItem>
-                                      )
-                                    })}
-                                </div>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                          {showColumnToggle && !mounted && (
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
-                              <Columns3 className="h-4 w-4" />
-                              <span className="sr-only">切换列</span>
-                            </Button>
-                          )}
-                          <span>操作</span>
-                        </div>
+                        {/* 表头操作列只显示「操作」文字，不显示列切换按钮，避免与固定表头冲突 */}
+                        <span>操作</span>
                       </TableHead>
                     )
                   }
@@ -1328,7 +1243,6 @@ export function DataTable<TData, TValue>({
             )}
           </TableBody>
         </Table>
-        </div>
       </div>
 
       {/* 分页 */}

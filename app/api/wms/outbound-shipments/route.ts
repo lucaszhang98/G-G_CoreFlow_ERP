@@ -141,9 +141,7 @@ export async function GET(request: NextRequest) {
       [appointments, total] = await Promise.all([
         prisma.delivery_appointments.findMany({
           where: appointmentWhere,
-          orderBy: {
-            created_at: order === 'asc' ? 'asc' : 'desc',
-          },
+          orderBy,
           skip: (page - 1) * limit,
           take: limit,
           include: {

@@ -213,7 +213,7 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
           </div>
         </header>
 
-        {/* 页面内容 */}
+        {/* 页面内容：整页可滚动，表格平铺显示全部数据；表头 sticky 吸顶 */}
         <main className="flex-1 overflow-y-auto">
           <div 
             className="w-full max-w-none py-6"

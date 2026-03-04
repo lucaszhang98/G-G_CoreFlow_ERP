@@ -2494,8 +2494,8 @@ export function EntityTable<T = any>({
         )}
       </div>
 
-      {/* 数据表格卡片 */}
-      <Card className="border border-border/50 shadow-xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm overflow-hidden !py-0 !gap-0">
+      {/* 数据表格卡片：表格平铺全部数据，整页滚动；overflow-visible 让表头 sticky 生效 */}
+      <Card className="border border-border/50 shadow-xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm overflow-visible !py-0 !gap-0">
         <CardContent className="!p-0">
           <DataTable
         columns={columns}

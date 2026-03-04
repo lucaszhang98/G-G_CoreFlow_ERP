@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
-import { formatDateString, addDaysToDateString, compareDateStrings } from '@/lib/utils/timezone'
+import { formatDateString, addDaysToDateString } from '@/lib/utils/timezone'
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,28 +45,21 @@ export async function GET(request: NextRequest) {
       `
       
       if (latestCalculation[0]?.min_date) {
-        // 使用最近一次计算的起始日期作为基准
-        // formatDateString 现在使用 UTC 方法，可以正确处理 Date 对象
+        // 使用最近一次计算的起始日期作为基准，固定返回 15 天，避免“第 15 天为空”
         queryStartDate = formatDateString(latestCalculation[0].min_date)
-        if (endDateParam) {
-          queryEndDate = formatDateString(endDateParam)
-        } else if (latestCalculation[0].max_date) {
-          // 使用最近一次计算的结束日期
-          queryEndDate = formatDateString(latestCalculation[0].max_date)
-        } else {
-          // 如果没有结束日期，计算15天
-          queryEndDate = addDaysToDateString(queryStartDate, 14)
-        }
+        // 始终为「基准日 + 14」共 15 天，保证报表 15 列都有数据
+        queryEndDate = addDaysToDateString(queryStartDate, 14)
       } else {
         // 如果数据库中没有数据，返回空结果
         return NextResponse.json({
           data: [],
           summary: {
             total_locations: 0,
-            date_range: {
-              start: null,
-              end: null,
-            },
+            date_range: { start: null, end: null },
+            server_today: formatDateString(new Date()),
+            total_unload_by_day: Array(15).fill(0),
+            total_delivery_by_day: Array(15).fill(0),
+            remaining_total_by_day: Array(15).fill(0),
           },
         })
       }
@@ -124,6 +117,28 @@ export async function GET(request: NextRequest) {
       calculated_at: row.calculated_at ? row.calculated_at.toISOString() : null,
     }))
 
+    // 合计拆柜：与入库管理一致，只统计关联订单 operation_mode='unload' 的入库单，按拆柜日期分组计数（柜数）
+    const unloadByDate = await prisma.$queryRaw<Array<{ d: Date; total: string | number }>>`
+      SELECT (r.planned_unload_at)::date AS d, COUNT(r.inbound_receipt_id)::bigint AS total
+      FROM wms.inbound_receipt r
+      INNER JOIN public.orders o ON o.order_id = r.order_id AND o.operation_mode = 'unload'
+      WHERE r.planned_unload_at::date >= ${queryStartDate}::date
+        AND r.planned_unload_at::date <= ${queryEndDate}::date
+      GROUP BY (r.planned_unload_at)::date
+    `
+    // 合计送仓：预约管理自提/卡派，按「转天」— 列日期 D 显示送货日期为 D+1 的预约笔数
+    const deliveryStartNext = addDaysToDateString(queryStartDate, 1)
+    const deliveryEndNext = addDaysToDateString(queryEndDate, 1)
+    const deliveryByDate = await prisma.$queryRaw<Array<{ d: Date; total: string | number }>>`
+      SELECT (COALESCE(d.confirmed_start, d.requested_start))::date AS d, COUNT(d.appointment_id)::bigint AS total
+      FROM oms.delivery_appointments d
+      WHERE d.delivery_method IN ('自提', '卡派')
+        AND (d.confirmed_start IS NOT NULL OR d.requested_start IS NOT NULL)
+        AND (COALESCE(d.confirmed_start, d.requested_start))::date >= ${deliveryStartNext}::date
+        AND (COALESCE(d.confirmed_start, d.requested_start))::date <= ${deliveryEndNext}::date
+      GROUP BY (COALESCE(d.confirmed_start, d.requested_start))::date
+    `
+
     // 按仓点分组，便于前端展示
     const groupedByLocation = serialized.reduce((acc, row) => {
       const key = `${row.location_group}_${row.location_id || 'null'}`
@@ -156,6 +171,42 @@ export async function GET(request: NextRequest) {
       return acc
     }, {} as Record<string, any>)
 
+    // 按日期的拆柜/送仓 Map（日期字符串 -> 数量）
+    const unloadMap: Record<string, number> = {}
+    unloadByDate.forEach((row) => {
+      unloadMap[formatDateString(row.d)] = Number(row.total ?? 0)
+    })
+    const deliveryMap: Record<string, number> = {}
+    deliveryByDate.forEach((row) => {
+      deliveryMap[formatDateString(row.d)] = Number(row.total ?? 0)
+    })
+
+    // 15 天顺序数组：合计拆柜=当日拆柜柜数；合计送仓=转天送货预约数（列日期 D 显示 D+1 日的送仓笔数）
+    const total_unload_by_day: number[] = []
+    const total_delivery_by_day: number[] = []
+    for (let i = 0; i < 15; i++) {
+      const dateStr = addDaysToDateString(queryStartDate, i)
+      total_unload_by_day.push(unloadMap[dateStr] ?? 0)
+      const deliveryDateStr = addDaysToDateString(queryStartDate, i + 1)
+      total_delivery_by_day.push(deliveryMap[deliveryDateStr] ?? 0)
+    }
+
+    // 剩余总板数：按天（day_number 1..15）各仓点 forecast_inventory 之和
+    const remaining_total_by_day: number[] = []
+    for (let dayNum = 1; dayNum <= 15; dayNum++) {
+      const sum = (Object.values(groupedByLocation) as Array<{ daily_data: Array<{ day_number: number; forecast_inventory: number }> }>).reduce(
+        (s, loc) => {
+          const dayData = loc.daily_data?.find((d) => d.day_number === dayNum)
+          return s + (dayData?.forecast_inventory ?? 0)
+        },
+        0
+      )
+      remaining_total_by_day.push(sum)
+    }
+
+    // 服务器当前日期，用于前端高亮「今天」列
+    const serverToday = formatDateString(new Date())
+
     const responseData = {
       data: Object.values(groupedByLocation),
       summary: {
@@ -164,6 +215,10 @@ export async function GET(request: NextRequest) {
           start: queryStartDate,
           end: queryEndDate,
         },
+        server_today: serverToday,
+        total_unload_by_day,
+        total_delivery_by_day,
+        remaining_total_by_day,
       },
     }
     

@@ -124,7 +124,10 @@ export async function PUT(
     const updateData: any = {};
 
     if (data.storage_location_code !== undefined) {
-      updateData.storage_location_code = data.storage_location_code || null;
+      updateData.storage_location_code =
+        data.storage_location_code === '' || data.storage_location_code === null
+          ? null
+          : data.storage_location_code;
     }
     // 如果实际板数变化了，自动重新计算；否则不触碰板数字段（仅改仓库位置时不改板数）
     if (shouldRecalculate) {

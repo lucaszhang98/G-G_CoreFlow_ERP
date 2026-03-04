@@ -27,45 +27,50 @@ interface LocationData {
 
 export function InventoryForecastClient() {
   const [data, setData] = React.useState<LocationData[]>([])
+  const [summary, setSummary] = React.useState<{
+    total_unload_by_day: number[]
+    total_delivery_by_day: number[]
+    remaining_total_by_day: number[]
+  }>({
+    total_unload_by_day: [],
+    total_delivery_by_day: [],
+    remaining_total_by_day: [],
+  })
+  // 与主表 data-table 一致的拖拽滚动状态
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+  const actualScrollContainerRef = React.useRef<HTMLElement | null>(null)
+  const [isDraggingScroll, setIsDraggingScroll] = React.useState(false)
+  const isDraggingScrollRef = React.useRef(false)
+  const scrollStartRef = React.useRef({ x: 0, scrollLeft: 0, hasMoved: false })
   const [loading, setLoading] = React.useState(true)
   const [calculating, setCalculating] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [lastCalculated, setLastCalculated] = React.useState<string | null>(null)
   const [startDate, setStartDate] = React.useState<string | null>(null)
+  const [serverToday, setServerToday] = React.useState<string | null>(null)
 
   const fetchData = React.useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      
-      // 获取服务器当前日期，用于查询从今天开始的15天数据
-      const timeResponse = await fetch("/api/system/current-time")
-      if (!timeResponse.ok) {
-        throw new Error("获取服务器时间失败")
-      }
-      const timeData = await timeResponse.json()
-      const todayString = timeData.date
+      // 用服务器「今天」作为报表起始日，使汇总行与入库管理/预约管理筛选的日期一致（拆柜=今天、送仓=转天）
+      const timeRes = await fetch("/api/system/current-time")
+      if (!timeRes.ok) throw new Error("获取服务器时间失败")
+      const { date: todayString } = await timeRes.json()
       const endDateString = addDaysToDateString(todayString, 14)
-      
-      console.log('[前端] 查询日预测数据:', { todayString, endDateString })
-      
-      // 查询从今天开始的15天数据
       const response = await fetch(`/api/reports/inventory-forecast?start_date=${todayString}&end_date=${endDateString}`)
       if (!response.ok) {
         throw new Error("获取数据失败")
       }
       const result = await response.json()
-      console.log('[前端] API返回的数据:', {
-        summary: result.summary,
-        dataCount: result.data?.length,
-        firstLocationData: result.data?.[0]?.daily_data?.length,
-      })
       setData(result.data || [])
-      // 设置基准日期为今天
-      console.log('[前端] 设置基准日期:', todayString)
-      setStartDate(todayString)
-      // 不读取外部时间，使用API返回的计算时间或显示"刚刚"
-      // 如果API返回了calculated_at，可以使用它，否则显示"刚刚"
+      setSummary({
+        total_unload_by_day: result.summary?.total_unload_by_day ?? Array(15).fill(0),
+        total_delivery_by_day: result.summary?.total_delivery_by_day ?? Array(15).fill(0),
+        remaining_total_by_day: result.summary?.remaining_total_by_day ?? Array(15).fill(0),
+      })
+      setStartDate(result.summary?.date_range?.start ?? todayString)
+      setServerToday(result.summary?.server_today ?? todayString)
       setLastCalculated("刚刚")
     } catch (err: any) {
       setError(err.message || "获取数据失败")
@@ -125,16 +130,13 @@ export function InventoryForecastClient() {
     fetchData()
   }, [fetchData])
 
-  // 生成日期列标题（15天）- 使用API返回的基准日期
+  // 生成日期列标题（15天）- 使用 API 返回的基准日期；「今天」用 server_today 高亮
   const dateColumns = React.useMemo(() => {
-    if (!startDate) {
-      // 如果还没有获取到基准日期，返回空数组
-      return []
-    }
-    
+    if (!startDate) return []
+
     const columns = Array.from({ length: 15 }, (_, i) => {
       const dateString = addDaysToDateString(startDate, i)
-      const date = new Date(dateString + 'T00:00:00Z') // 解析为UTC日期
+      const date = new Date(dateString + 'T00:00:00Z')
       const weekdays = ['日', '一', '二', '三', '四', '五', '六']
       const weekday = weekdays[date.getUTCDay()]
       const month = date.getUTCMonth() + 1
@@ -144,16 +146,88 @@ export function InventoryForecastClient() {
         dayNumber: i + 1,
         dateLabel: `${month}/${day}`,
         weekdayLabel: `星期${weekday}`,
-        isToday: i === 0,
+        isToday: !!serverToday && dateString === serverToday,
         isWeekend: date.getUTCDay() === 0 || date.getUTCDay() === 6,
       }
     })
-    console.log('[前端] 生成的日期列:', {
-      startDate,
-      columns: columns.map(c => `${c.dateLabel} (day ${c.dayNumber})`),
-    })
     return columns
-  }, [startDate])
+  }, [startDate, serverToday])
+
+  // 表格横向拖拽滚动：与主表 data-table 相同实现，从点击目标向上查找可滚动容器
+  const handleScrollMouseDown = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+
+    const target = e.target as HTMLElement
+    const isInteractiveElement =
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('a') ||
+      target.closest('select') ||
+      target.closest('textarea') ||
+      target.closest('[role="button"]') ||
+      target.closest('[role="checkbox"]')
+
+    if (isInteractiveElement) return
+
+    let scrollableContainer: HTMLElement | null = target
+    let depth = 0
+    const maxDepth = 10
+
+    while (scrollableContainer && depth < maxDepth) {
+      if (scrollableContainer.scrollWidth > scrollableContainer.clientWidth) break
+      scrollableContainer = scrollableContainer.parentElement
+      depth++
+    }
+
+    if (!scrollableContainer || scrollableContainer.scrollWidth <= scrollableContainer.clientWidth) return
+
+    actualScrollContainerRef.current = scrollableContainer
+    scrollStartRef.current = {
+      x: e.clientX,
+      scrollLeft: scrollableContainer.scrollLeft,
+      hasMoved: false,
+    }
+    isDraggingScrollRef.current = true
+  }, [])
+
+  React.useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDraggingScrollRef.current) return
+      const container = actualScrollContainerRef.current
+      if (!container) return
+
+      const dx = e.clientX - scrollStartRef.current.x
+      const distance = Math.abs(dx)
+
+      if (distance > 3) {
+        if (!scrollStartRef.current.hasMoved) {
+          scrollStartRef.current = { ...scrollStartRef.current, hasMoved: true }
+          setIsDraggingScroll(true)
+        }
+        const newScrollLeft = scrollStartRef.current.scrollLeft - dx
+        const maxScrollLeft = container.scrollWidth - container.clientWidth
+        const clampedScrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft))
+        container.scrollLeft = clampedScrollLeft
+        e.preventDefault()
+      }
+    }
+
+    const handleGlobalMouseUp = () => {
+      if (isDraggingScrollRef.current) {
+        isDraggingScrollRef.current = false
+        setIsDraggingScroll(false)
+        scrollStartRef.current = { x: 0, scrollLeft: 0, hasMoved: false }
+        actualScrollContainerRef.current = null
+      }
+    }
+
+    window.addEventListener('mousemove', handleGlobalMouseMove, { passive: false })
+    window.addEventListener('mouseup', handleGlobalMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove)
+      window.removeEventListener('mouseup', handleGlobalMouseUp)
+    }
+  }, [])
 
   // 获取某个仓点某天的数据
   const getDayData = (locationData: LocationData, dayNumber: number) => {
@@ -228,7 +302,7 @@ export function InventoryForecastClient() {
                 库存预测报表
               </h1>
               <p className="text-muted-foreground mt-1">
-                未来15天的库存、入库、出库预测分析
+                近两周的库存、入库、出库预测分析
               </p>
             </div>
           </div>
@@ -381,7 +455,7 @@ export function InventoryForecastClient() {
               <div>
                 <CardTitle className="text-xl font-bold">库存预测表格</CardTitle>
                 <CardDescription className="mt-1">
-                  横向为时间（今天到未来15天），纵向为各仓点
+                  横向为时间（近两周），纵向为各仓点
                 </CardDescription>
               </div>
               <Badge variant="secondary" className="text-sm">
@@ -390,7 +464,15 @@ export function InventoryForecastClient() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div
+              ref={scrollContainerRef}
+              onMouseDown={handleScrollMouseDown}
+              className={cn(
+                "overflow-x-auto overflow-y-hidden max-w-full scroll-container",
+                isDraggingScroll && "dragging-scroll"
+              )}
+              title="按住拖拽可左右滚动表格"
+            >
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 hover:from-slate-100 hover:to-slate-50">
@@ -426,7 +508,40 @@ export function InventoryForecastClient() {
                     ))}
                   </TableRow>
                 </TableHeader>
+                {/* 汇总行：表头与第一行数据之间，每天一列显示合计拆柜、合计送仓、剩余总板数 */}
                 <TableBody>
+                  <TableRow className="bg-slate-100/80 dark:bg-slate-800/60 border-b-2 border-slate-200 dark:border-slate-700">
+                    <TableCell className="sticky left-0 z-10 font-semibold border-r-2 border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/60">
+                      <span className="text-slate-700 dark:text-slate-200">汇总</span>
+                    </TableCell>
+                    {dateColumns.map((col, colIdx) => {
+                      const unload = summary.total_unload_by_day[colIdx] ?? 0
+                      const delivery = summary.total_delivery_by_day[colIdx] ?? 0
+                      const remaining = summary.remaining_total_by_day[colIdx] ?? 0
+                      return (
+                        <TableCell
+                          key={col.date}
+                          className={cn(
+                            "text-left py-2 px-3 border-x border-slate-200/80 dark:border-slate-700/80",
+                            col.isToday && "bg-blue-50/60 dark:bg-blue-950/30",
+                            col.isWeekend && !col.isToday && "bg-amber-50/40 dark:bg-amber-950/20"
+                          )}
+                        >
+                          <div className="flex flex-col gap-1.5 text-sm">
+                            <div className="text-muted-foreground">
+                              合计拆柜：<span className="font-semibold text-indigo-600 dark:text-indigo-400">{unload.toLocaleString()}</span>
+                            </div>
+                            <div className="text-muted-foreground">
+                              合计送仓：<span className="font-semibold text-orange-600 dark:text-orange-400">{delivery.toLocaleString()}</span>
+                            </div>
+                            <div className="text-muted-foreground">
+                              剩余板数：<span className="font-semibold text-emerald-600 dark:text-emerald-400">{remaining.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                      )
+                    })}
+                  </TableRow>
                   {data.map((locationData, idx) => {
                     const groupBadge = getLocationGroupBadge(locationData.location_group)
                     return (

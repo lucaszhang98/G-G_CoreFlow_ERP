@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { FileText, Printer } from "lucide-react"
 import { toast } from "sonner"
 
+const fmtDate = (d: Date) => d.toISOString().slice(0, 10)
+
 /** 获取当前工作周（周一至周日）的起止日期，用于送货时间筛选，格式 YYYY-MM-DD */
 function getThisWeekDateRange(): { confirmed_start_from: string; confirmed_start_to: string } {
   const now = new Date()
@@ -18,11 +20,23 @@ function getThisWeekDateRange(): { confirmed_start_from: string; confirmed_start
   monday.setDate(now.getDate() + mondayOffset)
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
-  const fmt = (d: Date) => d.toISOString().slice(0, 10)
   return {
-    confirmed_start_from: fmt(monday),
-    confirmed_start_to: fmt(sunday),
+    confirmed_start_from: fmtDate(monday),
+    confirmed_start_to: fmtDate(sunday),
   }
+}
+
+/** 获取本周某一天的送货时间筛选（1=周一 … 7=周日），当天起止相同 */
+function getWeekdayDeliveryRange(weekday: number): { confirmed_start_from: string; confirmed_start_to: string } {
+  const now = new Date()
+  const day = now.getDay()
+  const mondayOffset = day === 0 ? -6 : 1 - day
+  const monday = new Date(now)
+  monday.setDate(now.getDate() + mondayOffset)
+  const target = new Date(monday)
+  target.setDate(monday.getDate() + (weekday - 1))
+  const dateStr = fmtDate(target)
+  return { confirmed_start_from: dateStr, confirmed_start_to: dateStr }
 }
 
 const OUTBOUND_ID_FIELD = 'appointment_id'
@@ -168,17 +182,31 @@ export function OutboundShipmentTable() {
     },
   ], [router])
 
-  // 快速筛选：显示本周数据（送货时间为本周）
+  // 快速筛选：周一～周日（送货时间）+ 显示本周数据
+  const weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
   const customFilterContent = React.useCallback(
     (applyFilterValues: (v: Record<string, any>) => void) => (
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-9 rounded-lg"
-        onClick={() => applyFilterValues(getThisWeekDateRange())}
-      >
-        显示本周数据
-      </Button>
+      <>
+        {weekdayLabels.map((label, idx) => (
+          <Button
+            key={label}
+            variant="outline"
+            size="sm"
+            className="h-9 rounded-lg"
+            onClick={() => applyFilterValues(getWeekdayDeliveryRange(idx + 1))}
+          >
+            {label}
+          </Button>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 rounded-lg"
+          onClick={() => applyFilterValues(getThisWeekDateRange())}
+        >
+          显示本周数据
+        </Button>
+      </>
     ),
     [],
   )

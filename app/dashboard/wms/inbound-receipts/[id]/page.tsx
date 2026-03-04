@@ -119,6 +119,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
           },
         },
         inventory_lots: {
+          orderBy: { inventory_lot_id: 'asc' },
           select: {
             inventory_lot_id: true,
             order_detail_id: true,
@@ -264,6 +265,7 @@ export default async function InboundReceiptDetailPage({ params }: InboundReceip
               },
             },
             inventory_lots: {
+              orderBy: { inventory_lot_id: 'asc' },
               select: {
                 inventory_lot_id: true,
                 order_detail_id: true,

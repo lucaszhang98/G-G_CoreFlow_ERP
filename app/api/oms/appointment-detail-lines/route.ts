@@ -3,6 +3,14 @@ import { auth } from '@/auth'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
 
+function pickPreferredInventoryLot<T extends { inbound_receipt_id: bigint | null; inventory_lot_id: bigint }>(
+  lots: T[]
+): T | null {
+  if (!lots.length) return null
+  const withInbound = lots.find((lot) => lot.inbound_receipt_id !== null)
+  return withInbound ?? lots[0]
+}
+
 // GET - 获取预约明细列表（根据 appointment_id）
 export async function GET(request: NextRequest) {
   try {
@@ -87,10 +95,12 @@ export async function GET(request: NextRequest) {
         select: {
           inventory_lot_id: true,
           order_detail_id: true,
+          inbound_receipt_id: true,
           pallet_count: true,
           unbooked_pallet_count: true,
           storage_location_code: true,
         },
+        orderBy: [{ inventory_lot_id: 'asc' }],
       }),
       orderIds.length > 0
         ? prisma.inbound_receipt.findMany({
@@ -101,16 +111,24 @@ export async function GET(request: NextRequest) {
     ])
 
     // 创建库存映射（order_detail_id -> 第一个 inventory_lot，用于仓库位置与未约板数）
+    // 仓库位置 = inventory_lots.storage_location_code，与入库管理详情页为同一字段（同一柜号+同一仓点 = 同一 order_detail_id）
+    // orderBy inventory_lot_id 保证与入库详情取到同一“第一个”lot，两边读写一致
     const inventoryMap = new Map<bigint, { inventory_lot_id: bigint; pallet_count: number; unbooked_pallet_count: number | null; storage_location_code: string | null }>()
-    inventoryLots.forEach(lot => {
-      if (!inventoryMap.has(lot.order_detail_id)) {
-        inventoryMap.set(lot.order_detail_id, {
-          inventory_lot_id: lot.inventory_lot_id,
-          pallet_count: lot.pallet_count,
-          unbooked_pallet_count: lot.unbooked_pallet_count,
-          storage_location_code: lot.storage_location_code,
-        })
-      }
+    const lotsByDetail = new Map<bigint, typeof inventoryLots>()
+    inventoryLots.forEach((lot) => {
+      const arr = lotsByDetail.get(lot.order_detail_id) || []
+      arr.push(lot)
+      lotsByDetail.set(lot.order_detail_id, arr)
+    })
+    lotsByDetail.forEach((lots, orderDetailId) => {
+      const preferred = pickPreferredInventoryLot(lots)
+      if (!preferred) return
+      inventoryMap.set(orderDetailId, {
+        inventory_lot_id: preferred.inventory_lot_id,
+        pallet_count: preferred.pallet_count,
+        unbooked_pallet_count: preferred.unbooked_pallet_count,
+        storage_location_code: preferred.storage_location_code,
+      })
     })
 
     // 创建入库拆柜时间映射（order_id -> planned_unload_at，来自入库管理）
@@ -161,9 +179,9 @@ export async function GET(request: NextRequest) {
         remaining_pallets: totalPallets, // 总板数（已入库用 unbooked_pallet_count，未入库用 remaining_pallets）- 这是实时值，用于显示和验证
         has_inventory: hasInventory, // 是否有库存
         inventory_pallets: hasInventory ? inventoryLot.pallet_count : null, // 库存板数
-        // 仓库位置（入库管理对应明细的 storage_location_code），可编辑
-        storage_location_code: hasInventory ? inventoryLot.storage_location_code : null,
-        inventory_lot_id: hasInventory ? String(inventoryLot.inventory_lot_id) : null, // 用于编辑仓库位置时 PATCH inventory-lots
+        // 仓库位置（入库管理对应明细的 storage_location_code），有 inventory_lot 即可编辑
+        storage_location_code: inventoryLot ? inventoryLot.storage_location_code : null,
+        inventory_lot_id: inventoryLot ? String(inventoryLot.inventory_lot_id) : null, // 有批次即可编辑仓库位置并保存
         // 未约板数（订单明细动态计算，只读）
         unbooked_pallets: hasInventory ? (inventoryLot.unbooked_pallet_count ?? null) : (orderDetail.remaining_pallets ?? null),
         delivery_nature: orderDetail.delivery_nature,

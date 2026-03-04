@@ -24,6 +24,6 @@ export const outboundShipmentCreateSchema = z.object({
   origin_location_id: z.bigint().or(z.string().transform(val => BigInt(val))).optional().nullable(),
 })
 
-// 出库管理更新验证schema
+// 出库管理更新验证 schema（仓库位置与入库一致，在预约明细行上编辑 inventory_lots.storage_location_code）
 export const outboundShipmentUpdateSchema = outboundShipmentCreateSchema.partial()
 

@@ -72,6 +72,17 @@ function getTomorrowDateRange(): { planned_unload_at_from: string; planned_unloa
   return { planned_unload_at_from: fmt, planned_unload_at_to: fmt }
 }
 
+/** 获取本周某一天的拆柜日期筛选（1=周一 … 7=周日），当天起止相同 */
+function getWeekdayUnloadRange(weekday: number): { planned_unload_at_from: string; planned_unload_at_to: string } {
+  const now = new Date()
+  const day = now.getUTCDay()
+  const mondayOffset = day === 0 ? -6 : 1 - day
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + mondayOffset))
+  const target = new Date(Date.UTC(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate() + (weekday - 1)))
+  const dateStr = formatDateUTC(target)
+  return { planned_unload_at_from: dateStr, planned_unload_at_to: dateStr }
+}
+
 const INBOUND_ID_FIELD = 'inbound_receipt_id'
 
 export function InboundReceiptTable() {
@@ -465,10 +476,22 @@ export function InboundReceiptTable() {
     </div>
   ), [handleSyncMissingRecords, handleFixPlannedUnloadDates, isSyncing, isFixingDates])
 
-  // 快速筛选区：显示当天 / 显示明天 / 显示本周 / 显示本月 / 显示已放柜子
+  // 快速筛选区：周一～周日（拆柜日期）+ 显示当天/明天/本周/本月/已放柜子
+  const weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
   const customFilterContent = React.useCallback(
     (applyFilterValues: (v: Record<string, any>) => void) => (
       <>
+        {weekdayLabels.map((label, idx) => (
+          <Button
+            key={label}
+            variant="outline"
+            size="sm"
+            className="h-9 rounded-lg"
+            onClick={() => applyFilterValues(getWeekdayUnloadRange(idx + 1))}
+          >
+            {label}
+          </Button>
+        ))}
         <Button
           variant="outline"
           size="sm"

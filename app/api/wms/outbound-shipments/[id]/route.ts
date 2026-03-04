@@ -62,12 +62,11 @@ export async function PUT(
     // 获取当前用户
     const user = authResult.user || null;
 
-    // 允许修改 trailer_code, loaded_by, notes, rejected
+    // 允许修改 trailer_code, loaded_by, notes, rejected 等；空字符串与 null 均保存为 null
     const updateData: any = {};
     
     if (body.trailer_code !== undefined) {
-      // trailer_code 直接保存为文本
-      updateData.trailer_code = body.trailer_code || null;
+      updateData.trailer_code = body.trailer_code === '' || body.trailer_code === null ? null : body.trailer_code;
     }
     if (body.loaded_by !== undefined || body.loaded_by_name !== undefined) {
       // 支持 loaded_by 或 loaded_by_name（前端可能传 loaded_by_name，需要转换为 loaded_by）
@@ -97,20 +96,20 @@ export async function PUT(
       }
     }
     if (body.notes !== undefined) {
-      updateData.notes = body.notes || null;
+      updateData.notes = body.notes === '' || body.notes === null ? null : body.notes;
     }
     if (body.delivery_address !== undefined) {
-      updateData.delivery_address = body.delivery_address || null;
+      updateData.delivery_address = body.delivery_address === '' || body.delivery_address === null ? null : body.delivery_address;
     }
     if (body.contact_name !== undefined) {
-      updateData.contact_name = body.contact_name || null;
+      updateData.contact_name = body.contact_name === '' || body.contact_name === null ? null : body.contact_name;
     }
     if (body.contact_phone !== undefined) {
-      updateData.contact_phone = body.contact_phone || null;
+      updateData.contact_phone = body.contact_phone === '' || body.contact_phone === null ? null : body.contact_phone;
     }
 
-    // rejected、verify_loading_sheet、has_created_sheet 字段在 delivery_appointments 表中，需要单独更新
-    // 注意：can_create_sheet 在出库管理中只读，不允许更新
+    // rejected、verify_loading_sheet、has_created_sheet 在 delivery_appointments 表中，需要单独更新
+    // 注意：can_create_sheet 在出库管理中只读，不允许更新；仓库位置与入库一致，在预约明细行上编辑（inventory_lots.storage_location_code）
     const appointmentUpdateData: any = {}
     if (body.rejected !== undefined) {
       appointmentUpdateData.rejected = Boolean(body.rejected)

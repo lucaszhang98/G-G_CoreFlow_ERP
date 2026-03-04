@@ -363,6 +363,7 @@ export function DetailTable({
             ignore_unload_time_check: values?.ignore_unload_time_check,
             load_sheet_notes: values?.load_sheet_notes,
             bol_notes: values?.bol_notes,
+            storage_location_code: values?.storage_location_code,
           }
           
           const response = await fetch(`/api/oms/appointment-detail-lines/${detailId}`, {
@@ -388,18 +389,7 @@ export function DetailTable({
               throw new Error(`更新明细备注失败: ${errData.error || errData.message || '未知错误'}`)
             }
           }
-          // 仓库位置存于 inventory_lots，若有修改则 PATCH
-          if (values?.storage_location_code !== undefined && detail?.inventory_lot_id) {
-            const ilRes = await fetch(`/api/wms/inventory-lots/${detail.inventory_lot_id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ storage_location_code: values.storage_location_code || null }),
-            })
-            if (!ilRes.ok) {
-              const errData = await ilRes.json().catch(() => ({}))
-              throw new Error(`更新仓库位置失败: ${errData.error || errData.message || '未知错误'}`)
-            }
-          }
+          // 仓库位置通过 appointment-detail-lines API 在后端统一按 order_detail_id 写入 inventory_lots
         }
       } else {
         const savePromises: Promise<void>[] = []
@@ -482,6 +472,7 @@ export function DetailTable({
           ignore_unload_time_check: editingData.ignore_unload_time_check,
           load_sheet_notes: editingData.load_sheet_notes,
           bol_notes: editingData.bol_notes,
+          storage_location_code: editingData.storage_location_code,
         }
         
         try {
@@ -533,18 +524,7 @@ export function DetailTable({
           }
         }
 
-        // 仓库位置存于 inventory_lots，若修改了则 PATCH 对应库存明细
-        if (editingData.storage_location_code !== undefined && currentDetail?.inventory_lot_id) {
-          const ilRes = await fetch(`/api/wms/inventory-lots/${currentDetail.inventory_lot_id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ storage_location_code: editingData.storage_location_code || null }),
-          })
-          if (!ilRes.ok) {
-            const errData = await ilRes.json().catch(() => ({}))
-            throw new Error(errData.error || errData.message || '更新仓库位置失败')
-          }
-        }
+        // 仓库位置通过 appointment-detail-lines API 在后端统一按 order_detail_id 写入 inventory_lots
 
         // 先清除编辑状态
         setEditingRowId(null)
