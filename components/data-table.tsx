@@ -827,14 +827,94 @@ export function DataTable<TData, TValue>({
                         key={header.id} 
                         className={cn(
                           "font-semibold text-sm text-foreground/90 px-2 py-3 whitespace-nowrap relative",
-                          shouldSticky && stickyPosition === 'right' && "sticky right-0 z-20 bg-card"
+                          shouldSticky && stickyPosition === 'right' && "sticky right-0 z-20 bg-gradient-to-r from-transparent via-gray-50/95 to-gray-50/95 dark:via-gray-800/95 dark:to-gray-800/95"
                         )}
                         style={shouldSticky && stickyPosition === 'right' ? { 
                           boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
                         } : undefined}
                       >
-                        {/* 表头操作列只显示「操作」文字，不显示列切换按钮，避免与固定表头冲突 */}
-                        <span>操作</span>
+                        <div className="flex items-center justify-center gap-2">
+                          {showColumnToggle && mounted && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-accent">
+                                  <Columns3 className="h-4 w-4" />
+                                  <span className="sr-only">切换列</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent 
+                                align="end" 
+                                className="w-56 max-h-[400px] overflow-hidden"
+                              >
+                                <DropdownMenuLabel className="sticky top-0 bg-popover z-10 py-2 border-b">切换列显示</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {enableViewManager && viewManagerTableName && (
+                                  <>
+                                    <div className="px-2 py-1.5 border-b">
+                                      <TableViewManager
+                                        tableName={viewManagerTableName}
+                                        currentVisibility={currentColumnVisibility}
+                                        currentSizing={columnSizing}
+                                        currentOrder={columnOrder}
+                                        allColumns={(() => {
+                                          const allCols = table.getAllColumns()
+                                          return allCols
+                                            .map(col => col.id)
+                                            .filter((id): id is string => !!id && id !== 'select')
+                                        })()}
+                                        columnLabels={columnLabels}
+                                        onViewChange={(visibility, sizing, order) => {
+                                          setColumnVisibility(visibility)
+                                          if (sizing) setColumnSizing(sizing)
+                                          if (order) setColumnOrder(order)
+                                        }}
+                                      />
+                                    </div>
+                                    <DropdownMenuSeparator />
+                                  </>
+                                )}
+                                <div className="max-h-[320px] overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-border/80">
+                                  {table
+                                    .getAllColumns()
+                                    .filter((column) => column.getCanHide() && column.id !== 'actions')
+                                    .map((column) => {
+                                      const colId = column.id
+                                      const colLabel = columnLabels[colId] || colId
+                                      return (
+                                        <DropdownMenuCheckboxItem
+                                          key={colId}
+                                          checked={column.getIsVisible()}
+                                          onCheckedChange={(value) => {
+                                            const newValue = !!value
+                                            column.toggleVisibility(newValue)
+                                            if (enableViewManager) {
+                                              setColumnVisibility(prev => ({
+                                                ...prev,
+                                                [colId]: newValue
+                                              }))
+                                            }
+                                          }}
+                                          onSelect={(e) => {
+                                            e.preventDefault()
+                                          }}
+                                          className="capitalize"
+                                        >
+                                          {colLabel}
+                                        </DropdownMenuCheckboxItem>
+                                      )
+                                    })}
+                                </div>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                          {showColumnToggle && !mounted && (
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
+                              <Columns3 className="h-4 w-4" />
+                              <span className="sr-only">切换列</span>
+                            </Button>
+                          )}
+                          <span>操作</span>
+                        </div>
                       </TableHead>
                     )
                   }

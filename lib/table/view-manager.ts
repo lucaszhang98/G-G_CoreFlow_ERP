@@ -316,7 +316,9 @@ export async function setDefaultView(
  */
 export async function getDefaultView(tableName: string): Promise<TableView | null> {
   const views = await getTableViews(tableName)
-  return views.find(v => v.isDefault) || views[0] || null
+  // 仅应用用户明确设置为默认的视图。
+  // 若无默认视图，则返回 null，页面使用实体配置里的原始列顺序。
+  return views.find(v => v.isDefault) || null
 }
 
 /**
