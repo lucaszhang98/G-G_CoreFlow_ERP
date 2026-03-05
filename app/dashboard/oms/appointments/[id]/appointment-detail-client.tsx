@@ -9,9 +9,11 @@ interface AppointmentDetailClientProps {
   appointment: any
   /** 出库详情页为 true 时，显示并可编辑装车单明细备注、BOL明细备注（每条明细行） */
   showOutboundLineNotes?: boolean
+  /** 总排车板数（出库管理详情页传入，显示在子表上方） */
+  totalPallets?: number | null
 }
 
-export function AppointmentDetailClient({ appointmentId, appointment, showOutboundLineNotes }: AppointmentDetailClientProps) {
+export function AppointmentDetailClient({ appointmentId, appointment, showOutboundLineNotes, totalPallets }: AppointmentDetailClientProps) {
   const handleRefresh = React.useCallback(() => {
     // 刷新页面以更新数据
     window.location.reload()
@@ -60,7 +62,15 @@ export function AppointmentDetailClient({ appointmentId, appointment, showOutbou
   return (
     <Card className="border-0 shadow-lg">
       <CardHeader>
-        <CardTitle>预约明细</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle>预约明细</CardTitle>
+          {totalPallets != null && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+              <span className="text-sm font-medium text-muted-foreground">总排车板数：</span>
+              <span className="text-base font-semibold text-foreground tabular-nums">{totalPallets.toLocaleString()}</span>
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <DetailTable

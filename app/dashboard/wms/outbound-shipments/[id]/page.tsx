@@ -58,6 +58,7 @@ export default async function OutboundShipmentDetailPage({ params }: OutboundShi
               appointmentId={id}
               appointment={appointmentContext}
               showOutboundLineNotes
+              totalPallets={data.total_pallets}
             />
           </div>
         </div>

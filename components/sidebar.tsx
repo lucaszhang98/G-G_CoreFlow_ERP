@@ -544,15 +544,27 @@ export function Sidebar({ userRole = "user" }: SidebarProps) {
 
   return (
     <div className="flex h-full w-full flex-col border-r bg-background overflow-hidden" suppressHydrationWarning>
-      <div className="flex h-16 items-center border-b px-6 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
-            <Package2 className="h-5 w-5 text-white" />
+      <div className="flex h-20 items-center justify-center border-b px-4 py-3 flex-shrink-0 bg-background">
+        <Link href="/dashboard" className="relative w-full h-full flex items-center justify-center min-h-[3.5rem]">
+          {/* 长条 logo，与装车单/BOL 同源；无边框无底，与背景融为一体 */}
+          <img
+            src="/loading-sheet/logo.jpg"
+            alt=""
+            className="object-contain object-center w-full h-full max-h-14"
+            onError={(e) => {
+              const el = e.currentTarget
+              if (el.src.endsWith('logo.jpg')) {
+                el.src = '/loading-sheet/logo.png'
+              } else {
+                el.style.display = 'none'
+                el.nextElementSibling?.classList.remove('hidden')
+              }
+            }}
+          />
+          <div className="hidden absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600">
+            <Package2 className="h-8 w-8 text-white" />
           </div>
-          <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            CoreFlow ERP
-          </span>
-        </div>
+        </Link>
       </div>
       <ScrollArea className="flex-1 overflow-hidden">
         <div className="space-y-1 p-4" suppressHydrationWarning>

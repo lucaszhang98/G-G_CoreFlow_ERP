@@ -51,6 +51,9 @@ export async function getOutboundShipmentDetail(
   const appointment = await prisma.delivery_appointments.findUnique({
     where: { appointment_id: BigInt(appointmentId) },
     include: {
+      appointment_detail_lines: {
+        select: { estimated_pallets: true },
+      },
       orders: {
         select: {
           order_id: true,
@@ -104,10 +107,11 @@ export async function getOutboundShipmentDetail(
   const serialized = serializeBigInt(appointment)
   const outboundShipment = serialized.outbound_shipments || null
 
+  // 与列表一致：总板数 = 预约明细行 appointment_detail_lines.estimated_pallets 之和
   let totalPallets = 0
-  if (serialized.orders?.order_detail && Array.isArray(serialized.orders.order_detail)) {
-    totalPallets = serialized.orders.order_detail.reduce((sum: number, detail: any) => {
-      return sum + (detail.estimated_pallets || 0)
+  if (serialized.appointment_detail_lines && Array.isArray(serialized.appointment_detail_lines)) {
+    totalPallets = serialized.appointment_detail_lines.reduce((sum: number, line: any) => {
+      return sum + (line.estimated_pallets || 0)
     }, 0)
   }
 

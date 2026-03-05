@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
-import { Menu, LogOut, Bell, Package2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Menu, LogOut, Bell, ChevronLeft, ChevronRight } from "lucide-react"
 import dynamic from "next/dynamic"
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
@@ -16,14 +16,9 @@ const Sidebar = dynamic(() => import("@/components/sidebar").then(mod => ({ defa
   ssr: false,
   loading: () => (
     <div className="flex h-full w-64 flex-col border-r bg-background overflow-hidden">
-      <div className="flex h-16 items-center border-b px-6 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
-            <Package2 className="h-5 w-5 text-white" />
-          </div>
-          <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            CoreFlow ERP
-          </span>
+      <div className="flex h-20 items-center justify-center border-b px-4 py-3 flex-shrink-0 bg-background">
+        <div className="w-full h-full min-h-[3.5rem] flex items-center justify-center">
+          <img src="/loading-sheet/logo.jpg" alt="" className="object-contain object-center w-full h-full max-h-14" />
         </div>
       </div>
     </div>

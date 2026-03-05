@@ -2561,6 +2561,20 @@ export function EntityTable<T = any>({
                 }
                 return undefined
               }
+            : (config.name === 'outbound_shipments' || config.name === 'delivery_appointments')
+            ? (row: any) => {
+                // 出库管理 / 预约管理：按 拒收 > 校验装车单 > 已做单 优先级整行变色
+                if (row.rejected === true) {
+                  return "bg-gradient-to-r from-red-100 via-red-50/80 to-red-100 dark:from-red-900/40 dark:via-red-900/30 dark:to-red-900/40 hover:from-red-200 hover:via-red-100/80 hover:to-red-200 dark:hover:from-red-800/50 dark:hover:via-red-800/40 dark:hover:to-red-800/50"
+                }
+                if (row.verify_loading_sheet === true) {
+                  return "bg-gradient-to-r from-amber-100 via-yellow-50/80 to-amber-100 dark:from-amber-900/40 dark:via-yellow-900/30 dark:to-amber-900/40 hover:from-amber-200 hover:via-yellow-100/80 hover:to-amber-200 dark:hover:from-amber-800/50 dark:hover:via-yellow-800/40 dark:hover:to-amber-800/50"
+                }
+                if (row.has_created_sheet === true) {
+                  return "bg-gradient-to-r from-green-100 via-emerald-50/80 to-green-100 dark:from-green-900/40 dark:via-emerald-900/30 dark:to-green-900/40 hover:from-green-200 hover:via-emerald-100/80 hover:to-green-200 dark:hover:from-green-800/50 dark:hover:via-emerald-800/40 dark:hover:to-green-800/50"
+                }
+                return undefined
+              }
             : undefined
         }
       />
