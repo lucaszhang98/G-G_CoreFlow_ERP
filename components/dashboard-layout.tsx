@@ -242,6 +242,7 @@ function getPageTitle(pathname: string): string {
     "/dashboard/wms/inventory": "库存管理",
     "/dashboard/wms/outbound": "出库管理",
     "/dashboard/wms/inbound-receipts": "入库管理",
+    "/dashboard/wms/unload-bill": "拆柜账单",
     "/dashboard/settings": "系统设置",
     "/dashboard/reports/orders": "订单报表",
     "/dashboard/reports/inventory": "库存报表",

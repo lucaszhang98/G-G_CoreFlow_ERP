@@ -83,6 +83,7 @@ export interface DetailData {
   appointment_id?: string | number | null
   order_detail_id?: string | number | null
   order_number?: string | null
+  customer_name?: string | null
   /** 拆柜时间：来自入库管理（inbound_receipt.planned_unload_at），按明细对应订单关联 */
   unload_time?: string | Date | null
   /** 忽略：为 true 时柜号强制绿色，与拒收等字段一样需点铅笔编辑后保存 */
@@ -100,6 +101,7 @@ export interface DetailTableConfig {
   showExpandable?: boolean // 是否显示展开SKU功能
   showColumns?: {
     orderNumber?: boolean // 柜号
+    customerName?: boolean // 客户名称
     location?: boolean // 仓点
     locationType?: boolean // 仓点类型（性质）
     deliveryLocation?: boolean // 送仓地点
@@ -940,6 +942,7 @@ export function DetailTable({
     if (config.showExpandable) cols.push('expand')
     // 预约明细子表前几位：柜号、拆柜时间、实际板数、排车板数
     if (config.showColumns?.orderNumber) cols.push('orderNumber')
+    if (config.showColumns?.customerName) cols.push('customerName')
     if (appointmentId && config.showColumns?.unloadTime) cols.push('unloadTime')
     if (appointmentId && config.showColumns?.ignoreUnloadTimeCheck) cols.push('ignoreUnloadTimeCheck')
     if (config.showColumns?.storageLocation) cols.push('storageLocation')
@@ -1085,6 +1088,8 @@ export function DetailTable({
                     return <th key={col} className="text-left p-2 font-semibold text-sm w-12"></th>
                   case 'orderNumber':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">柜号</th>
+                  case 'customerName':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm">客户名称</th>
                   case 'location':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">仓点</th>
                   case 'locationType':
@@ -1233,6 +1238,8 @@ export function DetailTable({
                             </td>
                           )
                         }
+                        case 'customerName':
+                          return <td key={col} className="p-2 text-sm">{(detail as any).customer_name || '-'}</td>
                         case 'location':
                           // 仓点：显示 location_code（从 delivery_location 转换而来）
                           return <td key={col} className="p-2 text-sm">{locationCode}</td>

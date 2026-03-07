@@ -173,6 +173,11 @@ const menuItems: MenuItem[] = [
         href: "/dashboard/wms/inbound-receipts",
       },
       {
+        title: "拆柜账单",
+        icon: FileText,
+        href: "/dashboard/wms/unload-bill",
+      },
+      {
         title: "库存管理",
         icon: Package,
         href: "/dashboard/wms/inventory-lots",
