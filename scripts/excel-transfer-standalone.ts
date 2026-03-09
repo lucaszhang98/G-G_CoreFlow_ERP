@@ -96,25 +96,41 @@ function readSourceFile(filePath: string) {
   headerRow.forEach((header, idx) => {
     if (header) {
       const headerStr = String(header).trim()
+      // 调试：打印所有表头
+      if (idx < 15) { // 只打印前15列，避免输出太多
+        console.log(`    列 ${idx} (${String.fromCharCode(65 + idx)}): "${headerStr}"`)
+      }
       if (headerStr === '仓库代码') columnMap.deliveryLocation = idx
       if (headerStr === '箱数') columnMap.quantity = idx
+      if (headerStr === '重量') columnMap.weight = idx
       if (headerStr === '体积') columnMap.volume = idx
       if (headerStr === 'FBA') columnMap.fba = idx
       if (headerStr === 'PO') columnMap.po = idx
       if (headerStr === '派送方式') columnMap.deliveryNature = idx
+      // 窗口期：支持多种可能的表头名称
+      if (headerStr === '窗口期' || headerStr === '窗口期 ' || headerStr.includes('窗口期')) {
+        columnMap.windowPeriod = idx
+      }
     }
   })
   
   console.log(`\n  列映射:`, columnMap)
+  if (columnMap.windowPeriod !== undefined) {
+    console.log(`  ✅ 找到窗口期列，索引: ${columnMap.windowPeriod} (列 ${String.fromCharCode(65 + columnMap.windowPeriod)})`)
+  } else {
+    console.log(`  ⚠️  未找到窗口期列，请检查表头是否为"窗口期"`)
+  }
   
   // 读取数据行
   const detailRows: Array<{
     deliveryLocation: string
     quantity: number
+    weight: number
     volume: number
     fba: string
     po: string
     deliveryNature: string
+    windowPeriod: string
   }> = []
   
   for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
@@ -125,18 +141,22 @@ function readSourceFile(filePath: string) {
     if (!deliveryLocation) continue
     
     const quantity = columnMap.quantity !== undefined ? parseFloat(String(row[columnMap.quantity] || 0)) : 0
+    const weight = columnMap.weight !== undefined ? parseFloat(String(row[columnMap.weight] || 0)) : 0
     const volume = columnMap.volume !== undefined ? parseFloat(String(row[columnMap.volume] || 0)) : 0
     const fba = columnMap.fba !== undefined ? String(row[columnMap.fba] || '').trim() : ''
     const po = columnMap.po !== undefined ? String(row[columnMap.po] || '').trim() : ''
     const deliveryNature = columnMap.deliveryNature !== undefined ? String(row[columnMap.deliveryNature] || '').trim() : ''
+    const windowPeriod = columnMap.windowPeriod !== undefined ? String(row[columnMap.windowPeriod] || '').trim() : ''
     
     detailRows.push({
       deliveryLocation,
       quantity,
+      weight,
       volume,
       fba,
       po,
       deliveryNature,
+      windowPeriod,
     })
   }
   
@@ -151,18 +171,22 @@ function readSourceFile(filePath: string) {
 function aggregateByDeliveryLocation(detailRows: Array<{
   deliveryLocation: string
   quantity: number
+  weight: number
   volume: number
   fba: string
   po: string
   deliveryNature: string
+  windowPeriod: string
 }>) {
   const aggregated = new Map<string, {
     deliveryLocation: string
     quantity: number
+    weight: number
     volume: number
-    fbaList: string[]
+    fbaMap: Map<string, number> // FBA -> 数量映射
     poList: string[]
     deliveryNature: string
+    windowPeriod: string | null // 每个仓点的首个窗口期
   }>()
   
   for (const row of detailRows) {
@@ -171,18 +195,35 @@ function aggregateByDeliveryLocation(detailRows: Array<{
       aggregated.set(key, {
         deliveryLocation: row.deliveryLocation,
         quantity: 0,
+        weight: 0,
         volume: 0,
-        fbaList: [],
+        fbaMap: new Map<string, number>(), // 使用Map记录每个FBA对应的数量
         poList: [],
         deliveryNature: row.deliveryNature || 'AMZ', // 默认值
+        windowPeriod: row.windowPeriod || null, // 记录首个窗口期
       })
     }
     
     const item = aggregated.get(key)!
     item.quantity += row.quantity
+    item.weight += row.weight
     item.volume += row.volume
-    if (row.fba) item.fbaList.push(row.fba)
-    if (row.po) item.poList.push(row.po)
+    
+    // 窗口期：如果当前为空或null，且新行有窗口期，则更新为第一个非空的窗口期
+    if ((!item.windowPeriod || item.windowPeriod.trim() === '') && row.windowPeriod && row.windowPeriod.trim() !== '') {
+      item.windowPeriod = row.windowPeriod
+    }
+    
+    // FBA：记录每个FBA对应的数量（累加）
+    if (row.fba) {
+      const currentQty = item.fbaMap.get(row.fba) || 0
+      item.fbaMap.set(row.fba, currentQty + row.quantity)
+    }
+    
+    // PO：去重后添加到列表
+    if (row.po && !item.poList.includes(row.po)) {
+      item.poList.push(row.po)
+    }
   }
   
   return Array.from(aggregated.values())
@@ -227,10 +268,12 @@ async function writeOutputFile(
   aggregatedRows: Array<{
     deliveryLocation: string
     quantity: number
+    weight: number
     volume: number
-    fbaList: string[]
+    fbaMap: Map<string, number>
     poList: string[]
     deliveryNature: string
+    windowPeriod: string | null
   }>,
   outputPath: string
 ) {
@@ -249,24 +292,39 @@ async function writeOutputFile(
   const columnMap: Record<string, number> = {}
   headerRow.eachCell((cell, colNumber) => {
     const header = cell.value?.toString() || ''
-    if (header === '订单号') columnMap.orderNumber = colNumber
-    if (header === '客户代码') columnMap.customerCode = colNumber
-    if (header === '订单日期') columnMap.orderDate = colNumber
-    if (header === '操作方式') columnMap.operationMode = colNumber
-    if (header === '目的地') columnMap.destination = colNumber
-    if (header === '货柜类型') columnMap.containerType = colNumber
-    if (header === 'ETA') columnMap.eta = colNumber
-    if (header === 'MBL') columnMap.mbl = colNumber
-    if (header === 'DO') columnMap.do = colNumber
-    if (header === '送仓地点') columnMap.deliveryLocation = colNumber
-    if (header === '性质') columnMap.deliveryNature = colNumber
-    if (header === '数量') columnMap.quantity = colNumber
-    if (header === '体积') columnMap.volume = colNumber
-    if (header === 'FBA') columnMap.fba = colNumber
-    if (header === 'PO') columnMap.po = colNumber
+    const headerTrimmed = header.trim()
+    // 调试：打印所有表头（前30列）
+    if (colNumber <= 30) {
+      console.log(`    列 ${colNumber} (${String.fromCharCode(64 + colNumber)}): "${headerTrimmed}"`)
+    }
+    if (headerTrimmed === '订单号') columnMap.orderNumber = colNumber
+    if (headerTrimmed === '客户代码') columnMap.customerCode = colNumber
+    if (headerTrimmed === '订单日期') columnMap.orderDate = colNumber
+    if (headerTrimmed === '操作方式') columnMap.operationMode = colNumber
+    if (headerTrimmed === '目的地') columnMap.destination = colNumber
+    if (headerTrimmed === '货柜类型') columnMap.containerType = colNumber
+    if (headerTrimmed === 'ETA') columnMap.eta = colNumber
+    if (headerTrimmed === 'MBL') columnMap.mbl = colNumber
+    if (headerTrimmed === 'DO') columnMap.do = colNumber
+    if (headerTrimmed === '送仓地点') columnMap.deliveryLocation = colNumber
+    if (headerTrimmed === '性质') columnMap.deliveryNature = colNumber
+    if (headerTrimmed === '数量') columnMap.quantity = colNumber
+    if (headerTrimmed === '重量') columnMap.weight = colNumber
+    if (headerTrimmed === '体积') columnMap.volume = colNumber
+    if (headerTrimmed === 'FBA') columnMap.fba = colNumber
+    if (headerTrimmed === 'PO') columnMap.po = colNumber
+    // 窗口期：支持多种可能的表头名称
+    if (headerTrimmed === '窗口期' || headerTrimmed.includes('窗口期')) {
+      columnMap.windowPeriod = colNumber
+    }
   })
   
   console.log(`  列映射:`, columnMap)
+  if (columnMap.windowPeriod !== undefined) {
+    console.log(`  ✅ 找到窗口期列，列号: ${columnMap.windowPeriod} (列 ${String.fromCharCode(64 + columnMap.windowPeriod)})`)
+  } else {
+    console.log(`  ⚠️  未找到窗口期列，请检查模板表头是否为"窗口期"`)
+  }
   
   // 确定目的地
   const destination = sourceData.operationMode === '拆柜' ? 'GG' : sourceData.destination
@@ -330,9 +388,29 @@ async function writeOutputFile(
     if (columnMap.deliveryLocation) row.getCell(columnMap.deliveryLocation).value = rowData.deliveryLocation
     if (columnMap.deliveryNature) row.getCell(columnMap.deliveryNature).value = rowData.deliveryNature
     if (columnMap.quantity) row.getCell(columnMap.quantity).value = Math.round(rowData.quantity)
+    if (columnMap.weight) row.getCell(columnMap.weight).value = Math.round(rowData.weight * 100) / 100 // 保留2位小数
     if (columnMap.volume) row.getCell(columnMap.volume).value = Math.round(rowData.volume * 100) / 100 // 保留2位小数
-    if (columnMap.fba) row.getCell(columnMap.fba).value = rowData.fbaList.join('\n')
-    if (columnMap.po) row.getCell(columnMap.po).value = rowData.poList.join('\n')
+    
+    // FBA：格式为 "FBA1##数量1\nFBA2##数量2"
+    if (columnMap.fba) {
+      const fbaEntries = Array.from(rowData.fbaMap.entries())
+      const fbaValue = fbaEntries.map(([fba, qty]) => `${fba}##${qty}`).join('\n')
+      row.getCell(columnMap.fba).value = fbaValue || null
+    }
+    
+    // PO：格式为 "PO1\nPO2"（用回车分隔）
+    if (columnMap.po) {
+      row.getCell(columnMap.po).value = rowData.poList.join('\n') || null
+    }
+    
+    // 窗口期：填入每个仓点的首个窗口期（如果模板中有该列）
+    if (columnMap.windowPeriod) {
+      const windowPeriodValue = rowData.windowPeriod || null
+      row.getCell(columnMap.windowPeriod).value = windowPeriodValue
+      if (windowPeriodValue) {
+        console.log(`    写入窗口期: ${windowPeriodValue} (仓点: ${rowData.deliveryLocation})`)
+      }
+    }
     
     dataRowIndex++
   }
@@ -409,7 +487,12 @@ async function main() {
     const aggregatedRows = aggregateByDeliveryLocation(detailRows)
     console.log(`  汇总后行数: ${aggregatedRows.length}`)
     aggregatedRows.forEach((row, idx) => {
-      console.log(`  ${idx + 1}. ${row.deliveryLocation}: 数量=${row.quantity}, 体积=${row.volume}, FBA=${row.fbaList.length}个, PO=${row.poList.length}个`)
+      const fbaCount = row.fbaMap.size
+      const fbaDetails = Array.from(row.fbaMap.entries()).map(([fba, qty]) => `${fba}##${qty}`).join(', ')
+      console.log(`  ${idx + 1}. ${row.deliveryLocation}: 数量=${row.quantity}, 重量=${row.weight}, 体积=${row.volume}, FBA=${fbaCount}个(${fbaDetails}), PO=${row.poList.length}个, 窗口期=${row.windowPeriod || '(空)'}`)
+      if (row.windowPeriod) {
+        console.log(`    窗口期值: "${row.windowPeriod}"`)
+      }
     })
     
     // 5. 读取模板文件

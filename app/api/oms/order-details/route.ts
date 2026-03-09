@@ -339,6 +339,8 @@ export async function GET(request: NextRequest) {
         storage_location_code: il?.storage_location_code || null,
         notes: item.notes || null, // 备注应该关联订单明细的备注（order_detail.notes）
         window_period: item.window_period || null,
+        fba: item.fba || null, // FBA字段
+        po: item.po || null, // PO字段
         delivery_progress,
         appointments,
         earliest_appointment_reference_number,

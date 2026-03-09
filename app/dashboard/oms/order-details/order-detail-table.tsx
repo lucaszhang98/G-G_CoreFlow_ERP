@@ -227,6 +227,139 @@ export function OrderDetailTable() {
       })
   }, [selectedRows])
 
+  // 批量复制PO功能
+  const handleCopyPO = React.useCallback(() => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要复制的记录')
+      return
+    }
+
+    // 提取所有PO字段（按选中顺序，每行的PO用换行分隔）
+    const poValues: string[] = []
+    
+    selectedRows.forEach((row: any) => {
+      const po = row.po
+      if (po && po.trim()) {
+        // PO字段可能包含多行（用换行符分隔），直接使用
+        poValues.push(po.trim())
+      }
+    })
+
+    if (poValues.length === 0) {
+      toast.error('选中的记录中没有PO数据')
+      return
+    }
+
+    // 用换行符连接所有PO
+    const textToCopy = poValues.join('\n')
+
+    // 复制到剪贴板
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        toast.success(`已复制 ${poValues.length} 个PO到剪贴板`)
+      })
+      .catch((error) => {
+        console.error('复制失败:', error)
+        toast.error('复制失败，请重试')
+      })
+  }, [selectedRows])
+
+  // 批量复制FBA功能（提取##之前的部分）
+  const handleCopyFBA = React.useCallback(() => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要复制的记录')
+      return
+    }
+
+    // 提取所有FBA字段中##之前的部分
+    const fbaValues: string[] = []
+    
+    selectedRows.forEach((row: any) => {
+      const fba = row.fba
+      if (fba && fba.trim()) {
+        // FBA字段格式：FBA1##数量1\nFBA2##数量2
+        // 需要提取每行##之前的部分
+        const lines = fba.split('\n')
+        lines.forEach((line: string) => {
+          const trimmedLine = line.trim()
+          if (trimmedLine) {
+            // 提取##之前的部分
+            const parts = trimmedLine.split('##')
+            if (parts.length > 0 && parts[0].trim()) {
+              fbaValues.push(parts[0].trim())
+            }
+          }
+        })
+      }
+    })
+
+    if (fbaValues.length === 0) {
+      toast.error('选中的记录中没有FBA数据')
+      return
+    }
+
+    // 用换行符连接所有FBA
+    const textToCopy = fbaValues.join('\n')
+
+    // 复制到剪贴板
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        toast.success(`已复制 ${fbaValues.length} 个FBA到剪贴板`)
+      })
+      .catch((error) => {
+        console.error('复制失败:', error)
+        toast.error('复制失败，请重试')
+      })
+  }, [selectedRows])
+
+  // 批量复制箱数功能（提取##之后的部分）
+  const handleCopyQuantity = React.useCallback(() => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要复制的记录')
+      return
+    }
+
+    // 提取所有FBA字段中##之后的部分（箱数）
+    const quantityValues: string[] = []
+    
+    selectedRows.forEach((row: any) => {
+      const fba = row.fba
+      if (fba && fba.trim()) {
+        // FBA字段格式：FBA1##数量1\nFBA2##数量2
+        // 需要提取每行##之后的部分
+        const lines = fba.split('\n')
+        lines.forEach((line: string) => {
+          const trimmedLine = line.trim()
+          if (trimmedLine) {
+            // 提取##之后的部分
+            const parts = trimmedLine.split('##')
+            if (parts.length > 1 && parts[1].trim()) {
+              quantityValues.push(parts[1].trim())
+            }
+          }
+        })
+      }
+    })
+
+    if (quantityValues.length === 0) {
+      toast.error('选中的记录中没有箱数数据')
+      return
+    }
+
+    // 用换行符连接所有箱数
+    const textToCopy = quantityValues.join('\n')
+
+    // 复制到剪贴板
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        toast.success(`已复制 ${quantityValues.length} 个箱数到剪贴板`)
+      })
+      .catch((error) => {
+        console.error('复制失败:', error)
+        toast.error('复制失败，请重试')
+      })
+  }, [selectedRows])
+
   // 复制预约时间功能
   const handleCopyAppointmentTimes = React.useCallback((format: 'line' | 'comma' | 'space') => {
     if (selectedRows.length === 0) {
@@ -497,9 +630,45 @@ export function OrderDetailTable() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* 批量复制PO按钮 */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[100px] h-9"
+          disabled={selectedRows.length === 0}
+          onClick={handleCopyPO}
+        >
+          <Copy className="mr-2 h-4 w-4" />
+          批量复制PO
+        </Button>
+
+        {/* 批量复制FBA按钮 */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[100px] h-9"
+          disabled={selectedRows.length === 0}
+          onClick={handleCopyFBA}
+        >
+          <Copy className="mr-2 h-4 w-4" />
+          批量复制FBA
+        </Button>
+
+        {/* 批量复制箱数按钮 */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[100px] h-9"
+          disabled={selectedRows.length === 0}
+          onClick={handleCopyQuantity}
+        >
+          <Copy className="mr-2 h-4 w-4" />
+          批量复制箱数
+        </Button>
       </>
     )
-  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets, handleCopyAppointmentNumbers, handleCopyAppointmentTimes, totalUnbookedPallets, handleNewAppointment, setAddToExistingAppointmentOpen])
+  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets, handleCopyAppointmentNumbers, handleCopyAppointmentTimes, totalUnbookedPallets, handleNewAppointment, setAddToExistingAppointmentOpen, handleCopyPO, handleCopyFBA, handleCopyQuantity])
 
   return (
     <>
