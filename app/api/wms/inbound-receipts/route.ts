@@ -609,6 +609,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 创建时：拆柜日期不能早于明天，若为今天或更早则强制为明天
+    if (createData.planned_unload_at) {
+      const now = new Date();
+      const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      const unloadDay = new Date(createData.planned_unload_at);
+      const unloadDayStart = new Date(Date.UTC(unloadDay.getUTCFullYear(), unloadDay.getUTCMonth(), unloadDay.getUTCDate()));
+      if (unloadDayStart.getTime() <= todayStart.getTime()) {
+        createData.planned_unload_at = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+      }
+    }
+
     // 自动添加系统维护字段
     await addSystemFields(createData, currentUser, true);
 
