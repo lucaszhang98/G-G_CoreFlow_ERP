@@ -224,9 +224,8 @@ export function OrdersPageClient() {
     }
   }
 
-  // 订单管理不允许删除（单个和批量都不允许）
+  // 删除权限由 orderConfig.permissions.delete 控制（已对所有人开放）
   const customActions = {
-    onDelete: undefined, // 禁用单个删除
     onAdd: () => setCreateDialogOpen(true), // 自定义创建操作
   }
 

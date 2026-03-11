@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { checkPermission, parsePaginationParams, buildPaginationResponse, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers'
+import { checkAuth, checkPermission, parsePaginationParams, buildPaginationResponse, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers'
 import { applyTransform, applyTransformList } from '@/lib/api/transformers'
 import { resolveParams, withApiHandler } from '@/lib/api/middleware'
 import { EntityConfig } from './types'
@@ -1426,8 +1426,11 @@ export function createDeleteHandler(config: EntityConfig) {
     { params }: { params: Promise<{ id: string }> }
   ) => {
     try {
-      const permissionResult = await checkPermission(config.permissions.delete)
-      if (permissionResult.error) return permissionResult.error
+      // 订单删除对所有人开放：仅校验登录，不校验角色
+      const authCheck = config.prisma?.model === 'orders'
+        ? await checkAuth()
+        : await checkPermission(config.permissions.delete)
+      if (authCheck.error) return authCheck.error
 
       const resolvedParams = await params
       const prismaModel = getPrismaModel(config)
@@ -1472,8 +1475,11 @@ export function createDeleteHandler(config: EntityConfig) {
 export function createBatchDeleteHandler(config: EntityConfig) {
   return async (request: NextRequest) => {
     try {
-      const permissionResult = await checkPermission(config.permissions.delete)
-      if (permissionResult.error) return permissionResult.error
+      // 订单批量删除对所有人开放：仅校验登录，不校验角色
+      const authCheck = config.prisma?.model === 'orders'
+        ? await checkAuth()
+        : await checkPermission(config.permissions.delete)
+      if (authCheck.error) return authCheck.error
 
       const body = await request.json()
       const { ids } = body
