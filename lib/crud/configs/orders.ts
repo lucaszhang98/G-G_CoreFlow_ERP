@@ -320,7 +320,7 @@ export const orderConfig: EntityConfig = {
         ],
       },
       delete: {
-        enabled: false, // 订单管理不允许删除
+        enabled: true, // 对所有人开放删除
       },
     },
   },
@@ -331,7 +331,7 @@ export const orderConfig: EntityConfig = {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
     create: ['admin', 'oms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以创建订单
     update: ['admin', 'oms_manager', 'oms_operator', 'wms_operator'], // 操作部门和仓库部门都可以编辑订单
-    delete: [], // 订单管理不允许删除
+    delete: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'], // 对所有人开放删除
   },
   
   prisma: {
