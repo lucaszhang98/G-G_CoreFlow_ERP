@@ -339,7 +339,12 @@ async function executeImport(
     if (row.driver_name !== undefined) {
       pickupUpdate.driver_name = row.driver_name?.trim() || null
     }
-    if (row.current_location !== undefined) pickupUpdate.current_location = row.current_location || null
+    // 现在位置：空或未传时统一写成 null，有值则用该值（同事常留空，都要传进去传成 null）
+    const currentLocationVal =
+      row.current_location != null && String(row.current_location).trim() !== ''
+        ? String(row.current_location).trim()
+        : null
+    pickupUpdate.current_location = currentLocationVal
     if (row.pickup_out !== undefined) pickupUpdate.pickup_out = row.pickup_out
     if (row.report_empty !== undefined) pickupUpdate.report_empty = row.report_empty
     if (row.return_empty !== undefined) pickupUpdate.return_empty = row.return_empty
