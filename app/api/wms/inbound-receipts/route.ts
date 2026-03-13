@@ -192,7 +192,7 @@ export async function GET(request: NextRequest) {
     let orderBy: any = {};
     
     // 判断排序字段是来自主表还是 orders 表
-    const mainTableFields = ['inbound_receipt_id', 'status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes', 'created_at', 'updated_at', 'delivery_progress'];
+    const mainTableFields = ['inbound_receipt_id', 'status', 'arrived_at_warehouse', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes', 'created_at', 'updated_at', 'delivery_progress'];
     
     if (sort === 'container_number') {
       // container_number 实际对应 order_number

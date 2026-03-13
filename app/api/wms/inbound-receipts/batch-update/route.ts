@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
     const updateData: any = {};
 
     if (data.status !== undefined) updateData.status = data.status;
+    if (data.arrived_at_warehouse !== undefined) updateData.arrived_at_warehouse = Boolean(data.arrived_at_warehouse);
     if (data.notes !== undefined) updateData.notes = data.notes || null;
     if (data.unloaded_by !== undefined) updateData.unloaded_by = data.unloaded_by || null;
     if (data.received_by !== undefined) updateData.received_by = data.received_by ? BigInt(data.received_by) : null;

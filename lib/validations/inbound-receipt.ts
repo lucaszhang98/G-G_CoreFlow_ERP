@@ -9,6 +9,7 @@ export const inboundReceiptCreateSchema = z.object({
     .positive('仓库ID必须为正整数'),
   status: z.enum(['pending', 'arrived', 'received', 'printed', 'inspection'])
     .default('pending'),
+  arrived_at_warehouse: z.boolean().optional().nullable(),
   planned_unload_at: z.string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, '拆柜日期格式必须为 YYYY-MM-DD')
     .optional()
@@ -38,6 +39,7 @@ export const inboundReceiptCreateSchema = z.object({
     .max(50, '卸货方式代码长度不能超过 50')
     .optional()
     .nullable(),
+  arrived_at_warehouse: z.boolean().optional(),
 });
 
 // 更新 schema：所有字段都是可选的，但如果有值则必须符合规则
@@ -77,6 +79,7 @@ export const inboundReceiptUpdateSchema = z.object({
     .max(50, '卸货方式代码长度不能超过 50')
     .optional()
     .nullable(),
+  arrived_at_warehouse: z.boolean().optional(),
 });
 
 export type InboundReceiptCreateInput = z.infer<typeof inboundReceiptCreateSchema>;

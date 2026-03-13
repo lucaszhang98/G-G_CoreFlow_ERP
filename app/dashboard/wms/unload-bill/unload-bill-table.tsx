@@ -5,7 +5,7 @@ import { EntityTable } from '@/components/crud/entity-table';
 import { unloadBillConfig } from '@/lib/crud/configs/unload-bills';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { DollarSign, FileDown } from 'lucide-react';
+import { DollarSign, FileDown, Package } from 'lucide-react';
 
 const ID_FIELD = 'inbound_receipt_id';
 
@@ -28,6 +28,7 @@ export function UnloadBillTable() {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [selectedRows, setSelectedRows] = React.useState<any[]>([]);
   const [applyingDefaults, setApplyingDefaults] = React.useState(false);
+  const [applyingByBox, setApplyingByBox] = React.useState(false);
 
   const applyDefaultPrices = React.useCallback(async () => {
     const ids = selectedRows.map((r) => r[ID_FIELD]).filter(Boolean);
@@ -50,6 +51,30 @@ export function UnloadBillTable() {
       toast.error(e instanceof Error ? e.message : '批量填充默认价格失败');
     } finally {
       setApplyingDefaults(false);
+    }
+  }, [selectedRows]);
+
+  const applyPriceByBox = React.useCallback(async () => {
+    const ids = selectedRows.map((r) => r[ID_FIELD]).filter(Boolean);
+    if (ids.length === 0) {
+      toast.error('请先勾选要按箱数填入价格的记录');
+      return;
+    }
+    setApplyingByBox(true);
+    try {
+      const res = await fetch('/api/wms/unload-bills/apply-price-by-box', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inbound_receipt_ids: ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '请求失败');
+      toast.success(`已为 ${data.updated ?? ids.length} 条记录按箱数填入价格（>1200 箱=220，≤1200 箱=200）`);
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '按箱数填入价格失败');
+    } finally {
+      setApplyingByBox(false);
     }
   }, [selectedRows]);
 
@@ -84,18 +109,30 @@ export function UnloadBillTable() {
 
   const customBatchActions = React.useMemo(
     () => (
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={applyDefaultPrices}
-        disabled={applyingDefaults || selectedRows.length === 0}
-        className="min-w-[140px]"
-      >
-        <DollarSign className="mr-2 h-4 w-4" />
-        {applyingDefaults ? '处理中...' : '批量填充默认价格'}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={applyDefaultPrices}
+          disabled={applyingDefaults || applyingByBox || selectedRows.length === 0}
+          className="min-w-[140px]"
+        >
+          <DollarSign className="mr-2 h-4 w-4" />
+          {applyingDefaults ? '处理中...' : '批量填充默认价格'}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={applyPriceByBox}
+          disabled={applyingDefaults || applyingByBox || selectedRows.length === 0}
+          className="min-w-[140px]"
+        >
+          <Package className="mr-2 h-4 w-4" />
+          {applyingByBox ? '处理中...' : '按箱数填入价格'}
+        </Button>
+      </div>
     ),
-    [applyDefaultPrices, applyingDefaults, selectedRows.length]
+    [applyDefaultPrices, applyPriceByBox, applyingDefaults, applyingByBox, selectedRows.length]
   );
 
   return (

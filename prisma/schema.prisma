@@ -953,6 +953,7 @@ model inbound_receipt {
   planned_unload_at                        DateTime?        @db.Date
   unload_method_code                       String?          @db.VarChar(50)
   delivery_progress                        Decimal?         @db.Decimal(5, 2)
+  arrived_at_warehouse                     Boolean?         @default(false)
   users_inbound_receipt_created_byTousers  users?           @relation("inbound_receipt_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   orders                                   orders           @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)
   users_inbound_receipt_unloaded_byTousers users?           @relation("inbound_receipt_unloaded_byTousers", fields: [unloaded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)

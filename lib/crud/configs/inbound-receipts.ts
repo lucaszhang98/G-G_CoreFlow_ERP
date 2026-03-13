@@ -95,6 +95,12 @@ export const inboundReceiptConfig: EntityConfig = {
         { label: '查验', value: 'inspection' },
       ],
     },
+    arrived_at_warehouse: {
+      key: 'arrived_at_warehouse',
+      label: '已到仓',
+      type: 'boolean',
+      sortable: true,
+    },
     planned_unload_at: {
       key: 'planned_unload_at',
       label: '拆柜日期',
@@ -188,6 +194,7 @@ export const inboundReceiptConfig: EntityConfig = {
       'current_location',
       'carrier',
       'status',
+      'arrived_at_warehouse',
       'planned_unload_at',
       'unloaded_by',
       'received_by',
@@ -290,7 +297,7 @@ export const inboundReceiptConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['status', 'planned_unload_at', 'unloaded_by', 'received_by'],
+        fields: ['status', 'arrived_at_warehouse', 'planned_unload_at', 'unloaded_by', 'received_by'],
       },
       delete: {
         enabled: false,
@@ -299,7 +306,7 @@ export const inboundReceiptConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['status', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes'],
+      fields: ['status', 'arrived_at_warehouse', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes'],
     },
   },
   
