@@ -82,8 +82,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 检查权限
-    const permissionResult = await checkPermission(['admin', 'oms_manager', 'tms_manager'])
+    // 检查权限（与 config 一致，含 oms_operator / wms_operator）
+    const permissionResult = await checkPermission(locationConfig.permissions.update)
     if (permissionResult.error) return permissionResult.error
     const currentUser = permissionResult.user
 
