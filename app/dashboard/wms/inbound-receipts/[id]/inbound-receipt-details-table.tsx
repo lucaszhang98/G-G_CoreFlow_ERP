@@ -142,13 +142,27 @@ export function InboundReceiptDetailsTable({
 
     // 合并多个库存批次的信息
     const totalPalletCount = lots.reduce((sum, lot) => sum + (lot.pallet_count || 0), 0)
-    // 剩余板数：使用 DB 的 remaining_pallet_count 汇总，与主行送货进度算法一致
-    const totalRemainingPalletCount = lots.reduce((sum, lot) => sum + (lot.remaining_pallet_count ?? 0), 0)
 
-    // 实时计算未约板数（用于展示）：基于预约
+    // 剩余板数：与订单明细管理一致，实时计算 = 实际板数 - 已过期预约有效板数（不再使用 DB remaining_pallet_count）
     const detail = orderDetails.find(d => d.id === detailId)
     const appointments = detail?.appointments || []
     const effectivePallets = (appt: DeliveryAppointment) => (appt.estimated_pallets ?? 0) - (appt.rejected_pallets ?? 0)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const expiredAppointments = appointments.filter((appt: DeliveryAppointment) => {
+      const start = appt.confirmed_start
+      if (!start) return false
+      const d = new Date(start)
+      d.setHours(0, 0, 0, 0)
+      return d <= today // 包括今天
+    })
+    const totalExpiredEffectivePallets = expiredAppointments.reduce(
+      (sum: number, appt: DeliveryAppointment) => sum + effectivePallets(appt),
+      0
+    )
+    const totalRemainingPalletCount = totalPalletCount - totalExpiredEffectivePallets
+
+    // 实时计算未约板数（用于展示）：基于预约
     const totalAppointmentPallets = appointments.reduce((sum: number, appt: DeliveryAppointment) => {
       return sum + effectivePallets(appt)
     }, 0)

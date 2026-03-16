@@ -126,16 +126,15 @@ export async function GET(request: NextRequest) {
         AND r.planned_unload_at::date <= ${queryEndDate}::date
       GROUP BY (r.planned_unload_at)::date
     `
-    // 合计送仓：预约管理自提/卡派，按「转天」— 列日期 D 显示送货日期为 D+1 的预约笔数
-    const deliveryStartNext = addDaysToDateString(queryStartDate, 1)
-    const deliveryEndNext = addDaysToDateString(queryEndDate, 1)
+    // 合计送仓：预约管理自提/卡派；日期范围含 queryStartDate 到 queryEndDate+1，便于日视图「列 D 显示 D+1」且周视图「第k周」含当周一到周日
+    const deliveryEndInclusive = addDaysToDateString(queryEndDate, 1)
     const deliveryByDate = await prisma.$queryRaw<Array<{ d: Date; total: string | number }>>`
       SELECT (COALESCE(d.confirmed_start, d.requested_start))::date AS d, COUNT(d.appointment_id)::bigint AS total
       FROM oms.delivery_appointments d
       WHERE d.delivery_method IN ('自提', '卡派')
         AND (d.confirmed_start IS NOT NULL OR d.requested_start IS NOT NULL)
-        AND (COALESCE(d.confirmed_start, d.requested_start))::date >= ${deliveryStartNext}::date
-        AND (COALESCE(d.confirmed_start, d.requested_start))::date <= ${deliveryEndNext}::date
+        AND (COALESCE(d.confirmed_start, d.requested_start))::date >= ${queryStartDate}::date
+        AND (COALESCE(d.confirmed_start, d.requested_start))::date <= ${deliveryEndInclusive}::date
       GROUP BY (COALESCE(d.confirmed_start, d.requested_start))::date
     `
 
@@ -181,19 +180,28 @@ export async function GET(request: NextRequest) {
       deliveryMap[formatDateString(row.d)] = Number(row.total ?? 0)
     })
 
-    // 15 天顺序数组：合计拆柜=当日拆柜柜数；合计送仓=转天送货预约数（列日期 D 显示 D+1 日的送仓笔数）
+    // 按实际日期范围生成汇总数组（日视图 15 天，周视图 56 天等）
+    const totalDays = (() => {
+      const [y1, m1, d1] = queryStartDate.split('-').map(Number)
+      const [y2, m2, d2] = queryEndDate.split('-').map(Number)
+      const date1 = new Date(y1, m1 - 1, d1)
+      const date2 = new Date(y2, m2 - 1, d2)
+      return Math.round((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    })()
     const total_unload_by_day: number[] = []
     const total_delivery_by_day: number[] = []
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < totalDays; i++) {
       const dateStr = addDaysToDateString(queryStartDate, i)
       total_unload_by_day.push(unloadMap[dateStr] ?? 0)
-      const deliveryDateStr = addDaysToDateString(queryStartDate, i + 1)
+    }
+    for (let j = 0; j <= totalDays; j++) {
+      const deliveryDateStr = addDaysToDateString(queryStartDate, j)
       total_delivery_by_day.push(deliveryMap[deliveryDateStr] ?? 0)
     }
 
-    // 剩余总板数：按天（day_number 1..15）各仓点 forecast_inventory 之和
+    // 剩余总板数：按天各仓点 forecast_inventory 之和
     const remaining_total_by_day: number[] = []
-    for (let dayNum = 1; dayNum <= 15; dayNum++) {
+    for (let dayNum = 1; dayNum <= totalDays; dayNum++) {
       const sum = (Object.values(groupedByLocation) as Array<{ daily_data: Array<{ day_number: number; forecast_inventory: number }> }>).reduce(
         (s, loc) => {
           const dayData = loc.daily_data?.find((d) => d.day_number === dayNum)

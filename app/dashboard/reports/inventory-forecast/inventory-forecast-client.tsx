@@ -516,7 +516,7 @@ export function InventoryForecastClient() {
                     </TableCell>
                     {dateColumns.map((col, colIdx) => {
                       const unload = summary.total_unload_by_day[colIdx] ?? 0
-                      const delivery = summary.total_delivery_by_day[colIdx] ?? 0
+                      const delivery = summary.total_delivery_by_day[colIdx + 1] ?? 0
                       const remaining = summary.remaining_total_by_day[colIdx] ?? 0
                       return (
                         <TableCell

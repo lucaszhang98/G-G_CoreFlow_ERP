@@ -382,7 +382,7 @@ export async function calculatePlannedOutboundBatch(
   const queryEndTimestamp = `${appointmentEndDate}T00:00:00Z`
 
   if (locationRow.location_group === 'private_warehouse') {
-    // 私仓：按 delivery_nature 汇总，排除 UPS 和 FedEx（通过 location_code 开头匹配）
+    // 私仓：按 delivery_nature 汇总，排除 UPS 和 FedEx（通过 location_code 开头匹配）；排除直送预约
     const rows = await prisma.$queryRaw<Array<{ date: Date; sum: bigint }>>`
       SELECT 
         (da.confirmed_start - INTERVAL '1 day')::DATE as date,
@@ -398,6 +398,7 @@ export async function calculatePlannedOutboundBatch(
         AND (loc.name IS NULL OR (loc.name NOT ILIKE 'ups%' AND loc.name NOT ILIKE 'fedex%'))
         AND da.confirmed_start IS NOT NULL
         AND (da.rejected = false OR da.rejected IS NULL)
+        AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
       GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
     `
     
@@ -409,7 +410,7 @@ export async function calculatePlannedOutboundBatch(
   }
 
   if (locationRow.location_group === 'hold') {
-    // 扣货：按 delivery_nature 汇总
+    // 扣货：按 delivery_nature 汇总；排除直送预约
     const rows = await prisma.$queryRaw<Array<{ date: Date; sum: bigint }>>`
       SELECT 
         (da.confirmed_start - INTERVAL '1 day')::DATE as date,
@@ -422,6 +423,7 @@ export async function calculatePlannedOutboundBatch(
         AND od.delivery_nature = '扣货'
         AND da.confirmed_start IS NOT NULL
         AND (da.rejected = false OR da.rejected IS NULL)
+        AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
       GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
     `
     
@@ -434,8 +436,7 @@ export async function calculatePlannedOutboundBatch(
 
   // 根据 location_group 决定匹配方式
   if (locationRow.location_group === 'ups' || locationRow.location_group === 'fedex') {
-    // UPS/FedEx：通过 location_code 开头匹配（不区分大小写），合并所有匹配的仓点
-    // 累加所有 UPS1-UPS7 或 FedEx1-FedEx7 的数据
+    // UPS/FedEx：通过 location_code 开头匹配（不区分大小写），合并所有匹配的仓点；排除直送预约
     const prefix = locationRow.location_group === 'ups' ? 'ups' : 'fedex'
     const prefixPattern = `${prefix}%`
     const rows = await prisma.$queryRaw<Array<{ date: Date; sum: bigint }>>`
@@ -454,6 +455,7 @@ export async function calculatePlannedOutboundBatch(
         )
         AND da.confirmed_start IS NOT NULL
         AND (da.rejected = false OR da.rejected IS NULL)
+        AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
       GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
     `
     
@@ -465,7 +467,7 @@ export async function calculatePlannedOutboundBatch(
     return result
   }
 
-  // 亚马逊：按 location_id 精确匹配（必须有 location_id）
+  // 亚马逊：按 location_id 精确匹配（必须有 location_id）；排除直送预约
   if (!locationRow.location_id) return result
 
   const rows = await prisma.$queryRaw<Array<{ date: Date; sum: bigint }>>`
@@ -480,6 +482,7 @@ export async function calculatePlannedOutboundBatch(
       AND od.delivery_location_id = ${locationRow.location_id}
       AND da.confirmed_start IS NOT NULL
       AND (da.rejected = false OR da.rejected IS NULL)
+      AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
     GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
   `
 

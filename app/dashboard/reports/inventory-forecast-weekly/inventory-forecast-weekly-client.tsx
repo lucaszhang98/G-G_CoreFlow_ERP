@@ -45,6 +45,7 @@ interface WeeklyLocationData {
 
 export function InventoryForecastWeeklyClient() {
   const [data, setData] = React.useState<WeeklyLocationData[]>([])
+  const [summary, setSummary] = React.useState<{ total_delivery_by_day: number[] }>({ total_delivery_by_day: [] })
   const [loading, setLoading] = React.useState(true)
   const [calculating, setCalculating] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -142,6 +143,9 @@ export function InventoryForecastWeeklyClient() {
       })
       
       setData(weeklyData)
+      setSummary({
+        total_delivery_by_day: result.summary?.total_delivery_by_day ?? [],
+      })
       setStartDate(mondayString)
       setLastCalculated("刚刚")
     } catch (err: any) {
@@ -406,21 +410,65 @@ export function InventoryForecastWeeklyClient() {
                         <span className="text-base">仓点</span>
                       </div>
                     </TableHead>
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((weekNum) => (
-                      <TableHead
-                        key={weekNum}
-                        className="text-center min-w-[170px] font-semibold border-x"
-                      >
-                        <div className="flex flex-col gap-1.5 py-2">
-                          <span className="text-sm font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                            第 {weekNum} 周
-                          </span>
-                        </div>
-                      </TableHead>
-                    ))}
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((weekNum) => {
+                      const weekData = data[0]?.weekly_data?.find(w => w.week_number === weekNum)
+                      const weekStartStr = weekData?.week_start ?? (startDate ? addDaysToDateString(startDate, (weekNum - 1) * 7) : '')
+                      const weekEndStr = weekData?.week_end ?? (startDate ? addDaysToDateString(startDate, (weekNum - 1) * 7 + 6) : '')
+                      const formatShort = (s: string) => {
+                        if (!s || s.length < 10) return s
+                        const [y, m, d] = s.split('-').map(Number)
+                        return `${m}/${d}`
+                      }
+                      const label = weekStartStr && weekEndStr ? `${formatShort(weekStartStr)}-${formatShort(weekEndStr)}` : `第 ${weekNum} 周`
+                      return (
+                        <TableHead
+                          key={weekNum}
+                          className="text-center min-w-[170px] font-semibold border-x"
+                        >
+                          <div className="flex flex-col gap-1.5 py-2">
+                            <span className="text-sm font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                              {label}
+                            </span>
+                          </div>
+                        </TableHead>
+                      )
+                    })}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {/* 汇总行：与库存预测-日第一行一致，显示每周周入库汇总 + 出车数（卡派/自提预约数） */}
+                  <TableRow className="bg-slate-100/80 dark:bg-slate-800/60 border-b-2 border-slate-200 dark:border-slate-700">
+                    <TableCell className="sticky left-0 z-10 font-semibold border-r-2 border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/60">
+                      <span className="text-slate-700 dark:text-slate-200">汇总</span>
+                    </TableCell>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((weekNum) => {
+                      const weekInbound = data.reduce(
+                        (s, loc) => s + (loc.weekly_data.find(w => w.week_number === weekNum)?.total_inbound ?? 0),
+                        0
+                      )
+                      const dayStart = (weekNum - 1) * 7
+                      const weekDelivery = (summary.total_delivery_by_day ?? [])
+                        .slice(dayStart, dayStart + 7)
+                        .reduce((a, b) => a + b, 0)
+                      return (
+                        <TableCell
+                          key={weekNum}
+                          className="py-2 px-3 border-x border-slate-200/80 dark:border-slate-700/80"
+                        >
+                          <div className="flex flex-col gap-1.5 text-sm">
+                            <div className="text-muted-foreground">
+                              周入库汇总：<span className="font-semibold text-indigo-600 dark:text-indigo-400">{weekInbound.toLocaleString()}</span>
+                              <span className="ml-1 text-xs">板</span>
+                            </div>
+                            <div className="text-muted-foreground">
+                              出车数：<span className="font-semibold text-orange-600 dark:text-orange-400">{weekDelivery.toLocaleString()}</span>
+                              <span className="ml-1 text-xs">车</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                      )
+                    })}
+                  </TableRow>
                   {data.map((locationData, idx) => {
                     const groupBadge = getLocationGroupBadge(locationData.location_group)
                     return (
