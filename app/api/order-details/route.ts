@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
 import { auth } from '@/auth'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
@@ -133,14 +134,17 @@ export async function GET(request: NextRequest) {
       })
       const totalExpiredEffectivePallets = expiredAppointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
 
+      const basePallets = il
+        ? basePalletCountForCalc(il.pallet_count, serialized.estimated_pallets)
+        : 0
       const remaining_pallets: number | null = il
-        ? Math.max(0, (il.pallet_count || 0) - totalExpiredEffectivePallets)
+        ? Math.max(0, basePallets - totalExpiredEffectivePallets)
         : null
 
-      const actual_pallets: number | null = il?.pallet_count || null
+      const actual_pallets: number | null = il?.pallet_count ?? null
 
       const unbooked_pallets: number = il
-        ? (il.pallet_count || 0) - totalEffectivePallets
+        ? basePallets - totalEffectivePallets
         : (serialized.estimated_pallets || 0) - totalEffectivePallets
 
       return {

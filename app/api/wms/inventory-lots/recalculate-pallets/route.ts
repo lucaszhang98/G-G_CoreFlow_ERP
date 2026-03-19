@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
+import { basePalletCountForCalc } from "@/lib/utils/pallet-base"
 import { serializeBigInt } from "@/lib/api/helpers"
 
 export async function POST(request: NextRequest) {
@@ -29,6 +30,15 @@ export async function POST(request: NextRequest) {
     })
 
     console.log(`[批量修复] 找到 ${inventoryLots.length} 条库存记录`)
+
+    const uniqueDetailIds = [...new Set(inventoryLots.map((l) => l.order_detail_id))]
+    const orderDetails = await prisma.order_detail.findMany({
+      where: { id: { in: uniqueDetailIds } },
+      select: { id: true, estimated_pallets: true },
+    })
+    const estimatedByDetailId = new Map(
+      orderDetails.map((d) => [d.id.toString(), d.estimated_pallets])
+    )
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -62,8 +72,10 @@ export async function POST(request: NextRequest) {
           return sum
         }, 0)
 
-        const newUnbookedCount = lot.pallet_count - totalEffectivePallets
-        const newRemainingCount = lot.pallet_count - totalExpiredEffectivePallets
+        const estimated = estimatedByDetailId.get(lot.order_detail_id.toString()) ?? null
+        const basePallets = basePalletCountForCalc(lot.pallet_count, estimated)
+        const newUnbookedCount = basePallets - totalEffectivePallets
+        const newRemainingCount = basePallets - totalExpiredEffectivePallets
 
         // 更新记录
         await prisma.inventory_lots.update({

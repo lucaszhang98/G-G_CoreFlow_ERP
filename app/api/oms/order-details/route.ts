@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth, serializeBigInt } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
+import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
 
 /**
  * GET /api/oms/order-details
@@ -296,26 +297,32 @@ export async function GET(request: NextRequest) {
       const totalExpiredEffectivePallets = expiredAppointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
 
       // 计算剩余板数（实时计算，不依赖数据库字段，确保准确性）
-      // 已入库：实时计算 = 实际板数 - 已过期预约板数之和（允许负数，实际为 0 且已有预约时表示超送）
+      // 已入库：基准板数 = 实际板数为 0 时用预计板数，否则用实际板数；剩余 = 基准 - 已过期预约有效板数
       // 未入库：返回 null
+      const basePallets = il
+        ? basePalletCountForCalc(il.pallet_count, item.estimated_pallets)
+        : 0
       const remaining_pallets: number | null = il
-        ? (il.pallet_count || 0) - totalExpiredEffectivePallets
+        ? basePallets - totalExpiredEffectivePallets
         : null
 
-      // 计算送货进度（使用实时计算的剩余板数）
+      // 计算送货进度（使用实时计算的剩余板数；基准为 0 时用预计板数作分母）
       let delivery_progress = 0
-      if (il?.pallet_count && il.pallet_count > 0) {
-        const shipped = il.pallet_count - (remaining_pallets || 0)
-        delivery_progress = Math.round(Math.min(100, (shipped / il.pallet_count) * 100))
-      } else if (il?.pallet_count === 0) {
-        delivery_progress = 100 // 实际板数为 0 视为已送完
+      if (il) {
+        const denom = basePalletCountForCalc(il.pallet_count, item.estimated_pallets)
+        if (denom > 0) {
+          const shipped = denom - (remaining_pallets ?? 0)
+          delivery_progress = Math.round(Math.min(100, (shipped / denom) * 100))
+        } else {
+          delivery_progress = 0
+        }
       }
 
       // 计算未约板数
-      // 已入库：实时计算 = pallet_count - 所有预约板数之和（不依赖数据库字段，确保一致性）
-      // 未入库：实时计算 = 预计板数 - 所有预约板数之和（允许负数，负数表示多约）
+      // 已入库：基准板数 = 实际为 0 时用预计板数
+      // 未入库：预计板数 - 所有预约板数之和（允许负数，负数表示多约）
       const unbooked_pallets: number = il
-        ? (il.pallet_count || 0) - totalEffectivePallets
+        ? basePallets - totalEffectivePallets
         : (item.estimated_pallets || 0) - totalEffectivePallets
 
       // 获取 location_code（从关联数据中获取）

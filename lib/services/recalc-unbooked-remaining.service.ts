@@ -7,10 +7,11 @@
  * - 剩余板数 = 实际板数 - sum(已过期预约的有效占用)（允许负数，表示已超送）
  *
  * 在预约明细增/改/删或拒收板数变更后调用，保证 DB 存库与公式一致。
- * 当用户将实际板数改为 0 且仍有预约时，未约/剩余会为负，正常落库并展示。
+ * 实际板数为 0 时用订单明细预计板数作基准，避免未约/剩余在仅有批次但未填实数时出现异常。
  */
 
 import prisma from '@/lib/prisma'
+import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
 
 function getEffectivePallets(estimated: number, rejected: number | null | undefined): number {
   return estimated - (rejected ?? 0)
@@ -75,10 +76,16 @@ export async function recalcUnbookedRemainingForOrderDetail(
   })
 
   if (lots.length > 0) {
+    const detailRow = await tx.order_detail.findUnique({
+      where: { id: orderDetailId },
+      select: { estimated_pallets: true },
+    })
+    const estimatedPallets = detailRow?.estimated_pallets ?? null
+
     for (const lot of lots) {
-      const palletCount = lot.pallet_count ?? 0
-      const unbooked = palletCount - totalEffective
-      const remaining = palletCount - expiredEffective
+      const basePallets = basePalletCountForCalc(lot.pallet_count, estimatedPallets)
+      const unbooked = basePallets - totalEffective
+      const remaining = basePallets - expiredEffective
       await tx.inventory_lots.update({
         where: { inventory_lot_id: lot.inventory_lot_id },
         data: {

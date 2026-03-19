@@ -17,6 +17,7 @@ import { ChevronDown, ChevronRight, Pencil, Check, X } from "lucide-react"
 import Link from "next/link"
 // 移除 Dialog 导入，改用内联编辑
 import { toast } from "sonner"
+import { basePalletCountForCalc } from "@/lib/utils/pallet-base"
 
 interface OrderDetail {
   id: string
@@ -140,11 +141,18 @@ export function InboundReceiptDetailsTable({
       }
     }
 
-    // 合并多个库存批次的信息
-    const totalPalletCount = lots.reduce((sum, lot) => sum + (lot.pallet_count || 0), 0)
-
-    // 剩余板数：与订单明细管理一致，实时计算 = 实际板数 - 已过期预约有效板数（不再使用 DB remaining_pallet_count）
+    // 合并多个库存批次：若全部为 0 则用订单明细预计板数作基准（与订单明细 API 一致）
     const detail = orderDetails.find(d => d.id === detailId)
+    const estimated = detail?.estimated_pallets ?? null
+    const rawPalletSum = lots.reduce((sum, lot) => sum + (lot.pallet_count || 0), 0)
+    const totalPalletCount =
+      lots.length === 1
+        ? basePalletCountForCalc(lots[0].pallet_count, estimated)
+        : rawPalletSum === 0
+          ? (estimated ?? 0)
+          : rawPalletSum
+
+    // 剩余板数：与订单明细管理一致，实时计算 = 基准板数 - 已过期预约有效板数
     const appointments = detail?.appointments || []
     const effectivePallets = (appt: DeliveryAppointment) => (appt.estimated_pallets ?? 0) - (appt.rejected_pallets ?? 0)
     const today = new Date()
@@ -179,8 +187,7 @@ export function InboundReceiptDetailsTable({
         avgDeliveryProgress = Math.max(0, Math.min(100, avgDeliveryProgress))
       }
     } else {
-      // 实际板数为 0 视为已送完（100%）
-      avgDeliveryProgress = 100
+      avgDeliveryProgress = 0
     }
     
     // 合并备注（取第一个非空的）

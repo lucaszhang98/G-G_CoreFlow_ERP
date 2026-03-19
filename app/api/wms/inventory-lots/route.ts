@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth, checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import { inventoryLotCreateSchema } from '@/lib/validations/inventory-lot';
-import prisma from '@/lib/prisma';
+import prisma from '@/lib/prisma'
+import { basePalletCountForCalc } from '@/lib/utils/pallet-base';
 import { inventoryLotConfig } from '@/lib/crud/configs/inventory-lots';
 import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper';
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
@@ -395,25 +396,24 @@ export async function GET(request: NextRequest) {
         const totalExpiredEffectivePallets = expiredAppointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
 
         // 实时计算剩余板数（不依赖数据库字段，确保准确性）
-        // 公式：剩余板数 = 实际板数 - 已过期预约有效板数之和（允许负数，实际为 0 且已有预约时显示超约）
+        // 实际板数为 0 时用预计板数作基准
+        const estimatedPallets = orderDetail?.estimated_pallets ?? null
         const palletCount = serialized.pallet_count ?? 0
-        const remaining_pallet_count = palletCount - totalExpiredEffectivePallets
+        const basePallets = basePalletCountForCalc(palletCount, estimatedPallets)
+        const remaining_pallet_count = basePallets - totalExpiredEffectivePallets
 
         // 实时计算未约板数（不依赖数据库字段，确保一致性）
-        // 公式：未约板数 = 实际板数 - 所有预约有效板数之和（允许负数）
-        const unbooked_pallet_count = palletCount - totalEffectivePallets
+        const unbooked_pallet_count = basePallets - totalEffectivePallets
 
-        // 计算送货进度（使用实时计算的剩余板数）
-        // 公式：delivery_progress = (pallet_count - remaining_pallet_count) / pallet_count * 100
+        // 计算送货进度（基准为 0 时用预计板数作分母）
         let deliveryProgress = null;
-        if (palletCount > 0) {
-          const deliveredCount = palletCount - remaining_pallet_count;
-          deliveryProgress = (deliveredCount / palletCount) * 100;
+        if (basePallets > 0) {
+          const deliveredCount = basePallets - remaining_pallet_count;
+          deliveryProgress = (deliveredCount / basePallets) * 100;
           deliveryProgress = Math.round(deliveryProgress * 100) / 100; // 保留两位小数
           deliveryProgress = Math.max(0, Math.min(100, deliveryProgress)); // 确保在 0-100 之间
-        } else if (palletCount === 0) {
-          // 如果实际板数为0，视为已送完（100%）
-          deliveryProgress = 100;
+        } else {
+          deliveryProgress = 0;
         }
 
         return {
@@ -569,7 +569,12 @@ export async function POST(request: NextRequest) {
     const warehouseId = warehouse.warehouse_id;
 
     const orderDetailId = BigInt(data.order_detail_id);
-    const palletCount = data.pallet_count || 1;
+    const palletCount = typeof data.pallet_count === 'number' ? data.pallet_count : 1;
+
+    const orderDetailForBase = await prisma.order_detail.findUnique({
+      where: { id: orderDetailId },
+      select: { estimated_pallets: true },
+    });
 
     const appointmentLines = await prisma.appointment_detail_lines.findMany({
       where: { order_detail_id: orderDetailId },
@@ -586,8 +591,9 @@ export async function POST(request: NextRequest) {
       d.setHours(0, 0, 0, 0);
       return d <= today ? sum + effective(line.estimated_pallets, line.rejected_pallets) : sum;  // 包括今天，今天的预约也视为已过期
     }, 0);
-    const unbookedPalletCount = palletCount - totalEffectivePallets;
-    const remainingPalletCount = palletCount - totalExpiredEffectivePallets;
+    const baseForCalc = basePalletCountForCalc(palletCount, orderDetailForBase?.estimated_pallets);
+    const unbookedPalletCount = baseForCalc - totalEffectivePallets;
+    const remainingPalletCount = baseForCalc - totalExpiredEffectivePallets;
 
     // 构建创建数据（使用解析后的 warehouseId，可能为传入值或回退的第一个仓库）
     const createData: any = {

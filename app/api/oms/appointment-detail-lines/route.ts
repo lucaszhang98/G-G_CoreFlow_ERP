@@ -156,7 +156,8 @@ export async function GET(request: NextRequest) {
       const locationCode = orderDetail.locations_order_detail_delivery_location_idTolocations?.location_code || null
 
       const inventoryLot = inventoryMap.get(line.order_detail_id)
-      const hasInventory = inventoryLot && inventoryLot.pallet_count > 0
+      // 存在库存批次即视为已入库（实际板数为 0 时也走批次，未约数以重算服务为准）
+      const hasInventory = !!inventoryLot
       const totalPallets = hasInventory
         ? (inventoryLot.unbooked_pallet_count ?? inventoryLot.pallet_count)
         : (orderDetail.remaining_pallets ?? orderDetail.estimated_pallets ?? 0)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
+import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
 
 // GET - 获取订单的明细和库存信息
 export async function GET(
@@ -129,13 +130,20 @@ export async function GET(
           },
         })
 
-        // 计算总库存板数
+        // 存在批次即视为已入库；基准板数 = 实际为 0 时用预计板数
+        const hasInventory = inventoryLots.length > 0
+        const basePallets = hasInventory
+          ? inventoryLots.reduce(
+              (sum, lot) =>
+                sum +
+                basePalletCountForCalc(lot.pallet_count, detail.estimated_pallets),
+              0
+            )
+          : 0
         const totalInventoryPallets = inventoryLots.reduce(
           (sum, lot) => sum + (Number(lot.pallet_count) || 0),
           0
         )
-
-        const hasInventory = inventoryLots.length > 0 && totalInventoryPallets > 0
 
         // 实时计算未约板数：有效占用 = estimated_pallets - rejected_pallets
         const appointmentLines = await prisma.appointment_detail_lines.findMany({
@@ -148,9 +156,9 @@ export async function GET(
           0
         )
 
-        // 未约板数 = 预计/实际板数 - 有效占用
+        // 未约板数 = 基准板数（实际为 0 时用预计）- 有效占用
         const unbookedPallets = hasInventory
-          ? (totalInventoryPallets - totalEffectivePallets)
+          ? basePallets - totalEffectivePallets
           : ((detail.estimated_pallets || 0) - totalEffectivePallets)
 
         // 获取 location_code（从关联数据中获取）
@@ -188,7 +196,7 @@ export async function GET(
           notes: detail.notes || null,
           po: detail.po || null, // PO字段
           has_inventory: hasInventory,
-          inventory_pallets: hasInventory ? totalInventoryPallets : null,
+          inventory_pallets: hasInventory ? totalInventoryPallets : null, // 仍为实际板数之和（展示用）
           // 新增：送仓地点与预约目的地一致性标记
           matches_appointment_destination: matchesAppointmentDestination,
           appointment_destination_location_code: appointmentDestinationLocationCode,
