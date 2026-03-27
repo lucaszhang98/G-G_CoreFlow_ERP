@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || ''
     const includeArchived = parseIncludeArchived(searchParams)
 
-    /** 列表内联填「实际板数」时，无库存行则 POST 创建批次需默认仓库 */
+    /** 历史：列表内联实际板数；现改为剩余板数草稿保存。保留默认仓库供其它流程创建批次 */
     const defaultWarehouse = await prisma.warehouses.findFirst({
       orderBy: { warehouse_id: 'asc' },
       select: { warehouse_id: true },
@@ -215,6 +215,7 @@ export async function GET(request: NextRequest) {
               pallet_count: true,
               remaining_pallet_count: true,
               unbooked_pallet_count: true, // inventory_lots 中的字段（已入库时使用）
+              pallet_counts_verified: true,
               storage_location_code: true,
               notes: true,
             },
@@ -327,6 +328,9 @@ export async function GET(request: NextRequest) {
 
       const lotsForCalc = (item.inventory_lots || []).map((lot: any) => ({
         pallet_count: lot.pallet_count,
+        pallet_counts_verified: lot.pallet_counts_verified === true,
+        remaining_pallet_count: lot.remaining_pallet_count,
+        unbooked_pallet_count: lot.unbooked_pallet_count,
       }))
       const appointmentsResolved = resolveAppointmentsFromOrderDetail({
         appointment_detail_lines: validAppointmentLines,
@@ -370,6 +374,7 @@ export async function GET(request: NextRequest) {
         delivery_nature: item.delivery_nature,
         estimated_pallets: item.estimated_pallets || 0,
         actual_pallets: il?.pallet_count ?? null,
+        pallet_counts_verified: il?.pallet_counts_verified === true,
         remaining_pallets, // 已入库：与入库详情相同口径（预约实时）；未入库 null
         unbooked_pallets, // 已入库：与入库详情相同口径；未入库 预计-预约
         storage_location_code: il?.storage_location_code || null,

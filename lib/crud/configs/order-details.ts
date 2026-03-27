@@ -100,6 +100,12 @@ export const orderDetailConfig: EntityConfig = {
       type: 'number',
       sortable: false, // 计算字段，不支持排序
     },
+    pallet_counts_verified: {
+      key: 'pallet_counts_verified',
+      label: '已校验',
+      type: 'boolean',
+      sortable: false,
+    },
     unbooked_pallets: {
       key: 'unbooked_pallets',
       label: '未约板数',
@@ -158,6 +164,7 @@ export const orderDetailConfig: EntityConfig = {
       'actual_pallets',
       'unbooked_pallets',
       'remaining_pallets',
+      'pallet_counts_verified',
       'earliest_appointment_reference_number',
       'earliest_appointment_time',
       'storage_location_code',

@@ -72,7 +72,7 @@ export async function recalcUnbookedRemainingForOrderDetail(
   // 2. 是否已入库
   const lots = await tx.inventory_lots.findMany({
     where: { order_detail_id: orderDetailId },
-    select: { inventory_lot_id: true, pallet_count: true },
+    select: { inventory_lot_id: true, pallet_count: true, pallet_counts_verified: true },
   })
 
   if (lots.length > 0) {
@@ -83,6 +83,7 @@ export async function recalcUnbookedRemainingForOrderDetail(
     const estimatedPallets = detailRow?.estimated_pallets ?? null
 
     for (const lot of lots) {
+      if (lot.pallet_counts_verified === true) continue
       const basePallets = basePalletCountForCalc(lot.pallet_count, estimatedPallets)
       const unbooked = basePallets - totalEffective
       const remaining = basePallets - expiredEffective

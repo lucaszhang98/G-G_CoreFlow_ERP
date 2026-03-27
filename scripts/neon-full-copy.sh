@@ -2,6 +2,9 @@
 # 将「源 Neon」整库（所有 schema + 数据）复制到「目标 Neon」。
 # 需本机已安装：pg_dump / pg_restore（如：brew install libpq，并把 bin 加入 PATH）
 #
+# 规范（与 .env 一致）：主库为直连实例，主机 ep-autumn-cherry-ake0bqaw.c-3.us-west-2.aws.neon.tech，
+# 库 neondb；迁移 / prisma db execute / Neon MCP 改库均应对准该库。连接串只放在 .env* 与部署平台，勿写进仓库。
+#
 # 用法（连接串用控制台里的 Direct / 非 pooler，勿提交到 Git）：
 #   export NEON_SOURCE_URL='postgresql://...@...neon.tech/neondb?sslmode=require'
 #   export NEON_TARGET_URL='postgresql://...@...neon.tech/neondb?sslmode=require'

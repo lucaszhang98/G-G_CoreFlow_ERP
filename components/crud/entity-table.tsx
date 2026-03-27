@@ -156,6 +156,11 @@ interface EntityTableProps<T = any> {
   extraListParams?: Record<string, string>
   /** 按列 id / accessorKey 覆盖单元格渲染（完全接管该列展示与交互，例如订单明细内联编辑） */
   customCellRenderers?: Partial<Record<string, (args: { row: any }) => React.ReactNode>>
+  /** 换页/改每页条数前拦截（例如有未保存草稿）；confirm 返回 true 才应用分页 */
+  paginationChangeGuard?: {
+    shouldIntercept: () => boolean
+    confirm: (intent: { nextPage: number; nextPageSize: number }) => Promise<boolean>
+  }
 }
 
 export function EntityTable<T = any>({ 
@@ -182,6 +187,7 @@ export function EntityTable<T = any>({
   customFilterContent,
   extraListParams = EMPTY_EXTRA_LIST_PARAMS,
   customCellRenderers,
+  paginationChangeGuard,
 }: EntityTableProps<T>) {
   // 自动增强配置，生成 filterFields 和 advancedSearchFields（如果未配置）
   const enhancedConfig = React.useMemo(() => {
@@ -2567,13 +2573,31 @@ export function EntityTable<T = any>({
         pageSize={pageSize}
         total={total}
         onPageChange={(newPage) => {
-          allowUrlSyncRef.current = true
-          setPage(newPage)
+          void (async () => {
+            if (paginationChangeGuard?.shouldIntercept()) {
+              const ok = await paginationChangeGuard.confirm({
+                nextPage: newPage,
+                nextPageSize: pageSize,
+              })
+              if (!ok) return
+            }
+            allowUrlSyncRef.current = true
+            setPage(newPage)
+          })()
         }}
         onPageSizeChange={(newPageSize) => {
-          allowUrlSyncRef.current = true
-          setPageSize(newPageSize)
-          setPage(1)
+          void (async () => {
+            if (paginationChangeGuard?.shouldIntercept()) {
+              const ok = await paginationChangeGuard.confirm({
+                nextPage: 1,
+                nextPageSize: newPageSize,
+              })
+              if (!ok) return
+            }
+            allowUrlSyncRef.current = true
+            setPageSize(newPageSize)
+            setPage(1)
+          })()
         }}
         onSortingChange={handleSortingChange}
         serverSidePagination={true}

@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
             pallet_count: true,
             remaining_pallet_count: true,
             unbooked_pallet_count: true,
+            pallet_counts_verified: true,
             storage_location_code: true,
             notes: true,
           },
@@ -122,7 +123,12 @@ export async function GET(request: NextRequest) {
       }))
 
       const totalEffectivePallets = appointments.reduce((sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets), 0)
-      const lotsForCalc = inventoryLots.map((lot: any) => ({ pallet_count: lot.pallet_count }))
+      const lotsForCalc = inventoryLots.map((lot: any) => ({
+        pallet_count: lot.pallet_count,
+        pallet_counts_verified: lot.pallet_counts_verified === true,
+        remaining_pallet_count: lot.remaining_pallet_count,
+        unbooked_pallet_count: lot.unbooked_pallet_count,
+      }))
       const appointmentsResolved = resolveAppointmentsFromOrderDetail({
         appointment_detail_lines: validAppointmentLines,
       })

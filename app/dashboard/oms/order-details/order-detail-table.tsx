@@ -23,12 +23,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Copy, CalendarPlus, CalendarCheck } from "lucide-react"
+import { Copy, CalendarPlus, CalendarCheck, CheckCircle, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { NewAppointmentDialog } from "./new-appointment-dialog"
 import { AddToExistingAppointmentDialog } from "./add-to-existing-appointment-dialog"
 import { IncludeArchivedOrdersToggle } from "@/components/order-visibility/include-archived-toggle"
-import { ActualPalletsInlineCell } from "./actual-pallets-inline-cell"
+import { RemainingPalletsInlineCell } from "./remaining-pallets-inline-cell"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 const EMPTY_EXTRA_LIST_PARAMS: Record<string, string> = {}
 
@@ -50,16 +58,152 @@ export function OrderDetailTable() {
     [includeArchived]
   )
 
-  const customCellRenderers = React.useMemo(
+  const [palletDrafts, setPalletDrafts] = React.useState<
+    Record<string, { remaining: number; unbooked: number }>
+  >({})
+  const palletDraftsRef = React.useRef(palletDrafts)
+  React.useEffect(() => {
+    palletDraftsRef.current = palletDrafts
+  }, [palletDrafts])
+
+  const [navGuardOpen, setNavGuardOpen] = React.useState(false)
+  const navResolveRef = React.useRef<((ok: boolean) => void) | null>(null)
+
+  const ensurePalletDraft = React.useCallback((row: any) => {
+    const lotId = row.inventory_lot_id as string | null | undefined
+    if (!lotId) return
+    setPalletDrafts((prev) => {
+      if (prev[lotId]) return prev
+      const remaining = Math.round(Number(row.remaining_pallets ?? 0))
+      const unbooked = Math.round(Number(row.unbooked_pallets ?? 0))
+      return { ...prev, [lotId]: { remaining, unbooked } }
+    })
+  }, [])
+
+  const [savingPallets, setSavingPallets] = React.useState(false)
+
+  const savePalletDraftsToServer = React.useCallback(async () => {
+    const entries = Object.entries(palletDraftsRef.current)
+    if (entries.length === 0) return true
+    setSavingPallets(true)
+    try {
+      const res = await fetch("/api/oms/order-details/batch-save-pallet-edits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: entries.map(([inventory_lot_id, v]) => ({
+            inventory_lot_id,
+            remaining_pallet_count: v.remaining,
+            unbooked_pallet_count: v.unbooked,
+            pallet_counts_verified: true as const,
+          })),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "保存失败")
+      }
+      setPalletDrafts({})
+      toast.success(`已保存 ${entries.length} 条库存板数修改`)
+      setTableRefreshKey((k) => k + 1)
+      return true
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "保存失败")
+      return false
+    } finally {
+      setSavingPallets(false)
+    }
+  }, [])
+
+  const finishNavGuard = React.useCallback((ok: boolean) => {
+    const r = navResolveRef.current
+    navResolveRef.current = null
+    setNavGuardOpen(false)
+    r?.(ok)
+  }, [])
+
+  const paginationChangeGuard = React.useMemo(
     () => ({
-      actual_pallets: ({ row }: { row: { original: Record<string, unknown> } }) => (
-        <ActualPalletsInlineCell
-          row={row.original as any}
-          onSaved={() => setTableRefreshKey((k) => k + 1)}
-        />
-      ),
+      shouldIntercept: () => Object.keys(palletDraftsRef.current).length > 0,
+      confirm: (_intent: { nextPage: number; nextPageSize: number }) =>
+        new Promise<boolean>((resolve) => {
+          navResolveRef.current = resolve
+          setNavGuardOpen(true)
+        }),
     }),
     []
+  )
+
+  React.useEffect(() => {
+    if (Object.keys(palletDrafts).length === 0) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [palletDrafts])
+
+  const customCellRenderers = React.useMemo(
+    () => ({
+      unbooked_pallets: ({ row }: { row: { original: Record<string, unknown> } }) => {
+        const r = row.original as any
+        const lotId = r.inventory_lot_id as string | undefined
+        const d = lotId ? palletDrafts[lotId] : undefined
+        const raw = d ? d.unbooked : r.unbooked_pallets
+        const numValue =
+          typeof raw === "number" ? raw : raw !== null && raw !== undefined ? parseFloat(String(raw)) : null
+        const isNegative = numValue !== null && !Number.isNaN(numValue) && numValue < 0
+        return (
+          <div className={isNegative ? "text-red-600 font-semibold tabular-nums" : "tabular-nums"}>
+            {numValue !== null && !Number.isNaN(numValue) ? numValue.toLocaleString() : "-"}
+          </div>
+        )
+      },
+      remaining_pallets: ({ row }: { row: { original: Record<string, unknown> } }) => {
+        const r = row.original as any
+        const lotId = r.inventory_lot_id as string | undefined
+        return (
+          <RemainingPalletsInlineCell
+            row={r}
+            draft={lotId ? palletDrafts[lotId] ?? null : null}
+            onEnsureDraft={() => ensurePalletDraft(r)}
+            onRemainingChange={(n) => {
+              if (!lotId) return
+              setPalletDrafts((prev) => {
+                const base =
+                  prev[lotId] ?? {
+                    remaining: Math.round(Number(r.remaining_pallets ?? 0)),
+                    unbooked: Math.round(Number(r.unbooked_pallets ?? 0)),
+                  }
+                return { ...prev, [lotId]: { ...base, remaining: n } }
+              })
+            }}
+          />
+        )
+      },
+      pallet_counts_verified: ({ row }: { row: { original: Record<string, unknown> } }) => {
+        const r = row.original as any
+        const lotId = r.inventory_lot_id as string | undefined
+        const pending = lotId && palletDrafts[lotId]
+        if (pending) {
+          return (
+            <span className="text-xs font-medium text-amber-700 dark:text-amber-400">待保存·已校验</span>
+          )
+        }
+        const ok = r.pallet_counts_verified === true
+        return (
+          <div className="flex items-center justify-center gap-1">
+            {ok ? (
+              <CheckCircle className="h-4 w-4 text-green-600" aria-label="已校验" />
+            ) : (
+              <XCircle className="h-4 w-4 text-muted-foreground" aria-label="未校验" />
+            )}
+          </div>
+        )
+      },
+    }),
+    [palletDrafts, ensurePalletDraft]
   )
   const [selectedRows, setSelectedRows] = React.useState<any[]>([]);
   const [newAppointmentOpen, setNewAppointmentOpen] = React.useState(false);
@@ -699,7 +843,19 @@ export function OrderDetailTable() {
         </Button>
       </>
     )
-  }, [selectedRows, handleCopyContainerNumbers, handleCopyUnbookedPallets, handleCopyAppointmentNumbers, handleCopyAppointmentTimes, totalUnbookedPallets, handleNewAppointment, setAddToExistingAppointmentOpen, handleCopyPO, handleCopyFBA, handleCopyQuantity])
+  }, [
+    selectedRows,
+    handleCopyContainerNumbers,
+    handleCopyUnbookedPallets,
+    handleCopyAppointmentNumbers,
+    handleCopyAppointmentTimes,
+    totalUnbookedPallets,
+    handleNewAppointment,
+    setAddToExistingAppointmentOpen,
+    handleCopyPO,
+    handleCopyFBA,
+    handleCopyQuantity,
+  ])
 
   return (
     <>
@@ -710,12 +866,28 @@ export function OrderDetailTable() {
       customClickableColumns={customClickableColumns}
       customActions={customActions}
       customBatchActions={customBatchActions}
+      paginationChangeGuard={paginationChangeGuard}
       customToolbarButtons={
-        <IncludeArchivedOrdersToggle
-          checked={includeArchived}
-          onCheckedChange={setIncludeArchived}
-          id="order-details-include-archived"
-        />
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 border-emerald-600 text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+            disabled={Object.keys(palletDrafts).length === 0 || savingPallets}
+            onClick={() => void savePalletDraftsToServer()}
+          >
+            保存本页修改
+            {Object.keys(palletDrafts).length > 0
+              ? ` (${Object.keys(palletDrafts).length})`
+              : ""}
+          </Button>
+          <IncludeArchivedOrdersToggle
+            checked={includeArchived}
+            onCheckedChange={setIncludeArchived}
+            id="order-details-include-archived"
+          />
+        </>
       }
       extraListParams={extraListParams}
       onRowSelectionChange={setSelectedRows}
@@ -804,6 +976,51 @@ export function OrderDetailTable() {
         },
       }}
     />
+    <Dialog
+      open={navGuardOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          const r = navResolveRef.current
+          navResolveRef.current = null
+          setNavGuardOpen(false)
+          if (r) r(false)
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle>有未保存的修改</DialogTitle>
+          <DialogDescription>
+            当前页有未保存的剩余板数/未约板数草稿（保存后将标记为已校验并冻结库内数值）。请选择操作。
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={() => finishNavGuard(false)}>
+            留在本页
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setPalletDrafts({})
+              finishNavGuard(true)
+            }}
+          >
+            放弃修改并继续
+          </Button>
+          <Button
+            type="button"
+            disabled={savingPallets}
+            onClick={async () => {
+              const ok = await savePalletDraftsToServer()
+              if (ok) finishNavGuard(true)
+            }}
+          >
+            保存并继续
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <NewAppointmentDialog
       open={newAppointmentOpen}
       onOpenChange={setNewAppointmentOpen}

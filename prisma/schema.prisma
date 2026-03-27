@@ -1006,6 +1006,8 @@ model inventory_lots {
   pallet_count                           Int? // null=未填实际板数，计算时按预计板数；0=明确零
   remaining_pallet_count                 Int?             @default(0)
   unbooked_pallet_count                  Int?             @default(0)
+  /// 为 true 时剩余/未约由人工确认，recalc 与定时任务不再覆盖
+  pallet_counts_verified                 Boolean          @default(false)
   delivery_progress                      Decimal?         @db.Decimal(5, 2)
   users_inventory_lots_created_byTousers users?           @relation("inventory_lots_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   inbound_receipt                        inbound_receipt? @relation(fields: [inbound_receipt_id], references: [inbound_receipt_id], onDelete: NoAction, onUpdate: NoAction)

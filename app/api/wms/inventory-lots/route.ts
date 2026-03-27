@@ -391,7 +391,14 @@ export async function GET(request: NextRequest) {
           appointment_detail_lines: validAppointmentLines,
         })
         const state = computeInboundOrderDetailDeliveryState({
-          lots: [{ pallet_count: serialized.pallet_count }],
+          lots: [
+            {
+              pallet_count: serialized.pallet_count,
+              pallet_counts_verified: serialized.pallet_counts_verified === true,
+              remaining_pallet_count: serialized.remaining_pallet_count,
+              unbooked_pallet_count: serialized.unbooked_pallet_count,
+            },
+          ],
           estimatedPallets: orderDetail?.estimated_pallets,
           appointments: appointmentsResolved,
         })

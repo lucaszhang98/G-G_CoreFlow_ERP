@@ -15,6 +15,13 @@ export type InboundLotPalletInput = {
   pallet_count?: number | null
 }
 
+/** 已校验批次：剩余/未约以库内字段为准，不参与预约公式重算 */
+export type InboundLotForDeliveryCalc = InboundLotPalletInput & {
+  pallet_counts_verified?: boolean | null
+  remaining_pallet_count?: number | null
+  unbooked_pallet_count?: number | null
+}
+
 export function effectiveAppointmentPallets(appt: InboundAppointmentInput): number {
   return (appt.estimated_pallets ?? 0) - (appt.rejected_pallets ?? 0)
 }
@@ -60,7 +67,7 @@ export function resolveAppointmentsFromOrderDetail(detail: any): InboundAppointm
  * 无 inventory_lots 时返回 null。
  */
 export function computeInboundOrderDetailDeliveryState(input: {
-  lots: InboundLotPalletInput[]
+  lots: InboundLotForDeliveryCalc[]
   estimatedPallets: number | null | undefined
   appointments: InboundAppointmentInput[]
 }): {
@@ -80,13 +87,27 @@ export function computeInboundOrderDetailDeliveryState(input: {
   )
 
   const totalExpiredEffectivePallets = getTotalExpiredEffectivePallets(appointments)
-  const totalRemainingPalletCount = totalPalletCount - totalExpiredEffectivePallets
-
   const totalAppointmentPallets = appointments.reduce(
     (sum, appt) => sum + effectiveAppointmentPallets(appt),
     0
   )
-  const totalUnbookedPalletCount = totalPalletCount - totalAppointmentPallets
+
+  const anyVerified = lots.some((l) => l.pallet_counts_verified === true)
+  const allVerified = lots.every((l) => l.pallet_counts_verified === true)
+
+  let totalRemainingPalletCount: number
+  let totalUnbookedPalletCount: number
+  if (allVerified) {
+    totalRemainingPalletCount = lots.reduce((s, l) => s + Number(l.remaining_pallet_count ?? 0), 0)
+    totalUnbookedPalletCount = lots.reduce((s, l) => s + Number(l.unbooked_pallet_count ?? 0), 0)
+  } else if (anyVerified) {
+    // 同一明细多批次且仅部分已校验：仍用聚合公式，避免误用单批库内值
+    totalRemainingPalletCount = totalPalletCount - totalExpiredEffectivePallets
+    totalUnbookedPalletCount = totalPalletCount - totalAppointmentPallets
+  } else {
+    totalRemainingPalletCount = totalPalletCount - totalExpiredEffectivePallets
+    totalUnbookedPalletCount = totalPalletCount - totalAppointmentPallets
+  }
 
   let deliveryProgress: number
   if (totalRemainingPalletCount <= 0) {
@@ -114,14 +135,25 @@ export function computeInboundOrderDetailDeliveryState(input: {
  */
 export function computeInboundReceiptHeaderDeliveryProgress(input: {
   orderDetails: any[]
-  inventoryLots: { order_detail_id: any; pallet_count?: any }[]
+  inventoryLots: {
+    order_detail_id: any
+    pallet_count?: any
+    pallet_counts_verified?: boolean | null
+    remaining_pallet_count?: number | null
+    unbooked_pallet_count?: number | null
+  }[]
 }): number {
   const { orderDetails, inventoryLots } = input
-  const lotsByDetailId = new Map<string, InboundLotPalletInput[]>()
+  const lotsByDetailId = new Map<string, InboundLotForDeliveryCalc[]>()
   for (const lot of inventoryLots) {
     const id = String(lot.order_detail_id)
     if (!lotsByDetailId.has(id)) lotsByDetailId.set(id, [])
-    lotsByDetailId.get(id)!.push({ pallet_count: lot.pallet_count })
+    lotsByDetailId.get(id)!.push({
+      pallet_count: lot.pallet_count,
+      pallet_counts_verified: lot.pallet_counts_verified === true,
+      remaining_pallet_count: lot.remaining_pallet_count,
+      unbooked_pallet_count: lot.unbooked_pallet_count,
+    })
   }
 
   let weightedSum = 0

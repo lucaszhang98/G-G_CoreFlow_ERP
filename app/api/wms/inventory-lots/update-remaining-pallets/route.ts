@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
         inventory_lot_id: true,
         order_detail_id: true,
         pallet_count: true,
+        pallet_counts_verified: true,
       },
     })
 
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
     // 批量更新每个库存记录
     for (const lot of inventoryLots) {
       try {
+        if (lot.pallet_counts_verified === true) continue
         const appointmentLines = await prisma.appointment_detail_lines.findMany({
           where: {
             order_detail_id: lot.order_detail_id,

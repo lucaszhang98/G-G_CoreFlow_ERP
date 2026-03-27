@@ -78,6 +78,7 @@ export async function GET(
             pallet_count: true,
             remaining_pallet_count: true,
             unbooked_pallet_count: true,
+            pallet_counts_verified: true,
             delivery_progress: true,
             order_detail: {
               select: {
@@ -253,7 +254,15 @@ export async function PUT(
     const progressSource = await prisma.inbound_receipt.findUnique({
       where: { inbound_receipt_id: BigInt(resolvedParams.id) },
       select: {
-        inventory_lots: { select: { order_detail_id: true, pallet_count: true } },
+        inventory_lots: {
+          select: {
+            order_detail_id: true,
+            pallet_count: true,
+            pallet_counts_verified: true,
+            remaining_pallet_count: true,
+            unbooked_pallet_count: true,
+          },
+        },
         orders: {
           select: {
             order_detail: {

@@ -39,6 +39,7 @@ interface InventoryLot {
   storage_location_code: string | null
   /** null = 未填（计算按预计板数），0 = 明确为零 */
   pallet_count: number | null
+  pallet_counts_verified?: boolean
   remaining_pallet_count: number
   unbooked_pallet_count: number
   delivery_progress: number | null
@@ -188,7 +189,12 @@ export function InboundReceiptDetailsTable({
     // 与订单明细 API（/api/oms/order-details）一致：已入库行统一用 computeInboundOrderDetailDeliveryState
     // （基准板数 + 已到期预约有效板数），避免单批次时「DB remaining + 过期预约」混合算法与订单明细 100% / 详情 50% 不一致
     const state = computeInboundOrderDetailDeliveryState({
-      lots: lots.map((l) => ({ pallet_count: l.pallet_count })),
+      lots: lots.map((l) => ({
+        pallet_count: l.pallet_count,
+        pallet_counts_verified: l.pallet_counts_verified === true,
+        remaining_pallet_count: l.remaining_pallet_count,
+        unbooked_pallet_count: l.unbooked_pallet_count,
+      })),
       estimatedPallets: detail?.estimated_pallets,
       appointments: appointmentInputs,
     })
