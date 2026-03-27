@@ -124,7 +124,7 @@ interface EntityTableProps<T = any> {
   customColumns?: ColumnDef<T>[] // 自定义列定义（如果提供，则使用自定义列而不是自动生成）
   customActions?: {
     onView?: ((item: T) => void) | null // null 表示隐藏查看详情按钮
-    onDelete?: (item: T) => void
+    onDelete?: ((item: T) => void) | null // null 表示隐藏删除按钮
     onAdd?: () => void
   } // 自定义操作（如果提供，则使用自定义操作）
   customSortableColumns?: string[] // 自定义可排序列

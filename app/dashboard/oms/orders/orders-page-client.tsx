@@ -224,9 +224,10 @@ export function OrdersPageClient() {
     }
   }
 
-  // 删除权限由 orderConfig.permissions.delete 控制（已对所有人开放）
   const customActions = {
     onAdd: () => setCreateDialogOpen(true), // 自定义创建操作
+    /** null 表示隐藏操作列删除按钮（EntityTable 约定） */
+    onDelete: null,
   }
 
   // 批量导入配置

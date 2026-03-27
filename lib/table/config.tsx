@@ -211,8 +211,9 @@ export function createTableColumns<TData>(
   if (actionsConfig && config.showActions !== false) {
     processedColumns.push({
       id: "actions",
-      size: 280,
-      minSize: 0,
+      // 权重偏大，避免整表按比例分配时操作列过窄；实际显示再配合 DataTable 的 minWidth
+      size: 560,
+      minSize: 240,
       maxSize: 9999,
       header: () => <div className="text-center">操作</div>,
       cell: ({ row }) => {
@@ -318,7 +319,7 @@ export function createTableColumns<TData>(
         }
         
         return (
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex flex-nowrap items-center justify-center gap-2 shrink-0">
             {actions}
           </div>
         )

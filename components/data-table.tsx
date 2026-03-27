@@ -898,12 +898,12 @@ export function DataTable<TData, TValue>({
                       <TableHead 
                         key={header.id} 
                         className={cn(
-                          "font-semibold text-xs text-foreground px-1 py-1 whitespace-nowrap relative bg-muted/80 overflow-hidden",
+                          "font-semibold text-xs text-foreground px-2.5 py-1 whitespace-nowrap relative bg-muted/80 overflow-visible",
                           shouldSticky && stickyPosition === 'right' && "sticky right-0 z-20 bg-muted/80"
                         )}
                         style={{
                           width: colWidthPercent(header.getSize()),
-                          minWidth: 0,
+                          minWidth: 280,
                           ...(shouldSticky && stickyPosition === 'right' ? { 
                             boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
                           } : {}),
@@ -1345,10 +1345,11 @@ export function DataTable<TData, TValue>({
                           <TableCell 
                             key={cell.id} 
                             className={cn(
-                              "py-0.5 group-hover:text-foreground transition-colors relative text-xs leading-snug overflow-hidden",
+                              "py-0.5 group-hover:text-foreground transition-colors relative text-xs leading-snug",
+                              isActionsCell ? "overflow-visible" : "overflow-hidden",
                               !isActionsCell && !isSelectCell && "font-normal text-foreground",
                               isActionsCell
-                                ? "px-0.5"
+                                ? "px-2.5"
                                 : isSelectCell
                                   ? "px-2.5"
                                   : "px-1",
@@ -1359,7 +1360,7 @@ export function DataTable<TData, TValue>({
                             )}
                             style={{
                               width: colWidthPercent(cell.column.getSize()),
-                              minWidth: 0,
+                              minWidth: isActionsCell ? 280 : 0,
                               ...(shouldSticky ? { 
                                 left: stickyPosition === 'left' ? 0 : undefined,
                                 right: stickyPosition === 'right' ? 0 : undefined,
@@ -1389,15 +1390,17 @@ export function DataTable<TData, TValue>({
                           >
                             <div
                               className={cn(
-                                "relative min-w-0 w-full",
-                                isActionsCell || isSelectCell
-                                  ? "flex items-center justify-center"
-                                  : cn(
+                                "relative w-full",
+                                isActionsCell ? "flex min-w-max shrink-0 items-center justify-center" : "min-w-0",
+                                isSelectCell ? "flex min-w-0 items-center justify-center" : null,
+                                !isActionsCell && !isSelectCell
+                                  ? cn(
                                       "block overflow-hidden text-ellipsis whitespace-nowrap",
                                       alignRightCell ? "text-right" : "text-left",
                                       // 默认单元格常包一层 div；行内编辑容器不截断
                                       "[&>*:not(.inline-edit-cell)]:min-w-0 [&>*:not(.inline-edit-cell)]:max-w-full [&>*:not(.inline-edit-cell)]:overflow-hidden [&>*:not(.inline-edit-cell)]:text-ellipsis [&>*:not(.inline-edit-cell)]:whitespace-nowrap"
                                     )
+                                  : null
                               )}
                               title={
                                 !isActionsCell && !isSelectCell && plainForTitle
