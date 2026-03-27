@@ -253,25 +253,23 @@ export function SearchModule({
   const hasAnyFilters = mounted && (hasActiveFilters || hasActiveAdvancedSearch || searchValue)
 
   return (
-    <div className="space-y-4">
-      {/* 主搜索区域 */}
+    <div className="space-y-2">
+      {/* 主搜索区域（与列表区同宽、紧凑） */}
       <div className="relative group">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        <div className="relative bg-white dark:bg-gray-900/50 border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-lg shadow-gray-900/5 dark:shadow-gray-900/20 p-4 backdrop-blur-sm">
+        <div className="relative bg-card border border-border rounded-md shadow-sm p-2.5">
           {/* 搜索框行 */}
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-3">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-2">
             {/* 主要搜索框 */}
             <div className="relative flex-1 group/search">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-indigo-500/5 to-purple-500/5 rounded-xl opacity-0 group-hover/search:opacity-100 transition-opacity duration-200" />
               <div className="relative flex items-center">
-                <div className="absolute left-4 z-10 pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400 dark:text-gray-500 transition-colors group-hover/search:text-blue-500" />
+                <div className="absolute left-2.5 z-10 pointer-events-none">
+                  <Search className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <Input
                   placeholder={searchPlaceholder}
                   value={searchValue}
                   onChange={(e) => onSearchChange(e.target.value)}
-                  className="pl-12 pr-4 h-14 text-base border-2 border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 rounded-xl focus:border-blue-500 focus:bg-white dark:focus:bg-gray-900/50 focus:ring-4 focus:ring-blue-500/10 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-300 dark:hover:border-gray-700"
+                  className="pl-9 pr-9 h-9 text-sm border border-input bg-background rounded-md focus-visible:ring-1 focus-visible:ring-ring"
                 />
                 {mounted && searchValue && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -288,7 +286,7 @@ export function SearchModule({
               </div>
               {/* 搜索结果提示 */}
               {mounted && searchValue && (
-                <div className="absolute left-4 top-full mt-2 text-xs text-gray-500 dark:text-gray-400 animate-in fade-in slide-in-from-top-1">
+                <div className="absolute left-2.5 top-full mt-1 text-xs text-muted-foreground animate-in fade-in slide-in-from-top-1">
                   找到 <span className="font-semibold text-blue-600 dark:text-blue-400">{total}</span> 条结果
                 </div>
               )}
@@ -302,10 +300,10 @@ export function SearchModule({
                   variant={hasActiveAdvancedSearch ? "default" : "outline"}
                   onClick={() => onAdvancedSearchOpenChange(true)}
                   className={`
-                    h-14 px-6 rounded-xl font-medium transition-all duration-200
+                    h-9 px-3 rounded-md text-sm font-medium transition-colors
                     ${hasActiveAdvancedSearch 
-                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25" 
-                      : "border-2 border-gray-200 dark:border-gray-800 hover:border-blue-500 dark:hover:border-blue-600 bg-white dark:bg-gray-900/50 hover:bg-blue-50/50 dark:hover:bg-blue-950/20"
+                      ? "bg-primary text-primary-foreground shadow-sm" 
+                      : "border border-input bg-background hover:bg-muted/50"
                     }
                   `}
                 >
@@ -333,7 +331,7 @@ export function SearchModule({
                     onClearFilters()
                     onResetAdvancedSearch()
                   }}
-                  className="h-14 px-4 rounded-xl border-2 border-gray-200 dark:border-gray-800 hover:border-red-400 dark:hover:border-red-600 hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-all duration-200"
+                  className="h-9 px-3 rounded-md border border-input hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
                 >
                   <X className="h-4 w-4 mr-2 text-gray-600 dark:text-gray-400" />
                   <span className="text-gray-700 dark:text-gray-300">清除</span>
@@ -344,9 +342,9 @@ export function SearchModule({
 
           {/* 快速筛选区域 */}
           {filterFields.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-200/60 dark:border-gray-800/60">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 shrink-0">
+            <div className="mt-2 pt-2 border-t border-border">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                   <Filter className="h-4 w-4" />
                   <span className="font-medium">快速筛选</span>
                 </div>

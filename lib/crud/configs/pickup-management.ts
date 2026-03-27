@@ -246,7 +246,7 @@ export const pickupManagementConfig: EntityConfig = {
       fields: [
         'container_number',
         'mbl',
-        'port_location',
+        // port_location：改由列表专用内联格 +「保存码头修改」批量写入，见 PickupManagementClient
         'port_text',
         'shipping_line',
         'container_type',

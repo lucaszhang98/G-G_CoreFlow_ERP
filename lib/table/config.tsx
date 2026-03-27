@@ -211,6 +211,9 @@ export function createTableColumns<TData>(
   if (actionsConfig && config.showActions !== false) {
     processedColumns.push({
       id: "actions",
+      size: 280,
+      minSize: 0,
+      maxSize: 9999,
       header: () => <div className="text-center">操作</div>,
       cell: ({ row }) => {
         const actions: React.ReactNode[] = []

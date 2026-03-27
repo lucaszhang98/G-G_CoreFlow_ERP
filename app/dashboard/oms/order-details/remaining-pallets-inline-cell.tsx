@@ -91,7 +91,7 @@ export function RemainingPalletsInlineCell({
           type="text"
           inputMode="numeric"
           placeholder="剩余板数"
-          className={cn("h-8 tabular-nums text-right")}
+          className={cn("h-7 text-xs tabular-nums text-right")}
           value={localDraft}
           onChange={(e) => {
             const v = e.target.value
@@ -122,7 +122,7 @@ export function RemainingPalletsInlineCell({
     <button
       type="button"
       className={cn(
-        "w-full text-right tabular-nums rounded px-1.5 py-0.5 -mx-1.5 min-h-8",
+        "w-full text-right text-xs tabular-nums rounded px-1 py-0.5 -mx-1 min-h-7",
         "hover:bg-muted/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
       )}
       title="点击编辑剩余板数（需点「保存本页修改」写入数据库）"

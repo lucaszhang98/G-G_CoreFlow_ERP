@@ -28,6 +28,18 @@ import {
   generatePickupExportByTemplate,
   type PickupExportRowForTemplate,
 } from "@/lib/utils/pickup-management-excel-template"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  PortLocationInlineCell,
+  type PortLocationDraft,
+} from "@/components/pickup-management/port-location-inline-cell"
 
 export function PickupManagementClient() {
   const router = useRouter()
@@ -47,6 +59,17 @@ export function PickupManagementClient() {
   const [filteredCount, setFilteredCount] = React.useState(0)
   const [importDialogOpen, setImportDialogOpen] = React.useState(false)
   const [includeArchived, setIncludeArchived] = React.useState(false)
+  const [portLocationDrafts, setPortLocationDrafts] = React.useState<
+    Record<string, PortLocationDraft>
+  >({})
+  const portLocationDraftsRef = React.useRef(portLocationDrafts)
+  React.useEffect(() => {
+    portLocationDraftsRef.current = portLocationDrafts
+  }, [portLocationDrafts])
+  const [savingPortLocations, setSavingPortLocations] = React.useState(false)
+  const [navGuardOpen, setNavGuardOpen] = React.useState(false)
+  const navResolveRef = React.useRef<((ok: boolean) => void) | null>(null)
+
   // 首次挂载时从 URL 恢复「待提柜」状态（勿在 refreshKey 上重复读 URL，否则会在 router.replace 生效前把状态盖掉，导致要点两次）
   React.useLayoutEffect(() => {
     if (typeof window === "undefined") return
@@ -108,6 +131,126 @@ export function PickupManagementClient() {
   const handleFilteredTotalChange = React.useCallback((newFilteredTotal: number) => {
     setFilteredCount(newFilteredTotal)
   }, [])
+
+  const ensurePortLocationDraft = React.useCallback((row: any) => {
+    const id = String(row.pickup_id)
+    setPortLocationDrafts((prev) => {
+      if (prev[id]) return prev
+      return {
+        ...prev,
+        [id]: {
+          port_location_id: row.port_location_id != null ? String(row.port_location_id) : null,
+          displayCode:
+            row.port_location != null && String(row.port_location).trim() !== ""
+              ? String(row.port_location)
+              : "—",
+          original_port_location_id: row.port_location_id != null ? String(row.port_location_id) : null,
+        },
+      }
+    })
+  }, [])
+
+  const handlePortLocationDraftChange = React.useCallback((row: any, next: PortLocationDraft) => {
+    const id = String(row.pickup_id)
+    setPortLocationDrafts((prev) => {
+      if (String(next.port_location_id ?? "") === String(next.original_port_location_id ?? "")) {
+        const { [id]: _, ...rest } = prev
+        return rest
+      }
+      return { ...prev, [id]: next }
+    })
+  }, [])
+
+  const dirtyPortLocationCount = React.useMemo(
+    () =>
+      Object.values(portLocationDrafts).filter(
+        (d) => String(d.port_location_id ?? "") !== String(d.original_port_location_id ?? "")
+      ).length,
+    [portLocationDrafts]
+  )
+
+  const savePortLocationDraftsToServer = React.useCallback(async () => {
+    const entries = Object.entries(portLocationDraftsRef.current).filter(
+      ([, d]) => String(d.port_location_id ?? "") !== String(d.original_port_location_id ?? "")
+    )
+    if (entries.length === 0) return true
+    setSavingPortLocations(true)
+    try {
+      const res = await fetch("/api/tms/pickup-management/batch-save-port-locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: entries.map(([pickup_id, d]) => ({
+            pickup_id,
+            port_location_id: d.port_location_id,
+          })),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "保存失败")
+      }
+      setPortLocationDrafts({})
+      toast.success(`已保存 ${entries.length} 条码头/查验站修改`)
+      setRefreshKey((k) => k + 1)
+      return true
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "保存失败")
+      return false
+    } finally {
+      setSavingPortLocations(false)
+    }
+  }, [])
+
+  const finishNavGuard = React.useCallback((ok: boolean) => {
+    const r = navResolveRef.current
+    navResolveRef.current = null
+    setNavGuardOpen(false)
+    r?.(ok)
+  }, [])
+
+  const paginationChangeGuard = React.useMemo(
+    () => ({
+      shouldIntercept: () =>
+        Object.values(portLocationDraftsRef.current).some(
+          (d) => String(d.port_location_id ?? "") !== String(d.original_port_location_id ?? "")
+        ),
+      confirm: (_intent: { nextPage: number; nextPageSize: number }) =>
+        new Promise<boolean>((resolve) => {
+          navResolveRef.current = resolve
+          setNavGuardOpen(true)
+        }),
+    }),
+    []
+  )
+
+  React.useEffect(() => {
+    if (dirtyPortLocationCount === 0) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [dirtyPortLocationCount])
+
+  const customCellRenderers = React.useMemo(
+    () => ({
+      port_location: ({ row }: { row: { original: Record<string, unknown> } }) => {
+        const r = row.original as any
+        const pid = String(r.pickup_id)
+        return (
+          <PortLocationInlineCell
+            row={r}
+            draft={portLocationDrafts[pid] ?? null}
+            onEnsureDraft={() => ensurePortLocationDraft(r)}
+            onDraftChange={(next) => handlePortLocationDraftChange(r, next)}
+          />
+        )
+      },
+    }),
+    [portLocationDrafts, ensurePortLocationDraft, handlePortLocationDraftChange]
+  )
 
   // 导出选中行（与导入模板一致的双 Sheet 格式）
   const handleExportSelected = React.useCallback(async () => {
@@ -535,6 +678,17 @@ export function PickupManagementClient() {
     return (
       <div className="flex flex-col gap-2">
         <div className="flex gap-2 items-center flex-wrap">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 border-emerald-600 text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+            disabled={dirtyPortLocationCount === 0 || savingPortLocations}
+            onClick={() => void savePortLocationDraftsToServer()}
+          >
+            {savingPortLocations ? "保存中…" : "保存码头修改"}
+            {dirtyPortLocationCount > 0 ? ` (${dirtyPortLocationCount})` : ""}
+          </Button>
           <IncludeArchivedOrdersToggle
             checked={includeArchived}
             onCheckedChange={setIncludeArchived}
@@ -643,6 +797,9 @@ export function PickupManagementClient() {
     filteredCount,
     totalCount,
     includeArchived,
+    dirtyPortLocationCount,
+    savingPortLocations,
+    savePortLocationDraftsToServer,
   ])
 
   // 自定义批量操作按钮
@@ -753,9 +910,11 @@ export function PickupManagementClient() {
           customActions={{
             onView: null, // 禁用查看详情功能
           }}
+          customCellRenderers={customCellRenderers}
           customFilterContent={customFilterContent}
           customToolbarButtons={customToolbarButtons}
           customBatchActions={customBatchActions}
+          paginationChangeGuard={paginationChangeGuard}
           onRowSelectionChange={setSelectedRows}
           onSearchParamsChange={setCurrentSearchParams}
           onTotalChange={handleTotalChange}
@@ -774,6 +933,52 @@ export function PickupManagementClient() {
           onOpenChange={setImportDialogOpen}
           onSuccess={() => setRefreshKey((k) => k + 1)}
         />
+
+        <Dialog
+          open={navGuardOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              const r = navResolveRef.current
+              navResolveRef.current = null
+              setNavGuardOpen(false)
+              if (r) r(false)
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+            <DialogHeader>
+              <DialogTitle>有未保存的修改</DialogTitle>
+              <DialogDescription>
+                当前页有未保存的码头/查验站修改。请选择操作。
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => finishNavGuard(false)}>
+                留在本页
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setPortLocationDrafts({})
+                  finishNavGuard(true)
+                }}
+              >
+                放弃修改并继续
+              </Button>
+              <Button
+                type="button"
+                disabled={savingPortLocations}
+                onClick={async () => {
+                  const ok = await savePortLocationDraftsToServer()
+                  if (ok) finishNavGuard(true)
+                }}
+              >
+                保存并继续
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </>
     )
   }

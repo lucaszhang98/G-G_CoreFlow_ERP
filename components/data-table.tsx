@@ -448,8 +448,12 @@ export function DataTable<TData, TValue>({
       },
       enableSorting: false,
       enableHiding: false,
+      // 权重略高于「单列默认」的一小部分，让整表 100% 铺平时左侧仍留出足够留白
+      size: 200,
+      minSize: 0,
+      maxSize: 280,
       meta: {
-        widthClass: 'w-[60px]',
+        widthClass: "min-w-0",
         alignRight: false,
       },
     }
@@ -495,10 +499,12 @@ export function DataTable<TData, TValue>({
     columnResizeMode: 'onChange',
     onColumnSizingChange: setColumnSizing,
     onColumnOrderChange: setColumnOrder,
+    // 列宽：size 为「权重」（px 数值），整表 100% 宽时按权重比例分配；默认约 280。
+    // 用户拖拽 = 改权重；maxSize 放宽以便像 Excel 一样可拉得很宽（不被 400px 卡住）。
     defaultColumn: {
-      size: 150, // 默认列宽
-      minSize: 50, // 最小列宽
-      maxSize: 800, // 最大列宽
+      size: 280,
+      minSize: 0,
+      maxSize: 9999,
     },
     state: {
       sorting,
@@ -513,6 +519,19 @@ export function DataTable<TData, TValue>({
       },
     },
   })
+
+  // 整表铺满容器宽度，列宽按 TanStack 列权重（getSize）比例分配；展开列用固定权重 28（与 w-7 一致）
+  const expandColWeight = expandableRows?.enabled ? 28 : 0
+  const layoutTotal = React.useMemo(() => {
+    const sum = table
+      .getVisibleLeafColumns()
+      .reduce((acc, col) => acc + col.getSize(), 0)
+    return Math.max(sum + expandColWeight, 1)
+  }, [table, columnSizing, columnVisibility, columnOrder, expandColWeight, expandableRows?.enabled])
+  const colWidthPercent = React.useCallback(
+    (weight: number) => `${(weight / layoutTotal) * 100}%`,
+    [layoutTotal]
+  )
 
   // 当 table 初始化后，应用默认视图（确保列ID都正确）
   // 这个 useEffect 必须在 table 创建之后
@@ -722,7 +741,7 @@ export function DataTable<TData, TValue>({
   }, [])
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full space-y-2">
       {/* 工具栏 - 已移到 EntityTable 中，这里不再显示 */}
       {false && (
       <div className="flex items-center justify-between">
@@ -782,29 +801,32 @@ export function DataTable<TData, TValue>({
       </div>
       )}
 
-      {/* 表格 */}
-      <div className="border-0 bg-card overflow-hidden">
+      {/* 表格：Excel 式网格 + 紧凑行高 */}
+      <div className="rounded-sm border border-border bg-card overflow-hidden">
         <div
           ref={scrollContainerRef}
           className={cn(
-            "overflow-x-auto scroll-container",
+            "w-full overflow-x-auto scroll-container",
             isDraggingScroll && "dragging-scroll"
           )}
           onMouseDown={handleScrollMouseDown}
         >
           <Table
-            className="border-collapse sticky-table"
-            style={{
-              width: table.getCenterTotalSize(),
-              minWidth: '100%'
-            }}
+            noWrapper
+            className="border-collapse table-fixed sticky-table h-auto w-full min-w-full max-w-none bg-background"
           >
-            <TableHeader className="bg-gradient-to-r from-gray-50/80 to-gray-100/80 dark:from-gray-800/80 dark:to-gray-700/80">
+            <TableHeader className="bg-muted/80">
             {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id} className="hover:bg-transparent border-b-2 border-border/50 [&_th]:pb-3 [&_th]:pt-3 [&_th]:border-t-0 [&_th]:first:pl-4 [&_th]:last:pr-4">
+                <TableRow
+                  key={headerGroup.id}
+                  className="hover:bg-transparent border-0 [&_th]:border-border"
+                >
                   {/* 展开图标列占位（如果启用展开行功能） */}
                   {expandableRows?.enabled && (
-                    <TableHead className="w-[40px] px-2 py-3 text-center">
+                    <TableHead
+                      className="px-0 py-1 text-center bg-muted/80 overflow-hidden"
+                      style={{ width: colWidthPercent(28), minWidth: 0 }}
+                    >
                       {/* 占位，保持对齐 */}
                     </TableHead>
                   )}
@@ -876,19 +898,23 @@ export function DataTable<TData, TValue>({
                       <TableHead 
                         key={header.id} 
                         className={cn(
-                          "font-semibold text-sm text-foreground/90 px-2 py-3 whitespace-nowrap relative",
-                          shouldSticky && stickyPosition === 'right' && "sticky right-0 z-20 bg-gradient-to-r from-transparent via-gray-50/95 to-gray-50/95 dark:via-gray-800/95 dark:to-gray-800/95"
+                          "font-semibold text-xs text-foreground px-1 py-1 whitespace-nowrap relative bg-muted/80 overflow-hidden",
+                          shouldSticky && stickyPosition === 'right' && "sticky right-0 z-20 bg-muted/80"
                         )}
-                        style={shouldSticky && stickyPosition === 'right' ? { 
-                          boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
-                        } : undefined}
+                        style={{
+                          width: colWidthPercent(header.getSize()),
+                          minWidth: 0,
+                          ...(shouldSticky && stickyPosition === 'right' ? { 
+                            boxShadow: '-2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
+                          } : {}),
+                        }}
                       >
                         <div className="flex items-center justify-center gap-2">
                           {showColumnToggle && mounted && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-accent">
-                                  <Columns3 className="h-4 w-4" />
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:bg-accent">
+                                  <Columns3 className="h-3.5 w-3.5" />
                                   <span className="sr-only">切换列</span>
                                 </Button>
                               </DropdownMenuTrigger>
@@ -982,21 +1008,22 @@ export function DataTable<TData, TValue>({
                     <TableHead 
                       key={header.id} 
                       className={cn(
-                        "font-semibold text-sm text-foreground/90 py-3 relative group",
-                        isActionsColumn ? 'px-2' : 'px-3',
+                        "font-semibold text-xs text-foreground py-1 relative group bg-muted/80 overflow-hidden",
+                        isSelectColumn ? "px-2.5" : "px-1",
                         widthClass,
                         "whitespace-nowrap",
                         shouldSticky && stickyPosition === 'left' && "sticky z-20",
-                        isSelectColumn && "left-0 bg-gradient-to-r from-gray-50/95 via-gray-50/95 to-transparent dark:from-gray-800/95 dark:via-gray-800/95",
+                        isSelectColumn && "left-0 bg-muted/80",
                         isDragging && "opacity-50",
                         isDragOver && "bg-blue-100 dark:bg-blue-900/30"
                       )}
                       style={{
+                        width: colWidthPercent(header.getSize()),
+                        minWidth: 0,
                         ...(shouldSticky && stickyPosition === 'left' ? { 
                           left: 0,
                           boxShadow: '2px 0 4px -2px rgba(0, 0, 0, 0.1)'
                         } : {}),
-                        width: header.getSize(),
                       }}
                       draggable={isDraggable}
                       onDragStart={isDraggable ? (e) => handleDragStart(e, columnId) : undefined}
@@ -1017,12 +1044,22 @@ export function DataTable<TData, TValue>({
                               }}
                               title="拖动改变列顺序"
                             >
-                              <GripVertical className="h-4 w-4 text-muted-foreground" />
+                              <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
                             </div>
                           )}
                           
-                          <div className="flex items-center gap-2 justify-center">
-                            <span className="truncate">
+                          <div
+                            className={cn(
+                              "flex min-w-0 max-w-full items-center gap-0.5",
+                              alignRight ? "justify-end" : "justify-start"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "min-w-0 truncate block flex-1",
+                                alignRight ? "text-right" : "text-left"
+                              )}
+                            >
                             {flexRender(
                               header.column.columnDef.header,
                               header.getContext()
@@ -1035,11 +1072,11 @@ export function DataTable<TData, TValue>({
                                 aria-label="排序"
                               >
                                 {sortStatus === 'asc' ? (
-                                  <ArrowUp className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                  <ArrowUp className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                                 ) : sortStatus === 'desc' ? (
-                                  <ArrowDown className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                  <ArrowDown className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                                 ) : (
-                                  <ArrowUpDown className="h-3.5 w-3.5 opacity-40 hover:opacity-70" />
+                                  <ArrowUpDown className="h-3 w-3 opacity-40 hover:opacity-70" />
                                 )}
                               </button>
                             )}
@@ -1098,17 +1135,20 @@ export function DataTable<TData, TValue>({
               // 加载中状态
               <TableRow>
                 <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center py-8"
+                  colSpan={
+                    table.getVisibleLeafColumns().length +
+                    (expandableRows?.enabled ? 1 : 0)
+                  }
+                  className="h-16 text-center py-4 text-xs"
                 >
                   <div className="flex items-center justify-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                     <span className="text-muted-foreground">加载中...</span>
                   </div>
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row, index) => {
+              table.getRowModel().rows.map((row) => {
                 // 只在客户端检查编辑状态，避免 hydration 错误
                 const isEditing = typeof window !== 'undefined' && (isRowEditing?.(row.original) || false)
                 const isSelected = row.getIsSelected()
@@ -1129,13 +1169,14 @@ export function DataTable<TData, TValue>({
                       data-state={(isSelected && "selected") || (isEditing && "editing")}
                       suppressHydrationWarning={isEditing} // 编辑状态可能在服务器端和客户端不一致
                       className={cn(
-                        "transition-colors duration-150 border-b border-border/40 group cursor-pointer",
-                        // 主行：浅底 + 左侧竖线，与展开的明细行区分
+                        "transition-colors duration-100 border-0 group cursor-pointer",
+                        // 主行：紧凑 + Excel 式网格（单元格边框由 TableCell 承担）
                         isEditing
-                          ? "bg-amber-50/80 dark:bg-amber-950/30 border-l-2 border-l-amber-500 dark:border-l-amber-500 shadow-sm"
+                          ? "bg-amber-50/90 dark:bg-amber-950/35 border-l-2 border-l-amber-500 dark:border-l-amber-500"
                           : isSelected
-                          ? "bg-slate-50/80 dark:bg-slate-800/30 border-l-2 border-l-primary"
-                          : getRowClassName?.(row.original) || "bg-background hover:bg-slate-50/70 dark:hover:bg-slate-800/20 border-l-2 border-l-transparent hover:border-l-slate-300 dark:hover:border-l-slate-600"
+                          ? "bg-slate-100/90 dark:bg-slate-800/40 border-l-2 border-l-primary"
+                          : getRowClassName?.(row.original) ||
+                            "bg-background hover:bg-blue-50/60 dark:hover:bg-slate-800/25 border-l-2 border-l-transparent hover:border-l-blue-200/80 dark:hover:border-l-slate-600"
                       )}
                       onClick={(e) => {
                         // 完全禁用行点击展开，只允许通过展开图标展开
@@ -1145,11 +1186,14 @@ export function DataTable<TData, TValue>({
                     >
                       {/* 展开图标列（如果启用展开行功能，始终显示以保持对齐） */}
                       {expandableRows?.enabled && (
-                        <TableCell className="py-3.5 px-2 w-[40px] text-center">
+                        <TableCell
+                          className="py-0.5 px-0 text-center overflow-hidden"
+                          style={{ width: colWidthPercent(28), minWidth: 0 }}
+                        >
                           {canExpand ? (
                             <div 
                               data-expand-trigger
-                              className="flex items-center justify-center cursor-pointer hover:bg-muted/50 rounded p-1 transition-colors"
+                              className="flex items-center justify-center cursor-pointer hover:bg-muted/50 rounded p-0.5 transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 const newExpanded = new Set(expandedRows)
@@ -1162,9 +1206,9 @@ export function DataTable<TData, TValue>({
                               }}
                             >
                               {isExpanded ? (
-                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                               ) : (
-                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                               )}
                             </div>
                           ) : (
@@ -1292,22 +1336,30 @@ export function DataTable<TData, TValue>({
                         
                         // 确定是否可以右键复制：非编辑状态、非操作列、非复选框列
                         const canContextMenu = !isActionsCell && !isSelectCell && !isEditing
+                        const alignRightCell = Boolean(
+                          (cell.column.columnDef.meta as { alignRight?: boolean } | undefined)?.alignRight
+                        )
+                        const plainForTitle = extractCellText()
                         
                         return (
                           <TableCell 
                             key={cell.id} 
                             className={cn(
-                              "py-3.5 group-hover:text-foreground transition-colors relative",
-                              // 主行数据格：略大字号 + 中等字重，与明细行 text-sm 区分且更耐看
-                              !isActionsCell && !isSelectCell && "text-[15px] font-medium text-foreground/95",
-                              isActionsCell ? 'px-2' : 'px-3',
+                              "py-0.5 group-hover:text-foreground transition-colors relative text-xs leading-snug overflow-hidden",
+                              !isActionsCell && !isSelectCell && "font-normal text-foreground",
+                              isActionsCell
+                                ? "px-0.5"
+                                : isSelectCell
+                                  ? "px-2.5"
+                                  : "px-1",
                               widthClass,
                               shouldSticky && stickyPosition === 'left' && "sticky z-10 left-0",
                               shouldSticky && stickyPosition === 'right' && "sticky right-0 z-10",
                               isCopied && "bg-green-50 dark:bg-green-950/20"
                             )}
                             style={{
-                              width: cell.column.getSize(),
+                              width: colWidthPercent(cell.column.getSize()),
+                              minWidth: 0,
                               ...(shouldSticky ? { 
                                 left: stickyPosition === 'left' ? 0 : undefined,
                                 right: stickyPosition === 'right' ? 0 : undefined,
@@ -1335,13 +1387,30 @@ export function DataTable<TData, TValue>({
                             }}
                             data-tooltip={canContextMenu ? '右键点击复制' : undefined}
                           >
-                            <div className="flex justify-center truncate relative">
+                            <div
+                              className={cn(
+                                "relative min-w-0 w-full",
+                                isActionsCell || isSelectCell
+                                  ? "flex items-center justify-center"
+                                  : cn(
+                                      "block overflow-hidden text-ellipsis whitespace-nowrap",
+                                      alignRightCell ? "text-right" : "text-left",
+                                      // 默认单元格常包一层 div；行内编辑容器不截断
+                                      "[&>*:not(.inline-edit-cell)]:min-w-0 [&>*:not(.inline-edit-cell)]:max-w-full [&>*:not(.inline-edit-cell)]:overflow-hidden [&>*:not(.inline-edit-cell)]:text-ellipsis [&>*:not(.inline-edit-cell)]:whitespace-nowrap"
+                                    )
+                              )}
+                              title={
+                                !isActionsCell && !isSelectCell && plainForTitle
+                                  ? plainForTitle
+                                  : undefined
+                              }
+                            >
                               {flexRender(
                                 cell.column.columnDef.cell,
                                 cell.getContext()
                               )}
                               {isCopied && (
-                                <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-0.5 animate-in fade-in zoom-in duration-200">
+                                <div className="absolute -top-0.5 -right-0.5 bg-green-500 text-white rounded-full p-0.5 animate-in fade-in zoom-in duration-200">
                                   <Check className="h-3 w-3" />
                                 </div>
                               )}
@@ -1351,8 +1420,8 @@ export function DataTable<TData, TValue>({
                       })}
                     </TableRow>
                     {isExpanded && currentExpandedContent && (
-                      <TableRow className="border-b border-border/30">
-                        <TableCell colSpan={row.getVisibleCells().length + (expandableRows?.enabled ? 1 : 0)} className="p-0 bg-muted/25 text-sm border-l-4 border-l-muted-foreground/15 pl-2">
+                      <TableRow className="border-0">
+                        <TableCell colSpan={row.getVisibleCells().length + (expandableRows?.enabled ? 1 : 0)} className="p-1.5 bg-muted/30 text-xs border-l-4 border-l-muted-foreground/25">
                           {currentExpandedContent}
                         </TableCell>
                       </TableRow>
@@ -1364,10 +1433,13 @@ export function DataTable<TData, TValue>({
               // 暂无数据状态
               <TableRow>
                 <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center py-8"
+                  colSpan={
+                    table.getVisibleLeafColumns().length +
+                    (expandableRows?.enabled ? 1 : 0)
+                  }
+                  className="h-16 text-center py-6 text-xs text-muted-foreground"
                 >
-                  <span className="text-muted-foreground">暂无数据</span>
+                  暂无数据
                 </TableCell>
               </TableRow>
             )}
@@ -1377,8 +1449,8 @@ export function DataTable<TData, TValue>({
       </div>
 
       {/* 分页 */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-6 py-3 border-t border-border/50 bg-gradient-to-r from-gray-50/50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-700/50 !mt-0">
-        <div className="flex-1 text-sm text-muted-foreground">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 py-2 border-t border-border bg-muted/30 text-xs !mt-0">
+        <div className="flex-1 text-muted-foreground">
           {serverSidePagination && total !== undefined ? (
             <span className="flex items-center gap-1">
               显示第 <span className="font-medium text-foreground">{currentPage * currentPageSize + 1}</span> - <span className="font-medium text-foreground">{Math.min((currentPage + 1) * currentPageSize, total)}</span> 条，
@@ -1388,14 +1460,14 @@ export function DataTable<TData, TValue>({
             <>显示 {table.getFilteredRowModel().rows.length} 条记录</>
           )}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {/* 每页选择 */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">每页</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground whitespace-nowrap">每页</span>
             <select
               value={currentPageSize}
               onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-              className="h-9 w-[80px] rounded-md border-2 border-input bg-background px-3 text-sm font-medium text-foreground shadow-sm transition-all duration-200 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 cursor-pointer appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iNiIgdmlld0JveD0iMCAwIDEwIDYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNSA1TDkgMSIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:10px_6px] bg-[right_10px_center] bg-no-repeat"
+              className="h-7 w-[72px] rounded border border-input bg-background px-2 text-xs font-medium text-foreground shadow-sm transition-colors hover:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/40 cursor-pointer appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iNiIgdmlld0JveD0iMCAwIDEwIDYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNSA1TDkgMSIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:10px_6px] bg-[right_8px_center] bg-no-repeat"
             >
               {[10, 20, 30, 40, 50, 100].map((size) => (
                 <option key={size} value={size}>
@@ -1406,17 +1478,17 @@ export function DataTable<TData, TValue>({
           </div>
 
           {/* 页码导航 */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {/* 上一页 */}
             <Button
               variant="outline"
               size="sm"
-              className="h-9 w-9 p-0 border-2 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-all duration-200 disabled:opacity-40"
+              className="h-7 w-7 p-0 border hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors disabled:opacity-40"
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 0}
             >
               <span className="sr-only">上一页</span>
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Button>
@@ -1430,21 +1502,21 @@ export function DataTable<TData, TValue>({
                 onChange={(e) => handlePageInputChange(e.target.value)}
                 onKeyDown={handlePageInputKeyDown}
                 onBlur={handlePageInputBlur}
-                className="h-8 w-[36px] rounded-md border border-input bg-background px-1 text-center text-sm text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                className="h-7 w-[34px] rounded border border-input bg-background px-1 text-center text-xs text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
-              <span className="text-sm text-muted-foreground whitespace-nowrap">/ {pageCount}</span>
+              <span className="text-muted-foreground whitespace-nowrap">/ {pageCount}</span>
             </div>
 
             {/* 下一页 */}
             <Button
               variant="outline"
               size="sm"
-              className="h-9 w-9 p-0 border-2 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-all duration-200 disabled:opacity-40"
+              className="h-7 w-7 p-0 border hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors disabled:opacity-40"
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage >= pageCount - 1}
             >
               <span className="sr-only">下一页</span>
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </Button>

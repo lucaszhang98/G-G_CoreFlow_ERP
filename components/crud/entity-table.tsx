@@ -2448,14 +2448,14 @@ export function EntityTable<T = any>({
     : '搜索...'
 
   return (
-    <div className="space-y-6 px-4">
-      {/* 页面头部 */}
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-3 flex-1">
-          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+    <div className="space-y-3 px-3">
+      {/* 页面头部（紧凑，突出下方表格主区域） */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-1 flex-1 min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             {config.pluralName?.endsWith('管理') ? config.pluralName : `${config.pluralName}管理`}
           </h1>
-          <p className="text-base text-muted-foreground leading-relaxed max-w-2xl">
+          <p className="text-sm text-muted-foreground leading-snug max-w-2xl">
             管理系统中所有{config.pluralName}信息，支持搜索、筛选和批量操作
           </p>
         </div>
@@ -2515,8 +2515,8 @@ export function EntityTable<T = any>({
       />
       
       {/* 统计信息和批量操作工具栏 */}
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="flex items-center justify-between px-0.5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>共 <span className="font-semibold text-foreground">{total}</span> 条记录</span>
           {batchOpsEnabled && selectedRows.length > 0 && (
             <span className="ml-4 text-blue-600 dark:text-blue-400 font-medium">
@@ -2562,8 +2562,8 @@ export function EntityTable<T = any>({
         )}
       </div>
 
-      {/* 数据表格卡片：表格平铺全部数据，整页滚动；overflow-visible 让表头 sticky 生效 */}
-      <Card className="border border-border/50 shadow-xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm overflow-visible !py-0 !gap-0">
+      {/* 数据表格：Excel 式密度，浅边框少留白 */}
+      <Card className="border border-border shadow-sm bg-card overflow-visible !py-0 !gap-0">
         <CardContent className="!p-0">
           <DataTable
         columns={columns}
