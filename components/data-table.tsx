@@ -520,8 +520,8 @@ export function DataTable<TData, TValue>({
     },
   })
 
-  // 整表铺满容器宽度，列宽按 TanStack 列权重（getSize）比例分配；展开列用固定权重 28（与 w-7 一致）
-  const expandColWeight = expandableRows?.enabled ? 28 : 0
+  // 整表铺满容器宽度，列宽按 TanStack 列权重（getSize）比例分配；展开列单独加权（略宽于原 28，避免箭头贴边）
+  const expandColWeight = expandableRows?.enabled ? 88 : 0
   const layoutTotal = React.useMemo(() => {
     const sum = table
       .getVisibleLeafColumns()
@@ -824,8 +824,8 @@ export function DataTable<TData, TValue>({
                   {/* 展开图标列占位（如果启用展开行功能） */}
                   {expandableRows?.enabled && (
                     <TableHead
-                      className="px-0 py-1 text-center bg-muted/80 overflow-hidden"
-                      style={{ width: colWidthPercent(28), minWidth: 0 }}
+                      className="px-1.5 py-1 text-center bg-muted/80 overflow-hidden"
+                      style={{ width: colWidthPercent(expandColWeight), minWidth: 48 }}
                     >
                       {/* 占位，保持对齐 */}
                     </TableHead>
@@ -1187,13 +1187,13 @@ export function DataTable<TData, TValue>({
                       {/* 展开图标列（如果启用展开行功能，始终显示以保持对齐） */}
                       {expandableRows?.enabled && (
                         <TableCell
-                          className="py-0.5 px-0 text-center overflow-hidden"
-                          style={{ width: colWidthPercent(28), minWidth: 0 }}
+                          className="py-0.5 px-1.5 text-center overflow-hidden"
+                          style={{ width: colWidthPercent(expandColWeight), minWidth: 48 }}
                         >
                           {canExpand ? (
                             <div 
                               data-expand-trigger
-                              className="flex items-center justify-center cursor-pointer hover:bg-muted/50 rounded p-0.5 transition-colors"
+                              className="flex items-center justify-center cursor-pointer hover:bg-muted/50 rounded p-1 transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 const newExpanded = new Set(expandedRows)

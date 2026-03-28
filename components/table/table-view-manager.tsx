@@ -6,7 +6,7 @@
 "use client"
 
 import * as React from "react"
-import { LayoutGrid, Save, Trash2, Edit2, Star, Check, X } from "lucide-react"
+import { LayoutGrid, LayoutTemplate, Save, Trash2, Edit2, Star, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -71,6 +71,7 @@ export function TableViewManager({
   const [deletingView, setDeletingView] = React.useState<TableView | null>(null)
   const [isDefault, setIsDefault] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
+  const [dropdownOpen, setDropdownOpen] = React.useState(false)
 
   // 加载视图列表（异步）
   const loadViews = React.useCallback(async () => {
@@ -104,6 +105,20 @@ export function TableViewManager({
   React.useEffect(() => {
     loadViews()
   }, [loadViews])
+
+  /** 代码内置：不读数据库；可配置列全部显示，列顺序与列宽回到表格定义默认值 */
+  const applyOriginalView = React.useCallback(() => {
+    const finalVisibility: Record<string, boolean> = {}
+    allColumns.forEach((col) => {
+      finalVisibility[col] = true
+    })
+    onViewChange(finalVisibility, {}, [])
+    setCurrentViewId(null)
+    setTimeout(() => {
+      setDropdownOpen(false)
+      toast.success("已切换到原始视图")
+    }, 100)
+  }, [allColumns, onViewChange])
 
   // 应用视图
   const applyView = (view: TableView) => {
@@ -261,8 +276,6 @@ export function TableViewManager({
   const currentView = views.find(v => v.id === currentViewId)
   const defaultView = getDefaultViewSync(tableName)
 
-  const [dropdownOpen, setDropdownOpen] = React.useState(false)
-
   return (
     <>
       <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
@@ -284,7 +297,18 @@ export function TableViewManager({
         <DropdownMenuContent align="end" className="w-56" onCloseAutoFocus={(e) => e.preventDefault()}>
           <DropdownMenuLabel>表格视图</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onSelect={(e) => {
+              e.preventDefault()
+              applyOriginalView()
+            }}
+          >
+            <LayoutTemplate className="mr-2 h-4 w-4" />
+            原始视图
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+
           {views.length === 0 ? (
             <div className="px-2 py-4 text-center text-sm text-muted-foreground">
               暂无保存的视图
