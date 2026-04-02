@@ -226,9 +226,7 @@ async function updatePickupManagement(
     }
 
     // 订单字段（通过提柜管理修改）
-    if (body.container_number !== undefined) {
-      orderUpdateData.order_number = body.container_number || null
-    }
+    // 柜号（container_number / order_number）不在此修改，请在订单侧维护
     if (body.mbl !== undefined) {
       orderUpdateData.mbl_number = body.mbl || null
     }

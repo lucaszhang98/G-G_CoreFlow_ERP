@@ -697,17 +697,14 @@ export function EntityTable<T = any>({
   // 行内编辑：支持多行草稿（与铅笔编辑同一套字段），顶部可批量保存
   const [draftRowIds, setDraftRowIds] = React.useState<string[]>([])
   const draftValuesByRowRef = React.useRef<Record<string, Record<string, any>>>({})
-  /** 当前行内「正在编辑的单元格」对应的草稿字段键（与 draftValuesByRowRef 的 key 一致）；Excel 式一次只展开一列 */
+  /** 铅笔/点格进入编辑时的「首字段」键：仅用于 autoOpenDropdown，避免多列同时自动弹开下拉 */
   const [activeInlineFieldByRow, setActiveInlineFieldByRow] = React.useState<
     Record<string, string>
   >({})
-  const inlineEditUnboundedColumnIds = React.useMemo(() => {
-    const s = new Set<string>(Object.values(activeInlineFieldByRow))
-    for (const id of additionalInlineUnboundedColumnIds ?? []) {
-      s.add(id)
-    }
-    return s
-  }, [activeInlineFieldByRow, additionalInlineUnboundedColumnIds])
+  /** 铅笔=整行可编辑 UI；点单元格=仅该格（与 draft 键一致，如 location_id） */
+  const [rowInlineEditScopeByRow, setRowInlineEditScopeByRow] = React.useState<
+    Record<string, { kind: 'all' } | { kind: 'single'; field: string }>
+  >({})
   const [savingAllDrafts, setSavingAllDrafts] = React.useState(false)
   const [isMounted, setIsMounted] = React.useState(false)
   
@@ -931,13 +928,8 @@ export function EntityTable<T = any>({
   // 检查是否启用行内编辑（默认启用，如果有 update 权限）
   const inlineEditEnabled = config.list.inlineEdit?.enabled !== false && 
     config.permissions.update && config.permissions.update.length > 0
-  const inlineEditColumnWidthHints = React.useMemo(() => {
-    if (!inlineEditEnabled) return undefined
-    return buildInlineEditColumnWidthHints(
-      inlineEditUnboundedColumnIds,
-      enhancedConfig.fields
-    )
-  }, [inlineEditEnabled, inlineEditUnboundedColumnIds, enhancedConfig.fields])
+  /** 为 false 时仅铅笔进入草稿，单元格点击不进入编辑 */
+  const inlineEditCellClickEnabled = config.list.inlineEdit?.cellClickToEdit !== false
   const pageDraftCount = Math.max(0, pageDraftSave?.count ?? 0)
   const hasAnyDraftsToSave = (inlineEditEnabled && draftRowIds.length > 0) || pageDraftCount > 0
   const isSavingAnyDrafts = savingAllDrafts || Boolean(pageDraftSave?.saving)
@@ -956,6 +948,38 @@ export function EntityTable<T = any>({
       return key !== getIdField() && field.type !== 'relation'
     })
   }, [inlineEditEnabled, config.list.inlineEdit?.fields, config.fields, config.idField])
+
+  const inlineEditUnboundedColumnIds = React.useMemo(() => {
+    const s = new Set<string>(Object.values(activeInlineFieldByRow))
+    for (const id of additionalInlineUnboundedColumnIds ?? []) {
+      s.add(id)
+    }
+    if (draftRowIds.length > 0 && inlineEditEnabled) {
+      for (const k of editableFields) {
+        s.add(k)
+      }
+      for (const c of filterAuditFields(config.list.columns, config.idField)) {
+        s.add(c)
+      }
+    }
+    return s
+  }, [
+    activeInlineFieldByRow,
+    additionalInlineUnboundedColumnIds,
+    draftRowIds.length,
+    inlineEditEnabled,
+    editableFields,
+    config.list.columns,
+    config.idField,
+  ])
+
+  const inlineEditColumnWidthHints = React.useMemo(() => {
+    if (!inlineEditEnabled) return undefined
+    return buildInlineEditColumnWidthHints(
+      inlineEditUnboundedColumnIds,
+      enhancedConfig.fields
+    )
+  }, [inlineEditEnabled, inlineEditUnboundedColumnIds, enhancedConfig.fields])
   
   // 检查行是否处于草稿编辑中（只在客户端检查，避免 hydration 错误）
   const isRowEditing = React.useCallback((row: T): boolean => {
@@ -1022,7 +1046,17 @@ export function EntityTable<T = any>({
             idKey = `${fieldKey}_id`
           }
           
-          const idValue = (row as any)[idKey]
+          let idValue = (row as any)[idKey]
+          // locations 关联：列表行上常为嵌套对象 { location_id, location_code }，不能回退成纯代码字符串当 ID
+          if (
+            (idValue === undefined || idValue === null) &&
+            fieldConfig.relation?.model === 'locations'
+          ) {
+            const nested = (row as any)[fieldKey]
+            if (nested && typeof nested === 'object' && nested.location_id != null) {
+              idValue = nested.location_id
+            }
+          }
           if (idValue !== undefined && idValue !== null) {
             initialValues[fieldKey] = String(idValue)
           } else {
@@ -1075,25 +1109,31 @@ export function EntityTable<T = any>({
       return initialValues
     }
 
-    // 检查是否有选中的行（使用函数式更新来获取最新值）
+    // 清空批量勾选；草稿状态必须在 setSelectedRows 的 updater 之外调度，避免在 updater 内同步 setState 导致更新丢失（React 不推荐在 updater 里触发其它 setState）
+    const applyDraftAndFocus = () => {
+      if (!draftValuesByRowRef.current[idStr]) {
+        draftValuesByRowRef.current[idStr] = buildInitialValues()
+      }
+      setDraftRowIds((prev) => (prev.includes(idStr) ? prev : [...prev, idStr]))
+      const fromCell =
+        typeof focusFieldKey === 'string' &&
+        focusFieldKey.trim() !== '' &&
+        editableFields.includes(focusFieldKey)
+      setRowInlineEditScopeByRow((prev) => ({
+        ...prev,
+        [idStr]: fromCell ? { kind: 'single', field: focusFieldKey.trim() } : { kind: 'all' },
+      }))
+      // 仅标记首字段：多列同时显示编辑 UI 时，只对匹配列 autoOpenDropdown，避免所有下拉一起弹开
+      setActiveInlineFieldByRow({ [idStr]: focusKey })
+    }
+
     setSelectedRows((prevSelectedRows) => {
       const hasSelectedRows = prevSelectedRows.length > 0
-
-      const applyDraftAndFocus = () => {
-        if (!draftValuesByRowRef.current[idStr]) {
-          draftValuesByRowRef.current[idStr] = buildInitialValues()
-        }
-        setDraftRowIds((prev) => (prev.includes(idStr) ? prev : [...prev, idStr]))
-        // 全局仅一个「当前单元格」：避免多行同一列同时 InlineEdit + autoOpenDropdown 一起弹开
-        setActiveInlineFieldByRow({ [idStr]: focusKey })
-      }
-
       if (hasSelectedRows) {
         setTimeout(applyDraftAndFocus, 10)
       } else {
-        applyDraftAndFocus()
+        queueMicrotask(applyDraftAndFocus)
       }
-
       return []
     })
   }, [editableFields, config.idField, config.fields])
@@ -1117,6 +1157,10 @@ export function EntityTable<T = any>({
     delete draftValuesByRowRef.current[rowId]
     setDraftRowIds((prev) => prev.filter((x) => x !== rowId))
     setActiveInlineFieldByRow((prev) => {
+      const { [rowId]: _, ...rest } = prev
+      return rest
+    })
+    setRowInlineEditScopeByRow((prev) => {
       const { [rowId]: _, ...rest } = prev
       return rest
     })
@@ -1299,17 +1343,41 @@ export function EntityTable<T = any>({
             if (oldStr === null && key === 'customer' && (row as any).customer?.id != null) {
               oldStr = normalizeFk((row as any).customer.id)
             }
+            if (
+              oldStr === null &&
+              fieldConfig.relation?.model === 'locations' &&
+              (row as any)[key] &&
+              typeof (row as any)[key] === 'object' &&
+              (row as any)[key].location_id != null
+            ) {
+              oldStr = normalizeFk((row as any)[key].location_id)
+            }
             originalValue = oldStr
+          }
+
+          // locations 关联：草稿里若误为位置代码（非纯数字），无法用 delivery_location_id 提交，回退为当前行上的数字 ID
+          let effectiveProcessed = processedValue
+          if (
+            fieldConfig.relation?.model === 'locations' &&
+            effectiveProcessed != null &&
+            String(effectiveProcessed).trim() !== '' &&
+            !/^\d+$/.test(String(effectiveProcessed).trim())
+          ) {
+            if (originalValue != null && /^\d+$/.test(String(originalValue))) {
+              effectiveProcessed = originalValue
+            } else {
+              effectiveProcessed = null
+            }
           }
           
           // 对于 unloaded_by, received_by, loaded_by_name，如果新值不为 null，或者原始值为 null 但新值不为 null，都需要更新
-          const shouldUpdate = processedValue !== originalValue || 
-            (processedValue !== null && originalValue === null) ||
-            (processedValue === null && originalValue !== null)
+          const shouldUpdate = effectiveProcessed !== originalValue || 
+            (effectiveProcessed !== null && originalValue === null) ||
+            (effectiveProcessed === null && originalValue !== null)
           
           if (shouldUpdate) {
             // 使用数据库字段名（如 carrier_id）而不是配置字段名（如 carrier）
-            updates[dbFieldName] = processedValue
+            updates[dbFieldName] = effectiveProcessed
           }
           return // 跳过后续处理
         }
@@ -1674,6 +1742,7 @@ export function EntityTable<T = any>({
     draftValuesByRowRef.current = {}
     setDraftRowIds([])
     setActiveInlineFieldByRow({})
+    setRowInlineEditScopeByRow({})
   }, [])
 
   // 处理查看详情
@@ -1922,6 +1991,9 @@ export function EntityTable<T = any>({
           // 确保是 YYYY-MM-DD 格式
           const dateValue = typeof value === 'string' ? value.split('T')[0] : value
           processedUpdates[dbFieldKey] = dateValue
+        } else if (actualFieldConfig?.type === 'datetime' && value) {
+          processedUpdates[dbFieldKey] =
+            typeof value === 'string' ? value : value instanceof Date ? value.toISOString() : String(value)
         } else {
           processedUpdates[dbFieldKey] = value
         }
@@ -2117,11 +2189,23 @@ export function EntityTable<T = any>({
                   : (columnId === 'department' && editableFields.includes('department_id'))
                     ? 'department_id'
                     : columnId
-          const cellIsActive = activeInlineFieldByRow[rowId] === actualFieldKeyForEdit
+          const activeF = activeInlineFieldByRow[rowId]
+          const shouldAutoOpenDropdown =
+            activeF != null &&
+            activeF !== '' &&
+            (activeF === actualFieldKeyForEdit || activeF === columnId)
           const rowIsEditing = isMounted && isRowEditing(row.original)
           const draft = draftValuesByRowRef.current[rowId]
+          const scope = rowInlineEditScopeByRow[rowId]
+          const showThisColumnInline =
+            rowIsEditing &&
+            !fieldConfig.readonly &&
+            (!scope ||
+              scope.kind === 'all' ||
+              (scope.kind === 'single' &&
+                (scope.field === actualFieldKeyForEdit || scope.field === columnId)))
 
-          if (rowIsEditing && cellIsActive) {
+          if (showThisColumnInline) {
             const currentValue = draft?.[actualFieldKeyForEdit] !== undefined
               ? draft[actualFieldKeyForEdit]
               : draft?.[columnId] !== undefined
@@ -2146,7 +2230,7 @@ export function EntityTable<T = any>({
                 onChange={getFieldOnChange(rowId, actualFieldKeyForEdit)}
                 loadOptions={loadOptionsForEdit}
                 loadFuzzyOptions={loadFuzzyOptionsForEdit}
-                autoOpenDropdown
+                autoOpenDropdown={shouldAutoOpenDropdown}
               />
             )
           }
@@ -2176,7 +2260,7 @@ export function EntityTable<T = any>({
             const content = typeof originalCell === 'function' 
               ? originalCell({ row } as any)
               : originalCell
-            return fieldConfig.readonly ? content : wrap(content)
+            return fieldConfig.readonly || !inlineEditCellClickEnabled ? content : wrap(content)
           }
           
           const draftVal =
@@ -2189,14 +2273,14 @@ export function EntityTable<T = any>({
           
           if (fieldConfig.type === 'date') {
             const node = <div>{formatDateDisplay(value)}</div>
-            return fieldConfig.readonly ? node : wrap(node)
+            return fieldConfig.readonly || !inlineEditCellClickEnabled ? node : wrap(node)
           }
           if (fieldConfig.type === 'datetime') {
             const node = <div>{formatDateTimeDisplay(value)}</div>
-            return fieldConfig.readonly ? node : wrap(node)
+            return fieldConfig.readonly || !inlineEditCellClickEnabled ? node : wrap(node)
           }
           const node = <div>{value || '-'}</div>
-          return fieldConfig.readonly ? node : wrap(node)
+          return fieldConfig.readonly || !inlineEditCellClickEnabled ? node : wrap(node)
         }
         
         // 返回新的列定义，使用新的 cell 渲染函数
@@ -2302,11 +2386,28 @@ export function EntityTable<T = any>({
         const rowId = String(row.original[getIdField()])
         // 与 editableFieldKey / 草稿、handleStartEdit(focus) 一致（含 destination/origin 等映射）
         const draftFieldKey = editableFieldKey
-        const cellIsActive = activeInlineFieldByRow[rowId] === draftFieldKey
-        const rowIsEditing = isMounted && isEditable && isRowEditing(row.original)
+        const activeF = activeInlineFieldByRow[rowId]
+        const shouldAutoOpenDropdown =
+          activeF != null &&
+          activeF !== '' &&
+          (activeF === draftFieldKey ||
+            activeF === fieldKey ||
+            activeF === actualFieldKey)
+        const rowInDraft = isMounted && isRowEditing(row.original)
+        const scope = rowInlineEditScopeByRow[rowId]
+        const showThisColumnInline =
+          rowInDraft &&
+          !fieldConfig.readonly &&
+          isEditable &&
+          (!scope ||
+            scope.kind === 'all' ||
+            (scope.kind === 'single' &&
+              (scope.field === draftFieldKey ||
+                scope.field === fieldKey ||
+                scope.field === actualFieldKey)))
 
         const wrapIfEditable = (node: React.ReactNode) => {
-          if (!isEditable || fieldConfig.readonly) return <>{node}</>
+          if (!isEditable || fieldConfig.readonly || !inlineEditCellClickEnabled) return <>{node}</>
           return (
             <div
               role="button"
@@ -2328,7 +2429,7 @@ export function EntityTable<T = any>({
           )
         }
         
-        if (rowIsEditing && !fieldConfig.readonly && cellIsActive) {
+        if (showThisColumnInline) {
           let initialValue = row.getValue(fieldKey)
           
           // 对于location字段，从 _id 字段读取ID值
@@ -2482,7 +2583,7 @@ export function EntityTable<T = any>({
               onChange={getFieldOnChange(rowId, actualFieldKeyForEdit)}
               loadOptions={loadOptions}
               loadFuzzyOptions={loadFuzzyOptions}
-              autoOpenDropdown
+              autoOpenDropdown={shouldAutoOpenDropdown}
             />
           )
         }
@@ -2688,7 +2789,7 @@ export function EntityTable<T = any>({
           const value = dPref !== undefined ? dPref : row.getValue(fieldKey)
           const boolValue = value === true || value === 'true' || value === 1 || value === '1'
           // 如果正在编辑但字段是只读的，显示为只读文本
-          if (rowIsEditing && fieldConfig.readonly) {
+          if (rowInDraft && fieldConfig.readonly) {
             return <div className="text-sm">{boolValue ? '是' : '否'}</div>
           }
           return wrapIfEditable(
@@ -2832,6 +2933,7 @@ export function EntityTable<T = any>({
     isRowEditing,
     draftRowIds,
     activeInlineFieldByRow,
+    rowInlineEditScopeByRow,
     handleEditValueChange,
     getFieldOnChange,
     handleStartEdit,
@@ -2839,6 +2941,7 @@ export function EntityTable<T = any>({
     fieldFuzzyLoadOptions,
     getIdField,
     customCellRenderers,
+    inlineEditCellClickEnabled,
   ])
 
   // 使用新框架创建表格配置

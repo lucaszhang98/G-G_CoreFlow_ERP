@@ -39,6 +39,7 @@ export const deliveryManagementConfig: EntityConfig = {
       key: 'delivery_date',
       label: '送货日期',
       type: 'datetime',
+      sortable: true,
     },
     origin_location: {
       key: 'origin_location',
@@ -115,8 +116,8 @@ export const deliveryManagementConfig: EntityConfig = {
   },
   
   list: {
-    defaultSort: 'created_at',
-    defaultOrder: 'desc',
+    defaultSort: 'appointment_time',
+    defaultOrder: 'asc',
     columns: [
       'appointment_number',
       'container_number',
@@ -161,6 +162,11 @@ export const deliveryManagementConfig: EntityConfig = {
     ],
     // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
     // advancedSearchFields 已由 search-config-generator 自动生成
+    batchOperations: {
+      enabled: true,
+      edit: { enabled: false },
+      delete: { enabled: false },
+    },
   },
   
   formFields: [],

@@ -540,6 +540,28 @@ export function PickupManagementClient() {
       })
   }, [orderedSelectedRows])
 
+  // 勾选行后 Ctrl+C / ⌘C：与「复制柜号 → 换行分隔」相同（不在输入框内时生效）
+  React.useEffect(() => {
+    const isEditableTarget = (el: EventTarget | null) => {
+      if (!el || !(el instanceof HTMLElement)) return false
+      const tag = el.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true
+      if (el.isContentEditable) return true
+      return Boolean(el.closest('[contenteditable="true"]'))
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== "c") return
+      if (isEditableTarget(e.target)) return
+      if (orderedSelectedRows.length === 0) return
+      e.preventDefault()
+      handleCopyContainerNumbers("line")
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [handleCopyContainerNumbers, orderedSelectedRows])
+
   /** 放在「快速筛选」一行：待查询（无 LFD、无提柜） / 待提柜（有 LFD、无提柜） */
   const customFilterContent = React.useCallback(
     () => (
@@ -550,7 +572,7 @@ export function PickupManagementClient() {
           size="sm"
           className="h-9 shrink-0 gap-1.5"
           onClick={togglePendingLfdInquiry}
-          title="LFD 与提柜日期均为空，需查询；按 ETA 升序，相同 ETA 按最早预约时间升序"
+          title="LFD 与提柜日期均为空，需查询；且 ETA 在「今天起前 28 天～后 2 天」（UTC 日历日）；列表按 ETA 升序，相同 ETA 按最早预约时间升序"
         >
           <Search className="h-4 w-4" />
           待查询
@@ -561,7 +583,7 @@ export function PickupManagementClient() {
           size="sm"
           className="h-9 shrink-0 gap-1.5"
           onClick={toggleLfdNoPickup}
-          title="已填 LFD、尚未填提柜日期；按 LFD 升序，相同 LFD 按最早预约时间升序"
+          title="已填 LFD、尚未填提柜日期；且 ETA 在「今天起前 28 天～后 2 天」（UTC 日历日）；列表按 LFD 升序，相同 LFD 按最早预约时间升序"
         >
           <CalendarClock className="h-4 w-4" />
           待提柜
@@ -757,7 +779,9 @@ export function PickupManagementClient() {
             <DropdownMenuItem onClick={() => handleCopyContainerNumbers('line')}>
               <div className="flex flex-col gap-1">
                 <span className="font-medium">换行分隔</span>
-                <span className="text-xs text-muted-foreground">每个柜号一行</span>
+                <span className="text-xs text-muted-foreground">
+                  每个柜号一行 · 快捷键 Ctrl+C / ⌘C
+                </span>
               </div>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => handleCopyContainerNumbers('comma')}>

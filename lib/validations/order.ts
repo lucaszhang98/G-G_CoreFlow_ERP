@@ -16,7 +16,11 @@ export const orderCreateSchema = z.object({
   order_date: z.string().or(z.date()),
   status: z.enum(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'archived']).optional(),
   operation_mode: z.enum(['unload', 'direct_delivery']).optional().nullable(),
-  delivery_location_id: z.number().optional().nullable(),
+  // 前端/JSON 常把 BigInt 主键以数字或数字字符串提交，须同时接受（避免「expected number, received string」）
+  delivery_location_id: z
+    .union([z.number(), z.string().regex(/^\d+$/, '目的地ID须为数字')])
+    .optional()
+    .nullable(),
   total_amount: z.number().min(0, '订单金额不能为负数'),
   discount_amount: z.number().min(0, '折扣金额不能为负数').optional().nullable(),
   tax_amount: z.number().min(0, '税费不能为负数').optional().nullable(),

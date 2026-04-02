@@ -250,6 +250,7 @@ export async function PUT(
     
     const resolvedParams = await Promise.resolve(params);
     const id = resolvedParams.id;
+    const appointmentId = BigInt(id);
 
     // 获取当前用户（用于审计字段）
     const currentUser = authResult;
@@ -482,10 +483,6 @@ export async function PUT(
       ? formatUTCDateTimeString(serialized.confirmed_end) 
       : null
 
-    // 注意：预约更新时不需要处理 delivery_management 的创建/删除
-    // 因为送仓管理的字段都是从 delivery_appointments 表读取的，会自动同步
-    // 只有在预约创建和删除时才需要处理 delivery_management 记录
-
     // 同步订单的预约信息（如果有 order_id）
     if (updatedItem.orders?.order_id) {
       try {
@@ -498,8 +495,6 @@ export async function PUT(
     }
 
     // 处理 outbound_shipments 的自动同步
-    const appointmentId = BigInt(id);
-    
     // 检查 delivery_method 是否改变
     if (originalDeliveryMethod !== newDeliveryMethod) {
       if (newDeliveryMethod && newDeliveryMethod !== '直送') {
@@ -585,6 +580,15 @@ export async function PUT(
         console.warn('确保 outbound_shipments 记录存在失败:', outboundError);
       }
     }
+
+    // 补建送仓管理行（历史孤儿或曾创建失败时，与 outbound 同步后再对齐 1:1）
+    const { ensureDeliveryManagementRow } = await import('@/lib/services/ensure-delivery-management')
+    await ensureDeliveryManagementRow(prisma, {
+      appointment_id: appointmentId,
+      delivery_method: updatedItem.delivery_method ?? null,
+      order_id: updatedItem.order_id ?? null,
+      updated_by: user?.id ? BigInt(user.id) : null,
+    })
 
     // 确保返回三个 Boolean 字段
     const verify_loading_sheet = serialized.verify_loading_sheet ?? false;

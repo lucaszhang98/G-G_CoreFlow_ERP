@@ -42,6 +42,10 @@ interface FuzzySearchSelectProps {
   loadOptions: (search: string) => Promise<FuzzySearchOption[]>
   displayValue?: (option: FuzzySearchOption | null) => string
   icon?: React.ReactNode
+  /** 挂载后自动展开下拉（行内编辑进入时） */
+  autoOpenOnMount?: boolean
+  /** 结果列表区域最大高度（Tailwind 类） */
+  listMaxHeightClassName?: string
 }
 
 export function FuzzySearchSelect({
@@ -57,8 +61,16 @@ export function FuzzySearchSelect({
   loadOptions,
   displayValue,
   icon,
+  autoOpenOnMount = false,
+  listMaxHeightClassName = "max-h-[min(70vh,480px)]",
 }: FuzzySearchSelectProps) {
   const [open, setOpen] = React.useState(false)
+  const autoOpenOnceRef = React.useRef(false)
+  React.useEffect(() => {
+    if (!autoOpenOnMount || autoOpenOnceRef.current) return
+    autoOpenOnceRef.current = true
+    setOpen(true)
+  }, [autoOpenOnMount])
   const [options, setOptions] = React.useState<FuzzySearchOption[]>([])
   const [loading, setLoading] = React.useState(false)
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -324,9 +336,10 @@ export function FuzzySearchSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="w-[420px] p-0" 
+        className="w-[420px] p-0 z-[100]" 
         align="start"
         sideOffset={4}
+        collisionPadding={12}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <Command shouldFilter={false}>
@@ -355,7 +368,7 @@ export function FuzzySearchSelect({
             </div>
           </div>
           
-          <CommandList className="max-h-[280px] overflow-y-auto overflow-x-hidden">
+          <CommandList className={cn("overflow-y-auto overflow-x-hidden", listMaxHeightClassName)}>
             {loading && options.length === 0 ? (
               <div className="py-8 text-center">
                 <div className="inline-flex items-center gap-2.5 text-sm text-muted-foreground">

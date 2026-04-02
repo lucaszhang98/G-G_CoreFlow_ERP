@@ -3,6 +3,10 @@
  */
 
 import { EntityConfig } from '../types'
+import {
+  DELIVERY_APPOINTMENT_ACCOUNT_SELECT_OPTIONS,
+  DELIVERY_APPOINTMENT_TYPE_SELECT_OPTIONS,
+} from '../delivery-appointment-shared-selects'
 
 export const deliveryAppointmentConfig: EntityConfig = {
   name: 'delivery_appointments',
@@ -50,27 +54,14 @@ export const deliveryAppointmentConfig: EntityConfig = {
       type: 'select',
       sortable: true,
       searchable: true,
-      options: [
-        { label: 'AA', value: 'AA' },
-        { label: 'YTAQ', value: 'YTAQ' },
-        { label: 'AYIE', value: 'AYIE' },
-        { label: 'KP', value: 'KP' },
-        { label: 'OLPN', value: 'OLPN' },
-        { label: 'DATONG', value: 'DATONG' },
-        { label: 'GG', value: 'GG' },
-        { label: 'WGUY', value: 'WGUY' },
-        { label: 'Other', value: 'other' },
-      ],
+      options: DELIVERY_APPOINTMENT_ACCOUNT_SELECT_OPTIONS,
     },
     appointment_type: {
       key: 'appointment_type',
       label: '预约类型',
       type: 'select',
       sortable: true,
-      options: [
-        { label: '地板', value: '地板' },
-        { label: '卡板', value: '卡板' },
-      ],
+      options: DELIVERY_APPOINTMENT_TYPE_SELECT_OPTIONS,
     },
     origin_location: {
       key: 'origin_location',
@@ -222,9 +213,10 @@ export const deliveryAppointmentConfig: EntityConfig = {
         enabled: true,
       },
     },
-    // 行内编辑配置
+    // 行内编辑：仅铅笔进入编辑，避免误点单元格（预约管理）
     inlineEdit: {
       enabled: true,
+      cellClickToEdit: false,
       fields: ['reference_number', 'origin_location_id', 'location_id', 'confirmed_start', 'delivery_method', 'appointment_type', 'appointment_account', 'rejected', 'verify_po', 'can_create_sheet', 'po', 'notes'],
     },
   },

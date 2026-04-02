@@ -9,6 +9,7 @@ import {
   PickupManagementExportData,
 } from '@/lib/utils/pickup-management-export-excel'
 import { mergeOrdersRelationExcludeArchived, parseIncludeArchived } from '@/lib/orders/order-visibility'
+import { getPickupQuickFilterEtaDateRange } from '@/lib/utils/pickup-management-quick-filter'
 
 /**
  * GET /api/tms/pickup-management/export
@@ -75,25 +76,25 @@ export async function GET(request: NextRequest) {
         where.orders = where.orders ? { ...where.orders, ...searchCondition } : searchCondition
       }
 
-      if (searchParams.get('pending_lfd_inquiry') === '1') {
-        const pendingInquiryFilter = {
-          lfd_date: null,
-          pickup_date: null,
-        }
+      const pendingLfdInquiry = searchParams.get('pending_lfd_inquiry') === '1'
+      const lfdNoPickup = searchParams.get('lfd_no_pickup') === '1'
+      if (pendingLfdInquiry || lfdNoPickup) {
+        const etaWin = getPickupQuickFilterEtaDateRange()
+        const quickFilterOrders = pendingLfdInquiry
+          ? {
+              lfd_date: null,
+              pickup_date: null,
+              eta_date: { gte: etaWin.gte, lte: etaWin.lte },
+            }
+          : {
+              lfd_date: { not: null },
+              pickup_date: null,
+              eta_date: { gte: etaWin.gte, lte: etaWin.lte },
+            }
         if (where.orders) {
-          where.orders = { AND: [where.orders, pendingInquiryFilter] }
+          where.orders = { AND: [where.orders, quickFilterOrders] }
         } else {
-          where.orders = pendingInquiryFilter
-        }
-      } else if (searchParams.get('lfd_no_pickup') === '1') {
-        const lfdPickupFilter = {
-          lfd_date: { not: null },
-          pickup_date: null,
-        }
-        if (where.orders) {
-          where.orders = { AND: [where.orders, lfdPickupFilter] }
-        } else {
-          where.orders = lfdPickupFilter
+          where.orders = quickFilterOrders
         }
       }
     }

@@ -1064,14 +1064,18 @@ export function createCreateHandler(config: EntityConfig) {
           continue
         }
         if (fieldConfig?.relation && fieldConfig.relation.valueField) {
-          // 关系字段需要转换为 BigInt
-          if (value) {
-            // 如果字段名以 _id 结尾，使用字段名本身；否则使用 relation.valueField
+          if (value !== undefined && value !== null && value !== '') {
             const targetField = key.endsWith('_id') ? key : fieldConfig.relation.valueField
-            processedData[targetField] = BigInt(value as number)
+            const idStr = typeof value === 'bigint' ? value.toString() : String(value).trim()
+            if (/^\d+$/.test(idStr)) {
+              processedData[targetField] = BigInt(idStr)
+            }
           }
-        } else if (typeof value === 'number' && key.endsWith('_id')) {
-          processedData[key] = BigInt(value)
+        } else if (key.endsWith('_id') && value !== undefined && value !== null && value !== '') {
+          const idStr = typeof value === 'bigint' ? value.toString() : String(value).trim()
+          if (/^\d+$/.test(idStr)) {
+            processedData[key] = BigInt(idStr)
+          }
         } else if (value && typeof value === 'string' && (fieldConfig?.type === 'date' || fieldConfig?.type === 'datetime' || key.includes('_date') || key.includes('_at'))) {
           // 处理日期字段：如果是 YYYY-MM-DD 格式，转换为完整的 DateTime
           // Prisma 需要完整的 ISO-8601 DateTime 格式（包含时间部分）
@@ -1283,13 +1287,19 @@ export function createUpdateHandler(config: EntityConfig) {
         }
         
         if (fieldConfig?.relation) {
-          if (value) {
+          if (value !== undefined && value !== null && value !== '') {
             // 优先使用 relationField，否则如果字段名以 _id 结尾使用字段名，最后才使用 valueField
             const targetField = fieldConfig.relationField || (key.endsWith('_id') ? key : fieldConfig.relation.valueField) || key
-            processedData[targetField] = BigInt(value as number)
+            const idStr = typeof value === 'bigint' ? value.toString() : String(value).trim()
+            if (/^\d+$/.test(idStr)) {
+              processedData[targetField] = BigInt(idStr)
+            }
           }
-        } else if (typeof value === 'number' && key.endsWith('_id')) {
-          processedData[key] = BigInt(value)
+        } else if (key.endsWith('_id') && value !== undefined && value !== null && value !== '') {
+          const idStr = typeof value === 'bigint' ? value.toString() : String(value).trim()
+          if (/^\d+$/.test(idStr)) {
+            processedData[key] = BigInt(idStr)
+          }
         } else {
           processedData[key] = value
         }

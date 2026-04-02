@@ -1,12 +1,14 @@
 /**
  * 出库管理实体配置（完全可序列化）
- * 
- * 注意：出库管理现在从 delivery_appointments 动态获取数据（非直送）
- * 每个 delivery_appointment 可能有一个对应的 outbound_shipment 记录
- * 只能修改 trailer_id, loaded_by, notes
+ *
+ * 注意：列表来自 delivery_appointments（非直送），写操作经 API 同步 outbound_shipments 与预约可编辑字段
  */
 
 import { EntityConfig } from '../types'
+import {
+  DELIVERY_APPOINTMENT_ACCOUNT_SELECT_OPTIONS,
+  DELIVERY_APPOINTMENT_TYPE_SELECT_OPTIONS,
+} from '../delivery-appointment-shared-selects'
 
 export const outboundShipmentConfig: EntityConfig = {
   name: 'outbound_shipments',
@@ -77,15 +79,17 @@ export const outboundShipmentConfig: EntityConfig = {
     appointment_account: {
       key: 'appointment_account',
       label: '预约账号',
-      type: 'text',
+      type: 'select',
       sortable: true,
       searchable: true,
+      options: DELIVERY_APPOINTMENT_ACCOUNT_SELECT_OPTIONS,
     },
     appointment_type: {
       key: 'appointment_type',
       label: '预约类型',
-      type: 'text',
+      type: 'select',
       sortable: true,
+      options: DELIVERY_APPOINTMENT_TYPE_SELECT_OPTIONS,
     },
     loaded_by_name: {
       key: 'loaded_by_name',
@@ -258,21 +262,43 @@ export const outboundShipmentConfig: EntityConfig = {
     // 其他筛选字段已由 search-config-generator 自动生成
     // 高级搜索配置（多条件组合）- 已自动生成，包含所有 columns 中显示的字段（包括原始字段、读取字段、计算字段）
     // advancedSearchFields 已由 search-config-generator 自动生成
-    // 批量操作配置：只允许批量修改 trailer_id, loaded_by, notes
     batchOperations: {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['loaded_by_name', 'trailer_code', 'rejected', 'delivery_address', 'contact_name', 'contact_phone', 'notes'],
+        fields: [
+          'appointment_account',
+          'appointment_type',
+          'confirmed_start',
+          'loaded_by_name',
+          'trailer_code',
+          'rejected',
+          'delivery_address',
+          'contact_name',
+          'contact_phone',
+          'notes',
+        ],
       },
       delete: {
         enabled: false, // 不允许批量删除
       },
     },
-    // 行内编辑配置：允许修改 loaded_by_name, trailer_code, rejected, notes
     inlineEdit: {
       enabled: true,
-      fields: ['loaded_by_name', 'trailer_code', 'rejected', 'verify_loading_sheet', 'has_created_sheet', 'delivery_address', 'contact_name', 'contact_phone', 'notes'],
+      fields: [
+        'appointment_account',
+        'appointment_type',
+        'confirmed_start',
+        'loaded_by_name',
+        'trailer_code',
+        'rejected',
+        'verify_loading_sheet',
+        'has_created_sheet',
+        'delivery_address',
+        'contact_name',
+        'contact_phone',
+        'notes',
+      ],
     },
   },
   

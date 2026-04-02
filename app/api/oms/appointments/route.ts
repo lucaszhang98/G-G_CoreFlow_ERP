@@ -441,69 +441,36 @@ export async function POST(request: NextRequest) {
     const user = currentUser.user || null;
     const finalData = await addSystemFields(createData, user, true);
 
-    // 创建记录
-    const newItem = await prisma.delivery_appointments.create({
-      data: finalData,
-    });
+    const { ensureDeliveryManagementRow } = await import('@/lib/services/ensure-delivery-management')
+
+    // 预约 +（非直送时）出库占位 + 送仓管理 同一事务，避免「预约已建、送仓漏建」
+    const newItem = await prisma.$transaction(async (tx) => {
+      const created = await tx.delivery_appointments.create({
+        data: finalData,
+      })
+      const appointmentId = created.appointment_id
+
+      if (finalData.delivery_method && finalData.delivery_method !== '直送') {
+        const defaultWarehouseId = BigInt(1000)
+        await tx.$executeRaw`
+          INSERT INTO wms.outbound_shipments (warehouse_id, appointment_id, status, created_at, updated_at, created_by, updated_by)
+          VALUES (${defaultWarehouseId}, ${appointmentId}, 'planned', NOW(), NOW(), ${user?.id ? BigInt(user.id) : null}, ${user?.id ? BigInt(user.id) : null})
+          ON CONFLICT (appointment_id) DO NOTHING
+        `
+      }
+
+      await ensureDeliveryManagementRow(tx, {
+        appointment_id: appointmentId,
+        delivery_method: finalData.delivery_method ?? null,
+        order_id: finalData.order_id ?? null,
+        created_by: user?.id ? BigInt(user.id) : null,
+        updated_by: user?.id ? BigInt(user.id) : null,
+      })
+
+      return created
+    })
 
     const serialized = serializeBigInt(newItem);
-    
-    // 如果是非直送预约，自动创建 outbound_shipments 记录
-    if (finalData.delivery_method && finalData.delivery_method !== '直送') {
-      try {
-        // 获取默认 warehouse_id（使用第一个可用的 warehouse_id，或使用 1000 作为默认值）
-        const defaultWarehouseId = BigInt(1000);
-        const appointmentId = serialized.appointment_id;
-        
-        // 使用原始 SQL 插入，避免 Prisma 类型问题
-        // 确保 appointmentId 是 BigInt 类型
-        const appointmentIdBigInt = BigInt(appointmentId);
-        await prisma.$executeRaw`
-          INSERT INTO wms.outbound_shipments (warehouse_id, appointment_id, status, created_at, updated_at, created_by, updated_by)
-          VALUES (${defaultWarehouseId}, ${appointmentIdBigInt}, 'planned', NOW(), NOW(), ${user?.id ? BigInt(user.id) : null}, ${user?.id ? BigInt(user.id) : null})
-          ON CONFLICT (appointment_id) DO NOTHING
-        `;
-      } catch (outboundError: any) {
-        // 如果创建失败（例如已存在），记录错误但不影响预约创建
-        console.warn('自动创建 outbound_shipments 记录失败:', outboundError);
-      }
-    }
-
-    // 所有预约都自动创建 delivery_management（送仓管理）记录
-    try {
-      const appointmentId = BigInt(serialized.appointment_id);
-      // 检查是否已存在送仓管理记录
-      const existingDelivery = await prisma.delivery_management.findUnique({
-        where: { appointment_id: appointmentId },
-        select: { delivery_id: true },
-      });
-
-      if (!existingDelivery) {
-        // 如果是直送，自动填入柜号（从 orders.order_number）
-        let containerNumber: string | null = null
-        if (finalData.delivery_method === '直送' && finalData.order_id) {
-          const order = await prisma.orders.findUnique({
-            where: { order_id: finalData.order_id },
-            select: { order_number: true },
-          })
-          containerNumber = order?.order_number || null
-        }
-        // 卡派和自提的柜号会在 WMS 出库管理填写 trailer 时自动更新
-
-        // 创建送仓管理记录
-        await prisma.delivery_management.create({
-          data: {
-            appointment_id: appointmentId,
-            container_number: containerNumber,
-            // status 不设置默认值，保持为空
-            created_by: user?.id ? BigInt(user.id) : null,
-            updated_by: user?.id ? BigInt(user.id) : null,
-          } as any,
-        });
-      }
-    } catch (deliveryError: any) {
-      console.warn('自动创建送仓管理记录失败:', deliveryError);
-    }
 
     // 同步订单的预约信息（如果有 order_id）
     if (finalData.order_id) {

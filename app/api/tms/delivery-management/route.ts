@@ -5,6 +5,8 @@ import { deliveryManagementConfig } from '@/lib/crud/configs/delivery-management
 import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper'
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator'
 import { applyArchivedFilterToDeliveryManagementWhere, parseIncludeArchived } from '@/lib/orders/order-visibility'
+import { buildDeliveryManagementOrderBy } from '@/lib/api/delivery-management-order-by'
+import { getDeliveryNearWindowUtcBounds } from '@/lib/utils/delivery-near-window'
 
 // GET - 获取送仓管理列表
 export async function GET(request: NextRequest) {
@@ -12,12 +14,35 @@ export async function GET(request: NextRequest) {
     const authResult = await checkAuth()
     if (authResult.error) return authResult.error
 
+    // 打开列表前补齐「有预约、无送仓行」的历史数据，避免与预约管理条数长期不一致
+    try {
+      const { repairDeliveryManagementOrphans } = await import(
+        '@/lib/services/ensure-delivery-management'
+      )
+      const { repaired } = await repairDeliveryManagementOrphans(prisma)
+      if (repaired > 0) {
+        console.log(`[送仓管理 GET] 自动补建送仓行 ${repaired} 条`)
+      }
+    } catch (repairErr) {
+      console.warn('[送仓管理 GET] 补建送仓行失败:', repairErr)
+    }
+
     const { searchParams } = new URL(request.url)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)))
-    const sort = searchParams.get('sort') || 'created_at'
-    const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
+    const sort = searchParams.get('sort') || deliveryManagementConfig.list.defaultSort
+    const orderParam = searchParams.get('order')
+    const order: 'asc' | 'desc' =
+      orderParam === 'asc'
+        ? 'asc'
+        : orderParam === 'desc'
+          ? 'desc'
+          : deliveryManagementConfig.list.defaultOrder === 'desc'
+            ? 'desc'
+            : 'asc'
     const search = searchParams.get('search') || ''
+
+    const orderBy = buildDeliveryManagementOrderBy(sort, order)
 
     // 增强配置，确保 filterFields 已生成
     const enhancedConfig = enhanceConfigWithSearchFields(deliveryManagementConfig)
@@ -155,6 +180,22 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // 快速筛选：送货日期在「昨天 0 点～后天结束」（UTC 日历），与列表送货日期/预约时间口径一致
+    if (searchParams.get('near_delivery') === '1') {
+      const { gte, lte } = getDeliveryNearWindowUtcBounds()
+      const nearWindow = {
+        OR: [
+          { confirmed_start: { gte, lte } },
+          { requested_start: { gte, lte } },
+        ],
+      }
+      if (where.delivery_appointments) {
+        where.delivery_appointments = { AND: [where.delivery_appointments, nearWindow] }
+      } else {
+        where.delivery_appointments = nearWindow
+      }
+    }
+
     // 默认排除完成留档订单关联的送仓记录（?includeArchived=true 查看历史）
     applyArchivedFilterToDeliveryManagementWhere(where, parseIncludeArchived(searchParams))
 
@@ -241,9 +282,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: {
-        created_at: order,
-      },
+      orderBy,
       skip: (page - 1) * limit,
       take: limit,
     })

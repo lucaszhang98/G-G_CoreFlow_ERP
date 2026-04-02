@@ -142,9 +142,11 @@ export interface EntityConfig {
         enabled: boolean // 是否启用批量删除
       }
     }
-    // 行内编辑：与行操作「铅笔」同一套可编辑字段；可点击单元格进入草稿，支持多行草稿后点「保存修改」批量提交
+    // 行内编辑：与行操作「铅笔」同一套可编辑字段与草稿；cellClickToEdit 只控制是否「点单元格」进编辑，不影响铅笔
     inlineEdit?: {
       enabled?: boolean // 是否启用行内编辑（默认 true，如果有 update 权限）
+      /** 为 false 时仅能通过行操作「铅笔」进入编辑，点击单元格不再打开草稿（默认 true） */
+      cellClickToEdit?: boolean
       fields?: string[] // 可编辑的字段列表（如果为空，则所有可更新字段都可编辑）
     }
     // 批量导入配置

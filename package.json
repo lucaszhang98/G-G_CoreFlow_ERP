@@ -14,6 +14,7 @@
     "postinstall": "node scripts/copy-pdf-font.cjs && node scripts/generate-font-base64.cjs && prisma generate --no-hints",
     "prebuild": "node scripts/copy-pdf-font.cjs && node scripts/generate-font-base64.cjs && prisma generate --no-hints",
     "create-user": "tsx scripts/create-test-user.ts",
+    "backfill:delivery-management": "tsx scripts/backfill-delivery-management.ts",
     "schemaspy": "node scripts/generate_schemaspy.js",
     "build:exe": "node scripts/build-exe.js",
     "package:exe": "pkg scripts/excel-transfer-standalone.ts --targets node18-win-x64 --output-path dist"

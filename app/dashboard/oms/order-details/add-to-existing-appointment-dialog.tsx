@@ -155,8 +155,8 @@ export function AddToExistingAppointmentDialog({
     if (!open || selectedRows.length === 0) return
     const next: Record<string, number> = {}
     selectedRows.forEach((row) => {
-      // 默认使用剩余板数（未约板数），其次预计板数
-      next[row.id] = row.remaining_pallets ?? row.unbooked_pallets ?? row.estimated_pallets ?? 0
+      // 统一用未约板数作为默认；缺省时回退订单明细预计板数
+      next[row.id] = row.unbooked_pallets ?? row.estimated_pallets ?? 0
     })
     setLinePallets(next)
   }, [open, selectedRows])
@@ -193,7 +193,7 @@ export function AddToExistingAppointmentDialog({
     try {
       const lines = validRows.map((row) => ({
         order_detail_id: String(row.id),
-        estimated_pallets: linePallets[row.id] ?? row.remaining_pallets ?? row.unbooked_pallets ?? row.estimated_pallets ?? 0,
+        estimated_pallets: linePallets[row.id] ?? row.unbooked_pallets ?? row.estimated_pallets ?? 0,
       }))
       const res = await fetch("/api/oms/appointment-detail-lines/batch", {
         method: "POST",
@@ -272,7 +272,7 @@ export function AddToExistingAppointmentDialog({
           <DialogTitle>加入已存在的预约</DialogTitle>
           <DialogDescription>
             {hasRows
-              ? `已带入勾选的 ${selectedRows.length} 条订单明细（最多 ${MAX_ADD_LINES} 条），请选择目标预约并确认预计板数。提交后全部成功或全部不生效。`
+              ? `已带入勾选的 ${selectedRows.length} 条订单明细（最多 ${MAX_ADD_LINES} 条），请选择目标预约并确认未约板数。提交后全部成功或全部不生效。`
               : "请先勾选需要加入预约的订单明细。"}
           </DialogDescription>
         </DialogHeader>
@@ -361,13 +361,13 @@ export function AddToExistingAppointmentDialog({
               )}
             </div>
 
-            {/* 明细与预计板数 */}
+            {/* 明细与未约板数（提交为预约明细的 estimated_pallets） */}
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>柜号/订单号</TableHead>
-                    <TableHead>预计板数</TableHead>
+                    <TableHead>未约板数</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

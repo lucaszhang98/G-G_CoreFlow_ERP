@@ -28,6 +28,7 @@ export const pickupManagementConfig: EntityConfig = {
       type: 'text',
       sortable: true,
       searchable: true,
+      readonly: true, // 柜号来自订单，不在提柜管理中修改
     },
     mbl: {
       key: 'mbl',
@@ -244,7 +245,6 @@ export const pickupManagementConfig: EntityConfig = {
     inlineEdit: {
       enabled: true,
       fields: [
-        'container_number',
         'mbl',
         'port_location',
         'port_text',
@@ -269,7 +269,6 @@ export const pickupManagementConfig: EntityConfig = {
       edit: {
         enabled: true,
         fields: [
-          'container_number',
           'mbl',
           'port_location',
           'port_text',

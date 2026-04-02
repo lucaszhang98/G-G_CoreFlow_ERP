@@ -703,6 +703,7 @@ export function InlineEditCell({
               placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
               className={className}
               loadOptions={loadFuzzyOptions}
+              autoOpenOnMount={Boolean(autoOpenDropdown)}
             />
           </div>
         )

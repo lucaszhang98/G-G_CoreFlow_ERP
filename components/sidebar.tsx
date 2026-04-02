@@ -178,11 +178,6 @@ const menuItems: MenuItem[] = [
         href: "/dashboard/wms/inbound-receipts",
       },
       {
-        title: "拆柜账单",
-        icon: FileText,
-        href: "/dashboard/wms/unload-bill",
-      },
-      {
         title: "库存管理",
         icon: Package,
         href: "/dashboard/wms/inventory-lots",
@@ -197,7 +192,16 @@ const menuItems: MenuItem[] = [
   {
     title: "财务管理",
     icon: Banknote,
-    roles: ["admin", "oms_manager", "employee", "user", "oms_operator"],
+    roles: [
+      "admin",
+      "oms_manager",
+      "employee",
+      "user",
+      "oms_operator",
+      "wms_manager",
+      "tms_manager",
+      "wms_operator",
+    ],
     children: [
       {
         title: "直送账单",

@@ -5,6 +5,7 @@ import { pickupManagementConfig } from '@/lib/crud/configs/pickup-management'
 import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper'
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator'
 import { mergeOrdersRelationExcludeArchived, parseIncludeArchived } from '@/lib/orders/order-visibility'
+import { getPickupQuickFilterEtaDateRange } from '@/lib/utils/pickup-management-quick-filter'
 
 // GET - 获取提柜管理列表
 export async function GET(request: NextRequest) {
@@ -96,25 +97,26 @@ export async function GET(request: NextRequest) {
     }
 
     // 快速筛选互斥：待查询（无 LFD、无提柜）优先于待提柜（有 LFD、无提柜）
-    if (searchParams.get('pending_lfd_inquiry') === '1') {
-      const pendingInquiryFilter = {
-        lfd_date: null,
-        pickup_date: null,
-      }
+    // 二者均在原有条件上 AND：ETA 在「今天 UTC 前 28 天～后 2 天」（含）
+    const pendingLfdInquiry = searchParams.get('pending_lfd_inquiry') === '1'
+    const lfdNoPickup = searchParams.get('lfd_no_pickup') === '1'
+    if (pendingLfdInquiry || lfdNoPickup) {
+      const etaWin = getPickupQuickFilterEtaDateRange()
+      const quickFilterOrders = pendingLfdInquiry
+        ? {
+            lfd_date: null,
+            pickup_date: null,
+            eta_date: { gte: etaWin.gte, lte: etaWin.lte },
+          }
+        : {
+            lfd_date: { not: null },
+            pickup_date: null,
+            eta_date: { gte: etaWin.gte, lte: etaWin.lte },
+          }
       if (where.orders) {
-        where.orders = { AND: [where.orders, pendingInquiryFilter] }
+        where.orders = { AND: [where.orders, quickFilterOrders] }
       } else {
-        where.orders = pendingInquiryFilter
-      }
-    } else if (searchParams.get('lfd_no_pickup') === '1') {
-      const lfdPickupFilter = {
-        lfd_date: { not: null },
-        pickup_date: null,
-      }
-      if (where.orders) {
-        where.orders = { AND: [where.orders, lfdPickupFilter] }
-      } else {
-        where.orders = lfdPickupFilter
+        where.orders = quickFilterOrders
       }
     }
 

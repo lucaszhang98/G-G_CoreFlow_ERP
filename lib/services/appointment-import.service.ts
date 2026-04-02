@@ -603,16 +603,15 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
               }
             }
 
-            // 所有预约都创建 delivery_management
-            try {
-              await outerTx.$executeRaw`
-                INSERT INTO tms.delivery_management (appointment_id, status, created_at, updated_at, created_by, updated_by)
-                VALUES (${appointment.appointment_id}, 'pending', NOW(), NOW(), ${userId}, ${userId})
-                ON CONFLICT (appointment_id) DO NOTHING
-              `
-            } catch (error) {
-              console.warn('[预约导入] 创建 delivery_management 失败（可能已存在）:', error)
-            }
+            // 所有预约都创建 delivery_management（与 POST 预约一致；直送柜号可走明细订单）
+            const { ensureDeliveryManagementRow } = await import('@/lib/services/ensure-delivery-management')
+            await ensureDeliveryManagementRow(outerTx, {
+              appointment_id: appointment.appointment_id,
+              delivery_method: firstRow.delivery_method,
+              order_id: null,
+              created_by: userId,
+              updated_by: userId,
+            })
         }
         
         console.log(`[预约导入] 第 ${batchIndex + 1} 批次处理成功：${batch.length} 个预约，${batchRows} 行数据`)

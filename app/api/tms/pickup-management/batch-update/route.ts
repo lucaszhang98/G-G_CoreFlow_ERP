@@ -61,9 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 订单字段（通过提柜管理修改）
-    if (updates.container_number !== undefined) {
-      orderUpdateData.order_number = updates.container_number || null
-    }
+    // 柜号不在此批量修改
     if (updates.mbl !== undefined) {
       orderUpdateData.mbl_number = updates.mbl || null
     }
