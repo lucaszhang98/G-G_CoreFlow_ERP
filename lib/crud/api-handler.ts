@@ -24,7 +24,12 @@ import { buildRelationFilterCondition } from './relation-filter-helper'
 import { enhanceConfigWithSearchFields } from './search-config-generator'
 import prisma from '@/lib/prisma'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
-import { ORDER_STATUS_ARCHIVED, parseIncludeArchived } from '@/lib/orders/order-visibility'
+import {
+  ORDER_STATUS_ARCHIVED,
+  ORDER_STATUS_CANCELLED,
+  parseIncludeArchived,
+} from '@/lib/orders/order-visibility'
+import { purgeOperationalDataForCancelledOrder } from '@/lib/orders/cancelled-order-cleanup'
 
 /**
  * 获取 Prisma 模型
@@ -315,7 +320,7 @@ export function createListHandler(config: EntityConfig) {
 
       // 状态筛选通过快速筛选处理，这里只处理特殊的归档逻辑
       if (!parseIncludeArchived(searchParams) && enhancedConfig.prisma?.model === 'orders') {
-        // 对于订单表，如果没有明确选择状态，默认排除"完成留档"状态
+        // 订单主表：默认仅排除完成留档（已取消仍显示在订单管理中）
         const statusFilterValue = searchParams.get('filter_status')
         if (!statusFilterValue || statusFilterValue === '__all__') {
           where.status = { not: ORDER_STATUS_ARCHIVED }
@@ -1115,8 +1120,12 @@ export function createCreateHandler(config: EntityConfig) {
         data: processedData,
       })
 
-      // 对于订单表，如果创建时操作方式就是"拆柜"（unload），自动创建入库记录
-      if (config.prisma?.model === 'orders' && processedData.operation_mode === 'unload') {
+      // 对于订单表，如果创建时操作方式就是"拆柜"（unload），自动创建入库记录（已取消订单不建下游业务表）
+      if (
+        config.prisma?.model === 'orders' &&
+        processedData.operation_mode === 'unload' &&
+        item.status !== ORDER_STATUS_CANCELLED
+      ) {
         try {
           // 获取第一个可用的 warehouse_id，如果没有则使用 1000 作为默认值
           const firstWarehouse = await prisma.warehouses.findFirst({
@@ -1165,8 +1174,8 @@ export function createCreateHandler(config: EntityConfig) {
         }
       }
 
-      // 对于订单表，自动创建提柜管理记录
-      if (config.prisma?.model === 'orders') {
+      // 对于订单表，自动创建提柜管理记录（已取消订单不参与提柜等业务）
+      if (config.prisma?.model === 'orders' && item.status !== ORDER_STATUS_CANCELLED) {
         try {
           // 检查是否已存在提柜管理记录（理论上不应该存在，因为刚创建）
           const existingPickup = await prisma.pickup_management.findUnique({
@@ -1311,15 +1320,18 @@ export function createUpdateHandler(config: EntityConfig) {
 
       const prismaModel = getPrismaModel(config)
       
-      // 对于订单表，检查 operation_mode 是否变为"拆柜"（unload），如果是则自动创建入库记录
+      // 对于订单表，检查 operation_mode 是否变为"拆柜"（unload），如果是则自动创建入库记录（已取消不参与）
       if (config.prisma?.model === 'orders' && processedData.operation_mode === 'unload') {
         // 先获取当前订单，检查旧操作方式和是否已经有入库记录
         const currentOrder = await prismaModel.findUnique({
           where: { [idField]: BigInt(resolvedParams.id) },
-          select: { order_id: true, operation_mode: true },
+          select: { order_id: true, operation_mode: true, status: true },
         })
-        
-        if (currentOrder && currentOrder.operation_mode !== 'unload') {
+        const effectiveStatus =
+          processedData.status !== undefined ? processedData.status : currentOrder?.status
+        if (effectiveStatus === ORDER_STATUS_CANCELLED) {
+          // 本单将保持/变为已取消，不创建入库等业务数据
+        } else if (currentOrder && currentOrder.operation_mode !== 'unload') {
           // 只有当操作方式从非"拆柜"变为"拆柜"时才创建入库记录
           // 检查是否已存在入库记录
           const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
@@ -1414,13 +1426,34 @@ export function createUpdateHandler(config: EntityConfig) {
         }
       }
       
-      const item = await prismaModel.update({
-        where: { [idField]: BigInt(resolvedParams.id) },
-        data: processedData,
-      })
-
-      // 对于订单表，确保提柜管理记录存在（如果不存在则创建）
+      let item: any
       if (config.prisma?.model === 'orders') {
+        const beforeOrder = await prisma.orders.findUnique({
+          where: { order_id: BigInt(resolvedParams.id) },
+          select: { order_id: true, status: true },
+        })
+        item = await prisma.$transaction(async (tx) => {
+          const updated = await tx.orders.update({
+            where: { order_id: BigInt(resolvedParams.id) },
+            data: processedData,
+          })
+          if (
+            updated.status === ORDER_STATUS_CANCELLED &&
+            beforeOrder?.status !== ORDER_STATUS_CANCELLED
+          ) {
+            await purgeOperationalDataForCancelledOrder(tx, updated.order_id)
+          }
+          return updated
+        })
+      } else {
+        item = await prismaModel.update({
+          where: { [idField]: BigInt(resolvedParams.id) },
+          data: processedData,
+        })
+      }
+
+      // 对于订单表，确保提柜管理记录存在（如果不存在则创建）；已取消订单不创建
+      if (config.prisma?.model === 'orders' && item.status !== ORDER_STATUS_CANCELLED) {
         try {
           const existingPickup = await prisma.pickup_management.findUnique({
             where: { order_id: item.order_id },

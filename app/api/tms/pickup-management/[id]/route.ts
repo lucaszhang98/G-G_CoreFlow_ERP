@@ -253,23 +253,25 @@ async function updatePickupManagement(
         : null
     }
     if (body.pickup_date !== undefined) {
-      if (body.pickup_date) {
+      const raw = body.pickup_date
+      if (
+        raw === null ||
+        raw === '' ||
+        (typeof raw === 'string' && raw.trim() === '')
+      ) {
+        orderUpdateData.pickup_date = null
+      } else if (typeof raw === 'string') {
         // 不转换时区！直接将输入的日期时间当作UTC时间存储
-        // 输入格式：YYYY-MM-DDTHH:mm 或 ISO字符串
-        const dateTimeStr = body.pickup_date
+        const dateTimeStr = raw
         if (dateTimeStr.includes('T')) {
           const [datePart, timePart] = dateTimeStr.split('T')
           const [year, month, day] = datePart.split('-').map(Number)
           const timeWithSeconds = timePart.includes('Z') ? timePart.replace('Z', '') : timePart
           const [hours, minutes, seconds = 0] = timeWithSeconds.split(':').map(Number)
-          // 使用Date.UTC直接创建UTC时间，不做任何时区转换
           orderUpdateData.pickup_date = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds))
         } else {
-          // 如果是纯日期，补充00:00:00
-          orderUpdateData.pickup_date = new Date(body.pickup_date + 'T00:00:00Z')
+          orderUpdateData.pickup_date = new Date(dateTimeStr + 'T00:00:00Z')
         }
-      } else {
-        orderUpdateData.pickup_date = null
       }
     }
     if (body.ready_date !== undefined) {

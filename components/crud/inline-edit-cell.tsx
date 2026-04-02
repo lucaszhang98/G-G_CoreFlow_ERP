@@ -419,6 +419,8 @@ export function InlineEditCell({
                 const newDate = e.target.value
                 const newValue = newDate ? `${newDate}T${hourPart}:00` : null
                 handleInternalChange(newValue)
+                // 与小时下拉一致：立即同步草稿，避免清空后未失焦就保存时仍提交旧值
+                onChange(newValue)
               }}
               onBlur={handleBlur}
               className={cn("h-9 text-sm min-w-[140px] flex-1 bg-white", className)}
@@ -433,6 +435,23 @@ export function InlineEditCell({
                 onChange(newValue)
               }}
             />
+            {internalValue ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0 text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleInternalChange(null)
+                  onChange(null)
+                }}
+                title="清空提柜日期"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
           </div>
         )
       }

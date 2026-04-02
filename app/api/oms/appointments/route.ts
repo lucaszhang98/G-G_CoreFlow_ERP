@@ -5,6 +5,10 @@ import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
 import { deliveryAppointmentConfig } from '@/lib/crud/configs/delivery-appointments';
 import prisma from '@/lib/prisma';
+import {
+  mergeOrdersRelationExcludeArchived,
+  parseIncludeArchived,
+} from '@/lib/orders/order-visibility';
 
 // GET - 获取预约管理列表
 export async function GET(request: NextRequest) {
@@ -45,6 +49,11 @@ export async function GET(request: NextRequest) {
     // 筛选条件（快速筛选）- 使用统一的筛选逻辑辅助函数
     const filterConditions = buildFilterConditions(enhancedConfig, searchParams);
     mergeFilterConditions(where, filterConditions);
+
+    // 默认排除完成留档、已取消订单的预约（?includeArchived=true 查看历史）
+    if (!parseIncludeArchived(searchParams)) {
+      where.orders = mergeOrdersRelationExcludeArchived(where.orders);
+    }
 
     // 排序
     const orderBy: any = {};

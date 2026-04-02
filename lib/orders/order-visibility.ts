@@ -1,13 +1,21 @@
 /**
- * 订单「完成留档」(archived) 可见性约定 — 与列表/统计默认排除归档、?includeArchived=true 查看历史 对齐。
+ * 订单可见性约定 — 与列表默认排除「完成留档」「已取消」、?includeArchived=true 查看历史 对齐。
+ * 已取消订单在业务侧还应通过 cancelled-order-cleanup 清掉下游表数据；此处过滤用于列表与历史切换一致。
  *
- * 使用处：各 GET 列表在默认情况下对关联 orders 或 orders 主表追加「非 archived」条件。
- * 未在此处理的接口：预约列表、出库列表（产品要求暂缓）；订单主表列表已由 createListHandler 处理。
+ * 使用处：各 GET 列表在默认情况下对关联 orders 或 orders 主表追加非 archived / 非 cancelled 条件。
+ * 未在此处理的接口：部分出库列表（产品要求暂缓）；订单主表列表由 createListHandler 处理。
  */
 import type { Prisma } from '@prisma/client'
 
 /** 与 lib/crud/configs/orders、Prisma schema 中 status 字符串一致 */
 export const ORDER_STATUS_ARCHIVED = 'archived' as const
+export const ORDER_STATUS_CANCELLED = 'cancelled' as const
+
+/** 默认业务列表中排除的订单状态（与 includeArchived=true 时的「历史模式」相对） */
+export const ORDER_STATUSES_EXCLUDED_FROM_OPERATIONAL_LISTS = [
+  ORDER_STATUS_ARCHIVED,
+  ORDER_STATUS_CANCELLED,
+] as const
 
 /** URL / searchParams：是否包含完成留档订单（历史模式） */
 export function parseIncludeArchived(searchParams: URLSearchParams): boolean {
@@ -29,9 +37,7 @@ export function ordersWhereRootExcludeArchived(): Prisma.ordersWhereInput {
 export function mergeOrdersRelationExcludeArchived(
   existing: Prisma.ordersWhereInput | undefined
 ): Prisma.ordersWhereInput {
-  const fragment: Prisma.ordersWhereInput = {
-    NOT: { status: ORDER_STATUS_ARCHIVED },
-  }
+  const fragment = ordersWhereRootExcludeArchived()
   if (!existing || Object.keys(existing).length === 0) {
     return fragment
   }
@@ -46,7 +52,7 @@ export function applyArchivedFilterToInboundReceiptWhere(
   includeArchived: boolean
 ): void {
   if (includeArchived) return
-  const fragment = { NOT: { status: ORDER_STATUS_ARCHIVED } }
+  const fragment = ordersWhereRootExcludeArchived()
   const or = where.OR
   if (Array.isArray(or)) {
     where.OR = or.map((clause: unknown) => {

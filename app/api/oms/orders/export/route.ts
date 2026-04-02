@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       if (status && status !== '__all__') {
         where.status = status
       } else if (!parseIncludeArchived(searchParams)) {
-        // 默认排除"完成留档"状态
+        // 与订单列表一致：默认仅排除完成留档
         where.status = { not: ORDER_STATUS_ARCHIVED }
       }
 

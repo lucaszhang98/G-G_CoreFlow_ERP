@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
-import { ORDER_STATUS_ARCHIVED } from '@/lib/orders/order-visibility'
+import { ORDER_STATUSES_EXCLUDED_FROM_OPERATIONAL_LISTS } from '@/lib/orders/order-visibility'
 
 // GET - 获取订单列表（用于选择柜号）
 export async function GET(request: NextRequest) {
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     // 构建查询条件
     const where: any = {
-      status: { not: ORDER_STATUS_ARCHIVED }, // 排除已归档的订单
+      status: { notIn: [...ORDER_STATUSES_EXCLUDED_FROM_OPERATIONAL_LISTS] },
     }
 
     // 模糊搜索订单号
