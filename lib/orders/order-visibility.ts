@@ -25,9 +25,14 @@ export function parseIncludeArchived(searchParams: URLSearchParams): boolean {
   return lower === 'true' || lower === '1' || lower === 'yes'
 }
 
-/** 直接查询 orders 表时：排除完成留档（含 status 为 null 的行，与 NOT 语义一致） */
+/** 直接查询 orders 表时：排除完成留档与已取消 */
 export function ordersWhereRootExcludeArchived(): Prisma.ordersWhereInput {
-  return { NOT: { status: ORDER_STATUS_ARCHIVED } }
+  return {
+    AND: [
+      { NOT: { status: ORDER_STATUS_ARCHIVED } },
+      { NOT: { status: ORDER_STATUS_CANCELLED } },
+    ],
+  }
 }
 
 /**

@@ -29,23 +29,24 @@ export function DeliveryAppointmentTable() {
   const [totalCount, setTotalCount] = React.useState(0) // 全部数据总数（固定值，只在初始加载时设置）
   const [filteredCount, setFilteredCount] = React.useState(0) // 当前筛选结果数
 
-  // 初始加载时获取全部数据总数
+  // 与列表同源：/api/oms/appointments
   React.useEffect(() => {
     const fetchTotalCount = async () => {
       try {
-        const response = await fetch('/api/wms/delivery-appointments?page=1&limit=1')
+        const qs = new URLSearchParams({ page: "1", limit: "1" })
+        const response = await fetch(`/api/oms/appointments?${qs.toString()}`)
         if (response.ok) {
           const data = await response.json()
           const total = data.pagination?.total ?? data.total ?? 0
           setTotalCount(total)
-          setFilteredCount(total) // 初始时，筛选结果数等于总数
+          setFilteredCount(total)
         }
       } catch (error) {
         console.error('获取总数失败:', error)
       }
     }
     fetchTotalCount()
-  }, [refreshKey]) // 刷新时重新获取
+  }, [refreshKey])
 
   // 处理EntityTable的总数变化（只在首次加载时更新totalCount）
   const handleTotalChange = React.useCallback((newTotal: number) => {
@@ -296,7 +297,6 @@ export function DeliveryAppointmentTable() {
     </Button>
   ) : null
 
-  // 自定义工具栏按钮（批量导出下拉菜单）
   const customToolbarButtons = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

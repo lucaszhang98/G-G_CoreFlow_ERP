@@ -5,12 +5,20 @@ import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
 import { deliveryAppointmentConfig } from '@/lib/crud/configs/delivery-appointments';
 import prisma from '@/lib/prisma';
-import {
-  mergeOrdersRelationExcludeArchived,
-  parseIncludeArchived,
-} from '@/lib/orders/order-visibility';
 
-// GET - 获取预约管理列表
+/** 将条件并入 where.AND，避免与 mergeFilterConditions 生成的顶层 AND 并列再出现一个顶层 OR（Prisma/驱动下易 500） */
+function appendToWhereAnd(where: Record<string, any>, clause: unknown) {
+  const existing = where.AND;
+  if (existing === undefined) {
+    where.AND = [clause];
+  } else if (Array.isArray(existing)) {
+    where.AND = [...existing, clause];
+  } else {
+    where.AND = [existing, clause];
+  }
+}
+
+// GET - 获取预约管理列表（不按订单归档/已取消隐藏；与出库等业务列表区分）
 export async function GET(request: NextRequest) {
   try {
     // 检查登录
@@ -29,30 +37,39 @@ export async function GET(request: NextRequest) {
     // 增强配置，确保 filterFields 已生成
     const enhancedConfig = enhanceConfigWithSearchFields(deliveryAppointmentConfig);
 
-    // 搜索条件（模糊搜索）
-    if (search && enhancedConfig.list.searchFields) {
-      const searchConditions: any[] = [];
-      enhancedConfig.list.searchFields.forEach(field => {
-        const fieldConfig = enhancedConfig.fields[field];
-        // 只处理非关系字段的文本搜索
-        if (!fieldConfig?.relation && fieldConfig?.type !== 'relation' && !fieldConfig?.computed) {
-          searchConditions.push({
-            [field]: { contains: search, mode: 'insensitive' as const }
-          });
-        }
-      });
-      if (searchConditions.length > 0) {
-        where.OR = searchConditions;
-      }
-    }
-
-    // 筛选条件（快速筛选）- 使用统一的筛选逻辑辅助函数
+    // 筛选条件（快速筛选）
     const filterConditions = buildFilterConditions(enhancedConfig, searchParams);
     mergeFilterConditions(where, filterConditions);
 
-    // 默认排除完成留档、已取消订单的预约（?includeArchived=true 查看历史）
-    if (!parseIncludeArchived(searchParams)) {
-      where.orders = mergeOrdersRelationExcludeArchived(where.orders);
+    // 模糊搜索：必须放进 AND 的一条 { OR: ... }，禁止与筛选产生的顶层 AND 并列写顶层 OR
+    if (search && enhancedConfig.list.searchFields) {
+      const q = search.trim();
+      if (q) {
+        const searchConditions: any[] = [];
+        enhancedConfig.list.searchFields.forEach((field) => {
+          // trailer 为列表展示字段，实际存于 wms.outbound_shipments.trailer_code，不能对主表用 trailer
+          if (field === 'trailer') {
+            searchConditions.push({
+              outbound_shipments: {
+                trailer_code: { contains: q, mode: 'insensitive' as const },
+              },
+            });
+            return;
+          }
+          const fieldConfig = enhancedConfig.fields[field];
+          if (!fieldConfig?.relation && fieldConfig?.type !== 'relation' && !fieldConfig?.computed) {
+            searchConditions.push({
+              [field]: { contains: q, mode: 'insensitive' as const },
+            });
+          }
+        });
+        searchConditions.push({
+          orders: { order_number: { contains: q, mode: 'insensitive' as const } },
+        });
+        if (searchConditions.length > 0) {
+          appendToWhereAnd(where, { OR: searchConditions });
+        }
+      }
     }
 
     // 排序

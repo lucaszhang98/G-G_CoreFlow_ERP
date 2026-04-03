@@ -791,9 +791,23 @@ export function EntityTable<T = any>({
         let errorMessage = `获取${config.displayName}列表失败`
         try {
           const errorData = await response.json()
-          errorMessage = errorData.error || errorMessage
+          errorMessage =
+            errorData.error || errorData.message || errorMessage
           if (process.env.NODE_ENV === 'development') {
-            console.error(`[EntityTable] API错误 (${response.status}):`, errorData)
+            const empty =
+              !errorData ||
+              (typeof errorData === 'object' &&
+                !Array.isArray(errorData) &&
+                Object.keys(errorData).length === 0)
+            console.error(
+              `[EntityTable] API错误 (${response.status}):`,
+              empty
+                ? {
+                    hint: '响应体为空对象或非 JSON，请看 Network 面板原始正文与服务器日志',
+                    statusText: response.statusText,
+                  }
+                : errorData
+            )
           }
         } catch (e) {
           if (process.env.NODE_ENV === 'development') {

@@ -184,7 +184,15 @@ export const deliveryAppointmentConfig: EntityConfig = {
       'trailer',
       'po',
     ],
-    searchFields: ['reference_number', 'po'], // 搜索预约号码和PO字段
+    // 快速搜索：含派送方式（如「私仓」）、备注、账号等；柜号走 orders.order_number 由列表 API 追加
+    searchFields: [
+      'reference_number',
+      'po',
+      'delivery_method',
+      'appointment_account',
+      'notes',
+      'trailer',
+    ],
     // 筛选配置（快速筛选）- 手动覆盖 delivery_method 为多选
     filterFields: [
       {
