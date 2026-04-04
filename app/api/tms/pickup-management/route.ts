@@ -66,6 +66,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // 现在位置含「查验」（提柜页「查验柜」按钮写入 filter_pickup_location_inspection=yes）
+    if (searchParams.get('filter_pickup_location_inspection') === 'yes') {
+      where.current_location = {
+        contains: '查验',
+        mode: 'insensitive' as const,
+      }
+    }
+
     // 搜索条件（搜索订单号、MBL）- 通过关联的 orders 表搜索
     if (search) {
       const searchCondition = {

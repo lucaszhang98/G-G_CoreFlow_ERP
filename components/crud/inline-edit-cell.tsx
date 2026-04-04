@@ -24,6 +24,9 @@ import { ChevronDown, Check, X } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 
+/** 根容器：在 table-fixed 列宽下不撑开 td，内容过宽时横向滚动 */
+const CELL_ROOT = "inline-edit-cell min-w-0 w-full max-w-full overflow-x-auto"
+
 interface InlineEditCellProps {
   fieldKey: string
   fieldConfig: FieldConfig
@@ -64,7 +67,7 @@ function InlineSelectWithAutoOpen({
     setOpen(true)
   }, [autoOpenDropdown, loadingOptions])
   return (
-    <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+    <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
       <Select
         open={open}
         onOpenChange={setOpen}
@@ -80,7 +83,7 @@ function InlineSelectWithAutoOpen({
         }}
         disabled={loadingOptions}
       >
-        <SelectTrigger className={cn("h-10 text-sm min-w-[120px] w-full", className)}>
+        <SelectTrigger className={cn("h-10 text-sm min-w-0 w-full", className)}>
           <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
         </SelectTrigger>
         <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
@@ -128,7 +131,7 @@ function InlineRelationSelectWithAutoOpen({
     setOpen(true)
   }, [autoOpenDropdown, loadingOptions])
   return (
-    <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+    <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
       <Select
         open={open}
         onOpenChange={setOpen}
@@ -144,7 +147,7 @@ function InlineRelationSelectWithAutoOpen({
         }}
         disabled={loadingOptions}
       >
-        <SelectTrigger className={cn("h-10 text-sm min-w-[120px] w-full", className)}>
+        <SelectTrigger className={cn("h-10 text-sm min-w-0 w-full", className)}>
           <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
         </SelectTrigger>
         <SelectContent>
@@ -289,27 +292,27 @@ export function InlineEditCell({
       // 对于备注字段，使用 textarea
       if (fieldKey === 'notes') {
         return (
-          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
             <Textarea
               value={internalValue || ''}
               onChange={(e) => handleInternalChange(e.target.value)}
               onBlur={handleBlur}
               placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-              className={cn("min-h-[80px] text-sm min-w-[200px] w-full resize-none", className)}
+              className={cn("min-h-[80px] text-sm min-w-0 w-full max-w-full resize-none", className)}
               rows={3}
             />
           </div>
         )
       }
       return (
-        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+        <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
           <Input
             type={fieldConfig.type === 'email' ? 'email' : fieldConfig.type === 'phone' ? 'tel' : 'text'}
             value={internalValue || ''}
             onChange={(e) => handleInternalChange(e.target.value)}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-            className={cn("h-9 text-sm min-w-[120px] w-full", className)}
+            className={cn("h-9 text-sm min-w-0 w-full max-w-full", className)}
           />
         </div>
       )
@@ -319,7 +322,7 @@ export function InlineEditCell({
       // 0 为有效值，展示与入库管理详情页一致；空输入用 ''
       const numDisplayValue = internalValue === '' || internalValue === undefined || internalValue === null ? '' : internalValue
       return (
-        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+        <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
           <Input
             type="number"
             step={fieldConfig.type === 'currency' ? '0.01' : '1'}
@@ -327,7 +330,7 @@ export function InlineEditCell({
             onChange={(e) => handleInternalChange(e.target.value === '' ? '' : Number(e.target.value))}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-            className={cn("h-10 text-sm min-w-[100px] w-full", className)}
+            className={cn("h-10 text-sm min-w-0 w-full max-w-full", className)}
           />
         </div>
       )
@@ -344,16 +347,19 @@ export function InlineEditCell({
       return (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="inline-edit-cell mr-auto inline-flex w-fit max-w-full min-w-0 items-center gap-1"
+          className={cn(
+            CELL_ROOT,
+            "mr-auto inline-flex w-full max-w-full min-w-0 flex-wrap items-center gap-1"
+          )}
         >
-          {/* 勿用 flex-1：在宽单元格里会把原生 date 拉成一条长条，日历/清空按钮被甩到最右侧 */}
+          {/* 列宽由表格固定；控件 max-w-full 避免撑开 td */}
           <Input
             type="date"
             value={dateValue}
             onChange={(e) => handleInternalChange(e.target.value || null)}
             onBlur={handleBlur}
             className={cn(
-              "h-9 w-[10.5rem] max-w-full shrink-0 text-sm bg-white",
+              "h-9 min-w-0 max-w-full w-[10.5rem] shrink-0 text-sm bg-white",
               className
             )}
           />
@@ -411,7 +417,10 @@ export function InlineEditCell({
         })
         
         return (
-          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell flex items-center gap-2">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={cn(CELL_ROOT, "flex min-w-0 max-w-full flex-wrap items-center gap-2")}
+          >
             <Input
               type="date"
               value={datePart}
@@ -423,7 +432,7 @@ export function InlineEditCell({
                 onChange(newValue)
               }}
               onBlur={handleBlur}
-              className={cn("h-9 text-sm min-w-[140px] flex-1 bg-white", className)}
+              className={cn("h-9 min-w-0 max-w-full flex-1 text-sm bg-white", className)}
             />
             <PickupDateHourSelect
               hourPart={hourPart}
@@ -475,13 +484,13 @@ export function InlineEditCell({
         }
       }
       return (
-        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+        <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
           <Input
             type="datetime-local"
             value={datetimeValue}
             onChange={(e) => handleInternalChange(e.target.value || null)}
             onBlur={handleBlur}
-            className={cn("h-9 text-sm min-w-[160px] w-full bg-white", className)}
+            className={cn("h-9 min-w-0 w-full max-w-full text-sm bg-white", className)}
           />
         </div>
       )
@@ -524,7 +533,7 @@ export function InlineEditCell({
         }, [selectOptions, searchValue])
         
         return (
-          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
             <Popover open={open} onOpenChange={setOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -630,14 +639,14 @@ export function InlineEditCell({
 
     case 'textarea':
       return (
-        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+        <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
           <textarea
             value={internalValue || ''}
             onChange={(e) => handleInternalChange(e.target.value)}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
             className={cn(
-              "flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+              "flex min-h-[60px] min-w-0 w-full max-w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
               className
             )}
             rows={2}
@@ -651,7 +660,7 @@ export function InlineEditCell({
         ? internalValue 
         : (internalValue === true || internalValue === 'true' || internalValue === 1 || internalValue === '1')
       return (
-        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+        <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
           <input
             type="checkbox"
             checked={boolValue}
@@ -671,7 +680,7 @@ export function InlineEditCell({
       // 注意：不传递className来改变核心样式，保持统一的白色样式
       // 如果字段配置中指定了 locationType，则只显示该类型的位置
       return (
-        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+        <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
           <LocationSelect
             value={internalValue || null}
             onChange={(val) => {
@@ -680,7 +689,7 @@ export function InlineEditCell({
             }}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
-            className={className} // 只传递外部className，不覆盖核心样式
+            className={cn("min-w-0", className)}
             locationType={fieldConfig.locationType} // 支持直接指定位置类型
             autoOpenOnMount={autoOpenDropdown}
           />
@@ -692,7 +701,7 @@ export function InlineEditCell({
       // 注意：不传递className来改变核心样式，保持统一的白色样式
       if (fieldConfig.relation?.model === 'locations') {
         return (
-          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
             <LocationSelect
               value={internalValue || null}
               onChange={(val) => {
@@ -701,7 +710,7 @@ export function InlineEditCell({
               }}
               onBlur={handleBlur}
               placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
-              className={className} // 只传递外部className，不覆盖核心样式
+              className={cn("min-w-0", className)}
               locationType={fieldConfig.locationType} // 支持直接指定位置类型
               autoOpenOnMount={autoOpenDropdown}
             />
@@ -711,7 +720,7 @@ export function InlineEditCell({
       // 其他关联字段：优先使用模糊搜索下拉框（如果有 loadFuzzyOptions）
       if (loadFuzzyOptions) {
         return (
-          <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+          <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
             <FuzzySearchSelect
               value={internalValue || null}
               onChange={(val) => {
@@ -720,7 +729,7 @@ export function InlineEditCell({
               }}
               onBlur={handleBlur}
               placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
-              className={className}
+              className={cn("min-w-0", className)}
               loadOptions={loadFuzzyOptions}
               autoOpenOnMount={Boolean(autoOpenDropdown)}
             />
@@ -766,14 +775,14 @@ export function InlineEditCell({
     default:
       // 默认显示为文本输入
       return (
-        <div onClick={(e) => e.stopPropagation()} className="inline-edit-cell">
+        <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
           <Input
             type="text"
             value={internalValue?.toString() || ''}
             onChange={(e) => handleInternalChange(e.target.value)}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-            className={cn("h-8 text-sm", className)}
+            className={cn("h-8 min-w-0 w-full max-w-full text-sm", className)}
           />
         </div>
       )

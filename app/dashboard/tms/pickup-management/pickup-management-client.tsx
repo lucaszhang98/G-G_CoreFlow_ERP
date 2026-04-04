@@ -34,6 +34,8 @@ export function PickupManagementClient() {
   const pathname = usePathname()
   const [lfdNoPickupActive, setLfdNoPickupActive] = React.useState(false)
   const [pendingLfdInquiryActive, setPendingLfdInquiryActive] = React.useState(false)
+  /** 现在位置含「查验」，与 URL filter_pickup_location_inspection=yes 同步 */
+  const [pickupInspectionActive, setPickupInspectionActive] = React.useState(false)
   const [isInitializing, setIsInitializing] = React.useState(false)
   const [isSyncing, setIsSyncing] = React.useState(false)
   const [isSyncingAppointment, setIsSyncingAppointment] = React.useState(false)
@@ -63,9 +65,10 @@ export function PickupManagementClient() {
     const p: Record<string, string> = {}
     if (pendingLfdInquiryActive) p.pending_lfd_inquiry = "1"
     if (lfdNoPickupActive) p.lfd_no_pickup = "1"
+    if (pickupInspectionActive) p.filter_pickup_location_inspection = "yes"
     if (includeArchived) p.includeArchived = "true"
     return p
-  }, [pendingLfdInquiryActive, lfdNoPickupActive, includeArchived])
+  }, [pendingLfdInquiryActive, lfdNoPickupActive, pickupInspectionActive, includeArchived])
 
   const togglePendingLfdInquiry = React.useCallback(() => {
     const next = !pendingLfdInquiryActive
@@ -75,6 +78,8 @@ export function PickupManagementClient() {
     if (next) {
       params.set("pending_lfd_inquiry", "1")
       params.delete("lfd_no_pickup")
+      params.delete("filter_pickup_location_inspection")
+      setPickupInspectionActive(false)
       params.set("sort", "eta_date")
       params.set("order", "asc")
       params.set("page", "1")
@@ -95,6 +100,8 @@ export function PickupManagementClient() {
     if (next) {
       params.set("lfd_no_pickup", "1")
       params.delete("pending_lfd_inquiry")
+      params.delete("filter_pickup_location_inspection")
+      setPickupInspectionActive(false)
       params.set("sort", "lfd_date")
       params.set("order", "asc")
       params.set("page", "1")
@@ -106,6 +113,26 @@ export function PickupManagementClient() {
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [lfdNoPickupActive, pathname, router])
+
+  const togglePickupInspection = React.useCallback(() => {
+    const next = !pickupInspectionActive
+    const params = new URLSearchParams(
+      typeof window !== "undefined" ? window.location.search : ""
+    )
+    if (next) {
+      params.set("filter_pickup_location_inspection", "yes")
+      params.delete("pending_lfd_inquiry")
+      params.delete("lfd_no_pickup")
+      params.set("page", "1")
+      setPendingLfdInquiryActive(false)
+      setLfdNoPickupActive(false)
+    } else {
+      params.delete("filter_pickup_location_inspection")
+    }
+    setPickupInspectionActive(next)
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [pickupInspectionActive, pathname, router])
 
   // 用于追踪勾选顺序的状态
   const [orderedSelectedRows, setOrderedSelectedRows] = React.useState<any[]>([])
@@ -562,10 +589,20 @@ export function PickupManagementClient() {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [handleCopyContainerNumbers, orderedSelectedRows])
 
-  /** 放在「快速筛选」一行：待查询（无 LFD、无提柜） / 待提柜（有 LFD、无提柜） */
+  /** 放在「快速筛选」一行：查验柜 / 待查询（无 LFD、无提柜） / 待提柜（有 LFD、无提柜） */
   const customFilterContent = React.useCallback(
     () => (
       <>
+        <Button
+          type="button"
+          variant={pickupInspectionActive ? "default" : "outline"}
+          size="sm"
+          className="h-9 shrink-0"
+          onClick={togglePickupInspection}
+          title="筛选「现在位置」文案中含「查验」的提柜记录"
+        >
+          查验柜
+        </Button>
         <Button
           type="button"
           variant={pendingLfdInquiryActive ? "default" : "outline"}
@@ -590,7 +627,14 @@ export function PickupManagementClient() {
         </Button>
       </>
     ),
-    [pendingLfdInquiryActive, togglePendingLfdInquiry, lfdNoPickupActive, toggleLfdNoPickup]
+    [
+      pickupInspectionActive,
+      togglePickupInspection,
+      pendingLfdInquiryActive,
+      togglePendingLfdInquiry,
+      lfdNoPickupActive,
+      toggleLfdNoPickup,
+    ]
   )
 
   // 自定义工具栏按钮：第一行两个同步按钮，第二行批量导出 + 批量导入（与订单/预约管理 UI 一致）

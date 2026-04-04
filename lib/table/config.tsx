@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Eye, Trash2, Pencil, Save, X } from "lucide-react"
 import { autoFormatDateField, isDateField, isDateTimeField, formatDateTimeDisplay } from "@/lib/utils/date-format"
 import { ClickableCell } from "@/components/ui/clickable-cell"
+import { TABLE_COLUMN_RESIZE_MAX_PX } from "@/lib/table/column-sizing"
 
 /**
  * 列排序配置
@@ -212,8 +213,8 @@ export function createTableColumns<TData>(
     processedColumns.push({
       id: "actions",
       size: 200,
-      minSize: 120,
-      maxSize: 280,
+      minSize: 48,
+      maxSize: TABLE_COLUMN_RESIZE_MAX_PX,
       header: () => <div className="text-center">操作</div>,
       cell: ({ row }) => {
         const actions: React.ReactNode[] = []

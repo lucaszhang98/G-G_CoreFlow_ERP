@@ -8,7 +8,7 @@ import * as React from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { ColumnDef } from "@tanstack/react-table"
 import { Plus, Trash2, Edit, CheckCircle, XCircle, Upload } from "lucide-react"
-import { DataTable, type InlineEditColumnWidthHint } from "@/components/data-table"
+import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -344,35 +344,6 @@ function LocationInlineDisplayCell({
   return wrapDirty(displayText)
 }
 
-/** 行内编辑时按字段类型给列宽上下限，避免 date/弹层控件被 200px 封顶裁切 */
-function buildInlineEditColumnWidthHints(
-  columnIds: Set<string>,
-  fields: Record<string, FieldConfig>
-): Record<string, InlineEditColumnWidthHint> | undefined {
-  const hints: Record<string, InlineEditColumnWidthHint> = {}
-  for (const id of columnIds) {
-    const f = fields[id]
-    const t = f?.type
-    if (t === "date") {
-      // 与 InlineEditCell 固定 date 宽度 + 清空按钮一致；列本身勿再留大块空档
-      hints[id] = { min: 228, max: 252 }
-    } else if (t === "datetime") {
-      hints[id] =
-        id === "pickup_date"
-          ? { min: 360, max: 440 }
-          : { min: 312, max: 384 }
-    } else if (t === "textarea") {
-      hints[id] = { min: 240, max: 400 }
-    } else if (t === "location") {
-      // LocationSelect：图标 + 文案 + 清空 + chevron；过窄会只剩「选…」
-      hints[id] = { min: 300, max: 340 }
-    } else if (t === "relation") {
-      hints[id] = { min: 220, max: 288 }
-    }
-  }
-  return Object.keys(hints).length > 0 ? hints : undefined
-}
-
 interface EntityTableProps<T = any> {
   config: EntityConfig
   FormComponent?: React.ComponentType<any>
@@ -423,8 +394,6 @@ interface EntityTableProps<T = any> {
     shouldIntercept: () => boolean
     confirm: (intent: { nextPage: number; nextPageSize: number }) => Promise<boolean>
   }
-  /** 与行内编辑列宽放宽合并（如自定义列 `port_location` 不在 activeInlineFieldByRow 内） */
-  additionalInlineUnboundedColumnIds?: readonly string[]
 }
 
 export function EntityTable<T = any>({ 
@@ -453,7 +422,6 @@ export function EntityTable<T = any>({
   customCellRenderers,
   pageDraftSave,
   paginationChangeGuard,
-  additionalInlineUnboundedColumnIds,
 }: EntityTableProps<T>) {
   // 自动增强配置，生成 filterFields 和 advancedSearchFields（如果未配置）
   const enhancedConfig = React.useMemo(() => {
@@ -963,37 +931,6 @@ export function EntityTable<T = any>({
     })
   }, [inlineEditEnabled, config.list.inlineEdit?.fields, config.fields, config.idField])
 
-  const inlineEditUnboundedColumnIds = React.useMemo(() => {
-    const s = new Set<string>(Object.values(activeInlineFieldByRow))
-    for (const id of additionalInlineUnboundedColumnIds ?? []) {
-      s.add(id)
-    }
-    if (draftRowIds.length > 0 && inlineEditEnabled) {
-      for (const k of editableFields) {
-        s.add(k)
-      }
-      for (const c of filterAuditFields(config.list.columns, config.idField)) {
-        s.add(c)
-      }
-    }
-    return s
-  }, [
-    activeInlineFieldByRow,
-    additionalInlineUnboundedColumnIds,
-    draftRowIds.length,
-    inlineEditEnabled,
-    editableFields,
-    config.list.columns,
-    config.idField,
-  ])
-
-  const inlineEditColumnWidthHints = React.useMemo(() => {
-    if (!inlineEditEnabled) return undefined
-    return buildInlineEditColumnWidthHints(
-      inlineEditUnboundedColumnIds,
-      enhancedConfig.fields
-    )
-  }, [inlineEditEnabled, inlineEditUnboundedColumnIds, enhancedConfig.fields])
   
   // 检查行是否处于草稿编辑中（只在客户端检查，避免 hydration 错误）
   const isRowEditing = React.useCallback((row: T): boolean => {
@@ -3182,12 +3119,6 @@ export function EntityTable<T = any>({
         columns={columns}
         data={data}
         loading={loading}
-        inlineEditUnboundedColumnIds={
-          inlineEditEnabled ? inlineEditUnboundedColumnIds : undefined
-        }
-        inlineEditColumnWidthHints={
-          inlineEditEnabled ? inlineEditColumnWidthHints : undefined
-        }
         page={page}
         pageSize={pageSize}
         total={total}
@@ -3237,6 +3168,10 @@ export function EntityTable<T = any>({
         getRowClassName={
           config.name === 'pickup_management'
             ? (row: any) => {
+                const loc = row.current_location
+                if (typeof loc === 'string' && loc.includes('查验')) {
+                  return "bg-gradient-to-r from-red-200 via-red-100 to-red-200 dark:from-red-900/60 dark:via-red-950/50 dark:to-red-900/60 hover:from-red-300 hover:via-red-200 hover:to-red-300 dark:hover:from-red-800/65 dark:hover:via-red-900/55 dark:hover:to-red-800/65"
+                }
                 // 如果提柜时间字段有值，返回绿色背景（符合系统风格）
                 if (row.pickup_date != null && row.pickup_date !== '') {
                   return "bg-gradient-to-r from-green-100 via-emerald-50/80 to-green-100 dark:from-green-900/40 dark:via-emerald-900/30 dark:to-green-900/40 hover:from-green-200 hover:via-emerald-100/80 hover:to-green-200 dark:hover:from-green-800/50 dark:hover:via-emerald-800/40 dark:hover:to-green-800/50"

@@ -42,33 +42,26 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { TABLE_COLUMN_RESIZE_MAX_PX } from "@/lib/table/column-sizing"
 
-/** 数据列「Excel 式」最大宽度；短列用较小默认 size，显示时不超过此值 */
-const MAX_DATA_COLUMN_WIDTH_PX = 200
-const MAX_ACTIONS_COLUMN_WIDTH_PX = 220
-const MAX_SELECT_COLUMN_WIDTH_PX = 72
 const DEFAULT_COLUMN_SIZE_PX = 112
-/** 行内编辑：去掉 200px 硬顶；默认略放宽。日期/弹层类字段由 inlineEditColumnWidthHints 单独给上下限 */
-const INLINE_EDIT_COLUMN_SOFT_MIN_PX = 120
-const INLINE_EDIT_COLUMN_SOFT_MAX_PX = 240
 
-export type InlineEditColumnWidthHint = { min?: number; max?: number }
+/** 列渲染宽度：与 TanStack column.getSize() 一致，不在此二次封顶（拖拽可拉到 TABLE_COLUMN_RESIZE_MAX_PX） */
+function getColumnDisplayWidthPx<TData>(column: Column<TData, unknown>): number {
+  return column.getSize()
+}
 
-function getColumnDisplayWidthPx<TData>(
-  column: Column<TData, unknown>,
-  unboundedColumnIds?: Set<string> | null,
-  widthHints?: Record<string, InlineEditColumnWidthHint> | null
-): number {
-  const s = column.getSize()
-  if (column.id === "select") return Math.min(s, MAX_SELECT_COLUMN_WIDTH_PX)
-  if (column.id === "actions") return Math.min(s, MAX_ACTIONS_COLUMN_WIDTH_PX)
-  if (unboundedColumnIds?.has(column.id)) {
-    const hint = column.id ? widthHints?.[column.id] : undefined
-    const minPx = hint?.min ?? INLINE_EDIT_COLUMN_SOFT_MIN_PX
-    const maxPx = hint?.max ?? INLINE_EDIT_COLUMN_SOFT_MAX_PX
-    return Math.min(Math.max(s, minPx), maxPx)
+/** 订单 MBL 与提柜列表 MBL 列 id（右键复制仅取末尾 4 位） */
+const MBL_CLIPBOARD_COLUMN_IDS = new Set<string>(["mbl", "mbl_number"])
+
+/** 右键复制到剪贴板时的文本（MBL 列只复制 trim 后最后 4 个字符） */
+function textForContextMenuCopy(columnId: string | undefined, plainText: string): string {
+  if (!columnId || !plainText || !MBL_CLIPBOARD_COLUMN_IDS.has(columnId)) {
+    return plainText
   }
-  return Math.min(s, MAX_DATA_COLUMN_WIDTH_PX)
+  const t = plainText.trim()
+  if (!t) return ""
+  return t.length <= 4 ? t : t.slice(-4)
 }
 
 interface DataTableProps<TData, TValue> {
@@ -116,10 +109,6 @@ interface DataTableProps<TData, TValue> {
   }
   // 行样式相关
   getRowClassName?: (row: TData) => string | undefined // 根据行数据返回自定义 className
-  /** 行内编辑中的列 id：这些列临时突破最大列宽，保存后清空即可恢复 */
-  inlineEditUnboundedColumnIds?: Set<string> | readonly string[] | null
-  /** 按列覆盖行内编辑时的最小/最大显示宽度（如 date 需容纳原生日期控件 + 清空按钮） */
-  inlineEditColumnWidthHints?: Record<string, InlineEditColumnWidthHint> | null
 }
 
 export function DataTable<TData, TValue>({
@@ -152,8 +141,6 @@ export function DataTable<TData, TValue>({
   cancelEditOnSelectionChange = true,
   expandableRows,
   getRowClassName,
-  inlineEditUnboundedColumnIds,
-  inlineEditColumnWidthHints,
 }: DataTableProps<TData, TValue>) {
   // 防止 hydration 错误：只在客户端渲染 DropdownMenu
   const [mounted, setMounted] = React.useState(false)
@@ -502,7 +489,7 @@ export function DataTable<TData, TValue>({
       enableHiding: false,
       size: 56,
       minSize: 48,
-      maxSize: MAX_SELECT_COLUMN_WIDTH_PX,
+      maxSize: TABLE_COLUMN_RESIZE_MAX_PX,
       meta: {
         widthClass: "min-w-0",
         alignRight: false,
@@ -550,11 +537,11 @@ export function DataTable<TData, TValue>({
     columnResizeMode: 'onChange',
     onColumnSizingChange: setColumnSizing,
     onColumnOrderChange: setColumnOrder,
-    // 列宽：size 为逻辑像素；渲染时再按 MAX_* 封顶，表总宽为各列之和，列少时不强行撑满视口。
+    // 列宽：size 为逻辑像素；maxSize 仅约束拖拽上限，默认列宽仍用 DEFAULT_COLUMN_SIZE_PX。
     defaultColumn: {
       size: DEFAULT_COLUMN_SIZE_PX,
       minSize: 48,
-      maxSize: MAX_DATA_COLUMN_WIDTH_PX,
+      maxSize: TABLE_COLUMN_RESIZE_MAX_PX,
     },
     state: {
       sorting,
@@ -570,13 +557,6 @@ export function DataTable<TData, TValue>({
     },
   })
 
-  const inlineEditUnboundedIds = React.useMemo(() => {
-    if (!inlineEditUnboundedColumnIds) return null
-    return inlineEditUnboundedColumnIds instanceof Set
-      ? inlineEditUnboundedColumnIds
-      : new Set(inlineEditUnboundedColumnIds)
-  }, [inlineEditUnboundedColumnIds])
-
   // 展开列：参与表总宽；宽度封顶，避免单独占得过宽
   const expandColumnMinWidthPx = 72
   const expandColWeight = expandableRows?.enabled ? 96 : 0
@@ -586,44 +566,20 @@ export function DataTable<TData, TValue>({
   const layoutTotal = React.useMemo(() => {
     const sum = table
       .getVisibleLeafColumns()
-      .reduce(
-        (acc, col) =>
-          acc + getColumnDisplayWidthPx(col, inlineEditUnboundedIds, inlineEditColumnWidthHints),
-        0
-      )
+      .reduce((acc, col) => acc + getColumnDisplayWidthPx(col), 0)
     return Math.max(sum + expandColumnDisplayPx, 1)
-  }, [
-    table,
-    columnSizing,
-    columnVisibility,
-    columnOrder,
-    expandColumnDisplayPx,
-    inlineEditUnboundedIds,
-    inlineEditColumnWidthHints,
-  ])
+  }, [table, columnSizing, columnVisibility, columnOrder, expandColumnDisplayPx])
 
   const stretchLayout = React.useMemo(() => {
     const visibleCols = table.getVisibleLeafColumns()
-    const isUnboundedCol = (column: Column<TData, unknown>) =>
-      Boolean(column.id && inlineEditUnboundedIds?.has(column.id))
-    // 行内编辑列已按 min/max 算好宽度，不再参与「均分剩余宽度」，否则 ETA 等列会 336px + 一大块空白
-    let stretchEligibleCount = 0
-    for (const col of visibleCols) {
-      if (!isUnboundedCol(col)) stretchEligibleCount++
-    }
-    if (expandableRows?.enabled) stretchEligibleCount++
+    const stretchEligibleCount = visibleCols.length + (expandableRows?.enabled ? 1 : 0)
 
     const extraSpace = Math.max(0, tableContainerWidthPx - layoutTotal)
     const perColExtra =
       stretchEligibleCount > 0 ? extraSpace / stretchEligibleCount : 0
     const tableWidthPx = layoutTotal + extraSpace
     const getStretchedWidthPx = (column: Column<TData, unknown>) => {
-      const base = getColumnDisplayWidthPx(
-        column,
-        inlineEditUnboundedIds,
-        inlineEditColumnWidthHints
-      )
-      if (isUnboundedCol(column)) return base
+      const base = getColumnDisplayWidthPx(column)
       return base + perColExtra
     }
     const expandStretchedPx = expandColumnDisplayPx + perColExtra
@@ -637,8 +593,6 @@ export function DataTable<TData, TValue>({
     tableContainerWidthPx,
     expandableRows?.enabled,
     expandColumnDisplayPx,
-    inlineEditUnboundedIds,
-    inlineEditColumnWidthHints,
   ])
 
   // 当 table 初始化后，应用默认视图（确保列ID都正确）
@@ -1431,7 +1385,8 @@ export function DataTable<TData, TValue>({
                           
                           e.preventDefault()
                           
-                          const textToCopy = extractCellText()
+                          const plain = extractCellText()
+                          const textToCopy = textForContextMenuCopy(cell.column.id, plain)
                           
                           if (!textToCopy) {
                             return
@@ -1442,9 +1397,13 @@ export function DataTable<TData, TValue>({
                             await navigator.clipboard.writeText(textToCopy)
                             
                             setCopiedCellId(cell.id)
-                            toast.success('已复制到剪贴板', {
-                              duration: 1500,
-                            })
+                            const isMblCol =
+                              cell.column.id != null &&
+                              MBL_CLIPBOARD_COLUMN_IDS.has(cell.column.id)
+                            toast.success(
+                              isMblCol ? "已复制 MBL 后四位" : "已复制到剪贴板",
+                              { duration: 1500 }
+                            )
                             
                             setTimeout(() => {
                               setCopiedCellId(null)
@@ -1459,6 +1418,11 @@ export function DataTable<TData, TValue>({
                         
                         // 确定是否可以右键复制：非编辑状态、非操作列、非复选框列
                         const canContextMenu = !isActionsCell && !isSelectCell && !isEditing
+                        const mblCopyHint =
+                          cell.column.id != null &&
+                          MBL_CLIPBOARD_COLUMN_IDS.has(cell.column.id)
+                            ? "右键复制：仅 MBL 后四位"
+                            : "右键点击复制"
                         const alignRightCell = Boolean(
                           (cell.column.columnDef.meta as { alignRight?: boolean } | undefined)?.alignRight
                         )
@@ -1528,7 +1492,9 @@ export function DataTable<TData, TValue>({
                                 }
                               }
                             }}
-                            data-tooltip={canContextMenu ? '右键点击复制' : undefined}
+                            data-tooltip={
+                              canContextMenu ? mblCopyHint : undefined
+                            }
                           >
                             <div
                               className={cn(
@@ -1537,13 +1503,14 @@ export function DataTable<TData, TValue>({
                                 isSelectCell ? "flex min-w-0 items-center justify-center" : null,
                                 !isActionsCell && !isSelectCell
                                   ? cn(
-                                      // flex：垂直居中 + 水平按列对齐，避免内容在格子里「飘」
+                                      // flex：垂直居中 + 水平按列对齐；行内编辑根节点须 min-w-0 才能在 table-fixed 下不撑开列宽
                                       "relative flex h-full w-full min-w-0 items-center overflow-hidden",
                                       alignRightCell
                                         ? "justify-end [&>*:not(.inline-edit-cell)]:text-right"
                                         : alignLeftCell
                                           ? "justify-start [&>*:not(.inline-edit-cell)]:text-left"
                                           : "justify-center [&>*:not(.inline-edit-cell)]:text-center",
+                                      "[&>.inline-edit-cell]:min-w-0 [&>.inline-edit-cell]:w-full [&>.inline-edit-cell]:max-w-full",
                                       "[&>*:not(.inline-edit-cell)]:min-w-0 [&>*:not(.inline-edit-cell)]:max-w-full [&>*:not(.inline-edit-cell)]:overflow-hidden [&>*:not(.inline-edit-cell)]:text-ellipsis [&>*:not(.inline-edit-cell)]:whitespace-nowrap"
                                     )
                                   : null
