@@ -148,6 +148,17 @@ export const orderDetailConfig: EntityConfig = {
       type: 'datetime',
       sortable: false,
     },
+    /** 仅用于列表筛选，不落库；由 GET /api/oms/order-details 解析 */
+    inbound_receipt_status_scope: {
+      key: 'inbound_receipt_status_scope',
+      label: '入库管理状态',
+      type: 'select',
+      hidden: true,
+      options: [
+        { label: '仅已入库', value: 'received' },
+        { label: '全部', value: '__all__' },
+      ],
+    },
   },
   
   list: {
@@ -175,6 +186,15 @@ export const orderDetailConfig: EntityConfig = {
     pageSize: 20,
     // 筛选配置
     filterFields: [
+      {
+        field: 'inbound_receipt_status_scope',
+        label: '入库管理',
+        type: 'select',
+        options: [
+          { label: '仅已入库', value: 'received' },
+          { label: '全部', value: '__all__' },
+        ],
+      },
       {
         field: 'operation_mode',
         label: '操作方式',

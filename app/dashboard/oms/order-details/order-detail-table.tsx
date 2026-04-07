@@ -861,6 +861,7 @@ export function OrderDetailTable() {
     <>
     <EntityTable
       config={orderDetailListConfig}
+      initialFilterValues={{ inbound_receipt_status_scope: 'received' }}
       refreshKey={tableRefreshKey}
       customCellRenderers={customCellRenderers}
       customClickableColumns={customClickableColumns}

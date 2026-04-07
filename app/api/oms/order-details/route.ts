@@ -26,6 +26,7 @@ import {
  * - filter_delivery_location_code: 仓点筛选
  * - filter_booking_status: 预约状态筛选（unbooked/fully_booked/overbooked）
  * - filter_planned_unload_at_from/to: 预计拆柜日期范围筛选
+ * - filter_inbound_receipt_status_scope: received=仅关联入库单状态为已入库；__all__ 或不传=不按入库状态限制
  * 
  * 特殊说明：
  * - 未约/剩余/送货进度：已入库与入库详情一致（预约实时计算）；未入库用预计板数-预约板数之和算未约
@@ -133,6 +134,18 @@ export async function GET(request: NextRequest) {
       }
       if (planned_unload_at_to) {
         where.orders.inbound_receipt.planned_unload_at.lte = new Date(planned_unload_at_to)
+      }
+    }
+
+    // 仅显示入库管理中状态为「已入库」的订单下的明细（与列表筛选「仅已入库」一致）
+    const inboundReceiptStatusScope = searchParams.get('filter_inbound_receipt_status_scope')
+    if (inboundReceiptStatusScope === 'received') {
+      where.orders = {
+        ...where.orders,
+        inbound_receipt: {
+          ...(where.orders?.inbound_receipt || {}),
+          status: 'received',
+        },
       }
     }
 
