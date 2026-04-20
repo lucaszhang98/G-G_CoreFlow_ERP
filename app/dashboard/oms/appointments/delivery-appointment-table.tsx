@@ -20,6 +20,26 @@ import { Download, FileSpreadsheet, Database } from "lucide-react"
 import { toast } from "sonner"
 import { generateAppointmentExportExcel, AppointmentExportData } from "@/lib/utils/appointment-export-excel"
 
+/** 选中多行：汇总每条预约下所有明细行的 estimated_pallets；无明细数据时用行上 total_pallets */
+function sumSelectedAppointmentDetailPallets(rows: any[]): number {
+  let sum = 0
+  for (const row of rows) {
+    const lines = row.appointment_detail_lines
+    if (Array.isArray(lines) && lines.length > 0) {
+      for (const line of lines) {
+        const p = line.estimated_pallets
+        const n = typeof p === "number" ? p : p != null ? Number(p) : 0
+        sum += Number.isFinite(n) ? n : 0
+      }
+    } else {
+      const tp = row.total_pallets
+      const n = typeof tp === "number" ? tp : tp != null ? Number(tp) : 0
+      sum += Number.isFinite(n) ? n : 0
+    }
+  }
+  return sum
+}
+
 export function DeliveryAppointmentTable() {
   const router = useRouter()
   const [refreshKey, setRefreshKey] = React.useState(0)
@@ -286,17 +306,30 @@ export function DeliveryAppointmentTable() {
     },
   }
 
-  // 自定义批量操作按钮（导出选中）
+  const selectedPalletsTotal = React.useMemo(
+    () => sumSelectedAppointmentDetailPallets(selectedRows),
+    [selectedRows]
+  )
+
+  // 自定义批量操作：合计板数 + 导出选中
   const customBatchActions = selectedRows.length > 0 ? (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={handleExportSelected}
-      className="min-w-[100px] h-9"
-    >
-      <Download className="mr-2 h-4 w-4" />
-      导出选中 ({selectedRows.length}条)
-    </Button>
+    <>
+      <span
+        className="inline-flex items-center rounded-md border border-border bg-muted/50 px-3 py-1.5 text-sm tabular-nums text-foreground mr-1"
+        title="选中预约下全部明细行的板数之和"
+      >
+        合计板数：<span className="font-semibold text-primary ml-1">{selectedPalletsTotal}</span>
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleExportSelected}
+        className="min-w-[100px] h-9"
+      >
+        <Download className="mr-2 h-4 w-4" />
+        导出选中 ({selectedRows.length}条)
+      </Button>
+    </>
   ) : null
 
   const customToolbarButtons = (
