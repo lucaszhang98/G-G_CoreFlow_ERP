@@ -7,6 +7,11 @@ import { checkPermission, WMS_FULL_ACCESS_PERMISSION_OPTIONS, handleValidationEr
 import { inboundReceiptUpdateSchema } from '@/lib/validations/inbound-receipt';
 import { inboundReceiptConfig } from '@/lib/crud/configs/inbound-receipts';
 import prisma from '@/lib/prisma';
+import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
+
+function includesInspectionKeyword(currentLocation: string | null | undefined): boolean {
+  return typeof currentLocation === 'string' && currentLocation.includes('查验');
+}
 
 /**
  * POST /api/wms/inbound-receipts/batch-update
@@ -55,6 +60,11 @@ export async function POST(request: NextRequest) {
     if (data.unload_method_code !== undefined) updateData.unload_method_code = data.unload_method_code || null;
     if (data.warehouse_id !== undefined) updateData.warehouse_id = BigInt(data.warehouse_id);
     if (data.order_id !== undefined) updateData.order_id = BigInt(data.order_id);
+    const hasCurrentLocationUpdate = data.current_location !== undefined;
+    const normalizedCurrentLocation =
+      data.current_location && String(data.current_location).trim()
+        ? String(data.current_location).trim()
+        : null;
 
     // 处理拆柜日期
     if (data.planned_unload_at !== undefined) {
@@ -69,15 +79,71 @@ export async function POST(request: NextRequest) {
     // 自动添加系统维护字段（只更新修改人/时间）
     await addSystemFields(updateData, currentUser, false);
 
-    // 批量更新
-    const result = await prisma.inbound_receipt.updateMany({
-      where: {
-        inbound_receipt_id: {
-          in: ids.map((id: string | number) => BigInt(id)),
+    const inboundReceiptIds = ids.map((id: string | number) => BigInt(id));
+    let result: { count: number };
+
+    if (hasCurrentLocationUpdate) {
+      const targets = await prisma.inbound_receipt.findMany({
+        where: { inbound_receipt_id: { in: inboundReceiptIds } },
+        select: {
+          inbound_receipt_id: true,
+          order_id: true,
+          orders: {
+            select: {
+              pickup_date: true,
+              eta_date: true,
+            },
+          },
         },
-      },
-      data: updateData,
-    });
+      });
+
+      const inspection = includesInspectionKeyword(normalizedCurrentLocation);
+      const actorId = currentUser?.id ? BigInt(currentUser.id) : null;
+
+      await prisma.$transaction(async (tx) => {
+        for (const row of targets) {
+          const perRowUpdateData = {
+            ...updateData,
+            status: inspection ? 'inspection' : 'pending',
+            planned_unload_at: inspection
+              ? null
+              : calculateUnloadDate(row.orders?.pickup_date, row.orders?.eta_date),
+          };
+
+          await tx.inbound_receipt.update({
+            where: { inbound_receipt_id: row.inbound_receipt_id },
+            data: perRowUpdateData,
+          });
+
+          await tx.pickup_management.upsert({
+            where: { order_id: row.order_id },
+            update: {
+              current_location: normalizedCurrentLocation,
+              updated_by: actorId,
+              updated_at: new Date(),
+            },
+            create: {
+              order_id: row.order_id,
+              current_location: normalizedCurrentLocation,
+              created_by: actorId,
+              updated_by: actorId,
+            },
+          });
+        }
+      });
+
+      result = { count: targets.length };
+    } else {
+      // 普通批量更新
+      result = await prisma.inbound_receipt.updateMany({
+        where: {
+          inbound_receipt_id: {
+            in: inboundReceiptIds,
+          },
+        },
+        data: updateData,
+      });
+    }
 
     return NextResponse.json({
       message: `成功更新 ${result.count} 条记录`,

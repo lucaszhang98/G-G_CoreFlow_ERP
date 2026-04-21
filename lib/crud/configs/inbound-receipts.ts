@@ -307,7 +307,7 @@ export const inboundReceiptConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['status', 'arrived_at_warehouse', 'planned_unload_at', 'unloaded_by', 'received_by'],
+        fields: ['current_location', 'status', 'arrived_at_warehouse', 'planned_unload_at', 'unloaded_by', 'received_by'],
       },
       delete: {
         enabled: false,
@@ -316,7 +316,7 @@ export const inboundReceiptConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['status', 'arrived_at_warehouse', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes'],
+      fields: ['current_location', 'status', 'arrived_at_warehouse', 'planned_unload_at', 'unloaded_by', 'received_by', 'notes'],
     },
   },
   

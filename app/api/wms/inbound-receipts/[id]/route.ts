@@ -4,6 +4,11 @@ import { inboundReceiptUpdateSchema } from '@/lib/validations/inbound-receipt';
 import { inboundReceiptConfig } from '@/lib/crud/configs/inbound-receipts';
 import prisma from '@/lib/prisma';
 import { computeInboundReceiptHeaderDeliveryProgress } from '@/lib/utils/inbound-delivery-progress';
+import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
+
+function includesInspectionKeyword(currentLocation: string | null | undefined): boolean {
+  return typeof currentLocation === 'string' && currentLocation.includes('查验');
+}
 
 /**
  * GET /api/wms/inbound-receipts/:id
@@ -214,6 +219,14 @@ export async function PUT(
     if (data.warehouse_id !== undefined) updateData.warehouse_id = BigInt(data.warehouse_id);
     if (data.order_id !== undefined) updateData.order_id = BigInt(data.order_id);
 
+    const hasCurrentLocationUpdate = data.current_location !== undefined;
+    const targetOrderId = data.order_id !== undefined ? BigInt(data.order_id) : existing.order_id;
+    let normalizedCurrentLocation: string | null = null;
+    if (hasCurrentLocationUpdate) {
+      const raw = data.current_location;
+      normalizedCurrentLocation = raw && String(raw).trim() ? String(raw).trim() : null;
+    }
+
     // 处理拆柜日期：仅当请求中明确传入 planned_unload_at 时才更新，否则保留原值（避免只改状态时被重算覆盖）
     if (data.planned_unload_at !== undefined) {
       if (data.planned_unload_at) {
@@ -224,8 +237,34 @@ export async function PUT(
       }
     }
 
+    // 业务规则：当前位置信息含「查验」时，入库状态=查验 且拆柜日期置空；
+    // 不含时，入库状态=待处理 且按提柜/ETA自动回算拆柜日期。
+    if (hasCurrentLocationUpdate) {
+      const inspection = includesInspectionKeyword(normalizedCurrentLocation);
+      updateData.status = inspection ? 'inspection' : 'pending';
+      updateData.planned_unload_at = inspection
+        ? null
+        : calculateUnloadDate(existing.orders?.pickup_date, existing.orders?.eta_date);
+    }
+
     // 自动添加系统维护字段（只更新修改人/时间）
     await addSystemFields(updateData, currentUser, false);
+
+    // 同步写入提柜管理的现在位置（order级字段）
+    if (hasCurrentLocationUpdate) {
+      const pickupData: any = {
+        current_location: normalizedCurrentLocation,
+      };
+      await addSystemFields(pickupData, currentUser, false);
+      await prisma.pickup_management.upsert({
+        where: { order_id: targetOrderId },
+        update: pickupData,
+        create: {
+          order_id: targetOrderId,
+          ...pickupData,
+        },
+      });
+    }
 
     // 更新拆柜规划
     // 添加调试日志

@@ -79,6 +79,10 @@ export const inboundReceiptUpdateSchema = z.object({
     .optional()
     .nullable(),
   arrived_at_warehouse: z.boolean().optional(),
+  current_location: z.string()
+    .max(200, '现在位置长度不能超过 200')
+    .optional()
+    .nullable(),
 });
 
 export type InboundReceiptCreateInput = z.infer<typeof inboundReceiptCreateSchema>;
