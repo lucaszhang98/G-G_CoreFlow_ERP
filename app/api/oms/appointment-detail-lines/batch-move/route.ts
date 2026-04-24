@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import prisma from '@/lib/prisma'
+import { prismaDeliveryAppointmentNotDisabled } from '@/lib/utils/delivery-appointment-enabled'
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     const targetAppointment = await prisma.delivery_appointments.findFirst({
-      where: { reference_number: ref },
+      where: { reference_number: ref, ...prismaDeliveryAppointmentNotDisabled },
       select: { appointment_id: true, total_pallets: true },
     })
 

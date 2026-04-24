@@ -12,6 +12,7 @@
 
 import prisma from '@/lib/prisma'
 import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
+import { isDeliveryAppointmentEnabled } from '@/lib/utils/delivery-appointment-enabled'
 
 function getEffectivePallets(estimated: number, rejected: number | null | undefined): number {
   return estimated - (rejected ?? 0)
@@ -37,13 +38,17 @@ export async function recalcUnbookedRemainingForOrderDetail(
       estimated_pallets: true,
       rejected_pallets: true,
       delivery_appointments: {
-        select: { confirmed_start: true },
+        select: { confirmed_start: true, enabled: true },
       },
     },
   })
 
-  // 过滤掉孤立的 appointment_detail_lines 记录（关联的预约已被删除）
-  const validLines = allLines.filter((line) => line.delivery_appointments !== null)
+  // 过滤孤立行；停用（软删）的预约上的明细不计入占用
+  const validLines = allLines.filter(
+    (line) =>
+      line.delivery_appointments !== null &&
+      isDeliveryAppointmentEnabled(line.delivery_appointments.enabled)
+  )
 
   const totalEffective = validLines.reduce((sum, line) => {
     return sum + getEffectivePallets(line.estimated_pallets, line.rejected_pallets)
@@ -59,14 +64,33 @@ export async function recalcUnbookedRemainingForOrderDetail(
   }, 0)
 
   // 调试日志：如果存在孤立的记录，记录警告
-  if (allLines.length > validLines.length) {
-    const orphanedCount = allLines.length - validLines.length
-    const orphanedPallets = allLines
+  const excluded = allLines.filter(
+    (line) =>
+      line.delivery_appointments === null ||
+      !isDeliveryAppointmentEnabled(line.delivery_appointments?.enabled)
+  )
+  if (excluded.length > 0) {
+    const orphanedPallets = excluded
       .filter((line) => line.delivery_appointments === null)
       .reduce((sum, line) => sum + getEffectivePallets(line.estimated_pallets, line.rejected_pallets), 0)
-    console.warn(
-      `[重算服务] 订单明细 ${orderDetailId} 存在 ${orphanedCount} 条孤立的预约明细记录（关联的预约已被删除），共 ${orphanedPallets} 个有效板数。这些板数不会被计入未约板数计算。`
-    )
+    const disabledPallets = excluded
+      .filter(
+        (line) =>
+          line.delivery_appointments !== null &&
+          !isDeliveryAppointmentEnabled(line.delivery_appointments.enabled)
+      )
+      .reduce((sum, line) => sum + getEffectivePallets(line.estimated_pallets, line.rejected_pallets), 0)
+    if (orphanedPallets > 0) {
+      const orphanedCount = excluded.filter((l) => l.delivery_appointments === null).length
+      console.warn(
+        `[重算服务] 订单明细 ${orderDetailId} 存在 ${orphanedCount} 条孤立预约明细（预约已不存在），共 ${orphanedPallets} 个有效板数，不计入未约板数。`
+      )
+    }
+    if (disabledPallets > 0) {
+      console.log(
+        `[重算服务] 订单明细 ${orderDetailId} 有已停用预约上的明细共 ${disabledPallets} 板，不计入未约板数。`
+      )
+    }
   }
 
   // 2. 是否已入库

@@ -269,6 +269,17 @@ export async function POST(request: NextRequest) {
     const appointmentId = BigInt(appointment_id)
     const estimatedPalletsValue = parseInt(estimated_pallets) || 0
 
+    const parentAppointment = await prisma.delivery_appointments.findUnique({
+      where: { appointment_id: appointmentId },
+      select: { enabled: true },
+    })
+    if (!parentAppointment) {
+      return NextResponse.json({ error: '预约不存在' }, { status: 404 })
+    }
+    if (parentAppointment.enabled === false) {
+      return NextResponse.json({ error: '该预约已停用，无法新增明细' }, { status: 400 })
+    }
+
     // 检查是否已入库（查询 inventory_lots）
     const inventoryLot = await prisma.inventory_lots.findFirst({
       where: {
@@ -284,7 +295,10 @@ export async function POST(request: NextRequest) {
     // 实时计算总板数（用于验证和保存快照）：未约板数 = 预计/实际板数 - 有效占用（有效占用 = estimated_pallets - rejected_pallets）
     const effectiveBooked = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
     const existingAppointmentLines = await prisma.appointment_detail_lines.findMany({
-      where: { order_detail_id: orderDetailId },
+      where: {
+        order_detail_id: orderDetailId,
+        delivery_appointments: { is: { NOT: { enabled: false } } },
+      },
       select: { estimated_pallets: true, rejected_pallets: true } as { estimated_pallets: true; rejected_pallets: true },
     })
     const totalEffectiveBooked = existingAppointmentLines.reduce((sum, line) => sum + effectiveBooked(line.estimated_pallets, (line as { rejected_pallets?: number | null }).rejected_pallets), 0)

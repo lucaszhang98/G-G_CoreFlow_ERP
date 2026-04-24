@@ -65,12 +65,29 @@ export async function purgeOperationalDataForCancelledOrder(
   await tx.outbound_shipment_lines.deleteMany({ where: { order_id: orderId } })
   await tx.invoices.deleteMany({ where: { order_id: orderId } })
 
-  if (ownedAppointmentIds.length > 0) {
-    await tx.delivery_appointments.deleteMany({
-      where: { appointment_id: { in: ownedAppointmentIds } },
+  /** 预约主表不物理删除：清理送仓/出库并停用（与预约管理「删除」一致） */
+  const softDisableAppointmentsByIds = async (ids: bigint[]) => {
+    const unique = [...new Set(ids.map((x) => x.toString()))].map((s) => BigInt(s))
+    if (unique.length === 0) return
+    await tx.delivery_management.deleteMany({
+      where: { appointment_id: { in: unique } },
+    })
+    for (const appointmentId of unique) {
+      await tx.$executeRaw`
+        DELETE FROM wms.outbound_shipments WHERE appointment_id = ${appointmentId}
+      `
+    }
+    await tx.delivery_appointments.updateMany({
+      where: { appointment_id: { in: unique } },
+      data: {
+        enabled: false,
+        total_pallets: 0,
+        updated_at: new Date(),
+      },
     })
   }
 
+  // 仅对删除本单明细后已无明细行的预约做停用（与原先「删空预约」语义一致，避免误停仍含他单明细的预约）
   if (affectedAppointmentIds.length > 0) {
     const maybeEmptyAppointments = await tx.delivery_appointments.findMany({
       where: { appointment_id: { in: affectedAppointmentIds } },
@@ -84,9 +101,7 @@ export async function purgeOperationalDataForCancelledOrder(
       .map((a) => a.appointment_id)
 
     if (emptyAppointmentIds.length > 0) {
-      await tx.delivery_appointments.deleteMany({
-        where: { appointment_id: { in: emptyAppointmentIds } },
-      })
+      await softDisableAppointmentsByIds(emptyAppointmentIds)
     }
   }
 }

@@ -417,8 +417,16 @@ export async function PUT(
       },
       select: {
         delivery_method: true,
+        enabled: true,
       },
     });
+
+    if (originalItem?.enabled === false && finalData.enabled !== true) {
+      return NextResponse.json(
+        { error: '该预约已停用，无法修改。如需恢复请将「启用」设为开启后保存。' },
+        { status: 400 }
+      );
+    }
 
     const originalDeliveryMethod = originalItem?.delivery_method;
     const newDeliveryMethod = finalData.delivery_method !== undefined ? finalData.delivery_method : originalDeliveryMethod;
@@ -668,7 +676,7 @@ export async function DELETE(
     const { AppointmentDeleteService } = await import('@/lib/services/appointment-delete.service');
     await AppointmentDeleteService.deleteAppointment(appointmentId);
 
-    return NextResponse.json({ message: '预约管理记录已删除，剩余板数已回退' });
+    return NextResponse.json({ message: '预约已停用，剩余板数已回退' });
   } catch (error: any) {
     console.error('删除预约管理记录失败:', error);
     return handleError(error);

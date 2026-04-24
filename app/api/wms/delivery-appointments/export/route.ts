@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import prisma from '@/lib/prisma'
+import { withActiveDeliveryAppointmentsWhere } from '@/lib/utils/delivery-appointment-enabled'
 import { generateAppointmentExportExcel, AppointmentExportData } from '@/lib/utils/appointment-export-excel'
 
 /**
@@ -106,9 +107,9 @@ export async function GET(request: NextRequest) {
     const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
     const orderBy: any = { [sort]: order }
 
-    // 查询数据（限制最多10000条）
+    // 查询数据（限制最多10000条）；不包含已停用预约
     const appointments = await prisma.delivery_appointments.findMany({
-      where,
+      where: withActiveDeliveryAppointmentsWhere(where),
       orderBy,
       take: 10000, // 防止导出过多数据导致性能问题
       include: {

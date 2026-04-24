@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const result = await AppointmentDeleteService.deleteAppointments(bigIntIds)
 
     return NextResponse.json({
-      message: `成功删除 ${result.count} 条预约记录，剩余板数已回退`,
+      message: `已停用 ${result.count} 条预约，剩余板数已回退`,
       count: result.count,
     })
   } catch (error: any) {

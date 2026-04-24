@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import prisma from '@/lib/prisma';
+import { withActiveDeliveryAppointmentsWhere } from '@/lib/utils/delivery-appointment-enabled';
 import { outboundShipmentConfig } from '@/lib/crud/configs/outbound-shipments';
 import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper';
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
@@ -136,11 +137,13 @@ export async function GET(request: NextRequest) {
         is: outboundShipmentsWhere
       }
     }
+
+    const appointmentWhereActive = withActiveDeliveryAppointmentsWhere(appointmentWhere)
     
     try {
       [appointments, total] = await Promise.all([
         prisma.delivery_appointments.findMany({
-          where: appointmentWhere,
+          where: appointmentWhereActive,
           orderBy,
           skip: (page - 1) * limit,
           take: limit,
@@ -188,7 +191,7 @@ export async function GET(request: NextRequest) {
             },
           },
         }),
-        prisma.delivery_appointments.count({ where: appointmentWhere }),
+        prisma.delivery_appointments.count({ where: appointmentWhereActive }),
       ]);
     } catch (queryError: any) {
       console.error('Prisma 查询错误:', queryError);

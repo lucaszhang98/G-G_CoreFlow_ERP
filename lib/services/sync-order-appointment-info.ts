@@ -9,6 +9,7 @@
  */
 
 import prisma from '@/lib/prisma'
+import { isDeliveryAppointmentEnabled } from '@/lib/utils/delivery-appointment-enabled'
 
 /**
  * 同步指定订单的预约信息
@@ -55,6 +56,7 @@ export async function syncOrderAppointmentInfo(orderId: bigint): Promise<void> {
             requested_start: true,
             appointment_account: true,
             rejected: true,
+            enabled: true,
           },
         },
       },
@@ -62,8 +64,8 @@ export async function syncOrderAppointmentInfo(orderId: bigint): Promise<void> {
 
     // 3. 过滤掉被拒绝的预约，并提取所有有效的预约
     const validAppointments = appointmentDetailLines
-      .map(line => line.delivery_appointments)
-      .filter(apt => apt && !apt.rejected)
+      .map((line) => line.delivery_appointments)
+      .filter((apt) => apt && !apt.rejected && isDeliveryAppointmentEnabled(apt.enabled))
 
     if (validAppointments.length === 0) {
       // 如果没有有效预约，清空预约信息

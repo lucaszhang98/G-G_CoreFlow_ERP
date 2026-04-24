@@ -5,6 +5,7 @@ import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
 import { deliveryAppointmentConfig } from '@/lib/crud/configs/delivery-appointments';
 import prisma from '@/lib/prisma';
+import { prismaDeliveryAppointmentNotDisabled } from '@/lib/utils/delivery-appointment-enabled';
 
 /** 将条件并入 where.AND，避免与 mergeFilterConditions 生成的顶层 AND 并列再出现一个顶层 OR（Prisma/驱动下易 500） */
 function appendToWhereAnd(where: Record<string, any>, clause: unknown) {
@@ -40,6 +41,9 @@ export async function GET(request: NextRequest) {
     // 筛选条件（快速筛选）
     const filterConditions = buildFilterConditions(enhancedConfig, searchParams);
     mergeFilterConditions(where, filterConditions);
+
+    // 列表不展示已停用（软删除）的预约
+    appendToWhereAnd(where, prismaDeliveryAppointmentNotDisabled);
 
     // 模糊搜索：必须放进 AND 的一条 { OR: ... }，禁止与筛选产生的顶层 AND 并列写顶层 OR
     if (search && enhancedConfig.list.searchFields) {

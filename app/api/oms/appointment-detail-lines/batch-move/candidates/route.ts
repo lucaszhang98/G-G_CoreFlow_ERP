@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
+import { prismaDeliveryAppointmentNotDisabled } from '@/lib/utils/delivery-appointment-enabled'
 
 export async function GET(request: NextRequest) {
   try {
@@ -76,6 +77,7 @@ export async function GET(request: NextRequest) {
 
     const raw = await prisma.delivery_appointments.findMany({
       where: {
+        ...prismaDeliveryAppointmentNotDisabled,
         location_id: deliveryLocationId,
         appointment_id: { not: currentId },
         ...(maxUnloadAt

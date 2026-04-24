@@ -90,6 +90,7 @@ export async function repairDeliveryManagementOrphans(
        FROM oms.delivery_appointments a
        LEFT JOIN tms.delivery_management d ON d.appointment_id = a.appointment_id
        WHERE d.delivery_id IS NULL
+         AND (a.enabled IS DISTINCT FROM false)
        LIMIT $1`,
       batchSize
     ) as { appointment_id: bigint }[]

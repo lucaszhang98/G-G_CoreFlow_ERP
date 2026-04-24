@@ -399,6 +399,7 @@ export async function calculatePlannedOutboundBatch(
         AND da.confirmed_start IS NOT NULL
         AND (da.rejected = false OR da.rejected IS NULL)
         AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
+        AND (da.enabled IS DISTINCT FROM false)
       GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
     `
     
@@ -424,6 +425,7 @@ export async function calculatePlannedOutboundBatch(
         AND da.confirmed_start IS NOT NULL
         AND (da.rejected = false OR da.rejected IS NULL)
         AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
+        AND (da.enabled IS DISTINCT FROM false)
       GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
     `
     
@@ -456,6 +458,7 @@ export async function calculatePlannedOutboundBatch(
         AND da.confirmed_start IS NOT NULL
         AND (da.rejected = false OR da.rejected IS NULL)
         AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
+        AND (da.enabled IS DISTINCT FROM false)
       GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
     `
     
@@ -483,6 +486,7 @@ export async function calculatePlannedOutboundBatch(
       AND da.confirmed_start IS NOT NULL
       AND (da.rejected = false OR da.rejected IS NULL)
       AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
+      AND (da.enabled IS DISTINCT FROM false)
     GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
   `
 

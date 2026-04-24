@@ -1,120 +1,337 @@
 /**
  * 拆柜单据 PDF 组件（使用 @react-pdf/renderer）
- * 
- * 布局（A4 竖排）：
- * - 标题：拆柜单据
- * - 主数据：柜号、拆柜人员、入库人员、拆柜日期
- * - 明细表格：性质、仓点、备注（详情页数据）、实际板数、库位、备注（留白）
+ *
+ * A4 横排：备注多时提高第 4/7 列 flex 权重；列用 flexGrow 填满表宽，避免百分比+边框导致最右列被挤没。
  */
 
 import React from 'react'
-import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image } from '@react-pdf/renderer'
 import { UnloadSheetData } from './types'
-import { PageSizes, formatDate } from './print-templates'
+import { formatDate } from './print-templates'
 import { pdfFontRegistered, pdfFontFamily } from './register-pdf-font'
 import JsBarcode from 'jsbarcode'
 import { createCanvas } from 'canvas'
 
-// 页面尺寸（A4 横排：297mm x 210mm）
-const PAGE_WIDTH = PageSizes.A4_LANDSCAPE.width // 297mm
-const PAGE_HEIGHT = PageSizes.A4_LANDSCAPE.height // 210mm
+const PAGE_PT_WIDTH = 841.89
+const PAGE_PT_HEIGHT = 595.28
+const PADDING = 12
+const INNER_WIDTH_PT = PAGE_PT_WIDTH - PADDING * 2
+const USABLE_HEIGHT_PT = PAGE_PT_HEIGHT - PADDING * 2
+const HEIGHT_SAFETY = 1.22
 
-// 固定高度分配（单位：mm，转换为点）
-const TITLE_HEIGHT = 8 // 标题区域高度
-const HEADER_HEIGHT = 10 // 主数据区域高度
-const PADDING = 12 // 页面padding
-const AVAILABLE_HEIGHT = PAGE_HEIGHT - (PADDING * 2) - TITLE_HEIGHT - HEADER_HEIGHT // 表格可用高度
+type OrderDetailRow = UnloadSheetData['orderDetails'][number]
 
-/**
- * 根据数据行数计算缩放比例，确保内容在一页内显示
- * 强制条件：无论有多少行，都必须在一页内显示，不能分页
- * 注意：整体放大50%后，行高计算也需要相应调整
- */
-function calculateScaleFactor(rowCount: number): number {
-  // 基础行高（单位：点/毫米）- 整体放大50%后的计算
-  // padding: 12点（放大50%），字体高度: 33点（放大50%），lineHeight: 2.25（放大50%），border: 1点
-  // 实际行高 = padding * 2 + 字体高度 * lineHeight + border
-  const baseRowHeight = (12 * 2) + (33 * 2.25) + 1 // 约 108 点（放大50%后）
-  const headerRowHeight = (12 * 2) + (33 * 2.25) + 1 // 表头行高
-  const totalTableHeight = headerRowHeight + (rowCount * baseRowHeight)
-  
-  // 强制条件：如果表格高度超过可用高度，必须计算缩放比例，确保在一页内
-  if (totalTableHeight > AVAILABLE_HEIGHT) {
-    const scaleFactor = AVAILABLE_HEIGHT / totalTableHeight
-    // 最小缩放比例限制在0.4，确保即使数据很多也能在一页内显示（从0.6降低到0.4）
-    // 如果数据太多，可以缩小到0.4，虽然字体会小一些，但能保证在一页内
-    return Math.max(0.4, scaleFactor * 0.95) // 留5%余量，确保不会溢出
-  }
-  
-  return 1.0 // 不需要缩放
+/** 七列 flex 权重（仅比例有意义，总和任意正数） */
+type ColFlexWeights = {
+  w1: number
+  w2: number
+  w3: number
+  w4: number
+  w5: number
+  w6: number
+  w7: number
+}
+
+function sumWeights(c: ColFlexWeights): number {
+  return c.w1 + c.w2 + c.w3 + c.w4 + c.w5 + c.w6 + c.w7
+}
+
+function fractionOfInner(c: ColFlexWeights, wi: number): number {
+  const s = sumWeights(c)
+  return s > 0 ? wi / s : 1 / 7
 }
 
 /**
- * 创建动态样式，根据行数自动调整
- * 注意：返回普通对象而不是 StyleSheet，因为 StyleSheet.create 不能动态调用
+ * 备注越长，第 4、7 列 flex 越大（从数量/板数/库位借比例）。
  */
-function createStyles(rowCount: number) {
-  const scaleFactor = calculateScaleFactor(rowCount)
-  
-  // 基础字体大小（整体放大50%）
-  const baseTitleFontSize = 32 * 1.5 // 48 - 标题（柜号）字体更大
-  const baseHeaderLabelFontSize = 9 * 1.5 // 13.5
-  const baseHeaderValueFontSize = 10 * 1.5 // 15
-  const baseTableFontSize = 22 * 1.5 // 33，整体放大50%
-  
-  // 根据缩放比例调整，但确保最小字体不会太小
-  // 注意：为了强制在一页内显示，当数据很多时，字体可能会缩小到最小值
-  const titleFontSize = Math.max(24, baseTitleFontSize * scaleFactor) // 最小24点，确保柜号足够大
-  const headerLabelFontSize = Math.max(8, baseHeaderLabelFontSize * scaleFactor) // 最小8点（从10降低）
-  const headerValueFontSize = Math.max(10, baseHeaderValueFontSize * scaleFactor) // 最小10点（从12降低）
-  const tableFontSize = Math.max(16, baseTableFontSize * scaleFactor) // 最小16点（从21降低），确保即使数据很多也能在一页内
-  const cellPadding = Math.max(4, 12 * scaleFactor) // 最小4点padding（从6降低）
-  const lineHeight = Math.max(1.3, 2.25 * scaleFactor) // 最小1.3行高（从1.5降低）
-  
-  // 返回普通样式对象（不使用 StyleSheet.create，因为需要动态生成）
+function computeColFlexWeights(data: UnloadSheetData): ColFlexWeights {
+  let maxNoteLen = 0
+  let totalNoteChars = 0
+  for (const d of data.orderDetails) {
+    const a = (d.notes ?? '').length
+    const b = (d.workerNotes ?? '').length
+    maxNoteLen = Math.max(maxNoteLen, a, b)
+    totalNoteChars += a + b
+  }
+  if (data.orderNotes) {
+    totalNoteChars += data.orderNotes.length
+    maxNoteLen = Math.max(maxNoteLen, data.orderNotes.length)
+  }
+
+  if (maxNoteLen > 90 || totalNoteChars > 480) {
+    return { w1: 5, w2: 13, w3: 7, w4: 28, w5: 10, w6: 10, w7: 28 }
+  }
+  if (maxNoteLen > 42 || totalNoteChars > 180) {
+    return { w1: 6, w2: 15, w3: 8, w4: 23, w5: 12, w6: 12, w7: 24 }
+  }
+  return { w1: 7, w2: 17, w3: 9, w4: 18, w5: 14, w6: 14, w7: 21 }
+}
+
+function buildLocationDisplay(detail: OrderDetailRow): string {
+  let location = detail.deliveryLocation || '-'
+  if (detail.deliveryNature === '转仓') location += '+'
+  else if (detail.deliveryNature === '扣货') location += '-hold'
+  return location
+}
+
+function estimateWrappedLines(
+  text: string | null | undefined,
+  colFractionOfInner: number,
+  fontSize: number,
+  padLeft: number,
+  padRight: number = padLeft
+): number {
+  const raw = (text ?? '').trim()
+  const t = raw.length === 0 ? '-' : raw
+  const colOuter = INNER_WIDTH_PT * colFractionOfInner
+  const colW = Math.max(fontSize * 2, colOuter - padLeft - padRight)
+  if (colW <= 0 || fontSize <= 0) return 1
+  const charW = fontSize * 1.18
+  const charsPerLine = Math.max(2, Math.floor(colW / charW))
+  let lines = 0
+  for (const segment of t.split(/\n/)) {
+    const seg = segment.length === 0 ? ' ' : segment
+    lines += Math.max(1, Math.ceil(seg.length / charsPerLine))
+  }
+  return Math.max(1, Math.ceil(lines * 1.08))
+}
+
+function estimateRowMaxLines(
+  detail: OrderDetailRow,
+  tableFontSize: number,
+  cols: ColFlexWeights,
+  cellPaddingPt: number,
+  /** 与 createStyles：备注列 paddingLeft = cellPadding + noteL */
+  noteL: number,
+  /** 备注列在左侧额外留白基础上，右侧再多留的宽度（pt） */
+  noteRBoost: number,
+  /** 第 7 列贴表格外框，再追加的右侧留白（pt） */
+  noteCol7Edge: number
+): number {
+  const loc = buildLocationDisplay(detail)
+  const plN = cellPaddingPt + noteL
+  const prN4 = cellPaddingPt + noteL + noteRBoost
+  const prN7 = cellPaddingPt + noteL + noteRBoost + noteCol7Edge
+  return Math.max(
+    estimateWrappedLines(detail.deliveryNature || '-', fractionOfInner(cols, cols.w1), tableFontSize, cellPaddingPt),
+    estimateWrappedLines(loc, fractionOfInner(cols, cols.w2), tableFontSize, cellPaddingPt),
+    estimateWrappedLines(
+      detail.quantity !== undefined ? String(detail.quantity) : '-',
+      fractionOfInner(cols, cols.w3),
+      tableFontSize,
+      cellPaddingPt
+    ),
+    estimateWrappedLines(detail.notes, fractionOfInner(cols, cols.w4), tableFontSize, plN, prN4),
+    estimateWrappedLines(
+      detail.actualPallets !== undefined ? String(detail.actualPallets) : '',
+      fractionOfInner(cols, cols.w5),
+      tableFontSize,
+      cellPaddingPt
+    ),
+    estimateWrappedLines(detail.storageLocation, fractionOfInner(cols, cols.w6), tableFontSize, cellPaddingPt),
+    estimateWrappedLines(detail.workerNotes, fractionOfInner(cols, cols.w7), tableFontSize, plN, prN7)
+  )
+}
+
+function metricsForScale(scale: number, data: UnloadSheetData, cols: ColFlexWeights) {
+  const baseTitleFontSize = 32 * 1.5
+  const baseHeaderLabelFontSize = 9 * 1.5
+  const baseHeaderValueFontSize = 10 * 1.5
+  const baseTableFontSize = 22 * 1.5
+
+  const titleFontSize = Math.max(24, baseTitleFontSize * scale)
+  const headerLabelFontSize = Math.max(8, baseHeaderLabelFontSize * scale)
+  const headerValueFontSize = Math.max(10, baseHeaderValueFontSize * scale)
+  const tableFontSize = Math.max(16, baseTableFontSize * scale)
+  const cellPadding = Math.max(4, 12 * scale)
+  /** 备注列左侧在 cellPadding 上追加的留白（pt） */
+  const noteL = Math.max(6, 8 * scale)
+  /** 备注列右侧在「与左侧对称部分」之上再追加，左对齐时视觉才均衡 */
+  const noteRBoost = Math.max(10, 13 * scale)
+  /** 第 7 列靠表格外框，右侧再多留一点 */
+  const noteCol7Edge = Math.max(5, 7 * scale)
+  const lineHeight = Math.max(1.3, 2.25 * scale)
+
+  const rowTextHeight = (lines: number) => cellPadding * 2 + tableFontSize * lineHeight * lines
+
+  let y = 0
+  y += titleFontSize * 1.2 + 12 * scale
+  y += 90 * scale + 12 * scale * 2
+  y += headerValueFontSize * 2.2 + 15 * scale
+
+  if (data.orderNotes != null && data.orderNotes !== '') {
+    const onFs = Math.max(7, baseHeaderValueFontSize * 0.9 * scale)
+    const orderPadL = Math.max(8, 10 * scale)
+    const orderPadR = Math.max(14, 18 * scale)
+    const onLines = estimateWrappedLines(data.orderNotes, 1, onFs, orderPadL, orderPadR)
+    y += 8 * scale + onFs * 1.4 * onLines + 6 * scale + 4 * scale
+  }
+
+  y += 7.5 * scale
+  y += rowTextHeight(1)
+
+  for (const d of data.orderDetails) {
+    const lines = estimateRowMaxLines(d, tableFontSize, cols, cellPadding, noteL, noteRBoost, noteCol7Edge)
+    y += rowTextHeight(lines)
+  }
+
+  y += 18
+
+  return { y, titleFontSize, headerLabelFontSize, headerValueFontSize, tableFontSize, cellPadding, lineHeight }
+}
+
+function findOptimalScale(data: UnloadSheetData, cols: ColFlexWeights): number {
+  const rowCount = data.orderDetails.length
+  if (rowCount === 0) return 1
+
+  const minScale = 0.16
+  let lo = minScale
+  let hi = 1.0
+  let best = minScale
+  for (let i = 0; i < 56; i++) {
+    const mid = (lo + hi) / 2
+    const { y } = metricsForScale(mid, data, cols)
+    if (y * HEIGHT_SAFETY <= USABLE_HEIGHT_PT) {
+      best = mid
+      lo = mid
+    } else {
+      hi = mid
+    }
+  }
+  let { y: yBest } = metricsForScale(best, data, cols)
+  if (yBest * HEIGHT_SAFETY > USABLE_HEIGHT_PT && yBest > 0) {
+    best = Math.max(minScale, best * (USABLE_HEIGHT_PT / (yBest * HEIGHT_SAFETY)) * 0.94)
+    ;({ y: yBest } = metricsForScale(best, data, cols))
+    if (yBest * HEIGHT_SAFETY > USABLE_HEIGHT_PT && yBest > 0) {
+      best = Math.max(0.12, best * (USABLE_HEIGHT_PT / (yBest * HEIGHT_SAFETY)) * 0.94)
+    }
+  }
+  best *= 0.97
+  return Math.max(minScale, best)
+}
+
+/** 备注列：左侧 +noteL，右侧 +noteL+noteRBoost（可再叠 col7 贴边补偿） */
+type NotesCellPad = { leftExtra: number; rightExtra: number }
+
+function tableCellBase(cellPadding: number, flexGrow: number, notesPad?: NotesCellPad) {
+  const common = {
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    alignItems: 'stretch' as const,
+    justifyContent: 'flex-start' as const,
+    borderRightWidth: 1,
+    borderRightColor: '#ccc',
+    alignSelf: 'stretch' as const,
+    flexGrow,
+    flexBasis: 0 as const,
+    flexShrink: 1,
+    minWidth: 0 as const,
+  }
+  if (!notesPad) {
+    return { ...common, padding: cellPadding }
+  }
+  return {
+    ...common,
+    paddingTop: cellPadding,
+    paddingBottom: cellPadding,
+    paddingLeft: cellPadding + notesPad.leftExtra,
+    paddingRight: cellPadding + notesPad.rightExtra,
+  }
+}
+
+function tableHeaderCellBase(cellPadding: number, flexGrow: number, notesPad?: NotesCellPad) {
+  const common = {
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    alignItems: 'stretch' as const,
+    justifyContent: 'center' as const,
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+    backgroundColor: '#f0f0f0',
+    alignSelf: 'stretch' as const,
+    flexGrow,
+    flexBasis: 0 as const,
+    flexShrink: 1,
+    minWidth: 0 as const,
+  }
+  if (!notesPad) {
+    return { ...common, padding: cellPadding }
+  }
+  return {
+    ...common,
+    paddingTop: cellPadding,
+    paddingBottom: cellPadding,
+    paddingLeft: cellPadding + notesPad.leftExtra,
+    paddingRight: cellPadding + notesPad.rightExtra,
+  }
+}
+
+function createStyles(scaleFactor: number, cols: ColFlexWeights) {
+  const baseTitleFontSize = 32 * 1.5
+  const baseHeaderLabelFontSize = 9 * 1.5
+  const baseHeaderValueFontSize = 10 * 1.5
+  const baseTableFontSize = 22 * 1.5
+  const s = scaleFactor
+
+  const titleFontSize = Math.max(24, baseTitleFontSize * s)
+  const headerLabelFontSize = Math.max(8, baseHeaderLabelFontSize * s)
+  const headerValueFontSize = Math.max(10, baseHeaderValueFontSize * s)
+  const tableFontSize = Math.max(16, baseTableFontSize * s)
+  const cellPadding = Math.max(4, 12 * s)
+  const noteL = Math.max(6, 8 * s)
+  const noteRBoost = Math.max(10, 13 * s)
+  const noteCol7Edge = Math.max(5, 7 * s)
+  const padNotes4: NotesCellPad = { leftExtra: noteL, rightExtra: noteL + noteRBoost }
+  const padNotes7: NotesCellPad = { leftExtra: noteL, rightExtra: noteL + noteRBoost + noteCol7Edge }
+  const lineHeight = Math.max(1.3, 2.25 * s)
+
   return {
     page: {
-      width: PAGE_WIDTH,
-      height: PAGE_HEIGHT,
+      width: PAGE_PT_WIDTH,
+      height: PAGE_PT_HEIGHT,
       padding: PADDING,
       fontFamily: pdfFontFamily,
     },
     orderNotesSection: {
-      marginBottom: 8 * scaleFactor,
-      paddingBottom: 6 * scaleFactor,
+      marginBottom: 8 * s,
+      paddingBottom: 6 * s,
+      paddingLeft: Math.max(8, 10 * s),
+      paddingRight: Math.max(14, 18 * s),
       borderBottomWidth: 1,
       borderBottomColor: '#e0e0e0',
     },
     orderNotesLabel: {
-      fontSize: Math.max(8, baseHeaderLabelFontSize),
+      fontSize: Math.max(8, baseHeaderLabelFontSize * s),
       color: '#666',
-      marginBottom: 2 * scaleFactor,
+      marginBottom: 2 * s,
     },
     orderNotesText: {
-      fontSize: Math.max(9, baseHeaderValueFontSize * 0.9),
+      fontSize: Math.max(7, baseHeaderValueFontSize * 0.9 * s),
       lineHeight: 1.4,
-      wordBreak: 'break-word' as const,
+      wordBreak: 'break-all' as const,
+      textAlign: 'left' as const,
+      width: '100%',
+      maxWidth: '100%',
     },
     title: {
       fontSize: titleFontSize,
       fontWeight: 'bold',
       textAlign: 'center' as const,
-      marginBottom: 12 * scaleFactor, // 从8增加到12，放大50%
-      letterSpacing: 2, // 增加字间距，让柜号更清晰
+      marginBottom: 12 * s,
+      letterSpacing: 2,
     },
-    // 第一行柜号下方的条形码区域：居中、放大
     barcodeBlock: {
       alignItems: 'center' as const,
-      marginBottom: 12 * scaleFactor,
+      marginBottom: 12 * s,
     },
     barcodeImage: {
-      width: 280 * scaleFactor,
-      height: 90 * scaleFactor,
-      maxWidth: 280 * scaleFactor,
-      maxHeight: 90 * scaleFactor,
+      width: 280 * s,
+      height: 90 * s,
+      maxWidth: 280 * s,
+      maxHeight: 90 * s,
     },
     headerSection: {
-      marginBottom: 15 * scaleFactor, // 从10增加到15，放大50%
+      marginBottom: 15 * s,
       display: 'flex' as const,
       flexDirection: 'row' as const,
       justifyContent: 'space-between' as const,
@@ -123,77 +340,92 @@ function createStyles(rowCount: number) {
     },
     headerItem: {
       flex: 1,
-      marginRight: 12 * scaleFactor, // 从8增加到12，放大50%
+      marginRight: 12 * s,
       display: 'flex' as const,
       flexDirection: 'column' as const,
     },
     headerLabel: {
       fontSize: headerLabelFontSize,
       color: '#666',
-      marginBottom: 3 * scaleFactor, // 从2增加到3，放大50%
+      marginBottom: 3 * s,
     },
     headerValue: {
       fontSize: headerValueFontSize,
       fontWeight: 'bold' as const,
-      wordBreak: 'keep-all' as const,
-      overflow: 'hidden' as const,
+      wordBreak: 'break-word' as const,
     },
     table: {
-      marginTop: 7.5 * scaleFactor, // 从5增加到7.5，放大50%
+      marginTop: 7.5 * s,
       borderWidth: 1,
       borderColor: '#000',
+      width: '100%',
     },
     tableHeader: {
       flexDirection: 'row' as const,
+      alignItems: 'stretch' as const,
       backgroundColor: '#f0f0f0',
       borderBottomWidth: 1,
       borderBottomColor: '#000',
-    },
-    tableHeaderCell: {
-      padding: cellPadding,
-      fontSize: tableFontSize,
-      fontWeight: 'bold' as const,
-      borderRightWidth: 1,
-      borderRightColor: '#000',
-      textAlign: 'center' as const,
-      lineHeight: lineHeight,
-      overflow: 'hidden' as const,
-      wordBreak: 'keep-all' as const,
+      width: '100%',
     },
     tableRow: {
       flexDirection: 'row' as const,
+      alignItems: 'stretch' as const,
       borderBottomWidth: 1,
       borderBottomColor: '#ccc',
+      width: '100%',
     },
-    tableCell: {
-      padding: cellPadding,
+    /** 限制在列宽内换行 */
+    cellInner: {
+      width: '100%',
+      maxWidth: '100%',
+      minWidth: 0,
+      alignSelf: 'stretch' as const,
+    },
+    tableHeaderText: {
       fontSize: tableFontSize,
-      borderRightWidth: 1,
-      borderRightColor: '#ccc',
+      fontWeight: 'bold' as const,
+      lineHeight,
+      wordBreak: 'break-all' as const,
       textAlign: 'center' as const,
-      lineHeight: lineHeight,
-      overflow: 'hidden' as const,
-      wordBreak: 'keep-all' as const,
+      width: '100%',
+      maxWidth: '100%',
     },
-    // 列宽定义（7列）- 调整仓点列更宽，确保所有内容都能显示
-    col1: { width: '8%' },  // 性质：从10%减少到8%
-    col2: { width: '18%' }, // 仓点：从12%增加到18%，确保所有内容都能显示
-    col3: { width: '10%' }, // 数量：从12%减少到10%
-    col4: { width: '16%' }, // 备注：保持16%
-    col5: { width: '16%' }, // 实际板数：保持16%
-    col6: { width: '16%' }, // 库位：保持16%
-    col7: { width: '16%' }, // 备注：从18%减少到16%
+    tableCellText: {
+      fontSize: tableFontSize,
+      lineHeight,
+      wordBreak: 'break-all' as const,
+      textAlign: 'center' as const,
+      width: '100%',
+      maxWidth: '100%',
+    },
+    tableCellNotesText: {
+      fontSize: tableFontSize,
+      lineHeight,
+      wordBreak: 'break-all' as const,
+      textAlign: 'left' as const,
+      width: '100%',
+      maxWidth: '100%',
+    },
+    th1: tableHeaderCellBase(cellPadding, cols.w1),
+    th2: tableHeaderCellBase(cellPadding, cols.w2),
+    th3: tableHeaderCellBase(cellPadding, cols.w3),
+    th4: tableHeaderCellBase(cellPadding, cols.w4, padNotes4),
+    th5: tableHeaderCellBase(cellPadding, cols.w5),
+    th6: tableHeaderCellBase(cellPadding, cols.w6),
+    th7: { ...tableHeaderCellBase(cellPadding, cols.w7, padNotes7), borderRightWidth: 0 },
+    td1: tableCellBase(cellPadding, cols.w1),
+    td2: tableCellBase(cellPadding, cols.w2),
+    td3: tableCellBase(cellPadding, cols.w3),
+    td4: tableCellBase(cellPadding, cols.w4, padNotes4),
+    td5: tableCellBase(cellPadding, cols.w5),
+    td6: tableCellBase(cellPadding, cols.w6),
+    td7: { ...tableCellBase(cellPadding, cols.w7, padNotes7), borderRightWidth: 0 },
   }
 }
 
-/**
- * 生成条形码图片（Base64）
- * @param barcodeText 条形码文本
- * @returns Base64 编码的图片字符串
- */
 function generateBarcodeImage(barcodeText: string): string {
   try {
-    // 使用更大画布生成条形码，放大后更清晰
     const canvas = createCanvas(400, 140)
     JsBarcode(canvas, barcodeText, {
       format: 'CODE128',
@@ -210,44 +442,30 @@ function generateBarcodeImage(barcodeText: string): string {
   }
 }
 
-/**
- * 拆柜单据 PDF 文档
- */
 export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
-  // 根据数据行数动态创建样式
-  const rowCount = data.orderDetails.length
-  console.log('[UnloadSheet PDF Component] 渲染文档:', {
-    rowCount,
-    containerNumber: data.containerNumber,
-    fontRegistered: pdfFontRegistered,
-  })
-  
-  const styles = createStyles(rowCount)
-  
-  // 生成条形码图片（柜号）
+  const cols = computeColFlexWeights(data)
+  const scale = findOptimalScale(data, cols)
+  const styles = createStyles(scale, cols)
   const containerNumber = data.containerNumber || ''
   const barcodeImage = containerNumber ? generateBarcodeImage(containerNumber.replace(/\s+/g, '')) : null
-  
+
+  console.log('[UnloadSheet PDF Component] 渲染文档:', {
+    rowCount: data.orderDetails.length,
+    containerNumber: data.containerNumber,
+    fontRegistered: pdfFontRegistered,
+    scale,
+    colFlex: cols,
+  })
+
   return (
     <Document>
-      {/* 使用标准A4横向尺寸，强制只生成一页，不能分页 */}
-      <Page 
-        size="A4" 
-        orientation="landscape" 
-        style={styles.page}
-        wrap={false} // 禁用自动换页，强制在一页内
-      >
-        {/* 第一行：柜号 */}
+      <Page size="A4" orientation="landscape" style={styles.page} wrap>
         <Text style={styles.title}>{containerNumber || '-'}</Text>
 
-        {/* 条形码：直接放在柜号之下，居中放大 */}
         <View style={styles.barcodeBlock}>
-          {barcodeImage ? (
-            <Image src={barcodeImage} style={styles.barcodeImage} />
-          ) : null}
+          {barcodeImage ? <Image src={barcodeImage} style={styles.barcodeImage} /> : null}
         </View>
 
-        {/* 主数据：客户代码、拆柜人员等 */}
         <View style={styles.headerSection}>
           <View style={styles.headerItem}>
             <Text style={styles.headerLabel}>客户代码：</Text>
@@ -269,62 +487,119 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
           </View>
         </View>
 
-        {/* 订单备注：夹在表头上一行（条形码/客户代码等下方） */}
-        {(data.orderNotes != null && data.orderNotes !== '') && (
+        {data.orderNotes != null && data.orderNotes !== '' && (
           <View style={styles.orderNotesSection}>
             <Text style={styles.orderNotesLabel}>备注：</Text>
-            <Text style={styles.orderNotesText}>{data.orderNotes}</Text>
+            <Text style={styles.orderNotesText} wrap>
+              {data.orderNotes}
+            </Text>
           </View>
         )}
 
-        {/* 明细表格 */}
         <View style={styles.table}>
-          {/* 表头 */}
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, styles.col1]}>性质</Text>
-            <Text style={[styles.tableHeaderCell, styles.col2]}>仓点</Text>
-            <Text style={[styles.tableHeaderCell, styles.col3]}>数量</Text>
-            <Text style={[styles.tableHeaderCell, styles.col4]}>备注</Text>
-            <Text style={[styles.tableHeaderCell, styles.col5]}>实际板数</Text>
-            <Text style={[styles.tableHeaderCell, styles.col6]}>库位</Text>
-            <Text style={[styles.tableHeaderCell, styles.col7]}>备注</Text>
+            <View style={styles.th1}>
+              <View style={styles.cellInner}>
+                <Text style={styles.tableHeaderText} wrap>
+                  性质
+                </Text>
+              </View>
+            </View>
+            <View style={styles.th2}>
+              <View style={styles.cellInner}>
+                <Text style={styles.tableHeaderText} wrap>
+                  仓点
+                </Text>
+              </View>
+            </View>
+            <View style={styles.th3}>
+              <View style={styles.cellInner}>
+                <Text style={styles.tableHeaderText} wrap>
+                  数量
+                </Text>
+              </View>
+            </View>
+            <View style={styles.th4}>
+              <View style={styles.cellInner}>
+                <Text style={styles.tableHeaderText} wrap>
+                  备注
+                </Text>
+              </View>
+            </View>
+            <View style={styles.th5}>
+              <View style={styles.cellInner}>
+                <Text style={styles.tableHeaderText} wrap>
+                  实际板数
+                </Text>
+              </View>
+            </View>
+            <View style={styles.th6}>
+              <View style={styles.cellInner}>
+                <Text style={styles.tableHeaderText} wrap>
+                  库位
+                </Text>
+              </View>
+            </View>
+            <View style={styles.th7}>
+              <View style={styles.cellInner}>
+                <Text style={styles.tableHeaderText} wrap>
+                  备注
+                </Text>
+              </View>
+            </View>
           </View>
 
-          {/* 表格行 */}
           {data.orderDetails.map((detail, index) => (
             <View key={index} style={styles.tableRow}>
-              <Text style={[styles.tableCell, styles.col1]}>
-                {detail.deliveryNature || '-'}
-              </Text>
-              <Text style={[styles.tableCell, styles.col2]}>
-                {(() => {
-                  let location = detail.deliveryLocation || '-'
-                  // 如果性质是转仓，仓点后加+
-                  if (detail.deliveryNature === '转仓') {
-                    location += '+'
-                  }
-                  // 如果性质是扣货，仓点后加-hold
-                  else if (detail.deliveryNature === '扣货') {
-                    location += '-hold'
-                  }
-                  return location
-                })()}
-              </Text>
-              <Text style={[styles.tableCell, styles.col3]}>
-                {detail.quantity !== undefined ? detail.quantity.toString() : '-'}
-              </Text>
-              <Text style={[styles.tableCell, styles.col4]}>
-                {detail.notes || '-'}
-              </Text>
-              <Text style={[styles.tableCell, styles.col5]}>
-                {detail.actualPallets !== undefined ? detail.actualPallets.toString() : ''}
-              </Text>
-              <Text style={[styles.tableCell, styles.col6]}>
-                {detail.storageLocation || ''}
-              </Text>
-              <Text style={[styles.tableCell, styles.col7]}>
-                {detail.workerNotes || ''}
-              </Text>
+              <View style={styles.td1}>
+                <View style={styles.cellInner}>
+                  <Text style={styles.tableCellText} wrap>
+                    {detail.deliveryNature || '-'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.td2}>
+                <View style={styles.cellInner}>
+                  <Text style={styles.tableCellText} wrap>
+                    {buildLocationDisplay(detail)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.td3}>
+                <View style={styles.cellInner}>
+                  <Text style={styles.tableCellText} wrap>
+                    {detail.quantity !== undefined ? detail.quantity.toString() : '-'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.td4}>
+                <View style={styles.cellInner}>
+                  <Text style={styles.tableCellNotesText} wrap>
+                    {detail.notes || '-'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.td5}>
+                <View style={styles.cellInner}>
+                  <Text style={styles.tableCellText} wrap>
+                    {detail.actualPallets !== undefined ? detail.actualPallets.toString() : ''}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.td6}>
+                <View style={styles.cellInner}>
+                  <Text style={styles.tableCellText} wrap>
+                    {detail.storageLocation || ''}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.td7}>
+                <View style={styles.cellInner}>
+                  <Text style={styles.tableCellNotesText} wrap>
+                    {detail.workerNotes || ''}
+                  </Text>
+                </View>
+              </View>
             </View>
           ))}
         </View>
@@ -332,4 +607,3 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
     </Document>
   )
 }
-
