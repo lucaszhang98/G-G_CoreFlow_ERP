@@ -19,6 +19,26 @@ const INNER_WIDTH_PT = PAGE_PT_WIDTH - PADDING * 2
 const USABLE_HEIGHT_PT = PAGE_PT_HEIGHT - PADDING * 2
 const HEIGHT_SAFETY = 1.22
 
+const BASE_TITLE_FONT_SIZE = 32 * 1.5
+
+function getTitleFontSize(scale: number): number {
+  return Math.max(24, BASE_TITLE_FONT_SIZE * scale)
+}
+
+/**
+ * 拆柜单 PDF 条形码占位（@react-pdf 中 pt）：产品约定尺寸，固定不变。
+ * 不参与表格 findOptimalScale、不与标题字号联动；勿改比例或改为按版心百分比。
+ */
+const UNLOAD_SHEET_BARCODE_WIDTH_PT = 340
+const UNLOAD_SHEET_BARCODE_HEIGHT_PT = 64
+
+/** 条形码区垂直占用（与样式 margin 一致，供分页估算） */
+function getUnloadSheetBarcodeBlockHeightPt(scale: number): number {
+  const topGap = 8
+  const bottomGap = Math.max(14, 12 * scale)
+  return topGap + UNLOAD_SHEET_BARCODE_HEIGHT_PT + bottomGap
+}
+
 type OrderDetailRow = UnloadSheetData['orderDetails'][number]
 
 /** 七列 flex 权重（仅比例有意义，总和任意正数） */
@@ -134,12 +154,11 @@ function estimateRowMaxLines(
 }
 
 function metricsForScale(scale: number, data: UnloadSheetData, cols: ColFlexWeights) {
-  const baseTitleFontSize = 32 * 1.5
   const baseHeaderLabelFontSize = 9 * 1.5
   const baseHeaderValueFontSize = 10 * 1.5
   const baseTableFontSize = 22 * 1.5
 
-  const titleFontSize = Math.max(24, baseTitleFontSize * scale)
+  const titleFontSize = getTitleFontSize(scale)
   const headerLabelFontSize = Math.max(8, baseHeaderLabelFontSize * scale)
   const headerValueFontSize = Math.max(10, baseHeaderValueFontSize * scale)
   const tableFontSize = Math.max(16, baseTableFontSize * scale)
@@ -156,7 +175,7 @@ function metricsForScale(scale: number, data: UnloadSheetData, cols: ColFlexWeig
 
   let y = 0
   y += titleFontSize * 1.2 + 12 * scale
-  y += 90 * scale + 12 * scale * 2
+  y += getUnloadSheetBarcodeBlockHeightPt(scale)
   y += headerValueFontSize * 2.2 + 15 * scale
 
   if (data.orderNotes != null && data.orderNotes !== '') {
@@ -267,13 +286,12 @@ function tableHeaderCellBase(cellPadding: number, flexGrow: number, notesPad?: N
 }
 
 function createStyles(scaleFactor: number, cols: ColFlexWeights) {
-  const baseTitleFontSize = 32 * 1.5
   const baseHeaderLabelFontSize = 9 * 1.5
   const baseHeaderValueFontSize = 10 * 1.5
   const baseTableFontSize = 22 * 1.5
   const s = scaleFactor
 
-  const titleFontSize = Math.max(24, baseTitleFontSize * s)
+  const titleFontSize = getTitleFontSize(s)
   const headerLabelFontSize = Math.max(8, baseHeaderLabelFontSize * s)
   const headerValueFontSize = Math.max(10, baseHeaderValueFontSize * s)
   const tableFontSize = Math.max(16, baseTableFontSize * s)
@@ -322,13 +340,12 @@ function createStyles(scaleFactor: number, cols: ColFlexWeights) {
     },
     barcodeBlock: {
       alignItems: 'center' as const,
-      marginBottom: 12 * s,
+      marginTop: 8,
+      marginBottom: Math.max(14, 12 * s),
     },
     barcodeImage: {
-      width: 280 * s,
-      height: 90 * s,
-      maxWidth: 280 * s,
-      maxHeight: 90 * s,
+      width: UNLOAD_SHEET_BARCODE_WIDTH_PT,
+      height: UNLOAD_SHEET_BARCODE_HEIGHT_PT,
     },
     headerSection: {
       marginBottom: 15 * s,
@@ -424,16 +441,22 @@ function createStyles(scaleFactor: number, cols: ColFlexWeights) {
   }
 }
 
-function generateBarcodeImage(barcodeText: string): string {
+function generateBarcodeImage(barcodeText: string, widthPt: number, heightPt: number): string {
   try {
-    const canvas = createCanvas(400, 140)
+    const pr = 2.2
+    const w = Math.max(360, Math.round(widthPt * pr))
+    const h = Math.max(100, Math.round(heightPt * pr))
+    const canvas = createCanvas(w, h)
+    const margin = 8
+    const barHeight = Math.round(h * 0.78)
+    const moduleCap = Math.max(2, Math.floor((w - margin * 2) / Math.max(20, barcodeText.length * 11 + 6)))
+    const moduleW = Math.min(4, moduleCap)
     JsBarcode(canvas, barcodeText, {
       format: 'CODE128',
-      width: 2.5,
-      height: 100,
-      displayValue: true,
-      fontSize: 20,
-      margin: 10,
+      width: moduleW,
+      height: barHeight,
+      displayValue: false,
+      margin,
     })
     return canvas.toDataURL('image/png')
   } catch (error) {
@@ -447,7 +470,13 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
   const scale = findOptimalScale(data, cols)
   const styles = createStyles(scale, cols)
   const containerNumber = data.containerNumber || ''
-  const barcodeImage = containerNumber ? generateBarcodeImage(containerNumber.replace(/\s+/g, '')) : null
+  const barcodeImage = containerNumber
+    ? generateBarcodeImage(
+        containerNumber.replace(/\s+/g, ''),
+        UNLOAD_SHEET_BARCODE_WIDTH_PT,
+        UNLOAD_SHEET_BARCODE_HEIGHT_PT
+      )
+    : null
 
   console.log('[UnloadSheet PDF Component] 渲染文档:', {
     rowCount: data.orderDetails.length,
