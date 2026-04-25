@@ -26,16 +26,16 @@ function getTitleFontSize(scale: number): number {
 }
 
 /**
- * 拆柜单 PDF 条形码占位（@react-pdf 中 pt）：产品约定尺寸，固定不变。
+ * 拆柜单 PDF 条形码占位（@react-pdf 中 pt）：产品约定尺寸，固定不变（当前 200×36）。
  * 不参与表格 findOptimalScale、不与标题字号联动；勿改比例或改为按版心百分比。
  */
-const UNLOAD_SHEET_BARCODE_WIDTH_PT = 340
-const UNLOAD_SHEET_BARCODE_HEIGHT_PT = 64
+const UNLOAD_SHEET_BARCODE_WIDTH_PT = 200
+const UNLOAD_SHEET_BARCODE_HEIGHT_PT = 36
 
 /** 条形码区垂直占用（与样式 margin 一致，供分页估算） */
 function getUnloadSheetBarcodeBlockHeightPt(scale: number): number {
-  const topGap = 8
-  const bottomGap = Math.max(14, 12 * scale)
+  const topGap = 4
+  const bottomGap = Math.max(10, 10 * scale)
   return topGap + UNLOAD_SHEET_BARCODE_HEIGHT_PT + bottomGap
 }
 
@@ -310,6 +310,16 @@ function createStyles(scaleFactor: number, cols: ColFlexWeights) {
       padding: PADDING,
       fontFamily: pdfFontFamily,
     },
+    /** 占满版心高度，用 flex 垂直居中整块单据（短内容时上下留白对称） */
+    pageBody: {
+      width: '100%',
+      minHeight: USABLE_HEIGHT_PT,
+      display: 'flex' as const,
+      flexDirection: 'column' as const,
+    },
+    contentWrap: {
+      width: '100%',
+    },
     orderNotesSection: {
       marginBottom: 8 * s,
       paddingBottom: 6 * s,
@@ -340,8 +350,8 @@ function createStyles(scaleFactor: number, cols: ColFlexWeights) {
     },
     barcodeBlock: {
       alignItems: 'center' as const,
-      marginTop: 8,
-      marginBottom: Math.max(14, 12 * s),
+      marginTop: 4,
+      marginBottom: Math.max(10, 10 * s),
     },
     barcodeImage: {
       width: UNLOAD_SHEET_BARCODE_WIDTH_PT,
@@ -469,6 +479,9 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
   const cols = computeColFlexWeights(data)
   const scale = findOptimalScale(data, cols)
   const styles = createStyles(scale, cols)
+  const { y: contentHeightPt } = metricsForScale(scale, data, cols)
+  /** 估算内容明显短于版心时用 flex 居中；阈值避免临界抖动 */
+  const shouldVerticallyCenter = contentHeightPt + 4 < USABLE_HEIGHT_PT
   const containerNumber = data.containerNumber || ''
   const barcodeImage = containerNumber
     ? generateBarcodeImage(
@@ -489,43 +502,50 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={styles.page} wrap>
-        <Text style={styles.title}>{containerNumber || '-'}</Text>
+        <View
+          style={[
+            styles.pageBody,
+            shouldVerticallyCenter ? { justifyContent: 'center' as const } : { justifyContent: 'flex-start' as const },
+          ]}
+        >
+          <View style={styles.contentWrap}>
+          <Text style={styles.title}>{containerNumber || '-'}</Text>
 
-        <View style={styles.barcodeBlock}>
-          {barcodeImage ? <Image src={barcodeImage} style={styles.barcodeImage} /> : null}
-        </View>
+          <View style={styles.barcodeBlock}>
+            {barcodeImage ? <Image src={barcodeImage} style={styles.barcodeImage} /> : null}
+          </View>
 
-        <View style={styles.headerSection}>
-          <View style={styles.headerItem}>
-            <Text style={styles.headerLabel}>客户代码：</Text>
-            <Text style={styles.headerValue}>{data.customerCode || '-'}</Text>
+          <View style={styles.headerSection}>
+            <View style={styles.headerItem}>
+              <Text style={styles.headerLabel}>客户代码：</Text>
+              <Text style={styles.headerValue}>{data.customerCode || '-'}</Text>
+            </View>
+            <View style={styles.headerItem}>
+              <Text style={styles.headerLabel}>拆柜人员：</Text>
+              <Text style={styles.headerValue}>{data.unloadedBy || '-'}</Text>
+            </View>
+            <View style={styles.headerItem}>
+              <Text style={styles.headerLabel}>入库人员：</Text>
+              <Text style={styles.headerValue}>{data.receivedBy || '-'}</Text>
+            </View>
+            <View style={styles.headerItem}>
+              <Text style={styles.headerLabel}>拆柜日期：</Text>
+              <Text style={styles.headerValue}>
+                {data.unloadDate ? formatDate(data.unloadDate, 'short') : '-'}
+              </Text>
+            </View>
           </View>
-          <View style={styles.headerItem}>
-            <Text style={styles.headerLabel}>拆柜人员：</Text>
-            <Text style={styles.headerValue}>{data.unloadedBy || '-'}</Text>
-          </View>
-          <View style={styles.headerItem}>
-            <Text style={styles.headerLabel}>入库人员：</Text>
-            <Text style={styles.headerValue}>{data.receivedBy || '-'}</Text>
-          </View>
-          <View style={styles.headerItem}>
-            <Text style={styles.headerLabel}>拆柜日期：</Text>
-            <Text style={styles.headerValue}>
-              {data.unloadDate ? formatDate(data.unloadDate, 'short') : '-'}
-            </Text>
-          </View>
-        </View>
 
-        {data.orderNotes != null && data.orderNotes !== '' && (
-          <View style={styles.orderNotesSection}>
-            <Text style={styles.orderNotesLabel}>备注：</Text>
-            <Text style={styles.orderNotesText} wrap>
-              {data.orderNotes}
-            </Text>
-          </View>
-        )}
+          {data.orderNotes != null && data.orderNotes !== '' && (
+            <View style={styles.orderNotesSection}>
+              <Text style={styles.orderNotesLabel}>备注：</Text>
+              <Text style={styles.orderNotesText} wrap>
+                {data.orderNotes}
+              </Text>
+            </View>
+          )}
 
-        <View style={styles.table}>
+          <View style={styles.table}>
           <View style={styles.tableHeader}>
             <View style={styles.th1}>
               <View style={styles.cellInner}>
@@ -578,8 +598,8 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
             </View>
           </View>
 
-          {data.orderDetails.map((detail, index) => (
-            <View key={index} style={styles.tableRow}>
+            {data.orderDetails.map((detail, index) => (
+              <View key={index} style={styles.tableRow}>
               <View style={styles.td1}>
                 <View style={styles.cellInner}>
                   <Text style={styles.tableCellText} wrap>
@@ -629,8 +649,10 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
                   </Text>
                 </View>
               </View>
-            </View>
-          ))}
+              </View>
+            ))}
+          </View>
+          </View>
         </View>
       </Page>
     </Document>

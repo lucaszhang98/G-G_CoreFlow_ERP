@@ -48,12 +48,14 @@ export function DeliveryAppointmentTable() {
   const [currentSearchParams, setCurrentSearchParams] = React.useState<URLSearchParams>(new URLSearchParams())
   const [totalCount, setTotalCount] = React.useState(0) // 全部数据总数（固定值，只在初始加载时设置）
   const [filteredCount, setFilteredCount] = React.useState(0) // 当前筛选结果数
+  // 预约管理默认只显示启用记录；用户仍可通过筛选切换查看停用记录。
+  const initialFilterValues = React.useMemo(() => ({ enabled: 'true' }), [])
 
   // 与列表同源：/api/oms/appointments
   React.useEffect(() => {
     const fetchTotalCount = async () => {
       try {
-        const qs = new URLSearchParams({ page: "1", limit: "1" })
+        const qs = new URLSearchParams({ page: "1", limit: "1", enabled: "true" })
         const response = await fetch(`/api/oms/appointments?${qs.toString()}`)
         if (response.ok) {
           const data = await response.json()
@@ -381,6 +383,7 @@ export function DeliveryAppointmentTable() {
       <EntityTable 
         refreshKey={refreshKey}
         config={deliveryAppointmentConfig}
+        initialFilterValues={initialFilterValues}
         customActions={customActions}
         importConfig={{
           enabled: true,
