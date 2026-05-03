@@ -3,7 +3,7 @@
  * 直送(direct_delivery)：自动发票号 S+年月+4 位；拆柜(unload)：C+年月+4 位；均默认当天开票日期
  */
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createListHandler, createCreateHandler } from '@/lib/crud/api-handler'
 import { invoiceConfig } from '@/lib/crud/configs/invoices'
 import { getNextDirectDeliveryNumber } from '@/lib/finance/next-direct-delivery-number'

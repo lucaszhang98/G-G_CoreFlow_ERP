@@ -108,6 +108,7 @@ export async function createPenaltyRebateInvoiceFromContainerNumber(
   if (order.customer_id == null) {
     return { ok: false, error: '该订单未关联客户，无法创建负数账单', status: 400 }
   }
+  const customerId = order.customer_id
 
   if (isOrderCancelledStatus(order.status)) {
     return { ok: false, error: '该订单已取消，无法创建负数账单', status: 400 }
@@ -125,8 +126,8 @@ export async function createPenaltyRebateInvoiceFromContainerNumber(
     }
   }
 
-  const fees = await loadApplicableFeesForCustomer(order.customer_id)
-  const otherFee = pickOtherFee(fees, order, order.customer_id)
+  const fees = await loadApplicableFeesForCustomer(customerId)
+  const otherFee = pickOtherFee(fees, order, customerId)
   if (!otherFee) {
     return {
       ok: false,
@@ -149,7 +150,7 @@ export async function createPenaltyRebateInvoiceFromContainerNumber(
       data: {
         invoice_type: 'penalty',
         invoice_number: invoiceNumber,
-        customer_id: order.customer_id,
+        customer_id: customerId,
         order_id: order.order_id,
         total_amount: 0,
         tax_amount: 0,
