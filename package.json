@@ -90,5 +90,17 @@
     "pkg": "^5.8.1",
     "prisma-erd-generator": "^2.1.0",
     "tsx": "^4.20.6"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "canvas",
+      "esbuild",
+      "sharp",
+      "puppeteer",
+      "unrs-resolver"
+    ]
   }
 }
