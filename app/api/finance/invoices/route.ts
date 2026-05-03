@@ -18,6 +18,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
+  if (body?.invoice_type === 'storage') {
+    return NextResponse.json(
+      {
+        error:
+          '仓储账单由系统根据已入库订单与预约自动生成，不可手动创建；如需补历史数据请使用管理员接口 POST /api/admin/sync-storage-invoices',
+      },
+      { status: 400 }
+    )
+  }
   const today = new Date().toISOString().slice(0, 10)
   const defaults = {
     invoice_date: body.invoice_date ?? today,

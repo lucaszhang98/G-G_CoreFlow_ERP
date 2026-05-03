@@ -371,7 +371,10 @@ interface EntityTableProps<T = any> {
     getExpandedContent?: (row: T) => React.ReactNode | null // 获取展开内容
   } // 可展开行配置
   customToolbarButtons?: React.ReactNode // 自定义工具栏按钮（显示在新建按钮旁边）
-  customBatchActions?: React.ReactNode // 自定义批量操作按钮（显示在批量操作工具栏中）
+  /** 批量操作区额外按钮；传函数时可拿到当前勾选行（用于应收批量下载发票 PDF 等） */
+  customBatchActions?:
+    | React.ReactNode
+    | ((ctx: { selectedRows: T[]; clearSelection: () => void }) => React.ReactNode)
   onSearchParamsChange?: (params: URLSearchParams) => void // 搜索参数变化回调
   onTotalChange?: (total: number) => void // 总数变化回调
   onFilteredTotalChange?: (filteredTotal: number) => void // 筛选后总数变化回调
@@ -694,8 +697,12 @@ export function EntityTable<T = any>({
     return config.list.batchOperations?.edit?.fields || 
       Object.keys(config.fields).filter(key => {
         const field = config.fields[key]
-        // 排除主键字段
-        return key !== idField && field.type !== 'relation'
+        return (
+          key !== idField &&
+          field.type !== 'relation' &&
+          !field.readonly &&
+          !field.computed
+        )
       })
   }, [config.list.batchOperations?.edit?.fields, config.fields, config.idField])
 
@@ -929,12 +936,20 @@ export function EntityTable<T = any>({
     if (!inlineEditEnabled) return []
     const configuredFields = config.list.inlineEdit?.fields
     if (configuredFields && configuredFields.length > 0) {
-      return configuredFields
+      return configuredFields.filter((key) => {
+        const field = config.fields[key]
+        return field && !field.readonly && !field.computed
+      })
     }
     // 如果没有配置，则所有非主键、非关系字段都可编辑
     return Object.keys(config.fields).filter(key => {
       const field = config.fields[key]
-      return key !== getIdField() && field.type !== 'relation'
+      return (
+        key !== getIdField() &&
+        field.type !== 'relation' &&
+        !field.readonly &&
+        !field.computed
+      )
     })
   }, [inlineEditEnabled, config.list.inlineEdit?.fields, config.fields, config.idField])
 
@@ -3135,7 +3150,12 @@ export function EntityTable<T = any>({
                 批量删除
               </Button>
             )}
-            {customBatchActions}
+            {typeof customBatchActions === 'function'
+              ? customBatchActions({
+                  selectedRows,
+                  clearSelection: () => setSelectedRows([]),
+                })
+              : customBatchActions}
             <Button
               variant="outline"
               size="sm"

@@ -414,6 +414,16 @@ async function updatePickupManagement(
 
     console.log('[提柜管理更新] 更新成功')
 
+    try {
+      const { scheduleStorageInvoiceSync } = await import('@/lib/finance/storage-invoice-sync')
+      scheduleStorageInvoiceSync(
+        pickup.order_id,
+        user?.id ? BigInt(user.id) : null
+      )
+    } catch (e) {
+      console.warn('[提柜管理更新] 仓储账单同步调度失败', e)
+    }
+
     return NextResponse.json({
       success: true,
       data: responseData,

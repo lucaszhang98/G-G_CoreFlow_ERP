@@ -150,6 +150,16 @@ export async function POST(request: NextRequest) {
       include: inboundReceiptConfig.prisma?.include,
     });
 
+    try {
+      const { scheduleStorageInvoiceSync } = await import('@/lib/finance/storage-invoice-sync')
+      scheduleStorageInvoiceSync(
+        inboundReceipt.order_id,
+        currentUser?.id ? BigInt(currentUser.id) : null
+      )
+    } catch (e) {
+      console.warn('[inbound-receipts POST] 仓储账单同步调度失败', e)
+    }
+
     // 转换数据格式
     const serialized = serializeBigInt(inboundReceipt);
     const orderData = serialized.orders;

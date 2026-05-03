@@ -124,6 +124,12 @@ export async function POST(
     if (!invoice) {
       return NextResponse.json({ error: '账单不存在' }, { status: 404 })
     }
+    if (invoice.invoice_type === 'storage') {
+      return NextResponse.json(
+        { error: '仓储账单明细由系统根据预约与入库自动维护，不可手动添加' },
+        { status: 400 }
+      )
+    }
     if (invoice.status === 'audited') {
       const block = await getReceivableWithdrawBlockReason(prisma, invId)
       if (block) {

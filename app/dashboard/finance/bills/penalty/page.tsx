@@ -1,12 +1,11 @@
 /**
- * 负数账单（invoice_type=penalty）- 金额可为负
+ * 负数账单（invoice_type=penalty）- 金额可为负；新建仅按柜号弹窗创建
  */
 
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { EntityTable } from "@/components/crud/entity-table"
-import { penaltyBillConfig } from "@/lib/crud/configs/invoices"
+import { PenaltyBillTable } from "./penalty-bill-table"
 
 export default async function PenaltyBillsPage() {
   const session = await auth()
@@ -17,10 +16,7 @@ export default async function PenaltyBillsPage() {
 
   return (
     <DashboardLayout user={session.user || {}}>
-      <EntityTable
-        config={penaltyBillConfig}
-        initialFilterValues={{ invoice_type: "penalty" }}
-      />
+      <PenaltyBillTable />
     </DashboardLayout>
   )
 }

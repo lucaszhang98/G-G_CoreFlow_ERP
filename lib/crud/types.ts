@@ -162,6 +162,11 @@ export interface EntityConfig {
      */
     excludeCancelledOrders?: boolean
   }
+
+  /**
+   * 详情页标题栏：显示「下载发票 PDF」按钮，使用本字段从详情数据中读取关联发票 ID（如 receivable 的 invoice_id）
+   */
+  detailInvoicePdfField?: string
   
   // 表单字段顺序
   formFields: string[]

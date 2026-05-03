@@ -46,6 +46,10 @@ interface LineRow {
   total_amount: number | string
   currency?: string
   line_notes?: string | null
+  /** 仓储账单：拆柜/入库时间 */
+  storage_in_at?: string | null
+  /** 仓储账单：预约出库时间 */
+  storage_out_at?: string | null
 }
 
 export interface InvoiceBillDetailClientProps {
@@ -80,6 +84,7 @@ export function InvoiceBillDetailClient({
   billKindLabel,
 }: InvoiceBillDetailClientProps) {
   const isPenaltyInvoice = invoice.invoice_type === "penalty"
+  const isStorageInvoice = invoice.invoice_type === "storage"
   const router = useRouter()
   const [lines, setLines] = React.useState<LineRow[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -130,6 +135,13 @@ export function InvoiceBillDetailClient({
   React.useEffect(() => {
     loadLines()
   }, [loadLines])
+
+  const formatBillDateDisplay = React.useCallback((v: unknown) => {
+    if (v == null || v === "") return "—"
+    const s = String(v)
+    if (s.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+    return s.includes("T") ? s.replace("T", " ").slice(0, 19) : s
+  }, [])
 
   /** searchText：不传或空字符串 = 仅柜型/客户范围内全部费用；有值 = 模糊匹配编码/名称 */
   const loadFeeOptions = React.useCallback(
@@ -372,10 +384,12 @@ export function InvoiceBillDetailClient({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>账单明细</CardTitle>
-          <Button size="sm" onClick={openAdd}>
-            <Plus className="mr-2 h-4 w-4" />
-            添加明细
-          </Button>
+          {!isStorageInvoice && (
+            <Button size="sm" onClick={openAdd}>
+              <Plus className="mr-2 h-4 w-4" />
+              添加明细
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -383,11 +397,21 @@ export function InvoiceBillDetailClient({
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : lines.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">暂无明细，点击「添加明细」选择费用并填写单价、数量与备注。</p>
+            <p className="text-muted-foreground text-center py-8">
+              {isStorageInvoice
+                ? "暂无明细：请确认订单已入库，扣货行已关联预约且预约已填写出库时间；系统将自动同步。"
+                : "暂无明细，点击「添加明细」选择费用并填写单价、数量与备注。"}
+            </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
+                  {isStorageInvoice && (
+                    <>
+                      <TableHead>入库时间</TableHead>
+                      <TableHead>出库时间</TableHead>
+                    </>
+                  )}
                   <TableHead>费用编码</TableHead>
                   <TableHead>费用名称</TableHead>
                   <TableHead>单位</TableHead>
@@ -395,7 +419,7 @@ export function InvoiceBillDetailClient({
                   <TableHead className="text-right">数量</TableHead>
                   <TableHead className="text-right">总价</TableHead>
                   <TableHead className="min-w-[140px]">备注</TableHead>
-                  <TableHead className="w-[100px]">操作</TableHead>
+                  {!isStorageInvoice && <TableHead className="w-[100px]">操作</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -408,6 +432,16 @@ export function InvoiceBillDetailClient({
                         : undefined
                     }
                   >
+                    {isStorageInvoice && (
+                      <>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {formatBillDateDisplay(line.storage_in_at)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {formatBillDateDisplay(line.storage_out_at)}
+                        </TableCell>
+                      </>
+                    )}
                     <TableCell>{line.fee_code ?? "-"}</TableCell>
                     <TableCell>{line.fee_name ?? "-"}</TableCell>
                     <TableCell>{line.unit ?? "-"}</TableCell>
@@ -419,34 +453,36 @@ export function InvoiceBillDetailClient({
                     <TableCell className="text-xs text-muted-foreground max-w-[220px] whitespace-pre-wrap">
                       {line.line_notes ?? "—"}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => openEditLine(line)}
-                          title="编辑单价、数量、备注"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            if (line.id == null || line.id === "") {
-                              toast.error("明细缺少 ID，无法删除")
-                              return
-                            }
-                            setDeleteLineId(line.id)
-                          }}
-                          title="删除该明细"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    {!isStorageInvoice && (
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => openEditLine(line)}
+                            title="编辑单价、数量、备注"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              if (line.id == null || line.id === "") {
+                                toast.error("明细缺少 ID，无法删除")
+                                return
+                              }
+                              setDeleteLineId(line.id)
+                            }}
+                            title="删除该明细"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

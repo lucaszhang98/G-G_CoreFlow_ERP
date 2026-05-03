@@ -212,6 +212,19 @@ export async function PUT(
       // 不影响预约明细更新，只记录警告
     }
 
+    try {
+      const od = await prisma.order_detail.findUnique({
+        where: { id: orderDetailId },
+        select: { order_id: true },
+      })
+      if (od?.order_id) {
+        const { scheduleStorageInvoiceSync } = await import('@/lib/finance/storage-invoice-sync')
+        scheduleStorageInvoiceSync(od.order_id, session.user?.id ? BigInt(session.user.id) : null)
+      }
+    } catch (e) {
+      console.warn('[appointment-detail-lines PUT] 仓储账单同步调度失败', e)
+    }
+
     return NextResponse.json({
       success: true,
       data: serializeBigInt(result)
@@ -300,6 +313,19 @@ export async function DELETE(
     } catch (syncError: any) {
       console.warn('同步订单预约信息失败:', syncError)
       // 不影响预约明细删除，只记录警告
+    }
+
+    try {
+      const orderDetail = await prisma.order_detail.findUnique({
+        where: { id: orderDetailId },
+        select: { order_id: true },
+      })
+      if (orderDetail?.order_id) {
+        const { scheduleStorageInvoiceSync } = await import('@/lib/finance/storage-invoice-sync')
+        scheduleStorageInvoiceSync(orderDetail.order_id, session.user?.id ? BigInt(session.user.id) : null)
+      }
+    } catch (e) {
+      console.warn('[appointment-detail-lines DELETE] 仓储账单同步调度失败', e)
     }
 
     return NextResponse.json({ 

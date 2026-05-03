@@ -328,7 +328,17 @@ export async function PUT(
     const calculatedDeliveryProgress = computeInboundReceiptHeaderDeliveryProgress({
       orderDetails: progressSer?.orders?.order_detail || [],
       inventoryLots: progressSer?.inventory_lots || [],
-    });
+    })
+
+    try {
+      const { scheduleStorageInvoiceSync } = await import('@/lib/finance/storage-invoice-sync')
+      scheduleStorageInvoiceSync(
+        existing.order_id,
+        currentUser?.id ? BigInt(currentUser.id) : null
+      )
+    } catch (e) {
+      console.warn('[inbound-receipts PUT] 仓储账单同步调度失败', e)
+    }
 
     return NextResponse.json({
       data: {

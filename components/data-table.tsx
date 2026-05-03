@@ -95,6 +95,14 @@ function relationClipboardDisplayText(
     }
     return undefined
   }
+  if (columnId === 'invoice_id') {
+    const inv = r.invoices as { invoice_number?: string | null } | null | undefined
+    const num = inv?.invoice_number
+    if (num != null && String(num).trim() !== '') {
+      return String(num).trim()
+    }
+    return undefined
+  }
   return undefined
 }
 

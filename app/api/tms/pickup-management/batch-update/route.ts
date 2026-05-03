@@ -202,6 +202,14 @@ export async function POST(request: NextRequest) {
           userId: actorId,
         })
       }
+      try {
+        const { scheduleStorageInvoiceSync } = await import('@/lib/finance/storage-invoice-sync')
+        for (const orderId of uniqueOrderIds) {
+          scheduleStorageInvoiceSync(orderId, actorId)
+        }
+      } catch (e) {
+        console.warn('[提柜管理批量更新] 仓储账单同步调度失败', e)
+      }
     }
 
     return NextResponse.json({

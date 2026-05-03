@@ -14,6 +14,7 @@ import {
 } from '@/lib/finance/invoice-receivable-sync'
 import { isOrderCancelledStatus } from '@/lib/orders/order-visibility'
 import { feeMatchesContainer } from '@/lib/finance/fee-matching'
+import { volumePercentageFromVolumesByDetailId } from '@/lib/finance/order-detail-volume-percentage'
 
 async function deleteDirectDeliveryInvoiceByOrderId(orderId: bigint): Promise<void> {
   const existing = await prisma.invoices.findFirst({
@@ -181,6 +182,7 @@ export async function syncDirectDeliveryInvoiceForOrder(
       }
     }
     const details = order.order_detail ?? []
+    const volumePctByDetailId = volumePercentageFromVolumesByDetailId(details)
     const lines: Prisma.invoice_line_itemsCreateManyInput[] = []
     let sort = 0
 
@@ -188,7 +190,17 @@ export async function syncDirectDeliveryInvoiceForOrder(
       const loc = detail.locations_order_detail_delivery_location_idTolocations
       const locLabel = loc?.name || loc?.location_code || '未指定仓'
       const allInFee = pickAllInFee(fees, order, order.customer_id, loc)
-      const pctRaw = detail.volume_percentage != null ? Number(detail.volume_percentage) : null
+      const pctFromDb =
+        detail.volume_percentage != null ? Number(detail.volume_percentage) : null
+      const pctFromVolume = volumePctByDetailId.get(detail.id.toString()) ?? null
+      const pctRaw =
+        pctFromDb != null && !Number.isNaN(pctFromDb)
+          ? pctFromDb
+          : pctFromVolume != null && !Number.isNaN(pctFromVolume)
+            ? pctFromVolume
+            : details.length === 1
+              ? 100
+              : null
       const pct =
         pctRaw != null && !Number.isNaN(pctRaw)
           ? pctRaw

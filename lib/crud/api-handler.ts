@@ -89,8 +89,8 @@ export function createListHandler(config: EntityConfig) {
       const where: any = {}
       
       // 简单搜索条件（模糊搜索）
-      if (search && enhancedConfig.list.searchFields) {
-        const searchConditions = enhancedConfig.list.searchFields
+      if (search) {
+        const searchConditions = (enhancedConfig.list.searchFields ?? [])
           .map(field => {
             const fieldConfig = enhancedConfig.fields[field]
             if (fieldConfig?.relation) {
@@ -111,6 +111,18 @@ export function createListHandler(config: EntityConfig) {
           searchConditions.push({
             orders: {
               order_number: { contains: search, mode: 'insensitive' as const },
+            },
+          })
+        }
+
+        // 应收：按关联账单发票号模糊搜
+        if (
+          enhancedConfig.prisma?.model === 'receivables' &&
+          search.trim()
+        ) {
+          searchConditions.push({
+            invoices: {
+              invoice_number: { contains: search, mode: 'insensitive' as const },
             },
           })
         }
@@ -159,6 +171,12 @@ export function createListHandler(config: EntityConfig) {
                   if (process.env.NODE_ENV === 'development') {
                     console.log(`[createListHandler] 设置预约状态筛选条件: ${filterValue}`)
                   }
+                } else if (
+                  enhancedConfig.prisma?.model === 'receivables' &&
+                  filterField.field === 'invoice_type'
+                ) {
+                  // 应收：按关联账单的账单类型（直送/拆柜/负数/仓储）
+                  where.invoices = { invoice_type: filterValue }
                 } else {
                   // 普通 select 字段（包括状态）
                   where[filterField.field] = filterValue
@@ -1140,6 +1158,11 @@ export function createCreateHandler(config: EntityConfig) {
         processedData.balance = amt - allocated
       }
 
+      // 账单总金额由明细汇总，创建时主表 total_amount 仅允许默认 0（表单已不提交该字段）
+      if (config.prisma?.model === 'invoices' && processedData.total_amount === undefined) {
+        processedData.total_amount = 0
+      }
+
       // 自动添加系统维护字段（创建人/时间、修改人/时间）
       const { addSystemFields } = await import('@/lib/api/helpers')
       addSystemFields(processedData, permissionResult.user, true)
@@ -1288,7 +1311,10 @@ export function createUpdateHandler(config: EntityConfig) {
       const processedData: any = {}
       for (const [key, value] of Object.entries(submitData as Record<string, any>)) {
         const fieldConfig = config.fields[key]
-        
+        if (fieldConfig?.readonly || fieldConfig?.computed) {
+          continue
+        }
+
         // 处理 boolean 字段：确保转换为布尔类型
         if (fieldConfig?.type === 'boolean') {
           if (value !== undefined && value !== null) {
@@ -1622,6 +1648,21 @@ export function createDeleteHandler(config: EntityConfig) {
           data: serializeBigInt(item)
         })
       }
+
+      // 应收删除：已审核发票同步降级为「已开票」并撤回应收（与账单侧改明细逻辑一致）
+      if (config.prisma?.model === 'receivables') {
+        const userId = authCheck.user?.id ? BigInt(authCheck.user.id) : null
+        const { deleteReceivableAndSyncInvoiceTx, ReceivableWithdrawError } =
+          await import('@/lib/finance/invoice-receivable-sync')
+        await prisma.$transaction(async (tx) => {
+          await deleteReceivableAndSyncInvoiceTx(
+            tx,
+            BigInt(resolvedParams.id),
+            userId
+          )
+        })
+        return NextResponse.json({ message: `删除${config.displayName}成功` })
+      }
       
       // 其他表使用硬删除
       await prismaModel.delete({
@@ -1630,6 +1671,9 @@ export function createDeleteHandler(config: EntityConfig) {
 
       return NextResponse.json({ message: `删除${config.displayName}成功` })
     } catch (error: any) {
+      if (error?.name === 'ReceivableWithdrawError') {
+        return NextResponse.json({ error: error.message }, { status: 409 })
+      }
       if (error.code === 'P2025') {
         return NextResponse.json(
           { error: `${config.displayName}不存在` },
@@ -1691,6 +1735,31 @@ export function createBatchDeleteHandler(config: EntityConfig) {
         return NextResponse.json({
           message: `成功归档 ${result.count} 条${config.displayName}记录`,
           count: result.count,
+        })
+      }
+
+      // 应收批量删除：每条与单条删除相同逻辑，整批在同一事务内（任一条有核销则整批失败）
+      if (config.prisma?.model === 'receivables') {
+        const userId = authCheck.user?.id ? BigInt(authCheck.user.id) : null
+        const { deleteReceivableAndSyncInvoiceTx } = await import(
+          '@/lib/finance/invoice-receivable-sync'
+        )
+        try {
+          await prisma.$transaction(async (tx) => {
+            for (const rid of bigIntIds) {
+              await deleteReceivableAndSyncInvoiceTx(tx, rid, userId)
+            }
+          })
+        } catch (e: unknown) {
+          const err = e as Error
+          if (err?.name === 'ReceivableWithdrawError') {
+            return NextResponse.json({ error: err.message }, { status: 409 })
+          }
+          throw e
+        }
+        return NextResponse.json({
+          message: `成功删除 ${bigIntIds.length} 条${config.displayName}记录`,
+          count: bigIntIds.length,
         })
       }
 
@@ -1769,7 +1838,10 @@ export function createBatchUpdateHandler(config: EntityConfig) {
       Object.entries(updates).forEach(([key, value]) => {
         // 查找字段配置
         const fieldConfig = config.fields[key]
-        
+        if (fieldConfig?.readonly || fieldConfig?.computed) {
+          return
+        }
+
         // 如果是relation字段，使用relationField映射
         let actualKey = key
         if (fieldConfig?.relation) {
@@ -1871,6 +1943,34 @@ export function createBatchUpdateHandler(config: EntityConfig) {
           },
           data: processedUpdates,
         })
+      }
+
+      if (config.prisma?.model === 'delivery_appointments' && result.count > 0) {
+        try {
+          const appts = await prisma.delivery_appointments.findMany({
+            where: { appointment_id: { in: bigIntIds } },
+            select: { order_id: true },
+          })
+          const { scheduleStorageInvoiceSync } = await import(
+            '@/lib/finance/storage-invoice-sync'
+          )
+          const uid = permissionResult.user?.id
+            ? BigInt(permissionResult.user.id)
+            : null
+          const seen = new Set<string>()
+          for (const a of appts) {
+            if (!a.order_id) continue
+            const k = a.order_id.toString()
+            if (seen.has(k)) continue
+            seen.add(k)
+            scheduleStorageInvoiceSync(a.order_id, uid)
+          }
+        } catch (e) {
+          console.warn(
+            '[batch-update] delivery_appointments 仓储账单同步调度失败',
+            e
+          )
+        }
       }
 
       return NextResponse.json({

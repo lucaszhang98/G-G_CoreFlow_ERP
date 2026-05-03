@@ -59,13 +59,31 @@ export async function upsertReceivableForAuditedInvoice(
   const totalDec = new Prisma.Decimal(receivableAmount.toString())
   const balance = totalDec.sub(allocated)
 
+  /** 应收状态：正数账单「收讫」为 balance<=0；负数（返利等）余额为负是未结清，仅 balance===0 视为结清 */
+  let status: 'open' | 'partial' | 'closed'
+  if (totalDec.lt(0)) {
+    if (balance.eq(0)) {
+      status = 'closed'
+    } else if (allocated.gt(0)) {
+      status = 'partial'
+    } else {
+      status = 'open'
+    }
+  } else if (balance.lte(0)) {
+    status = 'closed'
+  } else if (allocated.gt(0)) {
+    status = 'partial'
+  } else {
+    status = 'open'
+  }
+
   const common = {
     customer_id: inv.customer_id,
     receivable_amount: receivableAmount,
     allocated_amount: allocated,
     balance,
     due_date: inv.invoice_date,
-    status: balance.lte(0) ? 'closed' : 'open',
+    status,
     updated_by: userId,
     updated_at: new Date(),
   }
@@ -131,4 +149,46 @@ export async function downgradeAuditedInvoiceAfterLineMutation(
       updated_at: new Date(),
     },
   })
+}
+
+/**
+ * 从应收管理删除一条应收（须在事务内调用）：
+ * - 关联发票为「已审核」：与「已审核账单在账单管理里改明细」一致——删应收并将发票降为「已开票」；已有核销则抛 ReceivableWithdrawError。
+ * - 否则：仅删除该应收行。
+ */
+export async function deleteReceivableAndSyncInvoiceTx(
+  tx: Prisma.TransactionClient,
+  receivableId: bigint,
+  userId: bigint | null
+): Promise<void> {
+  const rec = await tx.receivables.findUnique({
+    where: { receivable_id: receivableId },
+    select: { receivable_id: true, invoice_id: true },
+  })
+  if (!rec) {
+    const err = new Error('NOT_FOUND') as Error & { code: string }
+    err.code = 'P2025'
+    throw err
+  }
+
+  const inv = await tx.invoices.findUnique({
+    where: { invoice_id: rec.invoice_id },
+    select: { invoice_id: true, status: true },
+  })
+
+  if (!inv) {
+    await tx.receivables.delete({ where: { receivable_id: receivableId } })
+    return
+  }
+
+  if (inv.status === 'audited') {
+    const block = await getReceivableWithdrawBlockReason(tx, rec.invoice_id)
+    if (block) {
+      throw new ReceivableWithdrawError(block)
+    }
+    await downgradeAuditedInvoiceAfterLineMutation(tx, rec.invoice_id, userId)
+    return
+  }
+
+  await tx.receivables.delete({ where: { receivable_id: receivableId } })
 }

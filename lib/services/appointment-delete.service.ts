@@ -84,6 +84,14 @@ export class AppointmentDeleteService {
       } catch (syncError: any) {
         console.warn('[预约删除] 同步订单预约信息失败:', syncError)
       }
+      try {
+        const { scheduleStorageInvoiceSync } = await import('@/lib/finance/storage-invoice-sync')
+        for (const oid of orderIdsToSync) {
+          scheduleStorageInvoiceSync(oid, null)
+        }
+      } catch (e) {
+        console.warn('[预约删除] 仓储账单同步调度失败', e)
+      }
     }
 
     console.log(`[预约删除] ✅ 预约 ${appointmentId} 已停用，板数已按重算回退`)

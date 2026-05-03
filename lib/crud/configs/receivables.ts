@@ -100,7 +100,24 @@ export const receivableConfig: EntityConfig = {
     defaultSort: 'due_date',
     defaultOrder: 'asc',
     columns: ['invoice_id', 'customer_id', 'receivable_amount', 'allocated_amount', 'balance', 'due_date', 'status', 'notes'],
+    /** 主搜索走 api-handler 关联 invoices.invoice_number 模糊匹配 */
     searchFields: [],
+    searchPlaceholder: '搜索发票号…',
+    /** 快速筛选「发票」：按账单类型，不再用发票 ID 下拉 */
+    filterFieldKeysExclude: ['invoice_id'],
+    filterFields: [
+      {
+        field: 'invoice_type',
+        label: '发票',
+        type: 'select',
+        options: [
+          { label: '直送', value: 'direct_delivery' },
+          { label: '拆柜', value: 'unload' },
+          { label: '负数', value: 'penalty' },
+          { label: '仓储', value: 'storage' },
+        ],
+      },
+    ],
     pageSize: 100,
     batchOperations: {
       enabled: true,
@@ -126,6 +143,7 @@ export const receivableConfig: EntityConfig = {
         select: {
           invoice_id: true,
           invoice_number: true,
+          invoice_type: true,
           total_amount: true,
         },
       },

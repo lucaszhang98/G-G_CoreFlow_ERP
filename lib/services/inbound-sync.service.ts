@@ -107,6 +107,13 @@ export async function syncInboundReceiptForOrder(
       },
     })
 
+    try {
+      const { scheduleStorageInvoiceSync } = await import('@/lib/finance/storage-invoice-sync')
+      scheduleStorageInvoiceSync(orderId, userId ?? null)
+    } catch (e) {
+      console.warn('[InboundSync] 仓储账单同步调度失败', e)
+    }
+
     return {
       success: true,
       created: true,

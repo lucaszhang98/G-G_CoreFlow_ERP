@@ -52,6 +52,12 @@ export async function PATCH(
     if (!parentInvoice) {
       return NextResponse.json({ error: '账单不存在' }, { status: 404 })
     }
+    if (parentInvoice.invoice_type === 'storage') {
+      return NextResponse.json(
+        { error: '仓储账单明细由系统根据预约与入库自动维护，不可手动修改' },
+        { status: 400 }
+      )
+    }
     if (parentInvoice.status === 'audited') {
       const block = await getReceivableWithdrawBlockReason(prisma, invId)
       if (block) {
@@ -144,8 +150,14 @@ export async function DELETE(
 
     const parentForDelete = await prisma.invoices.findUnique({
       where: { invoice_id: invId },
-      select: { status: true },
+      select: { status: true, invoice_type: true },
     })
+    if (parentForDelete?.invoice_type === 'storage') {
+      return NextResponse.json(
+        { error: '仓储账单明细由系统根据预约与入库自动维护，不可手动删除' },
+        { status: 400 }
+      )
+    }
     if (parentForDelete?.status === 'audited') {
       const block = await getReceivableWithdrawBlockReason(prisma, invId)
       if (block) {

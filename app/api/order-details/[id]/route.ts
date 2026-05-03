@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
 import { scheduleDirectDeliveryInvoiceSync } from '@/lib/finance/direct-delivery-sync'
 import { scheduleContainerUnloadInvoiceSync } from '@/lib/finance/container-unload-sync'
+import { scheduleStorageInvoiceSync } from '@/lib/finance/storage-invoice-sync'
 
 // PUT - 更新仓点明细
 export async function PUT(
@@ -184,6 +185,7 @@ export async function PUT(
     if (currentDetail.order_id) {
       scheduleDirectDeliveryInvoiceSync(currentDetail.order_id, uidPut)
       scheduleContainerUnloadInvoiceSync(currentDetail.order_id, uidPut)
+      scheduleStorageInvoiceSync(currentDetail.order_id, uidPut)
     }
 
     return NextResponse.json({
@@ -292,6 +294,7 @@ export async function DELETE(
     const uidDel = session.user?.id ? BigInt(session.user.id) : undefined
     scheduleDirectDeliveryInvoiceSync(detailToDelete.order_id, uidDel)
     scheduleContainerUnloadInvoiceSync(detailToDelete.order_id, uidDel)
+    scheduleStorageInvoiceSync(detailToDelete.order_id, uidDel)
 
     return NextResponse.json({ message: '仓点明细删除成功' })
   } catch (error: any) {

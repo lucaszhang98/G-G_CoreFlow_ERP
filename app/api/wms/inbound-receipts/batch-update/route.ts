@@ -145,6 +145,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    try {
+      const affected = await prisma.inbound_receipt.findMany({
+        where: { inbound_receipt_id: { in: inboundReceiptIds } },
+        select: { order_id: true },
+      })
+      const { scheduleStorageInvoiceSync } = await import('@/lib/finance/storage-invoice-sync')
+      const uid = currentUser?.id ? BigInt(currentUser.id) : null
+      const done = new Set<string>()
+      for (const row of affected) {
+        const k = row.order_id.toString()
+        if (done.has(k)) continue
+        done.add(k)
+        scheduleStorageInvoiceSync(row.order_id, uid)
+      }
+    } catch (e) {
+      console.warn('[inbound-receipts batch-update] 仓储账单同步调度失败', e)
+    }
+
     return NextResponse.json({
       message: `成功更新 ${result.count} 条记录`,
       count: result.count,

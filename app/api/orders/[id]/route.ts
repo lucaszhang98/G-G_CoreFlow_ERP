@@ -3,6 +3,7 @@ import { createDetailHandler, createUpdateHandler, createDeleteHandler } from '@
 import { orderConfig } from '@/lib/crud/configs/orders'
 import { scheduleDirectDeliveryInvoiceSync } from '@/lib/finance/direct-delivery-sync'
 import { scheduleContainerUnloadInvoiceSync } from '@/lib/finance/container-unload-sync'
+import { scheduleStorageInvoiceSync } from '@/lib/finance/storage-invoice-sync'
 import { auth } from '@/auth'
 
 // GET - 获取订单详情
@@ -28,6 +29,7 @@ export async function PUT(
       const userId = session?.user?.id ? BigInt(session.user.id) : undefined
       scheduleDirectDeliveryInvoiceSync(BigInt(id), userId)
       scheduleContainerUnloadInvoiceSync(BigInt(id), userId)
+      scheduleStorageInvoiceSync(BigInt(id), userId)
     }
   }
   return res

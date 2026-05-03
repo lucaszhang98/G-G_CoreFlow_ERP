@@ -67,6 +67,9 @@ export const invoiceConfig: EntityConfig = {
       label: '总金额',
       type: 'currency',
       sortable: true,
+      /** 由明细汇总 recalc，禁止在表单/行内/批量中手改 */
+      readonly: true,
+      computed: true,
     },
     tax_amount: {
       key: 'tax_amount',
@@ -144,7 +147,9 @@ export const invoiceConfig: EntityConfig = {
     inlineEdit: { enabled: true },
   },
 
-  formFields: ['invoice_number', 'invoice_type', 'customer_id', 'order_id', 'total_amount', 'tax_amount', 'currency', 'invoice_date', 'status', 'notes'],
+  formFields: ['invoice_number', 'invoice_type', 'customer_id', 'order_id', 'tax_amount', 'currency', 'invoice_date', 'status', 'notes'],
+
+  detailInvoicePdfField: 'invoice_id',
 
   permissions: {
     list: ['admin', 'oms_manager', 'employee', 'user', 'oms_operator'],
@@ -192,6 +197,7 @@ export const directDeliveryBillConfig: EntityConfig = {
   permissions: {
     ...invoiceConfig.permissions,
     create: [], // 新建通过列表「新建直送账单」弹窗（按柜号）或 API create-from-container
+    delete: [], // 直送账单列表不允许删除
   },
 }
 
@@ -204,10 +210,34 @@ export const containerUnloadBillConfig: EntityConfig = {
   list: {
     ...invoiceConfig.list,
     columns: ['invoice_number', 'customer_id', 'order_id', 'invoice_date', 'status', 'total_amount', 'currency', 'notes'],
+    searchPlaceholder: '搜索发票号、柜号...',
+    /** 列表已限定拆柜，不展示账单类型/柜号筛选（仍用 initialFilterValues 请求接口） */
+    filterFieldKeysExclude: ['invoice_type', 'order_id'],
   },
   permissions: {
     ...invoiceConfig.permissions,
     create: [], // 新建通过 /bills/container-unload/new
+    delete: [], // 拆柜账单列表不允许删除
+  },
+}
+
+/** 仓储账单列表：仅 storage；不展示账单类型筛选；明细由预约/入库自动同步 */
+export const storageBillConfig: EntityConfig = {
+  ...invoiceConfig,
+  displayName: '仓储账单',
+  pluralName: '仓储账单',
+  detailPath: '/dashboard/finance/bills/storage',
+  list: {
+    ...invoiceConfig.list,
+    searchPlaceholder: '搜索发票号、柜号...',
+    filterFieldKeysExclude: ['invoice_type', 'order_id'],
+    /** 与直送账单一致：不列出关联订单已取消的仓储账单 */
+    excludeCancelledOrders: true,
+  },
+  permissions: {
+    ...invoiceConfig.permissions,
+    create: [], // 无手动新建
+    delete: [], // 仓储账单列表不允许删除
   },
 }
 
@@ -222,5 +252,11 @@ export const penaltyBillConfig: EntityConfig = {
     columns: ['invoice_number', 'customer_id', 'order_id', 'invoice_date', 'status', 'total_amount', 'currency', 'notes'],
     searchPlaceholder: '搜索发票号、柜号...',
     filterFieldKeysExclude: ['invoice_type', 'order_id'],
+  },
+  permissions: {
+    ...invoiceConfig.permissions,
+    /** 新建仅通过列表「新建负数账单」弹窗按柜号创建 */
+    create: [],
+    delete: [], // 负数账单列表不允许删除
   },
 }

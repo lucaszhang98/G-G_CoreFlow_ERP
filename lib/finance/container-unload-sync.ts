@@ -5,11 +5,12 @@
  *
  * 计费规则摘要：
  * - 每条订单明细一条主费用行：默认「亚马逊组合柜-*」费用（fee_name 与仓点编码/名称匹配）× 分仓占比；
- *   分仓占比：**仅**使用订单明细表 `order_detail.volume_percentage`（由订单管理-仓点明细 API 在新建/变更时写入，与详情页一致），不在此用体积重算。
+ *   分仓占比：优先 `order_detail.volume_percentage`；若为空则按各明细 **volume 占全单合计体积** 重算（与订单详情页展示规则一致），避免历史数据未回写字段时账单为 0%。
  *   例外：私仓，或仓点为 PDX7/BFI3/GEG2 且预计板数<5 →「提拆一口价 / terminal pick up」类费用 × 分仓占比。
  * - 拦截费：性质为「扣货」的明细条数 × 拦截费单价，合并一条明细。
  * - 超箱费：全订单明细 quantity 之和 > 1400 时，超出箱数 × 超箱费单价，一条明细。
  * - 仓点费：明细条数 > 10 时，超出条数 × 仓点费单价，一条明细。
+ * - 车架费：每单固定 1 条，备注「拆柜包四天」；单价从费用表匹配（fee_code 含 chassis 或名称含「车架」等）。
  */
 
 import prisma from '@/lib/prisma'
@@ -22,6 +23,7 @@ import {
 } from '@/lib/finance/invoice-receivable-sync'
 import { isOrderCancelledStatus } from '@/lib/orders/order-visibility'
 import { feeMatchesContainer } from '@/lib/finance/fee-matching'
+import { volumePercentageFromVolumesByDetailId } from '@/lib/finance/order-detail-volume-percentage'
 
 const BOX_THRESHOLD = 1400
 /** 仓点为这些编码且预计板数 < 5 时用 terminal pick up（与私仓规则并列） */
@@ -215,6 +217,36 @@ function pickWarehousePointFee(
   return pickBest(candidates, order, customerId)
 }
 
+function isChassisFeeRecord(f: { fee_code: string; fee_name: string }) {
+  const code = normCode(f.fee_code)
+  const name = (f.fee_name || '').trim().toLowerCase()
+  if (code.includes('chassis')) return true
+  if (name.includes('chassis')) return true
+  if (f.fee_code.includes('车架') || (f.fee_name && f.fee_name.includes('车架'))) return true
+  return false
+}
+
+function pickChassisFee(
+  fees: Awaited<ReturnType<typeof loadApplicableFeesForCustomer>>,
+  order: { container_type: string | null },
+  customerId: bigint
+) {
+  const withContainer = fees.filter(
+    (f) =>
+      isChassisFeeRecord(f) &&
+      feeMatchesContainer(f.container_type, order.container_type)
+  )
+  const pool =
+    withContainer.length > 0
+      ? withContainer
+      : fees.filter((f) => isChassisFeeRecord(f) && !f.container_type?.trim())
+  const finalPool = pool.length > 0 ? pool : fees.filter((f) => isChassisFeeRecord(f))
+  if (finalPool.length === 0) return null
+  return [...finalPool].sort(
+    (a, b) => scoreFee(b, order, customerId) - scoreFee(a, order, customerId)
+  )[0]
+}
+
 async function deleteUnloadInvoiceByOrderId(orderId: bigint): Promise<void> {
   const existing = await prisma.invoices.findFirst({
     where: { order_id: orderId, invoice_type: 'unload' },
@@ -265,6 +297,7 @@ export async function syncContainerUnloadInvoiceForOrder(
     const fees = await loadApplicableFeesForCustomer(order.customer_id)
     const invoiceDate = new Date()
     const details = order.order_detail ?? []
+    const volumePctByDetailId = volumePercentageFromVolumesByDetailId(details)
 
     let invoice = await prisma.invoices.findFirst({
       where: { order_id: orderId, invoice_type: 'unload' },
@@ -306,9 +339,17 @@ export async function syncContainerUnloadInvoiceForOrder(
     for (const detail of details) {
       const loc = detail.locations_order_detail_delivery_location_idTolocations
       const locLabel = loc?.name || loc?.location_code || '未指定仓'
-      // 与订单管理-仓点明细一致：仅用库字段 order_detail.volume_percentage（新建/更新明细后由 API 回写）
-      const pctRaw =
+      const pctFromDb =
         detail.volume_percentage != null ? Number(detail.volume_percentage) : null
+      const pctFromVolume = volumePctByDetailId.get(detail.id.toString()) ?? null
+      const pctRaw =
+        pctFromDb != null && !Number.isNaN(pctFromDb)
+          ? pctFromDb
+          : pctFromVolume != null && !Number.isNaN(pctFromVolume)
+            ? pctFromVolume
+            : details.length === 1
+              ? 100
+              : null
       const pct =
         pctRaw != null && !Number.isNaN(pctRaw)
           ? pctRaw
@@ -332,14 +373,12 @@ export async function syncContainerUnloadInvoiceForOrder(
       let feeName =
         fee?.fee_name ??
         (terminal ? `提拆一口价（${locLabel}）` : `亚马逊组合柜（${locLabel}）`)
-      let notes = `分仓占比 ${pct}%（订单明细 volume_percentage）${terminal ? '；提拆一口价' : '；亚马逊组合柜'}`
-      if (details.length > 1 && (pctRaw == null || Number.isNaN(pctRaw))) {
-        notes += '（分仓占比未写入订单明细，请检查订单仓点明细数据）'
-      }
-      if (!fee) {
-        notes += '（未匹配到费用主数据，单价为0，请在费用表维护）'
-      } else if (usedAmazonFallback) {
-        notes += '（仓点与费用名称未精确匹配，已用同柜型亚马逊组合柜默认单价；建议补全费用表仓点行）'
+      let notes = `分仓占比 ${pct}%`
+      if (terminal) {
+        // 与订单详情页「送仓地点」列一致：delivery_location_code || delivery_location（序列化后均为 location_code）|| '-'
+        const deliveryLocationAsOrderDetailPage =
+          loc?.location_code?.trim() || '-'
+        notes += `；送仓地点：${deliveryLocationAsOrderDetailPage}`
       }
 
       lines.push({
@@ -425,6 +464,24 @@ export async function syncContainerUnloadInvoiceForOrder(
         updated_by: userId ?? null,
       })
     }
+
+    const chFee = pickChassisFee(fees, order, order.customer_id)
+    const chPrice = chFee ? Number(chFee.unit_price) : 0
+    lines.push({
+      invoice_id: invId,
+      fee_id: null,
+      fee_code: chFee?.fee_code ?? 'CHASSIS',
+      fee_name: chFee?.fee_name ?? '车架费',
+      unit: chFee?.unit ?? null,
+      line_notes: '拆柜包四天',
+      order_detail_id: null,
+      quantity: new Prisma.Decimal(1),
+      unit_price: new Prisma.Decimal(chPrice.toFixed(2)),
+      total_amount: new Prisma.Decimal(chPrice.toFixed(2)),
+      sort_order: sort++,
+      created_by: userId ?? null,
+      updated_by: userId ?? null,
+    })
 
     await prisma.$transaction(async (tx) => {
       if (!isNewInvoice) {

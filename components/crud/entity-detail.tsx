@@ -13,6 +13,7 @@ import { Decimal } from "@prisma/client/runtime/library"
 import { autoFormatDateField, formatDateTimeDisplay } from "@/lib/utils/date-format"
 import { EntityDetailClient } from "./entity-detail-client"
 import { serializeBigInt } from "@/lib/api/helpers"
+import { InvoicePdfDownloadButton } from "@/components/finance/invoice-pdf-download-button"
 
 interface EntityDetailProps {
   config: EntityConfig
@@ -206,6 +207,16 @@ export async function EntityDetail({ config, id, data: providedData, rightCard, 
     detailFields.length = 0
   }
 
+  const pdfField = config.detailInvoicePdfField
+  const pdfRaw = pdfField ? (data as Record<string, unknown>)[pdfField] : null
+  const pdfInvoiceId =
+    pdfRaw != null && pdfRaw !== ''
+      ? typeof pdfRaw === 'bigint'
+        ? pdfRaw.toString()
+        : String(pdfRaw)
+      : null
+  const showInvoicePdf = Boolean(pdfInvoiceId)
+
   return (
     <div className="space-y-6">
       {/* 页面标题 */}
@@ -221,13 +232,20 @@ export async function EntityDetail({ config, id, data: providedData, rightCard, 
             </p>
           </div>
         </div>
-        {/* 编辑按钮 - 如果有更新权限 */}
-        {config.permissions.update && config.permissions.update.length > 0 && (
-          EditComponent ? (
-            <EditComponent config={config} data={serializeBigInt(data)} />
-          ) : (
-            <EntityDetailClient config={config} data={serializeBigInt(data)} />
-          )
+        {(showInvoicePdf ||
+          (config.permissions.update && config.permissions.update.length > 0)) && (
+          <div className="flex items-center gap-2 shrink-0">
+            {showInvoicePdf && pdfInvoiceId ? (
+              <InvoicePdfDownloadButton invoiceId={pdfInvoiceId} />
+            ) : null}
+            {config.permissions.update && config.permissions.update.length > 0 ? (
+              EditComponent ? (
+                <EditComponent config={config} data={serializeBigInt(data)} />
+              ) : (
+                <EntityDetailClient config={config} data={serializeBigInt(data)} />
+              )
+            ) : null}
+          </div>
         )}
       </div>
 

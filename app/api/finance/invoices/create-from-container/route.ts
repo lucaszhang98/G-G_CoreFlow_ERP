@@ -9,6 +9,7 @@ import { invoiceConfig } from '@/lib/crud/configs/invoices'
 import prisma from '@/lib/prisma'
 import { syncDirectDeliveryInvoiceForOrder } from '@/lib/finance/direct-delivery-sync'
 import { syncContainerUnloadInvoiceForOrder } from '@/lib/finance/container-unload-sync'
+import { syncStorageInvoiceForOrder } from '@/lib/finance/storage-invoice-sync'
 import {
   ORDER_STATUS_CANCELLED,
   ORDER_STATUS_CANCELED_US,
@@ -73,6 +74,14 @@ export async function POST(request: NextRequest) {
         { error: result.error ?? '同步账单失败' },
         { status: 500 }
       )
+    }
+
+    if (order.operation_mode === 'unload') {
+      try {
+        await syncStorageInvoiceForOrder(order.order_id, userId)
+      } catch (e) {
+        console.warn('[create-from-container] 仓储账单同步失败（不影响拆柜账单返回）', e)
+      }
     }
 
     const invoice = await prisma.invoices.findUnique({

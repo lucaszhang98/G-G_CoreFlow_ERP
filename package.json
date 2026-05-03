@@ -16,6 +16,7 @@
     "create-user": "tsx scripts/create-test-user.ts",
     "backfill:delivery-management": "tsx scripts/backfill-delivery-management.ts",
     "backfill:direct-delivery-invoices": "tsx scripts/backfill-direct-delivery-invoices.ts",
+    "backfill:storage-invoices": "tsx scripts/backfill-storage-invoices.ts",
     "fix:planned-unload-dates": "tsx scripts/fix-planned-unload-dates.ts",
     "cleanup:direct-delivery-invoices-cancelled": "tsx scripts/cleanup-direct-delivery-invoices-for-cancelled-orders.ts",
     "schemaspy": "node scripts/generate_schemaspy.js",

@@ -1,12 +1,12 @@
 /**
- * 仓储账单 - 与发票管理同表头，按账单类型筛选
+ * 仓储账单 - 仅展示 storage；接口带 invoice_type 筛选，列表不展示账单类型筛选器
  */
 
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { EntityTable } from "@/components/crud/entity-table"
-import { invoiceConfig } from "@/lib/crud/configs/invoices"
+import { storageBillConfig } from "@/lib/crud/configs/invoices"
 
 export default async function StorageBillsPage() {
   const session = await auth()
@@ -18,7 +18,7 @@ export default async function StorageBillsPage() {
   return (
     <DashboardLayout user={session.user || {}}>
       <EntityTable
-        config={invoiceConfig}
+        config={storageBillConfig}
         initialFilterValues={{ invoice_type: "storage" }}
       />
     </DashboardLayout>

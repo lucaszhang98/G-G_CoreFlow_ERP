@@ -507,6 +507,18 @@ export async function PUT(
       }
     }
 
+    if (updatedItem.orders?.order_id) {
+      try {
+        const { scheduleStorageInvoiceSync } = await import('@/lib/finance/storage-invoice-sync')
+        scheduleStorageInvoiceSync(
+          updatedItem.orders.order_id,
+          user?.id ? BigInt(user.id) : null
+        )
+      } catch (e) {
+        console.warn('[appointments PUT] 仓储账单同步调度失败', e)
+      }
+    }
+
     // 处理 outbound_shipments 的自动同步
     // 检查 delivery_method 是否改变
     if (originalDeliveryMethod !== newDeliveryMethod) {
