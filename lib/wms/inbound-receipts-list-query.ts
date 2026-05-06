@@ -65,6 +65,7 @@ export async function runInboundReceiptListQuery(
     'unloaded_by',
     'received_by',
     'notes',
+    'is_urgent',
   ]
   const mainTableConditions: any[] = []
   const ordersConditions: any = {}
@@ -173,6 +174,7 @@ export async function runInboundReceiptListQuery(
     'inbound_receipt_id',
     'status',
     'arrived_at_warehouse',
+    'is_urgent',
     'planned_unload_at',
     'unloaded_by',
     'received_by',

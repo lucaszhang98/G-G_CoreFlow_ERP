@@ -19,7 +19,6 @@ import {
 import { IncludeArchivedOrdersToggle } from "@/components/order-visibility/include-archived-toggle"
 
 const EMPTY_EXTRA_LIST_PARAMS: Record<string, string> = {}
-const INBOUND_URGENT_STORAGE_KEY = 'inbound-receipts-urgent-ids-v1'
 
 /** 按 UTC 格式化为 YYYY-MM-DD */
 function formatDateUTC(d: Date): string {
@@ -93,7 +92,6 @@ export function InboundReceiptTable() {
   const router = useRouter()
   const [refreshKey, setRefreshKey] = React.useState(0)
   const [includeArchived, setIncludeArchived] = React.useState(false)
-  const [urgentInboundIds, setUrgentInboundIds] = React.useState<string[]>([])
   const extraListParams = React.useMemo(
     () => (includeArchived ? { includeArchived: "true" } : EMPTY_EXTRA_LIST_PARAMS),
     [includeArchived]
@@ -103,28 +101,7 @@ export function InboundReceiptTable() {
   const [listSearchParams, setListSearchParams] = React.useState<URLSearchParams>(
     () => new URLSearchParams()
   )
-  const urgentInboundIdSet = React.useMemo(() => new Set(urgentInboundIds), [urgentInboundIds])
-
-  React.useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(INBOUND_URGENT_STORAGE_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) {
-        setUrgentInboundIds(parsed.map((id) => String(id)))
-      }
-    } catch {
-      // ignore parse errors from stale local cache
-    }
-  }, [])
-
-  React.useEffect(() => {
-    try {
-      window.localStorage.setItem(INBOUND_URGENT_STORAGE_KEY, JSON.stringify(urgentInboundIds))
-    } catch {
-      // ignore storage quota errors
-    }
-  }, [urgentInboundIds])
+  const [urgentFlagBusy, setUrgentFlagBusy] = React.useState(false)
 
   const handleExportFiltered = React.useCallback(() => {
     const p = new URLSearchParams(listSearchParams.toString())
@@ -198,7 +175,7 @@ export function InboundReceiptTable() {
       .catch(() => toast.error('复制失败，请重试'))
   }, [selectedInboundRows])
 
-  const applyUrgentFlag = React.useCallback((urgent: boolean) => {
+  const applyUrgentFlag = React.useCallback(async (urgent: boolean) => {
     const selectedIds = selectedInboundRows
       .map((row: any) => row[INBOUND_ID_FIELD])
       .filter(Boolean)
@@ -209,16 +186,29 @@ export function InboundReceiptTable() {
       return
     }
 
-    setUrgentInboundIds((prev) => {
-      const set = new Set(prev)
-      selectedIds.forEach((id) => {
-        if (urgent) set.add(id)
-        else set.delete(id)
+    setUrgentFlagBusy(true)
+    try {
+      const res = await fetch('/api/wms/inbound-receipts/batch-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: selectedIds,
+          updates: { is_urgent: urgent },
+        }),
       })
-      return Array.from(set)
-    })
-
-    toast.success(urgent ? `已将 ${selectedIds.length} 条记录标记为加急` : `已取消 ${selectedIds.length} 条记录的加急`)
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg = typeof payload.error === 'string' ? payload.error : '操作失败'
+        toast.error(msg)
+        return
+      }
+      toast.success(urgent ? `已将 ${selectedIds.length} 条记录标记为加急（全员可见）` : `已取消 ${selectedIds.length} 条记录的加急`)
+      setRefreshKey((k) => k + 1)
+    } catch {
+      toast.error('网络错误，请重试')
+    } finally {
+      setUrgentFlagBusy(false)
+    }
   }, [selectedInboundRows])
 
   const customBatchActions = React.useMemo(() => (
@@ -265,20 +255,22 @@ export function InboundReceiptTable() {
         size="sm"
         variant="destructive"
         className="min-w-[90px]"
-        onClick={() => applyUrgentFlag(true)}
+        disabled={urgentFlagBusy}
+        onClick={() => void applyUrgentFlag(true)}
       >
-        加急
+        {urgentFlagBusy ? '处理中…' : '加急'}
       </Button>
       <Button
         size="sm"
         variant="outline"
         className="min-w-[90px]"
-        onClick={() => applyUrgentFlag(false)}
+        disabled={urgentFlagBusy}
+        onClick={() => void applyUrgentFlag(false)}
       >
         取消加急
       </Button>
     </>
-  ), [openBatchUnloadSheet, openBatchLabels, handleCopyContainerNumbers, applyUrgentFlag])
+  ), [openBatchUnloadSheet, openBatchLabels, handleCopyContainerNumbers, applyUrgentFlag, urgentFlagBusy])
 
   // 可点击列配置：柜号列可点击跳转到入库管理详情
   const customClickableColumns: ClickableColumnConfig<any>[] = React.useMemo(() => [
@@ -302,8 +294,7 @@ export function InboundReceiptTable() {
 
   const customCellRenderers = React.useMemo(() => ({
     container_number: ({ row }: { row: any }) => {
-      const inboundReceiptId = row?.original?.inbound_receipt_id ? String(row.original.inbound_receipt_id) : ''
-      const isUrgent = inboundReceiptId ? urgentInboundIdSet.has(inboundReceiptId) : false
+      const isUrgent = Boolean(row?.original?.is_urgent)
       const text = row?.original?.container_number || '-'
       const clickable = Boolean(row?.original?.inbound_receipt_id)
 
@@ -323,7 +314,7 @@ export function InboundReceiptTable() {
         </button>
       )
     },
-  }), [router, urgentInboundIdSet])
+  }), [router])
 
   // 获取入库组部门ID（缓存，只获取一次）
   const departmentIdCacheRef = React.useRef<string | null | undefined>(undefined)

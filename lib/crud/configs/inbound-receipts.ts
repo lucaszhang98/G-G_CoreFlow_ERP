@@ -110,6 +110,13 @@ export const inboundReceiptConfig: EntityConfig = {
       type: 'boolean',
       sortable: true,
     },
+    is_urgent: {
+      key: 'is_urgent',
+      label: '加急',
+      type: 'boolean',
+      sortable: true,
+      hidden: true,
+    },
     planned_unload_at: {
       key: 'planned_unload_at',
       label: '拆柜日期',

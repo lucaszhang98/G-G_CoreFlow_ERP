@@ -79,6 +79,8 @@ export const inboundReceiptUpdateSchema = z.object({
     .optional()
     .nullable(),
   arrived_at_warehouse: z.boolean().optional(),
+  /** 列表加急标红，写入数据库后所有账号可见 */
+  is_urgent: z.boolean().optional(),
   current_location: z.string()
     .max(200, '现在位置长度不能超过 200')
     .optional()
