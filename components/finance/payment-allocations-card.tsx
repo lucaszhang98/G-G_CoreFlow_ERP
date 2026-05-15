@@ -9,7 +9,8 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2 } from "lucide-react"
+import { Download, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { PaymentWriteOffDialog } from "@/components/finance/payment-writeoff-dialog"
 
 interface PaymentAllocationsCardProps {
@@ -40,6 +41,7 @@ export function PaymentAllocationsCard({ paymentId }: PaymentAllocationsCardProp
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [writeOffOpen, setWriteOffOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const fetchPayment = useCallback(async () => {
     try {
@@ -103,6 +105,41 @@ export function PaymentAllocationsCard({ paymentId }: PaymentAllocationsCardProp
     return Math.max(0, Number(payment.amount) - allocatedTotal)
   }, [payment, allocatedTotal])
 
+  const handleExportExcel = async () => {
+    setExporting(true)
+    try {
+      const res = await fetch(
+        `/api/finance/payments/${paymentId}/allocations-export`
+      )
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(typeof j.error === "string" ? j.error : "导出失败")
+      }
+      const blob = await res.blob()
+      const cd = res.headers.get("Content-Disposition")
+      let filename = `收款-${paymentId}-核销明细.xlsx`
+      const m = cd?.match(/filename\*=UTF-8''(.+)/i)
+      if (m?.[1]) {
+        try {
+          filename = decodeURIComponent(m[1])
+        } catch {
+          /* keep default */
+        }
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success("已开始下载")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "导出失败")
+    } finally {
+      setExporting(false)
+    }
+  }
+
   if (loading) {
     return (
       <Card className="border-0 shadow-lg">
@@ -134,14 +171,34 @@ export function PaymentAllocationsCard({ paymentId }: PaymentAllocationsCardProp
             </CardDescription>
           </div>
           {payment && (
-            <Button
-              type="button"
-              onClick={() => setWriteOffOpen(true)}
-              disabled={remaining <= 1e-6}
-              title={remaining <= 1e-6 ? "收款已全部核销，无可再分配金额" : undefined}
-            >
-              消账
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleExportExcel()}
+                disabled={exporting}
+              >
+                {exporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    导出中…
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    导出 Excel
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setWriteOffOpen(true)}
+                disabled={remaining <= 1e-6}
+                title={remaining <= 1e-6 ? "收款已全部核销，无可再分配金额" : undefined}
+              >
+                消账
+              </Button>
+            </div>
           )}
         </CardHeader>
         <CardContent className="space-y-4">
