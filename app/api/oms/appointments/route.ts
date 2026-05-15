@@ -5,6 +5,7 @@ import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
 import { deliveryAppointmentConfig } from '@/lib/crud/configs/delivery-appointments';
 import prisma from '@/lib/prisma';
+import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled';
 
 /** 将条件并入 where.AND，避免与 mergeFilterConditions 生成的顶层 AND 并列再出现一个顶层 OR（Prisma/驱动下易 500） */
 function appendToWhereAnd(where: Record<string, any>, clause: unknown) {
@@ -195,6 +196,7 @@ export async function GET(request: NextRequest) {
             },
           },
           appointment_detail_lines: {
+            where: prismaAppointmentDetailLinesWhereParentAppointmentActive,
             include: {
               order_detail: {
                 include: {

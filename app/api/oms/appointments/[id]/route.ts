@@ -10,6 +10,7 @@ import {
 import { deliveryAppointmentConfig } from '@/lib/crud/configs/delivery-appointments';
 import { deliveryAppointmentUpdateSchema } from '@/lib/validations/delivery-appointment';
 import prisma from '@/lib/prisma';
+import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled';
 
 // GET - 获取单个预约管理记录
 export async function GET(
@@ -65,6 +66,14 @@ export async function GET(
               notes: true,
             } as any,
           },
+          appointment_detail_lines: {
+            where: prismaAppointmentDetailLinesWhereParentAppointmentActive,
+            select: {
+              id: true,
+              order_detail_id: true,
+              estimated_pallets: true,
+            },
+          },
         },
       });
     } catch (queryError: any) {
@@ -103,6 +112,14 @@ export async function GET(
                 notes: true,
               } as any,
             },
+            appointment_detail_lines: {
+              where: prismaAppointmentDetailLinesWhereParentAppointmentActive,
+              select: {
+                id: true,
+                order_detail_id: true,
+                estimated_pallets: true,
+              },
+            },
           },
         });
       } else {
@@ -132,9 +149,17 @@ export async function GET(
     const originLocationCode = serialized.locations_delivery_appointments_origin_location_idTolocations?.location_code || null;
     const destinationLocationId = serialized.location_id || null;
     const destinationLocationCode = serialized.locations?.location_code || null;
-    const totalPallets = serialized.orders?.order_detail?.reduce((sum: number, detail: any) => {
-      return sum + (Number(detail.estimated_pallets) || 0);
-    }, 0) || null;
+    // 与订单明细一致：只统计「预约仍启用」的 appointment_detail_lines，不用整单 order_detail（避免停用后仍显示整单板数）
+    const activeLines = serialized.appointment_detail_lines as
+      | { estimated_pallets?: number | string | null }[]
+      | undefined
+    const totalPalletsFromLines =
+      activeLines && activeLines.length > 0
+        ? activeLines.reduce((sum: number, line: any) => {
+            const n = Number(line.estimated_pallets) || 0
+            return sum + (Number.isFinite(n) ? n : 0)
+          }, 0)
+        : 0
     
     // 时间字段：直接格式化 UTC 时间，不做时区转换
     const requestedStart = serialized.requested_start 
@@ -190,7 +215,7 @@ export async function GET(
       confirmed_start: confirmedStart,
       confirmed_end: confirmedEnd,
       eta,
-      total_pallets: totalPallets ?? 0,
+      total_pallets: totalPalletsFromLines,
       rejected: rejected,
       enabled,
       verify_po: verify_po,

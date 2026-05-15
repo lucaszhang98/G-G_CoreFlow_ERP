@@ -29,6 +29,87 @@ export async function getReceivableWithdrawBlockReason(
   return null
 }
 
+/**
+ * 根据应收金额与已核销（仅由收款分配累加）计算余额与状态；与 upsertReceivableForAuditedInvoice 规则一致。
+ */
+export function deriveReceivableBalanceAndStatus(
+  receivableAmount: Prisma.Decimal | number | string,
+  allocatedAmount: Prisma.Decimal | number | string
+): { balance: Prisma.Decimal; status: 'open' | 'partial' | 'closed' } {
+  const totalDec = new Prisma.Decimal(receivableAmount.toString())
+  const allocated = new Prisma.Decimal(allocatedAmount.toString())
+  const balance = totalDec.sub(allocated)
+
+  let status: 'open' | 'partial' | 'closed'
+  if (totalDec.lt(0)) {
+    if (balance.eq(0)) {
+      status = 'closed'
+    } else if (allocated.gt(0)) {
+      status = 'partial'
+    } else {
+      status = 'open'
+    }
+  } else if (balance.lte(0)) {
+    status = 'closed'
+  } else if (allocated.gt(0)) {
+    status = 'partial'
+  } else {
+    status = 'open'
+  }
+
+  return { balance, status }
+}
+
+/**
+ * 删除收款前在同一事务内调用：按核销明细冲回应收的已核销额，并重算 balance/status。
+ * 随后删除 payment 行即可由级联删除 payment_allocations。
+ */
+export async function reversePaymentAllocationsForDeletionTx(
+  tx: Prisma.TransactionClient,
+  paymentId: bigint,
+  userId: bigint | null
+): Promise<void> {
+  const rows = await tx.payment_allocations.findMany({
+    where: { payment_id: paymentId },
+    select: { receivable_id: true, allocated_amount: true },
+  })
+
+  for (const row of rows) {
+    const recv = await tx.receivables.findUnique({
+      where: { receivable_id: row.receivable_id },
+      select: {
+        receivable_id: true,
+        receivable_amount: true,
+        allocated_amount: true,
+      },
+    })
+    if (!recv) continue
+
+    const prev = new Prisma.Decimal(recv.allocated_amount?.toString() ?? '0')
+    const sub = new Prisma.Decimal(row.allocated_amount.toString())
+    let newAllocated = prev.sub(sub)
+    if (newAllocated.lt(0)) {
+      newAllocated = new Prisma.Decimal(0)
+    }
+
+    const { balance, status } = deriveReceivableBalanceAndStatus(
+      recv.receivable_amount,
+      newAllocated
+    )
+
+    await tx.receivables.update({
+      where: { receivable_id: row.receivable_id },
+      data: {
+        allocated_amount: newAllocated,
+        balance,
+        status,
+        updated_at: new Date(),
+        updated_by: userId,
+      },
+    })
+  }
+}
+
 /** 状态为已审核时，将发票金额同步到应收（单票一条应收，按 invoice_id 关联）。 */
 export async function upsertReceivableForAuditedInvoice(
   db: DbClient,
@@ -57,25 +138,7 @@ export async function upsertReceivableForAuditedInvoice(
   const receivableAmount = inv.total_amount
   const allocated = existing?.allocated_amount ?? new Prisma.Decimal(0)
   const totalDec = new Prisma.Decimal(receivableAmount.toString())
-  const balance = totalDec.sub(allocated)
-
-  /** 应收状态：正数账单「收讫」为 balance<=0；负数（返利等）余额为负是未结清，仅 balance===0 视为结清 */
-  let status: 'open' | 'partial' | 'closed'
-  if (totalDec.lt(0)) {
-    if (balance.eq(0)) {
-      status = 'closed'
-    } else if (allocated.gt(0)) {
-      status = 'partial'
-    } else {
-      status = 'open'
-    }
-  } else if (balance.lte(0)) {
-    status = 'closed'
-  } else if (allocated.gt(0)) {
-    status = 'partial'
-  } else {
-    status = 'open'
-  }
+  const { balance, status } = deriveReceivableBalanceAndStatus(totalDec, allocated)
 
   const common = {
     customer_id: inv.customer_id,

@@ -38,6 +38,7 @@ import {
   Banknote,
   Wallet,
   Calculator,
+  PieChart,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isWmsFullAccessUsername } from "@/lib/auth/wms-full-access-users"
@@ -254,6 +255,11 @@ const menuItems: MenuItem[] = [
         title: "应收管理",
         icon: Receipt,
         href: "/dashboard/finance/receivables",
+      },
+      {
+        title: "财务汇总",
+        icon: PieChart,
+        href: "/dashboard/finance/summary",
       },
       {
         title: "收款管理",

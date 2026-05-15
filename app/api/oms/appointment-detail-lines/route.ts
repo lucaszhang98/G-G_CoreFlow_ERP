@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import prisma from '@/lib/prisma'
-import { isDeliveryAppointmentEnabled } from '@/lib/utils/delivery-appointment-enabled'
+import {
+  isDeliveryAppointmentEnabled,
+  prismaAppointmentDetailLinesWhereParentAppointmentActive,
+} from '@/lib/utils/delivery-appointment-enabled'
 import { serializeBigInt } from '@/lib/api/helpers'
 import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
 
@@ -28,10 +31,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '缺少 appointmentId 参数' }, { status: 400 })
     }
 
-    // 获取预约的所有明细
+    // 仅返回所属预约仍启用的明细（与订单明细 API 一致；已停用预约不在此展示占用）
     const appointmentDetailLines = await prisma.appointment_detail_lines.findMany({
       where: {
         appointment_id: BigInt(appointmentId),
+        ...prismaAppointmentDetailLinesWhereParentAppointmentActive,
       },
       include: {
         order_detail: {
@@ -259,18 +263,6 @@ export async function POST(request: NextRequest) {
     
     // PO 不再从请求中获取，应该从 order_detail.po 读取
 
-    // 检查是否已存在（使用 findFirst 因为复合唯一约束）
-    const existing = await prisma.appointment_detail_lines.findFirst({
-      where: {
-        appointment_id: BigInt(appointment_id),
-        order_detail_id: BigInt(order_detail_id),
-      },
-    })
-
-    if (existing) {
-      return NextResponse.json({ error: '该预约明细已存在' }, { status: 400 })
-    }
-
     const orderDetailId = BigInt(order_detail_id)
     const appointmentId = BigInt(appointment_id)
     const estimatedPalletsValue = parseInt(estimated_pallets) || 0
@@ -282,8 +274,37 @@ export async function POST(request: NextRequest) {
     if (!parentAppointment) {
       return NextResponse.json({ error: '预约不存在' }, { status: 404 })
     }
+
+    const existing = await prisma.appointment_detail_lines.findFirst({
+      where: {
+        appointment_id: appointmentId,
+        order_detail_id: orderDetailId,
+      },
+      include: { delivery_appointments: { select: { enabled: true } } },
+    })
+    if (existing) {
+      const parentRowActive = existing.delivery_appointments?.enabled !== false
+      if (parentRowActive) {
+        return NextResponse.json({ error: '该预约明细已存在' }, { status: 400 })
+      }
+      await prisma.appointment_detail_lines.delete({ where: { id: existing.id } })
+    }
+
+    let willReEnableAppointment = false
     if (parentAppointment.enabled === false) {
-      return NextResponse.json({ error: '该预约已停用，无法新增明细' }, { status: 400 })
+      const residualLines = await prisma.appointment_detail_lines.count({
+        where: { appointment_id: appointmentId },
+      })
+      if (residualLines > 0) {
+        return NextResponse.json(
+          {
+            error:
+              '该预约已停用且仍有历史明细，无法直接新增；请在预约管理中处理或选用其他预约',
+          },
+          { status: 400 }
+        )
+      }
+      willReEnableAppointment = true
     }
 
     // 检查是否已入库（查询 inventory_lots）
@@ -329,6 +350,12 @@ export async function POST(request: NextRequest) {
 
     // 使用事务确保数据一致性
     const result = await prisma.$transaction(async (tx) => {
+      if (willReEnableAppointment) {
+        await tx.delivery_appointments.update({
+          where: { appointment_id: appointmentId },
+          data: { enabled: true, updated_at: new Date() },
+        })
+      }
       // 创建预约明细（rejected_pallets 新建默认为 0）
       const appointmentDetailLine = await tx.appointment_detail_lines.create({
         data: {

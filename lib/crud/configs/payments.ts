@@ -1,5 +1,5 @@
 /**
- * 收款管理实体配置（Phase 1 骨架）
+ * 收款管理实体配置
  */
 
 import { EntityConfig } from '../types'
@@ -48,11 +48,13 @@ export const paymentConfig: EntityConfig = {
       key: 'currency',
       label: '币种',
       type: 'text',
+      readonly: true,
     },
     payment_method: {
       key: 'payment_method',
       label: '收款方式',
       type: 'text',
+      hidden: true,
     },
     bank_reference: {
       key: 'bank_reference',
@@ -83,24 +85,27 @@ export const paymentConfig: EntityConfig = {
   list: {
     defaultSort: 'payment_date',
     defaultOrder: 'desc',
-    columns: ['customer_id', 'payment_date', 'amount', 'currency', 'payment_method', 'bank_reference', 'notes'],
+    columns: ['customer_id', 'payment_date', 'amount', 'currency', 'bank_reference', 'notes'],
     searchFields: ['bank_reference'],
     pageSize: 100,
     batchOperations: {
       enabled: true,
-      edit: { enabled: true },
+      edit: { enabled: true, fields: ['payment_date', 'amount', 'bank_reference', 'notes'] },
       delete: { enabled: true },
     },
-    inlineEdit: { enabled: true },
+    inlineEdit: {
+      enabled: true,
+      fields: ['payment_date', 'amount', 'bank_reference', 'notes'],
+    },
   },
 
-  formFields: ['customer_id', 'payment_date', 'amount', 'currency', 'payment_method', 'bank_reference', 'notes'],
+  formFields: ['customer_id', 'payment_date', 'amount', 'bank_reference', 'notes'],
 
   permissions: {
     list: ['admin', 'oms_manager', 'employee', 'user', 'oms_operator'],
-    create: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以创建收款
-    update: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以编辑收款
-    delete: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以删除收款
+    create: ['admin', 'oms_manager', 'oms_operator'],
+    update: ['admin', 'oms_manager', 'oms_operator'],
+    delete: ['admin', 'oms_manager', 'oms_operator'],
   },
 
   prisma: {

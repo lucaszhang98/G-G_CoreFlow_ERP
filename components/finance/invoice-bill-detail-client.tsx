@@ -27,6 +27,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Search } from "lucide-react"
 import { toast } from "sonner"
+import { InvoicePdfDownloadButton } from "@/components/finance/invoice-pdf-download-button"
 
 const STATUS_MAP: Record<string, string> = {
   draft: "草稿",
@@ -86,6 +87,46 @@ export function InvoiceBillDetailClient({
   const isPenaltyInvoice = invoice.invoice_type === "penalty"
   const isStorageInvoice = invoice.invoice_type === "storage"
   const router = useRouter()
+  const [invoiceStatus, setInvoiceStatus] = React.useState(invoice.status ?? "draft")
+  const [statusSaving, setStatusSaving] = React.useState<"audited" | "issued" | null>(null)
+
+  React.useEffect(() => {
+    setInvoiceStatus(invoice.status ?? "draft")
+  }, [invoice.status])
+
+  const updateInvoiceStatus = React.useCallback(
+    async (next: "audited" | "issued") => {
+      if (invoiceStatus === "void") {
+        toast.error("作废账单不可修改状态")
+        return
+      }
+      if (invoiceStatus === next) return
+      setStatusSaving(next)
+      try {
+        const res = await fetch(`/api/finance/invoices/${invoiceId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: next }),
+        })
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          const msg =
+            typeof payload.error === "string" ? payload.error : "更新状态失败"
+          throw new Error(msg)
+        }
+        const nextStatus = payload.data?.status ?? next
+        setInvoiceStatus(typeof nextStatus === "string" ? nextStatus : next)
+        toast.success(next === "audited" ? "已设为已审核" : "已设为已开票")
+        router.refresh()
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "更新状态失败")
+      } finally {
+        setStatusSaving(null)
+      }
+    },
+    [invoiceId, invoiceStatus, router]
+  )
+
   const [lines, setLines] = React.useState<LineRow[]>([])
   const [loading, setLoading] = React.useState(true)
   const [addOpen, setAddOpen] = React.useState(false)
@@ -338,20 +379,68 @@ export function InvoiceBillDetailClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
           <Link href={backListHref}>
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-2xl font-semibold min-w-0 flex-1">
           {billKindLabel} - {invoice.invoice_number ?? invoiceId}
         </h1>
+        <InvoicePdfDownloadButton
+          invoiceId={invoiceId}
+          label="生成账单 PDF"
+          successToast="已打开账单 PDF"
+        />
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 pb-4">
           <CardTitle>主行信息</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={
+                invoiceStatus === "void" ||
+                invoiceStatus === "audited" ||
+                statusSaving !== null
+              }
+              onClick={() => void updateInvoiceStatus("audited")}
+            >
+              {statusSaving === "audited" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  处理中
+                </>
+              ) : (
+                "已审核"
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700"
+              disabled={
+                invoiceStatus === "void" ||
+                invoiceStatus === "issued" ||
+                statusSaving !== null
+              }
+              onClick={() => void updateInvoiceStatus("issued")}
+            >
+              {statusSaving === "issued" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  处理中
+                </>
+              ) : (
+                "已开票"
+              )}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="grid gap-2 text-sm">
           <div className="grid grid-cols-2 gap-x-8 gap-y-1">
@@ -367,7 +456,9 @@ export function InvoiceBillDetailClient({
             <span>{invoice.invoice_date ? String(invoice.invoice_date).slice(0, 10) : "-"}</span>
             <span className="text-muted-foreground">状态</span>
             <span>
-              <Badge variant="secondary">{STATUS_MAP[invoice.status ?? ""] ?? invoice.status}</Badge>
+              <Badge variant="secondary">
+                {STATUS_MAP[invoiceStatus] ?? invoiceStatus}
+              </Badge>
             </span>
             <span className="text-muted-foreground">总金额</span>
             <span>{invoice.total_amount != null ? Number(invoice.total_amount).toFixed(2) : "0.00"} {invoice.currency ?? "USD"}</span>
@@ -427,7 +518,7 @@ export function InvoiceBillDetailClient({
                   <TableRow
                     key={line.id}
                     className={
-                      invoice.status === "issued"
+                      invoiceStatus === "issued"
                         ? "bg-green-50/90 border-green-100 hover:bg-green-50 dark:bg-green-950/30 dark:border-green-900 dark:hover:bg-green-950/40"
                         : undefined
                     }

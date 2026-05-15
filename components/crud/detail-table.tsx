@@ -1318,7 +1318,22 @@ export function DetailTable({
                               </td>
                             )
                           }
-                          return <td key={col} className="p-2 text-sm">{detail.delivery_nature === '亚马逊' ? 'AMZ' : (detail.delivery_nature || '-')}</td>
+                          {
+                            const natureText =
+                              detail.delivery_nature === '亚马逊' ? 'AMZ' : (detail.delivery_nature || '-')
+                            const natureIsDetention = detail.delivery_nature === '扣货'
+                            return (
+                              <td
+                                key={col}
+                                className={cn(
+                                  'p-2 text-sm',
+                                  natureIsDetention && 'text-red-600 dark:text-red-400 font-medium'
+                                )}
+                              >
+                                {natureText}
+                              </td>
+                            )
+                          }
                       case 'quantity':
                         // 订单明细可以编辑数量，预约明细不允许编辑
                         if ((isBatchEditMode || editingRowId === detailId) && !appointmentId) {
@@ -2931,7 +2946,14 @@ function AddDetailDialog({
                                   )}
                                 </div>
                               </td>
-                              <td className="p-3 text-sm">{detail.delivery_nature === '亚马逊' ? 'AMZ' : (detail.delivery_nature || '-')}</td>
+                              <td
+                                className={cn(
+                                  'p-3 text-sm',
+                                  detail.delivery_nature === '扣货' && 'text-red-600 dark:text-red-400 font-medium'
+                                )}
+                              >
+                                {detail.delivery_nature === '亚马逊' ? 'AMZ' : (detail.delivery_nature || '-')}
+                              </td>
                               <td className="p-3 text-sm">{formatVolume(detail.volume)}</td>
                               <td className="p-3 text-sm">
                                 <div className="flex items-center gap-2">
@@ -3003,7 +3025,16 @@ function AddDetailDialog({
                   </div>
                   <div>
                     <span className="text-muted-foreground">仓点类型：</span>
-                    <span className="font-medium text-foreground ml-2">{selectedDetail.delivery_nature === '亚马逊' ? 'AMZ' : (selectedDetail.delivery_nature || '-')}</span>
+                    <span
+                      className={cn(
+                        'font-medium ml-2',
+                        selectedDetail.delivery_nature === '扣货'
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-foreground'
+                      )}
+                    >
+                      {selectedDetail.delivery_nature === '亚马逊' ? 'AMZ' : (selectedDetail.delivery_nature || '-')}
+                    </span>
                   </div>
                   {/* 总方数不需要显示 */}
                   <div>

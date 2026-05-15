@@ -20,10 +20,19 @@ interface EntityDetailProps {
   id: string | bigint
   data?: any // 如果已经获取了数据，直接传入
   rightCard?: React.ReactNode // 可选的右侧卡片内容
+  /** beside：与基本信息并排（默认）；below：次要面板在基本信息下方全宽 */
+  secondaryPlacement?: "beside" | "below"
   editComponent?: React.ComponentType<{ config: EntityConfig; data: any }> // 自定义编辑组件
 }
 
-export async function EntityDetail({ config, id, data: providedData, rightCard, editComponent: EditComponent }: EntityDetailProps) {
+export async function EntityDetail({
+  config,
+  id,
+  data: providedData,
+  rightCard,
+  secondaryPlacement = "beside",
+  editComponent: EditComponent,
+}: EntityDetailProps) {
   // 如果没有提供数据，则从数据库获取
   let data = providedData
 
@@ -249,8 +258,14 @@ export async function EntityDetail({ config, id, data: providedData, rightCard, 
         )}
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* 左侧：列表中的字段 */}
+      <div
+        className={
+          secondaryPlacement === "below"
+            ? "flex flex-col gap-6"
+            : "grid gap-6 md:grid-cols-2"
+        }
+      >
+        {/* 左侧 / 上方：列表中的字段 */}
         <Card className="border-0 shadow-lg">
           <CardHeader>
             <CardTitle>基本信息</CardTitle>
@@ -283,7 +298,7 @@ export async function EntityDetail({ config, id, data: providedData, rightCard, 
           </CardContent>
         </Card>
 
-        {/* 右侧：优先显示自定义卡片，否则显示不在列表中的详情字段 */}
+        {/* 次要区域：自定义卡片或「详细信息」卡片 */}
         {rightCard ? (
           rightCard
         ) : detailFields.length > 0 ? (

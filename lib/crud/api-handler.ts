@@ -1110,6 +1110,12 @@ export function createCreateHandler(config: EntityConfig) {
       // 处理 BigInt 字段和日期字段
       const processedData: any = {}
       for (const [key, value] of Object.entries(submitData as Record<string, any>)) {
+        if (
+          config.prisma?.model === 'receivables' &&
+          ['allocated_amount', 'balance', 'status'].includes(key)
+        ) {
+          continue
+        }
         const fieldConfig = config.fields[key]
         // 跳过只读/计算字段（如 container_volume）
         if (fieldConfig?.readonly || fieldConfig?.computed) {
@@ -1151,11 +1157,21 @@ export function createCreateHandler(config: EntityConfig) {
         processedData.container_volume = 0
       }
 
-      // 对于应收表，创建时设置 balance = receivable_amount - allocated_amount
+      // 对于应收表：已核销/余额/状态仅由收款核销与发票同步计算，创建时默认 allocated=0 并推导 balance、status
       if (config.prisma?.model === 'receivables' && processedData.receivable_amount != null) {
-        const amt = Number(processedData.receivable_amount)
-        const allocated = Number(processedData.allocated_amount ?? 0)
-        processedData.balance = amt - allocated
+        const { deriveReceivableBalanceAndStatus } = await import('@/lib/finance/invoice-receivable-sync')
+        processedData.allocated_amount = processedData.allocated_amount ?? 0
+        const { balance, status } = deriveReceivableBalanceAndStatus(
+          processedData.receivable_amount,
+          processedData.allocated_amount
+        )
+        processedData.balance = balance
+        processedData.status = status
+      }
+
+      if (config.prisma?.model === 'payments') {
+        processedData.currency = processedData.currency || 'USD'
+        processedData.payment_method = null
       }
 
       // 账单总金额由明细汇总，创建时主表 total_amount 仅允许默认 0（表单已不提交该字段）
@@ -1310,6 +1326,12 @@ export function createUpdateHandler(config: EntityConfig) {
       // 处理 BigInt 字段、boolean 字段和日期字段
       const processedData: any = {}
       for (const [key, value] of Object.entries(submitData as Record<string, any>)) {
+        if (
+          config.prisma?.model === 'receivables' &&
+          ['allocated_amount', 'balance', 'status'].includes(key)
+        ) {
+          continue
+        }
         const fieldConfig = config.fields[key]
         if (fieldConfig?.readonly || fieldConfig?.computed) {
           continue
@@ -1386,6 +1408,13 @@ export function createUpdateHandler(config: EntityConfig) {
       // 自动添加系统维护字段（只更新修改人/时间）
       const { addSystemFields } = await import('@/lib/api/helpers')
       addSystemFields(processedData, permissionResult.user, false)
+
+      if (config.prisma?.model === 'payments') {
+        processedData.payment_method = null
+        if (processedData.currency !== undefined) {
+          processedData.currency = processedData.currency || 'USD'
+        }
+      }
 
       const prismaModel = getPrismaModel(config)
       
@@ -1496,10 +1525,12 @@ export function createUpdateHandler(config: EntityConfig) {
       }
       
       let item: any
+      let ordersBeforeUpdate: { status: string | null; operation_mode: string | null } | null =
+        null
       if (config.prisma?.model === 'orders') {
-        const beforeOrder = await prisma.orders.findUnique({
+        ordersBeforeUpdate = await prisma.orders.findUnique({
           where: { order_id: BigInt(resolvedParams.id) },
-          select: { order_id: true, status: true },
+          select: { status: true, operation_mode: true },
         })
         item = await prisma.$transaction(async (tx) => {
           const updated = await tx.orders.update({
@@ -1508,11 +1539,55 @@ export function createUpdateHandler(config: EntityConfig) {
           })
           if (
             updated.status === ORDER_STATUS_CANCELLED &&
-            beforeOrder?.status !== ORDER_STATUS_CANCELLED
+            ordersBeforeUpdate?.status !== ORDER_STATUS_CANCELLED
           ) {
             await purgeOperationalDataForCancelledOrder(tx, updated.order_id)
           }
           return updated
+        })
+
+        // 操作方式变更：本单全部仍生效的预约统一停用（回退板数、删送仓/出库等），避免漏改
+        if (
+          ordersBeforeUpdate &&
+          ordersBeforeUpdate.operation_mode !== item.operation_mode
+        ) {
+          try {
+            const { cancelAllActiveAppointmentsForOrder } = await import(
+              '@/lib/services/cancel-appointments-for-order'
+            )
+            const r = await cancelAllActiveAppointmentsForOrder(item.order_id)
+            if (r.detailLinesRemoved > 0 || r.appointmentsFullyDisabled > 0) {
+              console.log(
+                `[订单更新] 操作方式 ${ordersBeforeUpdate.operation_mode ?? '(空)'} → ${item.operation_mode ?? '(空)'}：已移除本单 ${r.detailLinesRemoved} 条预约占用；${r.appointmentsFullyDisabled} 个预约因已无明细整单停用（拼柜他单明细仍保留的预约仅删本单行并回写板数）`
+              )
+            }
+          } catch (appointmentsCancelErr: any) {
+            console.warn('[订单更新] 操作方式变更后停用预约失败:', appointmentsCancelErr)
+          }
+        }
+      } else if (config.prisma?.model === 'receivables') {
+        const rid = BigInt(resolvedParams.id)
+        const existing = await prismaModel.findUnique({
+          where: { [idField]: rid },
+          select: { receivable_amount: true, allocated_amount: true },
+        })
+        if (!existing) {
+          return NextResponse.json({ error: `${config.displayName}不存在` }, { status: 404 })
+        }
+        const newRecAmt =
+          processedData.receivable_amount !== undefined
+            ? processedData.receivable_amount
+            : existing.receivable_amount
+        const { deriveReceivableBalanceAndStatus } = await import('@/lib/finance/invoice-receivable-sync')
+        const { balance, status } = deriveReceivableBalanceAndStatus(
+          newRecAmt,
+          existing.allocated_amount ?? 0
+        )
+        processedData.balance = balance
+        processedData.status = status
+        item = await prismaModel.update({
+          where: { [idField]: rid },
+          data: processedData,
         })
       } else if (config.prisma?.model === 'invoices') {
         const invoicePk = BigInt(resolvedParams.id)
@@ -1663,6 +1738,20 @@ export function createDeleteHandler(config: EntityConfig) {
         })
         return NextResponse.json({ message: `删除${config.displayName}成功` })
       }
+
+      // 收款删除：先冲回应收上的已核销，再删收款（核销行由级联删除）
+      if (config.prisma?.model === 'payments') {
+        const userId = authCheck.user?.id ? BigInt(authCheck.user.id) : null
+        const paymentId = BigInt(resolvedParams.id)
+        const { reversePaymentAllocationsForDeletionTx } = await import(
+          '@/lib/finance/invoice-receivable-sync'
+        )
+        await prisma.$transaction(async (tx) => {
+          await reversePaymentAllocationsForDeletionTx(tx, paymentId, userId)
+          await tx.payments.delete({ where: { payment_id: paymentId } })
+        })
+        return NextResponse.json({ message: `删除${config.displayName}成功` })
+      }
       
       // 其他表使用硬删除
       await prismaModel.delete({
@@ -1757,6 +1846,24 @@ export function createBatchDeleteHandler(config: EntityConfig) {
           }
           throw e
         }
+        return NextResponse.json({
+          message: `成功删除 ${bigIntIds.length} 条${config.displayName}记录`,
+          count: bigIntIds.length,
+        })
+      }
+
+      // 收款批量删除：逐笔冲回应收再删收款（与单条删除一致）
+      if (config.prisma?.model === 'payments') {
+        const userId = authCheck.user?.id ? BigInt(authCheck.user.id) : null
+        const { reversePaymentAllocationsForDeletionTx } = await import(
+          '@/lib/finance/invoice-receivable-sync'
+        )
+        await prisma.$transaction(async (tx) => {
+          for (const pid of bigIntIds) {
+            await reversePaymentAllocationsForDeletionTx(tx, pid, userId)
+            await tx.payments.delete({ where: { payment_id: pid } })
+          }
+        })
         return NextResponse.json({
           message: `成功删除 ${bigIntIds.length} 条${config.displayName}记录`,
           count: bigIntIds.length,

@@ -255,6 +255,7 @@ function getPageTitle(pathname: string): string {
     "/dashboard/finance/bills/storage": "仓储账单",
     "/dashboard/finance/fees": "费用管理",
     "/dashboard/finance/receivables": "应收管理",
+    "/dashboard/finance/summary": "财务汇总",
     "/dashboard/finance/payments": "收款管理",
     "/dashboard/notifications": "通知",
     "/dashboard/documents": "文档管理",

@@ -52,11 +52,13 @@ export const receivableConfig: EntityConfig = {
       key: 'allocated_amount',
       label: '已核销',
       type: 'currency',
+      readonly: true,
     },
     balance: {
       key: 'balance',
       label: '余额',
       type: 'currency',
+      readonly: true,
     },
     due_date: {
       key: 'due_date',
@@ -69,6 +71,7 @@ export const receivableConfig: EntityConfig = {
       label: '状态',
       type: 'badge',
       sortable: true,
+      readonly: true,
       options: [
         { label: '未结', value: 'open' },
         { label: '部分核销', value: 'partial' },
@@ -127,7 +130,7 @@ export const receivableConfig: EntityConfig = {
     inlineEdit: { enabled: true },
   },
 
-  formFields: ['invoice_id', 'customer_id', 'receivable_amount', 'allocated_amount', 'balance', 'due_date', 'status', 'notes'],
+  formFields: ['invoice_id', 'customer_id', 'receivable_amount', 'due_date', 'notes'],
 
   permissions: {
     list: ['admin', 'oms_manager', 'employee', 'user', 'oms_operator'],

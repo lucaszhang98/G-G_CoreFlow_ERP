@@ -44,7 +44,35 @@ export async function POST(request: NextRequest) {
 
     const effectiveBooked = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
 
+    const apptHead = await prisma.delivery_appointments.findUnique({
+      where: { appointment_id: appointmentId },
+      select: { enabled: true },
+    })
+    if (!apptHead) {
+      return NextResponse.json({ error: '预约不存在' }, { status: 404 })
+    }
+    if (apptHead.enabled === false) {
+      const residual = await prisma.appointment_detail_lines.count({
+        where: { appointment_id: appointmentId },
+      })
+      if (residual > 0) {
+        return NextResponse.json(
+          {
+            error:
+              '该预约已停用且仍有历史明细，无法批量加入；请在预约管理中处理或选用其他预约',
+          },
+          { status: 400 }
+        )
+      }
+    }
+
     const results = await prisma.$transaction(async (tx) => {
+      if (apptHead.enabled === false) {
+        await tx.delivery_appointments.update({
+          where: { appointment_id: appointmentId },
+          data: { enabled: true, updated_at: new Date() },
+        })
+      }
       const created: { id: bigint; order_detail_id: bigint }[] = []
       let totalPalletsToAdd = 0
 

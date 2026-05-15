@@ -51,6 +51,27 @@ export function isDefaultAllCustomersFee(f: FeeForMatch): boolean {
   return f.scope_type === 'all'
 }
 
+/** 同 fee_code 下「所有客户」默认行中选一条作柜型未命中时的回退（优先不限柜型，再 sort_order / id） */
+function pickFallbackDefaultAllCustomerForFeeCode(
+  fees: FeeForMatch[],
+  feeCode: string
+): FeeForMatch | null {
+  const c = feeCode.trim()
+  const pool = fees.filter(
+    (f) => f.fee_code.trim() === c && isDefaultAllCustomersFee(f)
+  )
+  if (pool.length === 0) return null
+  pool.sort((a, b) => {
+    const aAny = !a.container_type?.trim()
+    const bAny = !b.container_type?.trim()
+    if (aAny !== bAny) return aAny ? -1 : 1
+    const so = (a.sort_order ?? 0) - (b.sort_order ?? 0)
+    if (so !== 0) return so
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  })
+  return pool[0] ?? null
+}
+
 function scoreForPick(
   f: FeeForMatch,
   customerId: bigint,
@@ -70,6 +91,7 @@ function scoreForPick(
  * - 再按 fee_code 分组：若该编码下存在**适用于当前客户**的行，则只保留这些行，**不展示**同组「所有客户」默认行；
  *   若该编码下没有任何客户专属行，则只保留「所有客户」默认行。
  * - 同一编码可保留多条客户专属行（如不同仓点），不按分数压成一条。
+ * - 若某 fee_code 在柜型过滤后没有任何行，再追加一条归属「所有客户」的默认费用（不限柜型），便于 20GP 等柜型仅有他柜型价目时仍能选手动加价。
  */
 export function listFeesForInvoiceLinePicker(
   fees: FeeForMatch[],
@@ -104,6 +126,17 @@ export function listFeesForInvoiceLinePicker(
     }
   }
 
+  const codesWithPick = new Set(out.map((f) => f.fee_code.trim()))
+  const allCodes = new Set(fees.map((f) => f.fee_code.trim()))
+  for (const code of allCodes) {
+    if (codesWithPick.has(code)) continue
+    const fb = pickFallbackDefaultAllCustomerForFeeCode(fees, code)
+    if (fb) {
+      out.push(fb)
+      codesWithPick.add(code)
+    }
+  }
+
   out.sort((a, b) => {
     const so = (a.sort_order ?? 0) - (b.sort_order ?? 0)
     if (so !== 0) return so
@@ -115,8 +148,8 @@ export function listFeesForInvoiceLinePicker(
 }
 
 /**
- * 按 fee_code 去重：有客户专属则用专属，否则用「所有客户」默认行；仅保留柜型匹配的候选。
- * 用于需要「每个编码只选一条」的自动解析场景；账单明细人工选费用亦经 {@link listFeesForInvoiceLinePicker}（同组客户优先于「所有客户」）。
+ * 按 fee_code 去重：有客户专属则用专属，否则用「所有客户」默认行；以柜型匹配为主，
+ * 某编码在柜型过滤后无候选时，为该编码补一条「所有客户」默认行（不限柜型：优先 container 为空，再 sort_order / id）。
  */
 export function resolveFeesForInvoiceLinePick(
   fees: FeeForMatch[],
@@ -132,6 +165,13 @@ export function resolveFeesForInvoiceLinePick(
     const code = f.fee_code.trim()
     if (!byCode.has(code)) byCode.set(code, [])
     byCode.get(code)!.push(f)
+  }
+
+  const feeCodes = new Set(fees.map((f) => f.fee_code.trim()))
+  for (const code of feeCodes) {
+    if (byCode.has(code)) continue
+    const fb = pickFallbackDefaultAllCustomerForFeeCode(fees, code)
+    if (fb) byCode.set(code, [fb])
   }
 
   const out: FeeForMatch[] = []

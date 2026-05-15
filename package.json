@@ -19,6 +19,7 @@
     "backfill:storage-invoices": "tsx scripts/backfill-storage-invoices.ts",
     "fix:planned-unload-dates": "tsx scripts/fix-planned-unload-dates.ts",
     "cleanup:direct-delivery-invoices-cancelled": "tsx scripts/cleanup-direct-delivery-invoices-for-cancelled-orders.ts",
+    "remediate:receivable-allocations-zero": "tsx scripts/remediate-zero-receivable-allocations.ts",
     "schemaspy": "node scripts/generate_schemaspy.js",
     "build:exe": "node scripts/build-exe.js",
     "package:exe": "pkg scripts/excel-transfer-standalone.ts --targets node18-win-x64 --output-path dist"

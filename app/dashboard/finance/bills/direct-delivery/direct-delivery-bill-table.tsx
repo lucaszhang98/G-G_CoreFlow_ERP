@@ -7,11 +7,13 @@ import { directDeliveryBillConfig } from "@/lib/crud/configs/invoices"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { NewDirectDeliveryDialog } from "./new-direct-delivery-dialog"
+import { BillsBatchInvoicePdf } from "@/components/finance/bills-batch-invoice-pdf"
 
 export function DirectDeliveryBillTable() {
   const router = useRouter()
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [refreshKey, setRefreshKey] = React.useState(0)
+  const [selectedRows, setSelectedRows] = React.useState<any[]>([])
 
   const customActions = React.useMemo(
     () => ({
@@ -30,6 +32,8 @@ export function DirectDeliveryBillTable() {
         initialFilterValues={{ invoice_type: "direct_delivery" }}
         customActions={customActions}
         refreshKey={refreshKey}
+        onRowSelectionChange={setSelectedRows}
+        customBatchActions={<BillsBatchInvoicePdf selectedRows={selectedRows} />}
         customToolbarButtons={
           <Button
             type="button"

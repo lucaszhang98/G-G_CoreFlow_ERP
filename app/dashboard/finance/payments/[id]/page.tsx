@@ -29,6 +29,7 @@ export default async function PaymentDetailPage({ params }: PaymentDetailPagePro
           <EntityDetail
             config={paymentConfig}
             id={resolvedParams.id}
+            secondaryPlacement="below"
             rightCard={<PaymentAllocationsCard paymentId={resolvedParams.id} />}
           />
         </div>

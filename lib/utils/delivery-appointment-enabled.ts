@@ -11,7 +11,7 @@ export const prismaDeliveryAppointmentNotDisabled = { NOT: { enabled: false } } 
 
 /**
  * 嵌套查询 appointment_detail_lines 时用：只返回所属预约仍启用的明细。
- * 已停用（软删）预约上的明细仅在预约管理模块展示，订单/入库/出库等不应加载。
+ * 订单明细、预约列表/详情、预约明细 API 等统一使用该口径，与已停用（软删）预约上的行脱钩，避免界面「一边有、一边无」。
  */
 export const prismaAppointmentDetailLinesWhereParentAppointmentActive = {
   delivery_appointments: { is: prismaDeliveryAppointmentNotDisabled },
