@@ -13,7 +13,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 type ReceivableRow = {
   receivable_id: string
@@ -55,6 +57,7 @@ export function PaymentWriteOffDialog({
   const [ctx, setCtx] = useState<WriteOffContext | null>(null)
   const [invoiceFilter, setInvoiceFilter] = useState('')
   const [amounts, setAmounts] = useState<Record<string, string>>({})
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
   const load = useCallback(async () => {
     if (!paymentId) return
@@ -99,6 +102,7 @@ export function PaymentWriteOffDialog({
       })
       setAmounts({})
       setInvoiceFilter('')
+      setSelectedIds(new Set())
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : '加载失败')
       setCtx(null)
@@ -120,6 +124,41 @@ export function PaymentWriteOffDialog({
     )
   }, [ctx?.receivables, invoiceFilter])
 
+  const filteredIds = useMemo(
+    () => filteredReceivables.map((r) => r.receivable_id),
+    [filteredReceivables]
+  )
+
+  const allFilteredSelected =
+    filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id))
+  const someFilteredSelected = filteredIds.some((id) => selectedIds.has(id))
+  const headerCheckboxState: boolean | 'indeterminate' = allFilteredSelected
+    ? true
+    : someFilteredSelected
+      ? 'indeterminate'
+      : false
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allFilteredSelected) {
+        filteredIds.forEach((id) => next.delete(id))
+      } else {
+        filteredIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+
+  const toggleRowSelected = (receivableId: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(receivableId)
+      else next.delete(receivableId)
+      return next
+    })
+  }
+
   const setAmount = (receivableId: string, value: string) => {
     setAmounts((prev) => ({ ...prev, [receivableId]: value }))
   }
@@ -127,6 +166,43 @@ export function PaymentWriteOffDialog({
   const parseNum = (s: string) => {
     const n = Number(String(s).replace(/,/g, '').trim())
     return Number.isFinite(n) ? n : NaN
+  }
+
+  const currency = ctx?.payment.currency || 'USD'
+
+  const writeOffSum = useMemo(() => {
+    if (!ctx) return 0
+    let s = 0
+    for (const r of ctx.receivables) {
+      const raw = amounts[r.receivable_id]
+      if (raw == null || String(raw).trim() === '') continue
+      const n = parseNum(String(raw))
+      if (Number.isFinite(n) && n > 0) s += n
+    }
+    return s
+  }, [ctx, amounts])
+
+  const handleBatchFillBalance = () => {
+    if (!ctx) return
+    if (selectedIds.size === 0) {
+      toast.error('请先勾选要批量消账的发票')
+      return
+    }
+    const next: Record<string, string> = { ...amounts }
+    let count = 0
+    for (const r of ctx.receivables) {
+      if (!selectedIds.has(r.receivable_id)) continue
+      const bal = Number(r.balance)
+      if (bal <= 1e-6) continue
+      next[r.receivable_id] = bal.toFixed(2)
+      count++
+    }
+    if (count === 0) {
+      toast.error('所选行没有可核销余额')
+      return
+    }
+    setAmounts(next)
+    toast.success(`已为 ${count} 条填写与余额相同的本次核销金额`)
   }
 
   const handleSubmit = async () => {
@@ -182,13 +258,15 @@ export function PaymentWriteOffDialog({
     }
   }
 
+  const overRemaining = ctx && writeOffSum > ctx.remaining + 1e-6
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>消账</DialogTitle>
           <DialogDescription>
-            选择该客户仍有余额的应收，按发票号筛选后填写核销金额。已分配总额不得超过收款金额。
+            勾选发票后可「批量消账」将本次核销填为各自行余额；汇总金额不得超过收款剩余可分配。
           </DialogDescription>
         </DialogHeader>
 
@@ -202,8 +280,7 @@ export function PaymentWriteOffDialog({
               <div>
                 <span className="text-muted-foreground">收款金额：</span>
                 <span className="font-medium">
-                  {Number(ctx.payment.amount).toFixed(2)}{' '}
-                  {ctx.payment.currency || 'USD'}
+                  {Number(ctx.payment.amount).toFixed(2)} {currency}
                 </span>
               </div>
               <div>
@@ -224,8 +301,16 @@ export function PaymentWriteOffDialog({
             </div>
             <ScrollArea className="h-[min(360px,45vh)] border rounded-md">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-muted/80 backdrop-blur">
+                <thead className="sticky top-0 z-[1] bg-muted/80 backdrop-blur">
                   <tr className="border-b">
+                    <th className="w-10 p-2 text-center">
+                      <Checkbox
+                        aria-label="全选当前列表"
+                        checked={headerCheckboxState}
+                        onCheckedChange={() => toggleSelectAllFiltered()}
+                        disabled={filteredReceivables.length === 0}
+                      />
+                    </th>
                     <th className="text-left p-2 font-medium">发票号</th>
                     <th className="text-right p-2 font-medium">应收</th>
                     <th className="text-right p-2 font-medium">已核销</th>
@@ -239,7 +324,7 @@ export function PaymentWriteOffDialog({
                   {filteredReceivables.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="p-6 text-center text-muted-foreground"
                       >
                         没有符合条件的未结清应收
@@ -248,9 +333,16 @@ export function PaymentWriteOffDialog({
                   ) : (
                     filteredReceivables.map((r) => (
                       <tr key={r.receivable_id} className="border-b last:border-0">
-                        <td className="p-2">
-                          {r.invoice_number || '—'}
+                        <td className="p-2 text-center align-middle">
+                          <Checkbox
+                            aria-label={`选择 ${r.invoice_number || r.receivable_id}`}
+                            checked={selectedIds.has(r.receivable_id)}
+                            onCheckedChange={(c) =>
+                              toggleRowSelected(r.receivable_id, c === true)
+                            }
+                          />
                         </td>
+                        <td className="p-2">{r.invoice_number || '—'}</td>
                         <td className="p-2 text-right tabular-nums">
                           {Number(r.receivable_amount).toFixed(2)}
                         </td>
@@ -276,6 +368,37 @@ export function PaymentWriteOffDialog({
                 </tbody>
               </table>
             </ScrollArea>
+
+            <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-0.5 text-sm">
+                <div>
+                  <span className="text-muted-foreground">本次核销汇总金额：</span>
+                  <span
+                    className={cn(
+                      'font-semibold tabular-nums',
+                      overRemaining && 'text-destructive'
+                    )}
+                  >
+                    {writeOffSum.toFixed(2)} {currency}
+                  </span>
+                </div>
+                {overRemaining ? (
+                  <p className="text-xs text-destructive">
+                    已超过剩余可分配{' '}
+                    {(writeOffSum - ctx.remaining).toFixed(2)} {currency}
+                  </p>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="shrink-0 self-start sm:self-center"
+                onClick={handleBatchFillBalance}
+                disabled={loading || submitting}
+              >
+                批量消账
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="py-6 text-center text-muted-foreground text-sm">
@@ -283,7 +406,7 @@ export function PaymentWriteOffDialog({
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button
             type="button"
             variant="outline"
