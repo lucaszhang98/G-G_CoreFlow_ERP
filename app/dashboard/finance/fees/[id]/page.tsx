@@ -8,6 +8,7 @@ import { DashboardLayout } from "@/components/dashboard-layout"
 import { EntityDetail } from "@/components/crud/entity-detail"
 import { feeConfig } from "@/lib/crud/configs/fees"
 import { FeeScopeCard } from "@/components/finance/fee-scope-card"
+import { FeeInvoiceLinesExportCard } from "@/components/finance/fee-invoice-lines-export-card"
 
 interface FeeDetailPageProps {
   params: Promise<{ id: string }>
@@ -29,7 +30,12 @@ export default async function FeeDetailPage({ params }: FeeDetailPageProps) {
           <EntityDetail
             config={feeConfig}
             id={resolvedParams.id}
-            rightCard={<FeeScopeCard feeId={resolvedParams.id} />}
+            rightCard={
+              <div className="space-y-6">
+                <FeeScopeCard feeId={resolvedParams.id} />
+                <FeeInvoiceLinesExportCard feeId={resolvedParams.id} />
+              </div>
+            }
           />
         </div>
       </div>

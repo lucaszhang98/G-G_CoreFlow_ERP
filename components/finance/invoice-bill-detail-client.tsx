@@ -36,6 +36,21 @@ const STATUS_MAP: Record<string, string> = {
   void: "作废",
 }
 
+/** 将发票日期格式化为 `<input type="date">` 的 YYYY-MM-DD；空则返回当天 */
+function toDateInputValue(v: unknown): string {
+  if (v == null || v === "") {
+    return new Date().toISOString().slice(0, 10)
+  }
+  const s = String(v)
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (m) return m[1]
+  const d = new Date(s)
+  if (!Number.isNaN(d.getTime())) {
+    return d.toISOString().slice(0, 10)
+  }
+  return new Date().toISOString().slice(0, 10)
+}
+
 interface LineRow {
   id: string | number
   fee_id?: string | number | null
@@ -89,13 +104,17 @@ export function InvoiceBillDetailClient({
   const router = useRouter()
   const [invoiceStatus, setInvoiceStatus] = React.useState(invoice.status ?? "draft")
   const [statusSaving, setStatusSaving] = React.useState<"audited" | "issued" | null>(null)
+  const [issuedDialogOpen, setIssuedDialogOpen] = React.useState(false)
+  const [issuedDateInput, setIssuedDateInput] = React.useState(() =>
+    toDateInputValue(invoice.invoice_date)
+  )
 
   React.useEffect(() => {
     setInvoiceStatus(invoice.status ?? "draft")
   }, [invoice.status])
 
   const updateInvoiceStatus = React.useCallback(
-    async (next: "audited" | "issued") => {
+    async (next: "audited") => {
       if (invoiceStatus === "void") {
         toast.error("作废账单不可修改状态")
         return
@@ -116,7 +135,7 @@ export function InvoiceBillDetailClient({
         }
         const nextStatus = payload.data?.status ?? next
         setInvoiceStatus(typeof nextStatus === "string" ? nextStatus : next)
-        toast.success(next === "audited" ? "已设为已审核" : "已设为已开票")
+        toast.success("已设为已审核")
         router.refresh()
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "更新状态失败")
@@ -126,6 +145,56 @@ export function InvoiceBillDetailClient({
     },
     [invoiceId, invoiceStatus, router]
   )
+
+  const openIssuedDialog = React.useCallback(() => {
+    if (invoiceStatus === "void") {
+      toast.error("作废账单不可修改状态")
+      return
+    }
+    if (invoiceStatus === "issued") return
+    if (statusSaving !== null) return
+    if (issuedDialogOpen) return
+    setIssuedDateInput(toDateInputValue(invoice.invoice_date))
+    setIssuedDialogOpen(true)
+  }, [invoiceStatus, statusSaving, invoice.invoice_date, issuedDialogOpen])
+
+  const confirmIssuedWithDate = React.useCallback(async () => {
+    if (invoiceStatus === "void") {
+      toast.error("作废账单不可修改状态")
+      return
+    }
+    const dateStr = issuedDateInput?.trim()
+    if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      toast.error("请选择有效的发票日期")
+      return
+    }
+    setStatusSaving("issued")
+    try {
+      const res = await fetch(`/api/finance/invoices/${invoiceId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "issued",
+          invoice_date: dateStr,
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg =
+          typeof payload.error === "string" ? payload.error : "更新状态失败"
+        throw new Error(msg)
+      }
+      const nextStatus = payload.data?.status ?? "issued"
+      setInvoiceStatus(typeof nextStatus === "string" ? nextStatus : "issued")
+      setIssuedDialogOpen(false)
+      toast.success("已设为已开票")
+      router.refresh()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "更新状态失败")
+    } finally {
+      setStatusSaving(null)
+    }
+  }, [invoiceId, invoiceStatus, issuedDateInput, router])
 
   const [lines, setLines] = React.useState<LineRow[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -427,9 +496,10 @@ export function InvoiceBillDetailClient({
               disabled={
                 invoiceStatus === "void" ||
                 invoiceStatus === "issued" ||
-                statusSaving !== null
+                statusSaving !== null ||
+                issuedDialogOpen
               }
-              onClick={() => void updateInvoiceStatus("issued")}
+              onClick={openIssuedDialog}
             >
               {statusSaving === "issued" ? (
                 <>
@@ -878,6 +948,60 @@ export function InvoiceBillDetailClient({
             <Button type="button" onClick={saveEditLine} disabled={submitting}>
               {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={issuedDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && statusSaving !== "issued") setIssuedDialogOpen(false)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>修改发票日期</DialogTitle>
+            <DialogDescription>
+              如果本账单不是第一次开票，请勿修改。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-2">
+            <Label htmlFor="issued-invoice-date">发票日期</Label>
+            <Input
+              id="issued-invoice-date"
+              type="date"
+              value={issuedDateInput}
+              onChange={(e) => setIssuedDateInput(e.target.value)}
+              disabled={statusSaving === "issued"}
+            />
+            <p className="text-xs text-muted-foreground">
+              确认后将把账单设为「已开票」，并以上述日期写入发票日期（影响应收到期日等）。
+            </p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIssuedDialogOpen(false)}
+              disabled={statusSaving === "issued"}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => void confirmIssuedWithDate()}
+              disabled={statusSaving === "issued"}
+            >
+              {statusSaving === "issued" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  处理中
+                </>
+              ) : (
+                "确认已开票"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

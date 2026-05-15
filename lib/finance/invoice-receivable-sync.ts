@@ -61,6 +61,19 @@ export function deriveReceivableBalanceAndStatus(
 }
 
 /**
+ * 到期日 = 开票日期的次月同日（如 5/20 → 6/20；使用 UTC 日期部分，与 @db.Date 一致）。
+ */
+export function dueDateOneMonthAfterInvoiceDate(
+  invoiceDate: Date | string
+): Date {
+  const d = new Date(invoiceDate)
+  const y = d.getUTCFullYear()
+  const m = d.getUTCMonth()
+  const day = d.getUTCDate()
+  return new Date(Date.UTC(y, m + 1, day))
+}
+
+/**
  * 删除收款前在同一事务内调用：按核销明细冲回应收的已核销额，并重算 balance/status。
  * 随后删除 payment 行即可由级联删除 payment_allocations。
  */
@@ -145,7 +158,7 @@ export async function upsertReceivableForAuditedInvoice(
     receivable_amount: receivableAmount,
     allocated_amount: allocated,
     balance,
-    due_date: inv.invoice_date,
+    due_date: dueDateOneMonthAfterInvoiceDate(inv.invoice_date),
     status,
     updated_by: userId,
     updated_at: new Date(),

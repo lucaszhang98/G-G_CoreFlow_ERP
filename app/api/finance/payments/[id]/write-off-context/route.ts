@@ -105,9 +105,15 @@ export async function GET(
         return 0
       })
 
-    const openReceivablesPayload = openReceivables.map(
-      ({ invoice_date: _d, ...rest }) => rest
-    )
+    const openReceivablesPayload = openReceivables.map((r) => ({
+      receivable_id: r.receivable_id,
+      invoice_id: r.invoice_id,
+      invoice_number: r.invoice_number,
+      invoice_date: r.invoice_date,
+      receivable_amount: r.receivable_amount,
+      allocated_amount: r.allocated_amount,
+      balance: r.balance,
+    }))
 
     return NextResponse.json({
       data: serializeBigInt({

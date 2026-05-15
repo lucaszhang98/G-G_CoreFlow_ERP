@@ -16,11 +16,13 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { formatDateDisplay } from '@/lib/utils/date-format'
 
 type ReceivableRow = {
   receivable_id: string
   invoice_id: string | null
   invoice_number: string | null
+  invoice_date?: string | null
   receivable_amount: string | number
   allocated_amount: string | number
   balance: string | number
@@ -312,6 +314,9 @@ export function PaymentWriteOffDialog({
                       />
                     </th>
                     <th className="text-left p-2 font-medium">发票号</th>
+                    <th className="text-left p-2 font-medium whitespace-nowrap">
+                      发票日期
+                    </th>
                     <th className="text-right p-2 font-medium">应收</th>
                     <th className="text-right p-2 font-medium">已核销</th>
                     <th className="text-right p-2 font-medium">余额</th>
@@ -324,7 +329,7 @@ export function PaymentWriteOffDialog({
                   {filteredReceivables.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         className="p-6 text-center text-muted-foreground"
                       >
                         没有符合条件的未结清应收
@@ -343,6 +348,11 @@ export function PaymentWriteOffDialog({
                           />
                         </td>
                         <td className="p-2">{r.invoice_number || '—'}</td>
+                        <td className="p-2 whitespace-nowrap text-muted-foreground">
+                          {r.invoice_date
+                            ? formatDateDisplay(r.invoice_date)
+                            : '—'}
+                        </td>
                         <td className="p-2 text-right tabular-nums">
                           {Number(r.receivable_amount).toFixed(2)}
                         </td>

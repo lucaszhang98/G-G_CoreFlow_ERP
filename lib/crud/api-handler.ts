@@ -417,7 +417,14 @@ export function createListHandler(config: EntityConfig) {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { [orderByField]: order },
+        orderBy:
+          enhancedConfig.prisma?.model === 'receivables' &&
+          orderByField === 'invoice_date'
+            ? [
+                { invoices: { invoice_date: order } },
+                { receivable_id: order === 'desc' ? 'desc' : 'asc' },
+              ]
+            : { [orderByField]: order },
       }
 
       // 添加 include 或 select
@@ -830,6 +837,9 @@ export function createListHandler(config: EntityConfig) {
               serialized.contact = null
             }
           }
+          if (enhancedConfig.prisma?.model === 'receivables' && serialized.invoices) {
+            serialized.invoice_date = serialized.invoices.invoice_date ?? null
+          }
           return serialized
         } catch (error: any) {
           console.error('数据转换错误:', error, 'item:', item)
@@ -1077,6 +1087,10 @@ export function createDetailHandler(config: EntityConfig) {
         }
       }
 
+      if (config.prisma?.model === 'receivables' && transformed.invoices) {
+        transformed.invoice_date = transformed.invoices.invoice_date ?? null
+      }
+
       return NextResponse.json({ data: transformed })
     } catch (error) {
       return handleError(error, `获取${config.displayName}详情失败`)
@@ -1167,6 +1181,19 @@ export function createCreateHandler(config: EntityConfig) {
         )
         processedData.balance = balance
         processedData.status = status
+      }
+
+      if (config.prisma?.model === 'receivables' && processedData.invoice_id) {
+        const inv = await prisma.invoices.findUnique({
+          where: { invoice_id: processedData.invoice_id },
+          select: { invoice_date: true },
+        })
+        if (inv?.invoice_date) {
+          const { dueDateOneMonthAfterInvoiceDate } = await import(
+            '@/lib/finance/invoice-receivable-sync'
+          )
+          processedData.due_date = dueDateOneMonthAfterInvoiceDate(inv.invoice_date)
+        }
       }
 
       if (config.prisma?.model === 'payments') {
@@ -1569,7 +1596,7 @@ export function createUpdateHandler(config: EntityConfig) {
         const rid = BigInt(resolvedParams.id)
         const existing = await prismaModel.findUnique({
           where: { [idField]: rid },
-          select: { receivable_amount: true, allocated_amount: true },
+          select: { receivable_amount: true, allocated_amount: true, invoice_id: true },
         })
         if (!existing) {
           return NextResponse.json({ error: `${config.displayName}不存在` }, { status: 404 })
@@ -1578,13 +1605,26 @@ export function createUpdateHandler(config: EntityConfig) {
           processedData.receivable_amount !== undefined
             ? processedData.receivable_amount
             : existing.receivable_amount
-        const { deriveReceivableBalanceAndStatus } = await import('@/lib/finance/invoice-receivable-sync')
+        const { deriveReceivableBalanceAndStatus, dueDateOneMonthAfterInvoiceDate } =
+          await import('@/lib/finance/invoice-receivable-sync')
         const { balance, status } = deriveReceivableBalanceAndStatus(
           newRecAmt,
           existing.allocated_amount ?? 0
         )
         processedData.balance = balance
         processedData.status = status
+
+        const invoiceIdToUse = processedData.invoice_id ?? existing.invoice_id
+        if (invoiceIdToUse) {
+          const inv = await prisma.invoices.findUnique({
+            where: { invoice_id: invoiceIdToUse },
+            select: { invoice_date: true },
+          })
+          if (inv?.invoice_date) {
+            processedData.due_date = dueDateOneMonthAfterInvoiceDate(inv.invoice_date)
+          }
+        }
+
         item = await prismaModel.update({
           where: { [idField]: rid },
           data: processedData,

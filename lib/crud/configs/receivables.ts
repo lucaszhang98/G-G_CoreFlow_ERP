@@ -32,6 +32,13 @@ export const receivableConfig: EntityConfig = {
         valueField: 'invoice_id',
       },
     },
+    invoice_date: {
+      key: 'invoice_date',
+      label: '发票日期',
+      type: 'date',
+      sortable: true,
+      readonly: true,
+    },
     customer_id: {
       key: 'customer_id',
       label: '客户',
@@ -100,9 +107,19 @@ export const receivableConfig: EntityConfig = {
   },
 
   list: {
-    defaultSort: 'due_date',
+    defaultSort: 'invoice_date',
     defaultOrder: 'asc',
-    columns: ['invoice_id', 'customer_id', 'receivable_amount', 'allocated_amount', 'balance', 'due_date', 'status', 'notes'],
+    columns: [
+      'invoice_id',
+      'invoice_date',
+      'customer_id',
+      'receivable_amount',
+      'allocated_amount',
+      'balance',
+      'due_date',
+      'status',
+      'notes',
+    ],
     /** 主搜索走 api-handler 关联 invoices.invoice_number 模糊匹配 */
     searchFields: [],
     searchPlaceholder: '搜索发票号…',
@@ -130,7 +147,7 @@ export const receivableConfig: EntityConfig = {
     inlineEdit: { enabled: true },
   },
 
-  formFields: ['invoice_id', 'customer_id', 'receivable_amount', 'due_date', 'notes'],
+  formFields: ['invoice_id', 'customer_id', 'receivable_amount', 'notes'],
 
   permissions: {
     list: ['admin', 'oms_manager', 'employee', 'user', 'oms_operator'],
@@ -148,6 +165,7 @@ export const receivableConfig: EntityConfig = {
           invoice_number: true,
           invoice_type: true,
           total_amount: true,
+          invoice_date: true,
         },
       },
       customers: {
