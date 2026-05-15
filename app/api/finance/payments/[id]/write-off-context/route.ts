@@ -57,13 +57,29 @@ export async function GET(
     const receivableRows = await prisma.receivables.findMany({
       where: { customer_id: payment.customer_id },
       include: {
-        invoices: { select: { invoice_id: true, invoice_number: true, total_amount: true } },
+        invoices: {
+          select: {
+            invoice_id: true,
+            invoice_number: true,
+            total_amount: true,
+            invoice_date: true,
+          },
+        },
       },
-      orderBy: [{ due_date: 'asc' }, { receivable_id: 'asc' }],
       take: 500,
     })
 
-    const openReceivables = receivableRows
+    type OpenRow = {
+      receivable_id: bigint
+      invoice_id: bigint
+      invoice_number: string | null
+      receivable_amount: number
+      allocated_amount: number
+      balance: number
+      invoice_date: Date | null
+    }
+
+    const openReceivables: OpenRow[] = receivableRows
       .map((r) => ({
         receivable_id: r.receivable_id,
         invoice_id: r.invoice_id,
@@ -71,8 +87,27 @@ export async function GET(
         receivable_amount: Number(r.receivable_amount),
         allocated_amount: Number(r.allocated_amount ?? 0),
         balance: receivableOpenBalance(r),
+        invoice_date: r.invoices?.invoice_date ?? null,
       }))
       .filter((r) => r.balance > 1e-6)
+      .sort((a, b) => {
+        const ta =
+          a.invoice_date != null
+            ? new Date(a.invoice_date).getTime()
+            : Number.MAX_SAFE_INTEGER
+        const tb =
+          b.invoice_date != null
+            ? new Date(b.invoice_date).getTime()
+            : Number.MAX_SAFE_INTEGER
+        if (ta !== tb) return ta - tb
+        if (a.receivable_id < b.receivable_id) return -1
+        if (a.receivable_id > b.receivable_id) return 1
+        return 0
+      })
+
+    const openReceivablesPayload = openReceivables.map(
+      ({ invoice_date: _d, ...rest }) => rest
+    )
 
     return NextResponse.json({
       data: serializeBigInt({
@@ -81,7 +116,7 @@ export async function GET(
           allocated_total: allocatedTotal,
           remaining,
         },
-        open_receivables: openReceivables,
+        open_receivables: openReceivablesPayload,
       }),
     })
   } catch (error: any) {
