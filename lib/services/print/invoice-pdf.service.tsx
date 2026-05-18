@@ -10,10 +10,12 @@ import { resolveLogoDataUrl } from './resolve-logo'
 import { buildInvoicePdfPayload } from './invoice-pdf-data'
 
 export async function generateCustomerInvoicePdf(
-  invoiceId: bigint
+  invoiceId: bigint,
+  options?: { includeLogo?: boolean }
 ): Promise<{ buffer: Buffer; invoiceNumber: string } | null> {
   ensurePdfFont()
-  const logoDataUrl = await resolveLogoDataUrl()
+  const includeLogo = options?.includeLogo !== false
+  const logoDataUrl = includeLogo ? await resolveLogoDataUrl() : null
   const payload = await buildInvoicePdfPayload(invoiceId, logoDataUrl)
   if (!payload) return null
   const pdfDoc = <InvoicePdfDocument data={payload} />

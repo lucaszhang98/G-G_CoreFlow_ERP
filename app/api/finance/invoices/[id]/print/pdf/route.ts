@@ -21,7 +21,12 @@ export async function GET(
     }
 
     const invoiceId = BigInt(id)
-    const result = await generateCustomerInvoicePdf(invoiceId)
+    const noLogo =
+      _request.nextUrl.searchParams.get('noLogo') === '1' ||
+      _request.nextUrl.searchParams.get('noLogo') === 'true'
+    const result = await generateCustomerInvoicePdf(invoiceId, {
+      includeLogo: !noLogo,
+    })
     if (!result || result.buffer.length < 100) {
       return NextResponse.json({ error: '发票不存在或生成失败' }, { status: 404 })
     }

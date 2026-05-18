@@ -27,6 +27,7 @@ import {
  * - filter_delivery_location_code: 仓点筛选
  * - filter_booking_status: 预约状态筛选（unbooked/fully_booked/overbooked）
  * - filter_planned_unload_at_from/to: 预计拆柜日期范围筛选
+ * - filter_earliest_appointment_time_from/to: 最早预约时间范围（计算字段，查询后内存筛选）
  * - filter_inbound_receipt_status_scope: received=仅关联入库单状态为已入库；__all__ 或不传=不按入库状态限制
  * 
  * 特殊说明：
@@ -120,6 +121,14 @@ export async function GET(request: NextRequest) {
     // 先不在这里处理，在查询后根据计算出的未约板数筛选
     const booking_status_filter = searchParams.get('filter_booking_status')
 
+    // 最早预约时间为计算字段，查询后内存筛选
+    const earliest_appointment_time_from = searchParams.get(
+      'filter_earliest_appointment_time_from'
+    )
+    const earliest_appointment_time_to = searchParams.get(
+      'filter_earliest_appointment_time_to'
+    )
+
     const planned_unload_at_from = searchParams.get('filter_planned_unload_at_from')
     const planned_unload_at_to = searchParams.get('filter_planned_unload_at_to')
     if (planned_unload_at_from || planned_unload_at_to) {
@@ -177,9 +186,15 @@ export async function GET(request: NextRequest) {
     // 若按 ids 筛选，则取满全部 id 且不分页
     const hasIdsFilter = Array.isArray(where.id?.in) && where.id.in.length > 0
     const hasBookingStatusFilter = booking_status_filter && booking_status_filter !== '__all__'
+    const hasEarliestAppointmentTimeFilter = Boolean(
+      earliest_appointment_time_from?.trim() || earliest_appointment_time_to?.trim()
+    )
     const sortByStorageLocation = sort === 'storage_location_code'
     const needsWideQuery =
-      hasIdsFilter || hasBookingStatusFilter || sortByStorageLocation
+      hasIdsFilter ||
+      hasBookingStatusFilter ||
+      hasEarliestAppointmentTimeFilter ||
+      sortByStorageLocation
     const MAX_QUERY_LIMIT = 10000
     const queryLimit = hasIdsFilter
       ? where.id.in.length
@@ -449,8 +464,54 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    /** 与 planned_unload_at 一致：日期字符串按 UTC 日界比较 */
+    const parseFilterDayStart = (s: string) => {
+      const trimmed = s.trim()
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        return new Date(`${trimmed}T00:00:00.000Z`)
+      }
+      return new Date(trimmed)
+    }
+    const parseFilterDayEnd = (s: string) => {
+      const trimmed = s.trim()
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        return new Date(`${trimmed}T23:59:59.999Z`)
+      }
+      return new Date(trimmed)
+    }
+
+    const filterByEarliestAppointmentTime = (
+      items: any[],
+      from: string | null,
+      to: string | null
+    ): any[] => {
+      const fromStr = from?.trim() || ''
+      const toStr = to?.trim() || ''
+      if (!fromStr && !toStr) return items
+
+      const fromDate = fromStr ? parseFilterDayStart(fromStr) : null
+      const toDate = toStr ? parseFilterDayEnd(toStr) : null
+      if (fromDate && Number.isNaN(fromDate.getTime())) return items
+      if (toDate && Number.isNaN(toDate.getTime())) return items
+
+      return items.filter((item: any) => {
+        const raw = item.earliest_appointment_time
+        if (raw == null || raw === '') return false
+        const t = new Date(raw)
+        if (Number.isNaN(t.getTime())) return false
+        if (fromDate && t < fromDate) return false
+        if (toDate && t > toDate) return false
+        return true
+      })
+    }
+
     // 预约状态筛选
     let processedItems = filterByBookingStatus(transformedItems, booking_status_filter || '')
+    processedItems = filterByEarliestAppointmentTime(
+      processedItems,
+      earliest_appointment_time_from,
+      earliest_appointment_time_to
+    )
 
     // 按仓库位置排序（关联 lot 字段，仅内存排序；按 ids 拉取时保持勾选顺序，不覆盖）
     if (sortByStorageLocation && !hasIdsFilter) {
@@ -472,12 +533,20 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const finalTotal = hasBookingStatusFilter ? processedItems.length : total
+    const finalTotal =
+      hasBookingStatusFilter || hasEarliestAppointmentTimeFilter
+        ? processedItems.length
+        : total
 
     // 性能提示：宽查询达到上限时结果可能不完整
-    if ((hasBookingStatusFilter || sortByStorageLocation) && items.length >= MAX_QUERY_LIMIT) {
+    if (
+      (hasBookingStatusFilter ||
+        hasEarliestAppointmentTimeFilter ||
+        sortByStorageLocation) &&
+      items.length >= MAX_QUERY_LIMIT
+    ) {
       console.warn(
-        `[order-details] 查询已达到上限 ${MAX_QUERY_LIMIT} 条（预约筛选或按仓库位置排序），可能有数据未参与筛选/排序，建议缩小筛选范围`
+        `[order-details] 查询已达到上限 ${MAX_QUERY_LIMIT} 条（预约/最早预约时间筛选或按仓库位置排序），可能有数据未参与筛选/排序，建议缩小筛选范围`
       )
     }
 

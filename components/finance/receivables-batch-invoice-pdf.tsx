@@ -15,13 +15,23 @@ function rowToInvoiceId(row: ReceivableRow): string | null {
   return typeof direct === 'bigint' ? direct.toString() : String(direct)
 }
 
+function openBatchInvoicePdf(invoiceIds: string[], noLogo: boolean) {
+  const idsParam = invoiceIds.join(',')
+  const noLogoQs = noLogo ? '&noLogo=1' : ''
+  window.open(
+    `/api/finance/invoices/batch-print/pdf?ids=${encodeURIComponent(idsParam)}${noLogoQs}`,
+    '_blank',
+    'noopener,noreferrer'
+  )
+}
+
 /** 与出库「批量生成 BOL」一致：GET ?ids= + 新标签页打开合并 PDF */
 export function ReceivablesBatchInvoicePdf({
   selectedRows,
 }: {
   selectedRows: ReceivableRow[]
 }) {
-  const handleClick = () => {
+  const handleClick = (noLogo: boolean) => {
     const invoiceIds = [
       ...new Set(
         selectedRows.map(rowToInvoiceId).filter((id): id is string => Boolean(id))
@@ -36,25 +46,36 @@ export function ReceivablesBatchInvoicePdf({
       return
     }
 
-    const idsParam = invoiceIds.join(',')
-    window.open(
-      `/api/finance/invoices/batch-print/pdf?ids=${encodeURIComponent(idsParam)}`,
-      '_blank',
-      'noopener,noreferrer'
+    openBatchInvoicePdf(invoiceIds, noLogo)
+    toast.success(
+      noLogo
+        ? `已打开合并发票 PDF（无 logo，${invoiceIds.length} 张）`
+        : `已打开合并发票 PDF（${invoiceIds.length} 张）`
     )
-    toast.success(`已打开合并发票 PDF（${invoiceIds.length} 张）`)
   }
 
   return (
-    <Button
-      type="button"
-      variant="secondary"
-      size="sm"
-      onClick={handleClick}
-      className="min-w-[120px]"
-    >
-      <FileStack className="mr-2 h-4 w-4" />
-      生成发票单据
-    </Button>
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={() => handleClick(false)}
+        className="min-w-[120px]"
+      >
+        <FileStack className="mr-2 h-4 w-4" />
+        生成发票单据
+      </Button>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={() => handleClick(true)}
+        className="min-w-[120px]"
+      >
+        <FileStack className="mr-2 h-4 w-4" />
+        生成发票单据（无logo）
+      </Button>
+    </>
   )
 }

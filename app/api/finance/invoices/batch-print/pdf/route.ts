@@ -16,6 +16,10 @@ export async function GET(request: NextRequest) {
     const perm = await checkPermission(invoiceConfig.permissions.list)
     if (perm.error) return perm.error
 
+    const noLogo =
+      request.nextUrl.searchParams.get('noLogo') === '1' ||
+      request.nextUrl.searchParams.get('noLogo') === 'true'
+
     const idsParam = request.nextUrl.searchParams.get('ids')
     if (!idsParam?.trim()) {
       return NextResponse.json({ error: '请提供 ids 参数，如 ids=1,2,3' }, { status: 400 })
@@ -32,7 +36,9 @@ export async function GET(request: NextRequest) {
     }
 
     const results = await Promise.all(
-      uniqueIds.map((id) => generateCustomerInvoicePdf(BigInt(id)))
+      uniqueIds.map((id) =>
+        generateCustomerInvoicePdf(BigInt(id), { includeLogo: !noLogo })
+      )
     )
 
     const failed = uniqueIds.filter((id, i) => !results[i])

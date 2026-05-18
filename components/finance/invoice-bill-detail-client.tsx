@@ -462,6 +462,12 @@ export function InvoiceBillDetailClient({
           label="生成账单 PDF"
           successToast="已打开账单 PDF"
         />
+        <InvoicePdfDownloadButton
+          invoiceId={invoiceId}
+          noLogo
+          label="生成账单 PDF（无logo）"
+          successToast="已打开账单 PDF（无 logo）"
+        />
       </div>
 
       <Card>
