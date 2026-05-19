@@ -16,7 +16,7 @@ export default async function OrdersPage() {
 
   return (
     <DashboardLayout user={session.user || {}}>
-      <OrdersPageClient />
+      <OrdersPageClient userRole={session.user.role} />
     </DashboardLayout>
   )
 }

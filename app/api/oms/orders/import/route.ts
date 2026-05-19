@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { orderImportService } from '@/lib/services/order-import.service'
+import { canImportOrders } from '@/lib/orders/order-import-permissions'
 
 /**
  * 订单批量导入 API
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    if (!['admin', 'oms_manager'].includes(session.user.role || '')) {
+    if (!canImportOrders(session.user.role)) {
       return NextResponse.json({ error: '无权限导入订单' }, { status: 403 })
     }
 

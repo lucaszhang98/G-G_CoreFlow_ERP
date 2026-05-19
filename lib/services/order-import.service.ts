@@ -21,6 +21,7 @@ import {
   ORDER_STATUS_ARCHIVED,
   ORDER_STATUS_CANCELLED,
 } from '@/lib/orders/order-visibility'
+import { ORDER_IMPORT_ROLES } from '@/lib/orders/order-import-permissions'
 
 /**
  * 主数据（用于验证和关联）
@@ -70,7 +71,7 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
   validationSchema: orderImportRowSchema,
 
   // 3. 权限要求
-  requiredRoles: ['admin', 'oms_manager'],
+  requiredRoles: [...ORDER_IMPORT_ROLES],
 
   // 4. 预加载主数据
   loadMasterData: async (): Promise<OrderMasterData> => {

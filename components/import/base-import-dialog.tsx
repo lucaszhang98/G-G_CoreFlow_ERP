@@ -162,7 +162,35 @@ export function BaseImportDialog({
         method: 'POST',
         body: formData,
       })
-      const result: ImportResult = await response.json()
+      let result: ImportResult
+      try {
+        result = await response.json()
+      } catch {
+        throw new Error(
+          response.ok
+            ? '服务器返回格式异常'
+            : `导入失败（HTTP ${response.status}）`
+        )
+      }
+      if (!response.ok) {
+        const msg =
+          (typeof result === 'object' &&
+            result &&
+            ('error' in result
+              ? String((result as { error?: string }).error)
+              : result.message)) ||
+          `导入失败（HTTP ${response.status}）`
+        toast.error(msg)
+        setUploadResult({
+          success: false,
+          total: 0,
+          successCount: 0,
+          errorCount: 1,
+          errors: [{ row: 0, message: msg }],
+          message: msg,
+        })
+        return
+      }
       setUploadResult(result)
       if (result.success) {
         toast.success(result.message)

@@ -17,7 +17,9 @@ import { Download, FileSpreadsheet, Database } from "lucide-react"
 import { toast } from "sonner"
 import ExcelJS from "exceljs"
 import { generateOrderExportExcel, OrderExportData } from "@/lib/utils/order-export-excel"
-export function OrdersPageClient() {
+import { canImportOrders } from "@/lib/orders/order-import-permissions"
+
+export function OrdersPageClient({ userRole }: { userRole?: string | null }) {
   const [mounted, setMounted] = React.useState(false)
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false)
   const [importDialogOpen, setImportDialogOpen] = React.useState(false)
@@ -230,9 +232,9 @@ export function OrdersPageClient() {
     onDelete: null,
   }
 
-  // 批量导入配置
+  // 批量导入：与订单 create 权限一致（操作部门 oms_operator、仓库 wms_operator）
   const importConfig = {
-    enabled: true,
+    enabled: canImportOrders(userRole),
     onImport: () => setImportDialogOpen(true),
   }
 
