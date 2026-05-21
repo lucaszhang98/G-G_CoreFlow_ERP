@@ -19,7 +19,11 @@ export async function PUT(
 
     const resolvedParams = await params
     const body = await request.json()
-    const { quantity, volume, delivery_nature, delivery_location, fba, notes, po, window_period } = body
+    const { quantity, volume, delivery_nature, delivery_location, fba, notes, po, window_period } =
+      body
+    if (body.private_warehouse_info !== undefined) {
+      return NextResponse.json({ error: '私仓信息不可修改' }, { status: 400 })
+    }
 
     // 验证和转换 delivery_location：如果是 location_code，转换为 location_id
     // delivery_location 现在应该是 location_id（BigInt）或 location_code（string）

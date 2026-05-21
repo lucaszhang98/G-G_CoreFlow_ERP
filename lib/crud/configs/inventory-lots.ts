@@ -55,6 +55,15 @@ export const inventoryLotConfig: EntityConfig = {
         { label: '私仓', value: '私仓' },
       ],
     },
+    private_warehouse_info: {
+      key: 'private_warehouse_info',
+      label: '私仓信息',
+      type: 'text',
+      sortable: false,
+      readonly: true,
+      computed: true,
+      omitFromAdvancedSearch: true,
+    },
     delivery_location: {
       key: 'delivery_location',
       label: '仓点',
@@ -185,6 +194,7 @@ export const inventoryLotConfig: EntityConfig = {
       'container_number',
       'planned_unload_at',
       'delivery_nature',
+      'private_warehouse_info',
       'delivery_location',
       'order_detail_notes',
       'storage_location_code',

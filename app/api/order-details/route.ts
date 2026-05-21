@@ -10,6 +10,7 @@ import { serializeBigInt } from '@/lib/api/helpers'
 import { scheduleDirectDeliveryInvoiceSync } from '@/lib/finance/direct-delivery-sync'
 import { scheduleContainerUnloadInvoiceSync } from '@/lib/finance/container-unload-sync'
 import { scheduleStorageInvoiceSync } from '@/lib/finance/storage-invoice-sync'
+import { resolvePrivateWarehouseInfoForCreate } from '@/lib/orders/private-warehouse-info'
 
 // GET - 获取仓点明细列表（支持 orderId 查询参数）
 export async function GET(request: NextRequest) {
@@ -255,6 +256,12 @@ export async function POST(request: NextRequest) {
     const newTotalVolume = existingTotalVolume + volumeNum
     const calculatedVolumePercentage = newTotalVolume > 0 ? (volumeNum / newTotalVolume) * 100 : null
 
+    const privateWarehouseInfo = await resolvePrivateWarehouseInfoForCreate(
+      prisma,
+      delivery_nature,
+      new Date()
+    )
+
     const orderDetail = await prisma.order_detail.create({
       data: {
         order_id: BigInt(order_id), // 直接使用 order_id 字段
@@ -263,6 +270,7 @@ export async function POST(request: NextRequest) {
         estimated_pallets: calculatedEstimatedPallets, // 自动计算
         remaining_pallets: calculatedEstimatedPallets, // 初始化未约板数 = 预计板数（还没有预约）
         delivery_nature: delivery_nature || null,
+        private_warehouse_info: privateWarehouseInfo,
         delivery_location_id: validatedDeliveryLocationId,
         fba: fba || null,
         volume_percentage: calculatedVolumePercentage ? parseFloat(calculatedVolumePercentage.toFixed(2)) : null, // 自动计算，保留2位小数

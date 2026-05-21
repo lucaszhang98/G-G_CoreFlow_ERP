@@ -22,6 +22,7 @@ import {
   ORDER_STATUS_CANCELLED,
 } from '@/lib/orders/order-visibility'
 import { ORDER_IMPORT_ROLES } from '@/lib/orders/order-import-permissions'
+import { resolvePrivateWarehouseInfoForCreate } from '@/lib/orders/private-warehouse-info'
 
 /**
  * 主数据（用于验证和关联）
@@ -339,6 +340,12 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
           const volume = row.volume
           const estimatedPallets = Math.max(1, Math.round(volume / 2))
 
+          const privateWarehouseInfo = await resolvePrivateWarehouseInfoForCreate(
+            tx,
+            row.delivery_nature,
+            new Date()
+          )
+
           await tx.order_detail.create({
             data: {
               order_id: order.order_id,
@@ -347,6 +354,7 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
               estimated_pallets: estimatedPallets,
               remaining_pallets: estimatedPallets, // 初始未约板数 = 预计板数
               delivery_nature: row.delivery_nature,
+              private_warehouse_info: privateWarehouseInfo,
               delivery_location_id: locationMap
                 .get(row.detail_delivery_location_code)!,
               fba: row.fba || null,

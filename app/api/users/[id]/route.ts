@@ -93,7 +93,10 @@ export async function PUT(
 
     if (data.full_name !== undefined) updateData.full_name = data.full_name;
     if (data.department_id !== undefined) {
-      updateData.department_id = data.department_id ? BigInt(data.department_id) : null;
+      updateData.department_id =
+        data.department_id != null && data.department_id !== ''
+          ? BigInt(data.department_id)
+          : null
     }
     if (data.role) updateData.role = data.role;
     if (data.status) updateData.status = data.status;

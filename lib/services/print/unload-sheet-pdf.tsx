@@ -179,11 +179,10 @@ function metricsForScale(scale: number, data: UnloadSheetData, cols: ColFlexWeig
   y += headerValueFontSize * 2.2 + 15 * scale
 
   if (data.orderNotes != null && data.orderNotes !== '') {
-    const onFs = Math.max(7, baseHeaderValueFontSize * 0.9 * scale)
     const orderPadL = Math.max(8, 10 * scale)
     const orderPadR = Math.max(14, 18 * scale)
-    const onLines = estimateWrappedLines(data.orderNotes, 1, onFs, orderPadL, orderPadR)
-    y += 8 * scale + onFs * 1.4 * onLines + 6 * scale + 4 * scale
+    const onLines = estimateWrappedLines(data.orderNotes, 1, tableFontSize, orderPadL, orderPadR)
+    y += 8 * scale + tableFontSize * lineHeight * onLines + 6 * scale + 4 * scale
   }
 
   y += 7.5 * scale
@@ -329,13 +328,14 @@ function createStyles(scaleFactor: number, cols: ColFlexWeights) {
       borderBottomColor: '#e0e0e0',
     },
     orderNotesLabel: {
-      fontSize: Math.max(8, baseHeaderLabelFontSize * s),
-      color: '#666',
-      marginBottom: 2 * s,
+      fontSize: tableFontSize,
+      fontWeight: 'bold' as const,
+      color: '#333',
+      marginBottom: 4 * s,
     },
     orderNotesText: {
-      fontSize: Math.max(7, baseHeaderValueFontSize * 0.9 * s),
-      lineHeight: 1.4,
+      fontSize: tableFontSize,
+      lineHeight,
       wordBreak: 'break-all' as const,
       textAlign: 'left' as const,
       width: '100%',

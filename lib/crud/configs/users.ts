@@ -69,11 +69,24 @@ export const userConfig: EntityConfig = {
       key: 'department',
       label: '部门',
       type: 'relation',
+      relationField: 'department_id',
       relation: {
         model: 'departments',
         displayField: 'name',
         valueField: 'id',
       },
+    },
+    department_id: {
+      key: 'department_id',
+      label: '部门',
+      type: 'relation',
+      relationField: 'department_id',
+      relation: {
+        model: 'departments',
+        displayField: 'name',
+        valueField: 'id',
+      },
+      hidden: true,
     },
     phone: {
       key: 'phone',

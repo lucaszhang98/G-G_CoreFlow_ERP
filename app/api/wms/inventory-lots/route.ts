@@ -276,6 +276,7 @@ export async function GET(request: NextRequest) {
             volume: true,
             estimated_pallets: true,
             delivery_nature: true,
+            private_warehouse_info: true,
             delivery_location_id: true,
             notes: true,
             locations_order_detail_delivery_location_idTolocations: {
@@ -419,6 +420,7 @@ export async function GET(request: NextRequest) {
           planned_unload_at: plannedUnloadAt,
           delivery_location: deliveryLocation,
           delivery_nature: deliveryNature,
+          private_warehouse_info: orderDetail?.private_warehouse_info ?? null,
           order_detail_notes: orderDetail?.notes ?? null,
           // 使用实时计算的值，覆盖数据库字段
           remaining_pallet_count, // 实时计算的剩余板数
@@ -674,6 +676,7 @@ export async function POST(request: NextRequest) {
             volume: true,
             estimated_pallets: true,
             delivery_nature: true,
+            private_warehouse_info: true,
             delivery_location_id: true,
             notes: true,
             locations_order_detail_delivery_location_idTolocations: {

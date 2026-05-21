@@ -58,7 +58,10 @@ export async function POST(request: NextRequest) {
         username: data.username,
         password_hash: passwordHash,
         full_name: data.full_name,
-        department_id: data.department_id ? BigInt(data.department_id) : null,
+        department_id:
+          data.department_id != null && data.department_id !== ''
+            ? BigInt(data.department_id)
+            : null,
         role: data.role,
         status: data.status,
         phone: data.phone,

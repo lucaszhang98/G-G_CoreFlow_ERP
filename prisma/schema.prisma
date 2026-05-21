@@ -566,6 +566,8 @@ model order_detail {
   updated_at                                                  DateTime?                  @default(now()) @db.Timestamptz(6)
   updated_by                                                  BigInt?
   delivery_nature                                             String?                    @db.VarChar(50)
+  /// 私仓信息：GNG+年月日+四位随机数（仅 delivery_nature=私仓 时创建订单明细自动生成，不可改）
+  private_warehouse_info                                      String?                    @unique @db.VarChar(20)
   volume_percentage                                           Decimal?                   @db.Decimal(5, 2)
   delivery_location_id                                         BigInt?
   fba                                                         String?                    @db.VarChar(2000)

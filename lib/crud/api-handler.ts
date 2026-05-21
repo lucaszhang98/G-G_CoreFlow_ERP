@@ -1411,8 +1411,7 @@ export function createUpdateHandler(config: EntityConfig) {
         if (fieldConfig?.relation) {
           const targetField =
             fieldConfig.relationField ||
-            (key.endsWith('_id') ? key : fieldConfig.relation.valueField) ||
-            key
+            (key.endsWith('_id') ? key : `${key}_id`)
           // 显式清空可选外键（如费用 customer_id）
           if (value === null || value === '') {
             processedData[targetField] = null
@@ -1992,7 +1991,8 @@ export function createBatchUpdateHandler(config: EntityConfig) {
         // 如果是relation字段，使用relationField映射
         let actualKey = key
         if (fieldConfig?.relation) {
-          actualKey = fieldConfig.relationField || (key.endsWith('_id') ? key : fieldConfig.relation.valueField) || key
+          actualKey =
+            fieldConfig.relationField || (key.endsWith('_id') ? key : `${key}_id`)
         } else if (key === 'origin_location') {
           actualKey = 'origin_location_id'
         } else if (key === 'destination_location') {

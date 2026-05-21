@@ -166,8 +166,20 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
       // 对于delivery_appointments，location_id就是destination_location_id
       defaults.destination_location_id = defaults.location_id !== null ? String(defaults.location_id) : null
     }
-    
-    
+
+    // 用户部门：API 返回 department 对象，表单提交 department_id
+    if (
+      defaults.department &&
+      typeof defaults.department === 'object' &&
+      defaults.department.id != null
+    ) {
+      defaults.department_id = String(defaults.department.id)
+    }
+    if (defaults.department_id != null && defaults.department_id !== '') {
+      defaults.department_id = String(defaults.department_id)
+    }
+    delete defaults.department
+
     return defaults
   }, [data, isEditing, config.name, ggLocationId])
 
@@ -355,6 +367,23 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
         submitData.location_id = String(submitData.location_id)
       }
 
+      if (submitData.department && typeof submitData.department === 'object') {
+        if (
+          (submitData.department_id == null || submitData.department_id === '') &&
+          submitData.department.id != null
+        ) {
+          submitData.department_id = String(submitData.department.id)
+        }
+        delete submitData.department
+      }
+      if (submitData.department_id === '') {
+        submitData.department_id = null
+      } else if (
+        submitData.department_id !== undefined &&
+        submitData.department_id !== null
+      ) {
+        submitData.department_id = String(submitData.department_id)
+      }
 
       const response = await fetch(url, {
         method,
@@ -363,8 +392,14 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || `${isEditing ? '更新' : '创建'}失败`)
+        const error = await response.json().catch(() => ({}))
+        const detailMsg =
+          Array.isArray(error.details) && error.details[0]?.message
+            ? String(error.details[0].message)
+            : null
+        throw new Error(
+          detailMsg || error.error || `${isEditing ? '更新' : '创建'}失败`
+        )
       }
 
       toast.success(`${config.displayName}${isEditing ? '更新' : '创建'}成功`)
@@ -406,6 +441,16 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
         actualFieldKey = 'customer'
       }
     }
+
+    if (fieldKey === 'department_id') {
+      if (config.fields['department_id']) {
+        fieldConfig = config.fields['department_id']
+        actualFieldKey = 'department_id'
+      } else if (config.fields['department']) {
+        fieldConfig = config.fields['department']
+        actualFieldKey = 'department_id'
+      }
+    }
     
     // 强制映射 location_id 字段（无论 fieldConfig 是否存在，与批量编辑逻辑一致）
     if (fieldKey === 'location_id') {
@@ -433,8 +478,11 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
       // 对于 location 类型字段，始终使用 fieldKey（formFields 中的字段名）来读取值
       // 因为 LocationSelect 的 onChange 会设置 fieldKey 的值
       fieldValue = watch(fieldKey)
-    } else if (fieldConfig.type === 'relation' && fieldKey !== actualFieldKey) {
-      // 对于 relation 类型字段，如果 fieldKey 和 actualFieldKey 不同（如 customer_id vs customer），使用 fieldKey 读取值
+    } else if (
+      fieldConfig.type === 'relation' &&
+      (fieldKey !== actualFieldKey || fieldKey === 'department_id')
+    ) {
+      // relation 表单字段名多为 *_id（如 department_id、customer_id）
       fieldValue = watch(fieldKey)
     } else {
       fieldValue = watch(actualFieldKey)

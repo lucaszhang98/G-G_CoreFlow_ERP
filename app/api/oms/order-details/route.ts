@@ -407,6 +407,7 @@ export async function GET(request: NextRequest) {
         delivery_location: delivery_location_code, // 使用 location_code 作为 delivery_location
         delivery_location_code,
         delivery_nature: item.delivery_nature,
+        private_warehouse_info: item.private_warehouse_info ?? null,
         estimated_pallets: item.estimated_pallets || 0,
         actual_pallets: il?.pallet_count ?? null,
         pallet_counts_verified: il?.pallet_counts_verified === true,

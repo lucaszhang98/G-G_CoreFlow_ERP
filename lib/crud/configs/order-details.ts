@@ -82,6 +82,15 @@ export const orderDetailConfig: EntityConfig = {
         { label: '转仓', value: '转仓' },
       ],
     },
+    private_warehouse_info: {
+      key: 'private_warehouse_info',
+      label: '私仓信息',
+      type: 'text',
+      sortable: false,
+      readonly: true,
+      computed: true,
+      omitFromAdvancedSearch: true,
+    },
     estimated_pallets: {
       key: 'estimated_pallets',
       label: '预估板数',
@@ -177,6 +186,7 @@ export const orderDetailConfig: EntityConfig = {
       'customer_name',
       'delivery_location_code',
       'delivery_nature',
+      'private_warehouse_info',
       'planned_unload_at',
       'estimated_pallets',
       'actual_pallets',
