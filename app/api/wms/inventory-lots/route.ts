@@ -177,6 +177,11 @@ export async function GET(request: NextRequest) {
         { orders: { order_number: { contains: search, mode: 'insensitive' } } },
         { storage_location_code: { contains: search, mode: 'insensitive' } },
         { order_detail: { notes: { contains: search, mode: 'insensitive' } } },
+        {
+          order_detail: {
+            private_warehouse_info: { contains: search, mode: 'insensitive' },
+          },
+        },
       ];
       
       // 使用 AND 条件：必须满足 storage_location_code 不为空，并且满足搜索条件

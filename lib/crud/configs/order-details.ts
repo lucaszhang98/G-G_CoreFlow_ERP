@@ -89,6 +89,7 @@ export const orderDetailConfig: EntityConfig = {
       sortable: false,
       readonly: true,
       computed: true,
+      searchable: true,
       omitFromAdvancedSearch: true,
     },
     estimated_pallets: {
@@ -200,7 +201,7 @@ export const orderDetailConfig: EntityConfig = {
       'notes',
       'delivery_progress',
     ],
-    searchFields: ['container_number', 'order_number'],
+    searchFields: ['container_number', 'order_number', 'private_warehouse_info'],
     pageSize: 100,
     // 筛选配置
     filterFields: [

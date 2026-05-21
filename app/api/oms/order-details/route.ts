@@ -20,7 +20,7 @@ import {
  * - limit: 每页数量（默认100，最大100）
  * - sort: 排序字段（默认 id；storage_location_code 在服务端内存排序，单次最多拉取 10000 条）
  * - order: 排序方向（asc/desc，默认desc）
- * - search: 搜索关键词（仅搜索柜号/订单号）
+ * - search: 搜索关键词（柜号/订单号、私仓信息，模糊匹配）
  * - filter_customer_name: 客户筛选
  * - filter_operation_mode: 操作方式筛选（direct_delivery 直送 / unload 拆柜）
  * - filter_delivery_nature: 送仓性质筛选
@@ -74,11 +74,29 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 搜索条件（只搜索柜号，即订单号）
+    // 模糊搜索：柜号（订单号）、私仓信息
     if (search && search.trim()) {
-      where.orders = {
-        ...where.orders,
-        order_number: { contains: search, mode: 'insensitive' },
+      const searchTrim = search.trim()
+      const searchClause = {
+        OR: [
+          {
+            orders: {
+              order_number: { contains: searchTrim, mode: 'insensitive' as const },
+            },
+          },
+          {
+            private_warehouse_info: { contains: searchTrim, mode: 'insensitive' as const },
+          },
+        ],
+      }
+      if (where.AND) {
+        if (!Array.isArray(where.AND)) {
+          where.AND = [where.AND, searchClause]
+        } else {
+          where.AND.push(searchClause)
+        }
+      } else {
+        where.AND = [searchClause]
       }
     }
 

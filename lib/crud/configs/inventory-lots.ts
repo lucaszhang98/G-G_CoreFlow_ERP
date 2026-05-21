@@ -62,6 +62,7 @@ export const inventoryLotConfig: EntityConfig = {
       sortable: false,
       readonly: true,
       computed: true,
+      searchable: true,
       omitFromAdvancedSearch: true,
     },
     delivery_location: {
@@ -203,7 +204,7 @@ export const inventoryLotConfig: EntityConfig = {
       'unbooked_pallet_count',
       'delivery_progress',
     ],
-    searchFields: ['container_number', 'order_detail_notes'],
+    searchFields: ['container_number', 'order_detail_notes', 'private_warehouse_info'],
     pageSize: 100,
     // 筛选配置（快速筛选）- 手动定义，排除 warehouse_id，添加送仓性质、仓点、剩余板数、未约板数、送仓进度
     filterFields: [
