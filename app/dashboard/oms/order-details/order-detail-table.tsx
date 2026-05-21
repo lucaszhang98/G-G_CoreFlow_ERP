@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Copy, CalendarPlus, CalendarCheck, CheckCircle, XCircle } from "lucide-react"
 import { toast } from "sonner"
+import { copyPrivateWarehouseInfoFromRows } from "@/lib/utils/copy-private-warehouse-info"
 import { NewAppointmentDialog } from "./new-appointment-dialog"
 import { AddToExistingAppointmentDialog } from "./add-to-existing-appointment-dialog"
 import { IncludeArchivedOrdersToggle } from "@/components/order-visibility/include-archived-toggle"
@@ -535,6 +536,28 @@ export function OrderDetailTable() {
       })
   }, [selectedRows])
 
+  const handleCopyPrivateWarehouseInfo = React.useCallback(async () => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要复制的记录')
+      return
+    }
+    try {
+      const { copiedCount, skippedCount } = await copyPrivateWarehouseInfoFromRows(
+        selectedRows as Record<string, unknown>[]
+      )
+      if (copiedCount === 0) {
+        toast.error('选中的记录中没有私仓信息')
+        return
+      }
+      const skipHint =
+        skippedCount > 0 ? `，已跳过 ${skippedCount} 条无私仓信息的行` : ''
+      toast.success(`已复制 ${copiedCount} 条私仓信息到剪贴板${skipHint}`)
+    } catch (error) {
+      console.error('复制私仓信息失败:', error)
+      toast.error('复制失败，请重试')
+    }
+  }, [selectedRows])
+
   // 复制预约时间功能
   const handleCopyAppointmentTimes = React.useCallback((format: 'line' | 'comma' | 'space') => {
     if (selectedRows.length === 0) {
@@ -625,12 +648,12 @@ export function OrderDetailTable() {
   // 自定义批量操作按钮
   const customBatchActions = React.useMemo(() => {
     return (
-      <>
+      <div className="flex flex-wrap items-center gap-2 max-w-full">
         {/* 新建预约 */}
         <Button
           variant="default"
           size="sm"
-          className="min-w-[100px] h-9 bg-indigo-600 hover:bg-indigo-700"
+          className="min-w-[100px] h-9 shrink-0 bg-indigo-600 hover:bg-indigo-700"
           disabled={selectedRows.length === 0}
           onClick={handleNewAppointment}
         >
@@ -806,11 +829,23 @@ export function OrderDetailTable() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* 批量复制私仓信息 */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[130px] h-9 shrink-0"
+          disabled={selectedRows.length === 0}
+          onClick={() => void handleCopyPrivateWarehouseInfo()}
+        >
+          <Copy className="mr-2 h-4 w-4" />
+          批量复制私仓信息
+        </Button>
+
         {/* 批量复制PO按钮 */}
         <Button
           variant="outline"
           size="sm"
-          className="min-w-[100px] h-9"
+          className="min-w-[100px] h-9 shrink-0"
           disabled={selectedRows.length === 0}
           onClick={handleCopyPO}
         >
@@ -841,7 +876,7 @@ export function OrderDetailTable() {
           <Copy className="mr-2 h-4 w-4" />
           批量复制箱数
         </Button>
-      </>
+      </div>
     )
   }, [
     selectedRows,
@@ -855,6 +890,7 @@ export function OrderDetailTable() {
     handleCopyPO,
     handleCopyFBA,
     handleCopyQuantity,
+    handleCopyPrivateWarehouseInfo,
   ])
 
   return (

@@ -17,8 +17,9 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
+import { Copy, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
+import { copyPrivateWarehouseInfoFromRows } from "@/lib/utils/copy-private-warehouse-info"
 import { IncludeArchivedOrdersToggle } from "@/components/order-visibility/include-archived-toggle"
 
 const EMPTY_EXTRA_LIST_PARAMS: Record<string, string> = {}
@@ -27,6 +28,7 @@ export function InventoryLotTable() {
   const router = useRouter();
   const [isRecalculating, setIsRecalculating] = React.useState(false);
   const [includeArchived, setIncludeArchived] = React.useState(false)
+  const [selectedRows, setSelectedRows] = React.useState<any[]>([])
   const extraListParams = React.useMemo(
     () => (includeArchived ? { includeArchived: "true" } : EMPTY_EXTRA_LIST_PARAMS),
     [includeArchived]
@@ -176,6 +178,46 @@ export function InventoryLotTable() {
     }
   }, [])
 
+  const handleCopyPrivateWarehouseInfo = React.useCallback(async () => {
+    if (selectedRows.length === 0) {
+      toast.error('请先选择要复制的记录')
+      return
+    }
+    try {
+      const { copiedCount, skippedCount } = await copyPrivateWarehouseInfoFromRows(
+        selectedRows as Record<string, unknown>[]
+      )
+      if (copiedCount === 0) {
+        toast.error('选中的记录中没有私仓信息')
+        return
+      }
+      const skipHint =
+        skippedCount > 0 ? `，已跳过 ${skippedCount} 条无私仓信息的行` : ''
+      toast.success(`已复制 ${copiedCount} 条私仓信息到剪贴板${skipHint}`)
+    } catch (error) {
+      console.error('复制私仓信息失败:', error)
+      toast.error('复制失败，请重试')
+    }
+  }, [selectedRows])
+
+  const customBatchActions = React.useMemo(
+    () => (
+      <div className="flex flex-wrap items-center gap-2 max-w-full">
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[130px] h-9 shrink-0"
+          disabled={selectedRows.length === 0}
+          onClick={() => void handleCopyPrivateWarehouseInfo()}
+        >
+          <Copy className="mr-2 h-4 w-4" />
+          批量复制私仓信息
+        </Button>
+      </div>
+    ),
+    [selectedRows.length, handleCopyPrivateWarehouseInfo]
+  )
+
   // 自定义工具栏按钮
   const customToolbarButtons = React.useMemo(
     () => (
@@ -204,6 +246,8 @@ export function InventoryLotTable() {
       config={inventoryLotConfig}
       customClickableColumns={customClickableColumns}
       customActions={customActions}
+      customBatchActions={customBatchActions}
+      onRowSelectionChange={setSelectedRows}
       customToolbarButtons={customToolbarButtons}
       extraListParams={extraListParams}
       expandableRows={{
