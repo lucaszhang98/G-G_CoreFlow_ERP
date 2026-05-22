@@ -24,12 +24,15 @@ export function AppointmentDetailClient({ appointmentId, appointment, showOutbou
     showExpandable: false,
     showColumns: {
       orderNumber: true,
+      // 出库详情：显示订单明细所属订单的客户名称；不显示「忽略」
+      ...(showOutboundLineNotes
+        ? { customerName: true, ignoreUnloadTimeCheck: false }
+        : { ignoreUnloadTimeCheck: true }),
       location: true,
       locationType: true,
       estimatedPallets: true, // 排车板数（原预计板数）
       actualPallets: true, // 实际板数（入库对应的实际板数）
       unloadTime: true, // 拆柜时间（来自入库管理，按明细对应订单关联）
-      ignoreUnloadTimeCheck: true, // 忽略：勾选后柜号强制绿色
       windowPeriod: true, // 窗口期（来自订单明细）
       po: false, // 预约明细子表内不显示 PO
       notes: true,
