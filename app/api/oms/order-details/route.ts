@@ -10,6 +10,12 @@ import {
   mergeOrdersRelationExcludeArchived,
   parseIncludeArchived,
 } from '@/lib/orders/order-visibility'
+import { findOrderDetailIdsByBookingStatus } from '@/lib/orders/order-detail-booking-status-filter'
+import {
+  findOrderDetailIdsByEarliestAppointmentTime,
+  intersectOrderDetailIdFilter,
+} from '@/lib/orders/order-detail-earliest-appointment-filter'
+import { computeOrderDetailUnbookedPallets } from '@/lib/orders/order-detail-unbooked-pallets'
 
 /**
  * GET /api/oms/order-details
@@ -18,7 +24,7 @@ import {
  * 查询参数：
  * - page: 页码（默认1）
  * - limit: 每页数量（默认100，最大100）
- * - sort: 排序字段（默认 id；storage_location_code 在服务端内存排序，单次最多拉取 10000 条）
+ * - sort: 排序字段（默认 id；storage_location_code 在服务端对全量结果内存排序）
  * - order: 排序方向（asc/desc，默认desc）
  * - search: 搜索关键词（柜号/订单号、私仓信息，模糊匹配）
  * - filter_customer_name: 客户筛选
@@ -27,13 +33,13 @@ import {
  * - filter_delivery_location_code: 仓点筛选
  * - filter_booking_status: 预约状态筛选（unbooked/fully_booked/overbooked）
  * - filter_planned_unload_at_from/to: 预计拆柜日期范围筛选
- * - filter_earliest_appointment_time_from/to: 最早预约时间范围（计算字段，查询后内存筛选）
+ * - filter_earliest_appointment_time_from/to: 最早预约时间范围（计算字段，先全量算 id 再分页）
  * - filter_inbound_receipt_status_scope: received=仅关联入库单状态为已入库；__all__ 或不传=不按入库状态限制
  * 
  * 特殊说明：
  * - 未约/剩余/送货进度：已入库与入库详情一致（预约实时计算）；未入库用预计板数-预约板数之和算未约
  * - 未约板数允许负数（表示多约，会用红色显示）
- * - 当使用未约板数筛选时，会先查询所有数据再筛选，可能有性能影响
+ * - 预约状态、最早预约时间、按仓库位置排序均在完整 where 下全量处理，不设抽样上限
  */
 export async function GET(request: NextRequest) {
   try {
@@ -199,8 +205,8 @@ export async function GET(request: NextRequest) {
     }
 
     // 查询数据
-    // 如果有预约状态筛选，需要先查询所有数据（因为未约板数是实时计算的），筛选后再分页
-    // 为了性能考虑，设置最大查询限制（10000条）
+    // 预约状态、最早预约时间：先在完整 where 上算 order_detail_id，再分页
+    // 按仓库位置排序：对 where 命中全量结果内存排序后分页
     // 若按 ids 筛选，则取满全部 id 且不分页
     const hasIdsFilter = Array.isArray(where.id?.in) && where.id.in.length > 0
     const hasBookingStatusFilter = booking_status_filter && booking_status_filter !== '__all__'
@@ -208,19 +214,6 @@ export async function GET(request: NextRequest) {
       earliest_appointment_time_from?.trim() || earliest_appointment_time_to?.trim()
     )
     const sortByStorageLocation = sort === 'storage_location_code'
-    const needsWideQuery =
-      hasIdsFilter ||
-      hasBookingStatusFilter ||
-      hasEarliestAppointmentTimeFilter ||
-      sortByStorageLocation
-    const MAX_QUERY_LIMIT = 10000
-    const queryLimit = hasIdsFilter
-      ? where.id.in.length
-      : needsWideQuery
-        ? MAX_QUERY_LIMIT
-        : limit
-    const querySkip =
-      hasIdsFilter || needsWideQuery ? undefined : (page - 1) * limit
 
     // 默认排除完成留档；按 ids 精确拉取时不过滤（预约等场景需拿到已选行）
     if (!includeArchived && !(idsParam && idsParam.trim())) {
@@ -230,6 +223,80 @@ export async function GET(request: NextRequest) {
         where.orders = mergeOrdersRelationExcludeArchived(undefined)
       }
     }
+
+    // 最早预约时间为计算字段：先在预约明细上算出符合条件的 order_detail_id，避免「先取 1 万条再内存筛」漏数据
+    if (hasEarliestAppointmentTimeFilter) {
+      const matchingIds = await findOrderDetailIdsByEarliestAppointmentTime(
+        where,
+        earliest_appointment_time_from,
+        earliest_appointment_time_to
+      )
+      if (matchingIds.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+          },
+        })
+      }
+      where.id = intersectOrderDetailIdFilter(where.id, matchingIds)
+      const narrowed = where.id as { in: bigint[] }
+      if (narrowed.in.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+          },
+        })
+      }
+    }
+
+    // 预约状态为计算字段：在完整 where 下先算符合条件的 id，避免先分页再筛漏数据
+    if (hasBookingStatusFilter && booking_status_filter) {
+      const matchingIds = await findOrderDetailIdsByBookingStatus(
+        where,
+        booking_status_filter
+      )
+      if (matchingIds.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+          },
+        })
+      }
+      where.id = intersectOrderDetailIdFilter(where.id, matchingIds)
+      const narrowedBooking = where.id as { in: bigint[] }
+      if (narrowedBooking.in.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+          },
+        })
+      }
+    }
+
+    const needsInMemoryProcessing = sortByStorageLocation && !hasIdsFilter
+    const queryLimit = hasIdsFilter
+      ? (where.id as { in: bigint[] }).in.length
+      : needsInMemoryProcessing
+        ? undefined
+        : limit
+    const querySkip =
+      hasIdsFilter || needsInMemoryProcessing ? undefined : (page - 1) * limit
 
     const [items, total] = await Promise.all([
       prisma.order_detail.findMany({
@@ -326,8 +393,6 @@ export async function GET(request: NextRequest) {
       const ir = item.orders?.inbound_receipt || null
       const customer = item.orders?.customers || null
       
-      // 有效占用 = estimated_pallets - rejected_pallets
-      const effective = (est: number, rej?: number | null) => (est || 0) - (rej ?? 0)
       // 查询已排除已停用预约上的明细（与预约管理列表口径分离）
       const allAppointmentLines = item.appointment_detail_lines || []
       const validAppointmentLines = allAppointmentLines.filter((adl: any) => adl.delivery_appointments !== null)
@@ -374,11 +439,6 @@ export async function GET(request: NextRequest) {
         ? (earliestAppointment.confirmed_start || earliestAppointment.requested_start)
         : null
 
-      const totalEffectivePallets = appointments.reduce(
-        (sum: number, appt: any) => sum + effective(appt.estimated_pallets, appt.rejected_pallets),
-        0
-      )
-
       const lotsForCalc = (item.inventory_lots || []).map((lot: any) => ({
         pallet_count: lot.pallet_count,
         pallet_counts_verified: lot.pallet_counts_verified === true,
@@ -391,7 +451,11 @@ export async function GET(request: NextRequest) {
 
       let remaining_pallets: number | null = null
       let delivery_progress = 0
-      let unbooked_pallets: number
+      const unbooked_pallets = computeOrderDetailUnbookedPallets({
+        estimated_pallets: item.estimated_pallets,
+        inventory_lots: lotsForCalc,
+        appointment_detail_lines: validAppointmentLines,
+      })
 
       if (lotsForCalc.length > 0) {
         const state = computeInboundOrderDetailDeliveryState({
@@ -401,11 +465,9 @@ export async function GET(request: NextRequest) {
         })!
         remaining_pallets = state.totalRemainingPalletCount
         delivery_progress = state.deliveryProgress
-        unbooked_pallets = state.totalUnbookedPalletCount
       } else {
         remaining_pallets = null
         delivery_progress = 0
-        unbooked_pallets = (item.estimated_pallets || 0) - totalEffectivePallets
       }
 
       // 获取 location_code（从关联数据中获取）
@@ -452,85 +514,7 @@ export async function GET(request: NextRequest) {
       transformedItems.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0))
     }
 
-    /**
-     * 预约状态筛选函数
-     * 在查询后筛选，因为未约板数是实时计算的
-     * @param items 待筛选的数据项数组
-     * @param filterValue 筛选值：'unbooked'（未约）、'fully_booked'（约满）、'overbooked'（超约）
-     * @returns 筛选后的数据项数组
-     */
-    const filterByBookingStatus = (items: any[], filterValue: string): any[] => {
-      if (!filterValue || filterValue === '__all__') {
-        return items
-      }
-      
-      return items.filter((item: any) => {
-        const unbooked = item.unbooked_pallets
-        
-        switch (filterValue) {
-          case 'unbooked':
-            // 未约：未约板数 > 0
-            return unbooked > 0
-          case 'fully_booked':
-            // 约满：未约板数 = 0
-            return unbooked === 0
-          case 'overbooked':
-            // 超约：未约板数 < 0
-            return unbooked < 0
-          default:
-            return true
-        }
-      })
-    }
-
-    /** 与 planned_unload_at 一致：日期字符串按 UTC 日界比较 */
-    const parseFilterDayStart = (s: string) => {
-      const trimmed = s.trim()
-      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-        return new Date(`${trimmed}T00:00:00.000Z`)
-      }
-      return new Date(trimmed)
-    }
-    const parseFilterDayEnd = (s: string) => {
-      const trimmed = s.trim()
-      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-        return new Date(`${trimmed}T23:59:59.999Z`)
-      }
-      return new Date(trimmed)
-    }
-
-    const filterByEarliestAppointmentTime = (
-      items: any[],
-      from: string | null,
-      to: string | null
-    ): any[] => {
-      const fromStr = from?.trim() || ''
-      const toStr = to?.trim() || ''
-      if (!fromStr && !toStr) return items
-
-      const fromDate = fromStr ? parseFilterDayStart(fromStr) : null
-      const toDate = toStr ? parseFilterDayEnd(toStr) : null
-      if (fromDate && Number.isNaN(fromDate.getTime())) return items
-      if (toDate && Number.isNaN(toDate.getTime())) return items
-
-      return items.filter((item: any) => {
-        const raw = item.earliest_appointment_time
-        if (raw == null || raw === '') return false
-        const t = new Date(raw)
-        if (Number.isNaN(t.getTime())) return false
-        if (fromDate && t < fromDate) return false
-        if (toDate && t > toDate) return false
-        return true
-      })
-    }
-
-    // 预约状态筛选
-    let processedItems = filterByBookingStatus(transformedItems, booking_status_filter || '')
-    processedItems = filterByEarliestAppointmentTime(
-      processedItems,
-      earliest_appointment_time_from,
-      earliest_appointment_time_to
-    )
+    let processedItems = transformedItems
 
     // 按仓库位置排序（关联 lot 字段，仅内存排序；按 ids 拉取时保持勾选顺序，不覆盖）
     if (sortByStorageLocation && !hasIdsFilter) {
@@ -552,27 +536,12 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const finalTotal =
-      hasBookingStatusFilter || hasEarliestAppointmentTimeFilter
-        ? processedItems.length
-        : total
+    const finalTotal = needsInMemoryProcessing ? processedItems.length : total
 
-    // 性能提示：宽查询达到上限时结果可能不完整
-    if (
-      (hasBookingStatusFilter ||
-        hasEarliestAppointmentTimeFilter ||
-        sortByStorageLocation) &&
-      items.length >= MAX_QUERY_LIMIT
-    ) {
-      console.warn(
-        `[order-details] 查询已达到上限 ${MAX_QUERY_LIMIT} 条（预约/最早预约时间筛选或按仓库位置排序），可能有数据未参与筛选/排序，建议缩小筛选范围`
-      )
-    }
-
-    // 分页：宽查询或预约筛选后在内存中切片；ids 筛选返回全部
+    // 分页：按仓库位置排序时在内存中切片；ids 筛选返回全部
     const paginatedItems = hasIdsFilter
       ? processedItems
-      : needsWideQuery && !hasIdsFilter
+      : needsInMemoryProcessing
         ? processedItems.slice((page - 1) * limit, page * limit)
         : processedItems
 
