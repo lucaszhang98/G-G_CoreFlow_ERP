@@ -1,7 +1,7 @@
 /**
  * 按提柜「现在位置」与订单提柜/ETA，将入库拆柜日期与状态与数据库对齐。
  * - 现在位置含「查验」=> status=inspection；含「封闭区」=> status=closed_area；均清空拆柜日期
- * - 否则 => 状态=待处理、拆柜日期按 calculateUnloadDate(pickup_date, eta_date)
+ * - 否则（含从查验/封闭区改为其他现在位置）=> 状态固定改回待处理，拆柜日期按提柜/ETA重算
  */
 import prisma from '@/lib/prisma'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'

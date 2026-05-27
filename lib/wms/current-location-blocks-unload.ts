@@ -87,3 +87,18 @@ export function inboundRowShouldHighlightAsInspection(row: {
   if (inboundStatusBlocksUnload(row.status)) return true
   return currentLocationBlocksPlannedUnload(row.current_location)
 }
+
+/**
+ * 列表展示用状态：以提柜「现在位置」为准；非查验/封闭区时固定展示待处理（不沿用库内旧的 inspection/closed_area）。
+ */
+export function resolveInboundDisplayStatus(
+  currentLocation: string | null | undefined,
+  storedStatus: string | null | undefined
+): string {
+  const fromLocation = resolveInboundStatusFromCurrentLocation(currentLocation)
+  if (fromLocation) return fromLocation
+  if (inboundStatusBlocksUnload(storedStatus)) {
+    return 'pending'
+  }
+  return storedStatus ?? 'pending'
+}

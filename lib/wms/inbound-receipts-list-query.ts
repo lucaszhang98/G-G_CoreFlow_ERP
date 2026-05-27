@@ -6,7 +6,7 @@ import { serializeBigInt } from '@/lib/api/helpers'
 import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper'
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator'
 import { computeInboundReceiptHeaderDeliveryProgress } from '@/lib/utils/inbound-delivery-progress'
-import { resolveInboundStatusFromCurrentLocation } from '@/lib/wms/current-location-blocks-unload'
+import { resolveInboundDisplayStatus } from '@/lib/wms/current-location-blocks-unload'
 import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled'
 import {
   applyArchivedFilterToInboundReceiptWhere,
@@ -358,9 +358,10 @@ export async function runInboundReceiptListQuery(
       })
       const warehousePointCount = Array.isArray(orderDetails) ? orderDetails.length : 0
       const currentLocation = order?.pickup_management?.current_location ?? null
-      const displayStatus =
-        resolveInboundStatusFromCurrentLocation(currentLocation) ??
+      const displayStatus = resolveInboundDisplayStatus(
+        currentLocation,
         serialized.status
+      )
 
       return {
         ...serialized,

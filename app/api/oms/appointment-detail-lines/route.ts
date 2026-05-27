@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
               select: {
                 order_id: true,
                 order_number: true,
+                pickup_date: true,
                 customers: {
                   select: {
                     name: true,
@@ -207,6 +208,8 @@ export async function GET(request: NextRequest) {
         order_number: orderDetailOrders?.order_number || null,
         // 客户名称（来自订单）
         customer_name: orderDetailOrders?.customers?.name || null,
+        // 提柜时间：明细对应订单的 pickup_date
+        pickup_time: orderDetailOrders?.pickup_date ?? null,
         // 拆柜时间：根据明细对应订单，从入库管理（inbound_receipt）取该订单的 planned_unload_at
         unload_time: orderDetail.order_id != null ? unloadTimeMap.get(String(orderDetail.order_id)) ?? null : null,
         // 送货时间：预约的确认开始时间，用于与拆柜时间对比（柜号红/黄/绿）

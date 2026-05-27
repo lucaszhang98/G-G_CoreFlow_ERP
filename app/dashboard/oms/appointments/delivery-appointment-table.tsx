@@ -287,6 +287,7 @@ export function DeliveryAppointmentTable() {
     showColumns: {
       orderNumber: true,
       customerName: true,
+      pickupTime: true,
       location: true,
       locationType: true,
       estimatedPallets: true, // 排车板数（原预计板数）
@@ -295,6 +296,7 @@ export function DeliveryAppointmentTable() {
       storageLocation: true, // 现在位置：与入库管理详情 inventory_lots.storage_location_code 同源
       ignoreUnloadTimeCheck: true, // 忽略：勾选后柜号强制绿色
       windowPeriod: true, // 窗口期（来自订单明细）
+      estimatedWindowPeriod: true, // 提柜日期 +3 天（仅展示）
       po: false, // 主表明细下拉子表内不显示 PO
       notes: true,
     },

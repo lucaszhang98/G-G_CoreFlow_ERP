@@ -305,31 +305,21 @@ async function updatePickupManagement(
         data: orderUpdateData,
       })
 
-      // pickup/eta 更新后按规则同步入库拆柜日期
-      if (body.pickup_date !== undefined || body.eta_date !== undefined) {
-        try {
-          await syncInboundPlannedUnloadAtByPickupState({
-            orderId: pickup.order_id,
-            userId: user?.id ? BigInt(user.id) : null,
-          })
-        } catch (syncError: any) {
-          // 如果同步更新失败，记录错误但不影响提柜管理的更新
-          console.warn('[提柜管理更新] 同步更新入库管理拆柜日期失败:', syncError)
-        }
-      }
     }
 
-    // 现在位置更新后，也要立即同步入库拆柜日期：
-    // - 含「查验」或「封闭区」 => 置空
-    // - 否则 => 按提柜/ETA重算
-    if (body.current_location !== undefined) {
+    // 提柜日期 / ETA / 现在位置任一变更：同步入库状态 + 拆柜日期（现在位置决定 status，否则待处理）
+    const shouldSyncInbound =
+      body.pickup_date !== undefined ||
+      body.eta_date !== undefined ||
+      body.current_location !== undefined
+    if (shouldSyncInbound) {
       try {
         await syncInboundPlannedUnloadAtByPickupState({
           orderId: pickup.order_id,
           userId: user?.id ? BigInt(user.id) : null,
         })
       } catch (syncError: any) {
-        console.warn('[提柜管理更新] 按现在位置同步拆柜日期失败:', syncError)
+        console.warn('[提柜管理更新] 同步入库状态与拆柜日期失败:', syncError)
       }
     }
 

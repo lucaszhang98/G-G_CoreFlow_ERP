@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { formatDateTime } from '@/lib/utils/date'
 import {
   Popover,
   PopoverContent,
@@ -84,6 +85,8 @@ export interface DetailData {
   order_detail_id?: string | number | null
   order_number?: string | null
   customer_name?: string | null
+  /** 提柜时间：明细对应订单的 pickup_date */
+  pickup_time?: string | Date | null
   /** 拆柜时间：来自入库管理（inbound_receipt.planned_unload_at），按明细对应订单关联 */
   unload_time?: string | Date | null
   /** 忽略：为 true 时柜号强制绿色，与拒收等字段一样需点铅笔编辑后保存 */
@@ -102,6 +105,7 @@ export interface DetailTableConfig {
   showColumns?: {
     orderNumber?: boolean // 柜号
     customerName?: boolean // 客户名称
+    pickupTime?: boolean // 提柜时间（订单 pickup_date）
     location?: boolean // 仓点
     locationType?: boolean // 仓点类型（性质）
     deliveryLocation?: boolean // 送仓地点
@@ -121,6 +125,7 @@ export interface DetailTableConfig {
     unbookedPallets?: boolean // 未约板数（订单明细动态计算，只读）
     ignoreUnloadTimeCheck?: boolean // 忽略（预约明细：勾选后柜号强制绿色）
     windowPeriod?: boolean // 窗口期
+    estimatedWindowPeriod?: boolean // 预计窗口期（提柜日期 +3 天，仅展示）
     detailId?: boolean // 仓点ID（隐藏）
     quantity?: boolean // 数量
     volume?: boolean // 体积
@@ -129,6 +134,27 @@ export interface DetailTableConfig {
   }
   getLocationName?: (detail: DetailData, context?: any) => string
   getOrderNumber?: (detail: DetailData, context?: any) => string
+}
+
+function detailDateOnlyPart(value: string | Date | null | undefined): string | null {
+  if (value == null || value === '') return null
+  if (typeof value === 'string') {
+    const part = value.split('T')[0]?.trim()
+    return part || null
+  }
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toISOString().split('T')[0]
+}
+
+/** 提柜日期（日历日）往后推 3 天，仅用于预约明细展示 */
+function estimatedWindowPeriodFromPickup(pickup: string | Date | null | undefined): string | null {
+  const base = detailDateOnlyPart(pickup)
+  if (!base) return null
+  const [y, m, day] = base.split('-').map(Number)
+  if (!y || !m || !day) return null
+  const dt = new Date(Date.UTC(y, m - 1, day + 3))
+  return dt.toISOString().split('T')[0]
 }
 
 interface DetailTableProps {
@@ -943,6 +969,7 @@ export function DetailTable({
     // 预约明细子表前几位：柜号、拆柜时间、实际板数、排车板数
     if (config.showColumns?.orderNumber) cols.push('orderNumber')
     if (config.showColumns?.customerName) cols.push('customerName')
+    if (appointmentId && config.showColumns?.pickupTime) cols.push('pickupTime')
     if (appointmentId && config.showColumns?.unloadTime) cols.push('unloadTime')
     if (appointmentId && config.showColumns?.ignoreUnloadTimeCheck) cols.push('ignoreUnloadTimeCheck')
     if (config.showColumns?.storageLocation) cols.push('storageLocation')
@@ -965,6 +992,7 @@ export function DetailTable({
     if (config.showColumns?.totalPallets) cols.push('totalPallets')
     if (config.showColumns?.po) cols.push('po')
     if (config.showColumns?.windowPeriod) cols.push('windowPeriod')
+    if (appointmentId && config.showColumns?.estimatedWindowPeriod) cols.push('estimatedWindowPeriod')
     if (config.showColumns?.detailId) cols.push('detailId')
     if (config.showColumns?.createdAt) cols.push('createdAt')
     if (config.showColumns?.updatedAt) cols.push('updatedAt')
@@ -1090,6 +1118,8 @@ export function DetailTable({
                     return <th key={col} className="text-left p-2 font-semibold text-sm">柜号</th>
                   case 'customerName':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">客户名称</th>
+                  case 'pickupTime':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[140px]">提柜时间</th>
                   case 'location':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">仓点</th>
                   case 'locationType':
@@ -1128,6 +1158,8 @@ export function DetailTable({
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[200px]">PO</th>
                   case 'windowPeriod':
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[150px]">窗口期</th>
+                  case 'estimatedWindowPeriod':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[120px]">预计窗口期</th>
                   case 'detailId':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">仓点ID</th>
                   case 'quantity':
@@ -1248,6 +1280,26 @@ export function DetailTable({
                         }
                         case 'customerName':
                           return <td key={col} className="p-2 text-sm">{(detail as any).customer_name || '-'}</td>
+                        case 'pickupTime': {
+                          const pickupTime = (detail as any).pickup_time
+                          const formatted =
+                            pickupTime && formatDateTime(pickupTime) !== '-'
+                              ? formatDateTime(pickupTime)
+                              : null
+                          return (
+                            <td key={col} className="p-2 text-sm min-w-[140px]">
+                              {formatted ?? ''}
+                            </td>
+                          )
+                        }
+                        case 'estimatedWindowPeriod': {
+                          const estimated = estimatedWindowPeriodFromPickup((detail as any).pickup_time)
+                          return (
+                            <td key={col} className="p-2 text-sm min-w-[120px]">
+                              {estimated ?? ''}
+                            </td>
+                          )
+                        }
                         case 'location':
                           // 仓点：显示 location_code（从 delivery_location 转换而来）
                           return <td key={col} className="p-2 text-sm">{locationCode}</td>

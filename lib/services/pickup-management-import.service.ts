@@ -15,7 +15,7 @@ import {
   type PickupManagementSheet2Row,
   type PickupManagementMergedRow,
 } from '@/lib/validations/pickup-management-import'
-import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
+import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
 const SHEET1_NAME = '提柜数据1'
 const SHEET2_NAME = '提柜数据2'
@@ -354,6 +354,7 @@ async function executeImport(
       select: { pickup_id: true },
     })
 
+    let pickupWasUpdated = false
     await prisma.$transaction(async (tx) => {
       if (Object.keys(orderUpdate).length > 2) {
         await tx.orders.update({ where: { order_id: orderId }, data: orderUpdate })
@@ -363,35 +364,16 @@ async function executeImport(
           where: { pickup_id: existingPickup.pickup_id },
           data: pickupUpdate,
         })
+        pickupWasUpdated = true
       }
     })
 
-    if (orderUpdate.pickup_date !== undefined || orderUpdate.eta_date !== undefined) {
-      const updatedOrder = await prisma.orders.findUnique({
-        where: { order_id: orderId },
-        select: { pickup_date: true, eta_date: true },
+    // 每行导入都会写入现在位置；同步入库 status（查验/封闭区或改回待处理）与拆柜日期
+    if (pickupWasUpdated || orderUpdate.pickup_date !== undefined || orderUpdate.eta_date !== undefined) {
+      await syncInboundPlannedUnloadAtByPickupState({
+        orderId,
+        userId,
       })
-      if (updatedOrder) {
-        const calculatedUnloadDate = calculateUnloadDate(
-          updatedOrder.pickup_date,
-          updatedOrder.eta_date
-        )
-        const inbound = await prisma.inbound_receipt.findUnique({
-          where: { order_id: orderId },
-          select: { inbound_receipt_id: true, unloaded_by: true },
-        })
-        // 仅当未录入拆柜人员时才同步（拆柜人员有值视为已录入，不再覆盖）
-        if (inbound && calculatedUnloadDate && inbound.unloaded_by == null) {
-          await prisma.inbound_receipt.update({
-            where: { inbound_receipt_id: inbound.inbound_receipt_id },
-            data: {
-              planned_unload_at: calculatedUnloadDate,
-              updated_by: userId,
-              updated_at: new Date(),
-            },
-          })
-        }
-      }
     }
     successCount++
   }
