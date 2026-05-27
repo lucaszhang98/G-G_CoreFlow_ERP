@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { formatDateTime } from '@/lib/utils/date'
 import {
   Popover,
   PopoverContent,
@@ -971,6 +970,8 @@ export function DetailTable({
     if (config.showColumns?.customerName) cols.push('customerName')
     if (appointmentId && config.showColumns?.pickupTime) cols.push('pickupTime')
     if (appointmentId && config.showColumns?.unloadTime) cols.push('unloadTime')
+    if (config.showColumns?.windowPeriod) cols.push('windowPeriod')
+    if (config.showColumns?.estimatedWindowPeriod) cols.push('estimatedWindowPeriod')
     if (appointmentId && config.showColumns?.ignoreUnloadTimeCheck) cols.push('ignoreUnloadTimeCheck')
     if (config.showColumns?.storageLocation) cols.push('storageLocation')
     if (config.showColumns?.actualPallets) cols.push('actualPallets')
@@ -991,8 +992,6 @@ export function DetailTable({
     if (config.showColumns?.totalVolume) cols.push('totalVolume')
     if (config.showColumns?.totalPallets) cols.push('totalPallets')
     if (config.showColumns?.po) cols.push('po')
-    if (config.showColumns?.windowPeriod) cols.push('windowPeriod')
-    if (appointmentId && config.showColumns?.estimatedWindowPeriod) cols.push('estimatedWindowPeriod')
     if (config.showColumns?.detailId) cols.push('detailId')
     if (config.showColumns?.createdAt) cols.push('createdAt')
     if (config.showColumns?.updatedAt) cols.push('updatedAt')
@@ -1119,7 +1118,7 @@ export function DetailTable({
                   case 'customerName':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">客户名称</th>
                   case 'pickupTime':
-                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[140px]">提柜时间</th>
+                    return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[110px]">提柜时间</th>
                   case 'location':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">仓点</th>
                   case 'locationType':
@@ -1281,21 +1280,20 @@ export function DetailTable({
                         case 'customerName':
                           return <td key={col} className="p-2 text-sm">{(detail as any).customer_name || '-'}</td>
                         case 'pickupTime': {
-                          const pickupTime = (detail as any).pickup_time
-                          const formatted =
-                            pickupTime && formatDateTime(pickupTime) !== '-'
-                              ? formatDateTime(pickupTime)
-                              : null
+                          const formatted = detailDateOnlyPart((detail as any).pickup_time)
                           return (
-                            <td key={col} className="p-2 text-sm min-w-[140px]">
+                            <td key={col} className="p-2 text-sm min-w-[110px]">
                               {formatted ?? ''}
                             </td>
                           )
                         }
                         case 'estimatedWindowPeriod': {
-                          const estimated = estimatedWindowPeriodFromPickup((detail as any).pickup_time)
+                          const pickupDate = detailDateOnlyPart((detail as any).pickup_time)
+                          const estimated = pickupDate
+                            ? estimatedWindowPeriodFromPickup((detail as any).pickup_time)
+                            : null
                           return (
-                            <td key={col} className="p-2 text-sm min-w-[120px]">
+                            <td key={col} className="p-2 text-sm min-w-[110px]">
                               {estimated ?? ''}
                             </td>
                           )
