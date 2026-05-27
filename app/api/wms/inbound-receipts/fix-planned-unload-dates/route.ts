@@ -1,8 +1,8 @@
 /**
  * 批量修复入库管理拆柜日期 API
  *
- * 1) 现在位置含「查验」但 planned_unload_at 仍有值 → 置空（与库为准、对齐历史脏数据）
- * 2) planned_unload_at 为空且未录入拆柜人员 → 按提柜/ETA 回填（不含查验的订单）
+ * 1) 现在位置含「查验」或「封闭区」但 planned_unload_at 仍有值 → 置空
+ * 2) planned_unload_at 为空且未录入拆柜人员 → 按提柜/ETA 回填（不含上述关键词的订单）
  */
 
 import { NextRequest, NextResponse } from 'next/server'

@@ -320,8 +320,8 @@ async function updatePickupManagement(
     }
 
     // 现在位置更新后，也要立即同步入库拆柜日期：
-    // - 含「查验」 => 置空
-    // - 不含「查验」 => 按提柜/ETA重算
+    // - 含「查验」或「封闭区」 => 置空
+    // - 否则 => 按提柜/ETA重算
     if (body.current_location !== undefined) {
       try {
         await syncInboundPlannedUnloadAtByPickupState({

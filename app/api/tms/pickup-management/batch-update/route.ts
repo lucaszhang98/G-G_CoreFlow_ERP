@@ -185,8 +185,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 批量更新后统一同步入库拆柜日期：
-    // - 现在位置含「查验」 => 置空
-    // - 不含「查验」 => 按提柜/ETA重算
+    // - 现在位置含「查验」或「封闭区」 => 置空
+    // - 否则 => 按提柜/ETA重算
     if (
       updates.current_location !== undefined ||
       updates.pickup_date !== undefined ||

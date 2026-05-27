@@ -6,10 +6,7 @@ import prisma from '@/lib/prisma';
 import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled';
 import { computeInboundReceiptHeaderDeliveryProgress } from '@/lib/utils/inbound-delivery-progress';
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
-
-function includesInspectionKeyword(currentLocation: string | null | undefined): boolean {
-  return typeof currentLocation === 'string' && currentLocation.includes('查验');
-}
+import { includesInspectionKeyword } from '@/lib/wms/current-location-blocks-unload';
 
 /**
  * GET /api/wms/inbound-receipts/:id
@@ -240,7 +237,7 @@ export async function PUT(
       }
     }
 
-    // 业务规则：当前位置信息含「查验」时，入库状态=查验 且拆柜日期置空；
+    // 业务规则：现在位置含「查验」或「封闭区」时，入库状态=查验 且拆柜日期置空；
     // 不含时，入库状态=待处理 且按提柜/ETA自动回算拆柜日期。
     if (hasCurrentLocationUpdate) {
       const inspection = includesInspectionKeyword(normalizedCurrentLocation);

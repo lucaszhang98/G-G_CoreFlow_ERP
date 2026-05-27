@@ -1,14 +1,13 @@
 /**
  * 按提柜「现在位置」与订单提柜/ETA，将入库拆柜日期 `planned_unload_at` 与数据库对齐。
- * - 现在位置含「查验」=> 置空
+ * - 现在位置含「查验」或「封闭区」=> 置空
  * - 否则 => 按 calculateUnloadDate(pickup_date, eta_date)
  */
 import prisma from '@/lib/prisma'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
+import { includesInspectionKeyword } from '@/lib/wms/current-location-blocks-unload'
 
-export function includesInspectionKeyword(currentLocation: string | null | undefined): boolean {
-  return typeof currentLocation === 'string' && currentLocation.includes('查验')
-}
+export { includesInspectionKeyword } from '@/lib/wms/current-location-blocks-unload'
 
 export async function syncInboundPlannedUnloadAtByPickupState(args: {
   orderId: bigint

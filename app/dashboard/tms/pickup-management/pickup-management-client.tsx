@@ -34,7 +34,7 @@ export function PickupManagementClient() {
   const pathname = usePathname()
   const [lfdNoPickupActive, setLfdNoPickupActive] = React.useState(false)
   const [pendingLfdInquiryActive, setPendingLfdInquiryActive] = React.useState(false)
-  /** 现在位置含「查验」，与 URL filter_pickup_location_inspection=yes 同步 */
+  /** 现在位置含「查验」或「封闭区」，与 URL filter_pickup_location_inspection=yes 同步 */
   const [pickupInspectionActive, setPickupInspectionActive] = React.useState(false)
   const [isInitializing, setIsInitializing] = React.useState(false)
   const [isSyncing, setIsSyncing] = React.useState(false)
@@ -599,7 +599,7 @@ export function PickupManagementClient() {
           size="sm"
           className="h-9 shrink-0"
           onClick={togglePickupInspection}
-          title="筛选「现在位置」文案中含「查验」的提柜记录"
+          title="筛选「现在位置」含「查验」或「封闭区」的提柜记录"
         >
           查验柜
         </Button>

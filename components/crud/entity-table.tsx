@@ -3225,7 +3225,10 @@ export function EntityTable<T = any>({
           config.name === 'pickup_management'
             ? (row: any) => {
                 const loc = row.current_location
-                if (typeof loc === 'string' && loc.includes('查验')) {
+                if (
+                  typeof loc === 'string' &&
+                  (loc.includes('查验') || loc.includes('封闭区'))
+                ) {
                   return "bg-gradient-to-r from-red-200 via-red-100 to-red-200 dark:from-red-900/60 dark:via-red-950/50 dark:to-red-900/60 hover:from-red-300 hover:via-red-200 hover:to-red-300 dark:hover:from-red-800/65 dark:hover:via-red-900/55 dark:hover:to-red-800/65"
                 }
                 // 如果提柜时间字段有值，返回绿色背景（符合系统风格）

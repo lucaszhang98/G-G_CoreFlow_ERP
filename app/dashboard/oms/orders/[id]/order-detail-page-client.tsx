@@ -58,6 +58,12 @@ export function OrderDetailPageClient({
     router.refresh()
   }
   const totalLocations = orderDetails.length
+  const totalCartons = orderDetails.reduce((sum, detail) => {
+    const q = detail?.quantity
+    if (q === null || q === undefined || q === '') return sum
+    const n = typeof q === 'number' ? q : Number(q)
+    return sum + (Number.isFinite(n) ? n : 0)
+  }, 0)
 
   return (
     <div className="space-y-6">
@@ -77,8 +83,9 @@ export function OrderDetailPageClient({
             <CardTitle>仓点明细</CardTitle>
             <CardDescription>订单的仓点信息，点击展开查看每个仓点的SKU明细</CardDescription>
           </div>
-          <div className="text-sm text-muted-foreground whitespace-nowrap">
-            仓点总数：{totalLocations}（共 {totalLocations} 个仓点）
+          <div className="text-sm text-muted-foreground whitespace-nowrap text-right space-y-0.5">
+            <div>总箱数：{formatNumber(totalCartons)}</div>
+            <div>仓点总数：{totalLocations}（共 {totalLocations} 个仓点）</div>
           </div>
         </CardHeader>
         <CardContent>

@@ -8,10 +8,7 @@ import { inboundReceiptUpdateSchema } from '@/lib/validations/inbound-receipt';
 import { inboundReceiptConfig } from '@/lib/crud/configs/inbound-receipts';
 import prisma from '@/lib/prisma';
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
-
-function includesInspectionKeyword(currentLocation: string | null | undefined): boolean {
-  return typeof currentLocation === 'string' && currentLocation.includes('查验');
-}
+import { includesInspectionKeyword } from '@/lib/wms/current-location-blocks-unload';
 
 /**
  * POST /api/wms/inbound-receipts/batch-update

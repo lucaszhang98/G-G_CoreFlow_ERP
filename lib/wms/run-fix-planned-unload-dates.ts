@@ -3,7 +3,10 @@
  */
 import prisma from '@/lib/prisma'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
-import { includesInspectionKeyword } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
+import {
+  includesInspectionKeyword,
+  pickupCurrentLocationBlocksUnloadWhere,
+} from '@/lib/wms/current-location-blocks-unload'
 
 export interface FixPlannedUnloadDatesErrorRow {
   inbound_receipt_id: string
@@ -26,9 +29,7 @@ export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDat
     where: {
       planned_unload_at: { not: null },
       orders: {
-        pickup_management: {
-          current_location: { contains: '查验' },
-        },
+        pickup_management: pickupCurrentLocationBlocksUnloadWhere(),
       },
     },
     data: {

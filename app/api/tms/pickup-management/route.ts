@@ -66,11 +66,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 现在位置含「查验」（提柜页「查验柜」按钮写入 filter_pickup_location_inspection=yes）
+    // 现在位置含「查验」或「封闭区」（提柜页「查验柜」按钮）
     if (searchParams.get('filter_pickup_location_inspection') === 'yes') {
-      where.current_location = {
-        contains: '查验',
-        mode: 'insensitive' as const,
+      const blocksUnloadFilter = {
+        OR: [
+          { current_location: { contains: '查验', mode: 'insensitive' as const } },
+          { current_location: { contains: '封闭区', mode: 'insensitive' as const } },
+        ],
+      }
+      if (where.AND) {
+        where.AND = Array.isArray(where.AND)
+          ? [...where.AND, blocksUnloadFilter]
+          : [where.AND, blocksUnloadFilter]
+      } else {
+        where.AND = [blocksUnloadFilter]
       }
     }
 
