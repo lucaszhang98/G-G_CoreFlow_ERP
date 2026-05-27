@@ -102,6 +102,7 @@ export function InboundReceiptTable() {
     () => new URLSearchParams()
   )
   const [urgentFlagBusy, setUrgentFlagBusy] = React.useState(false)
+  const [changedFlagBusy, setChangedFlagBusy] = React.useState(false)
 
   const handleExportFiltered = React.useCallback(() => {
     const p = new URLSearchParams(listSearchParams.toString())
@@ -211,6 +212,42 @@ export function InboundReceiptTable() {
     }
   }, [selectedInboundRows])
 
+  const applyMarkedChanged = React.useCallback(async () => {
+    const selectedIds = selectedInboundRows
+      .map((row: any) => row[INBOUND_ID_FIELD])
+      .filter(Boolean)
+      .map((id: any) => String(id))
+
+    if (selectedIds.length === 0) {
+      toast.error('请先选择要操作的记录')
+      return
+    }
+
+    setChangedFlagBusy(true)
+    try {
+      const res = await fetch('/api/wms/inbound-receipts/batch-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: selectedIds,
+          updates: { status: 'pending', is_changed: true },
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg = typeof payload.error === 'string' ? payload.error : '操作失败'
+        toast.error(msg)
+        return
+      }
+      toast.success(`已将 ${selectedIds.length} 条记录标记为已变更（状态：待处理）`)
+      setRefreshKey((k) => k + 1)
+    } catch {
+      toast.error('网络错误，请重试')
+    } finally {
+      setChangedFlagBusy(false)
+    }
+  }, [selectedInboundRows])
+
   const customBatchActions = React.useMemo(() => (
     <>
       <Button size="sm" variant="outline" onClick={openBatchUnloadSheet} className="min-w-[100px]">
@@ -269,8 +306,25 @@ export function InboundReceiptTable() {
       >
         取消加急
       </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="min-w-[90px] text-orange-600 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-950/40"
+        disabled={changedFlagBusy || urgentFlagBusy}
+        onClick={() => void applyMarkedChanged()}
+      >
+        {changedFlagBusy ? '处理中…' : '已变更'}
+      </Button>
     </>
-  ), [openBatchUnloadSheet, openBatchLabels, handleCopyContainerNumbers, applyUrgentFlag, urgentFlagBusy])
+  ), [
+    openBatchUnloadSheet,
+    openBatchLabels,
+    handleCopyContainerNumbers,
+    applyUrgentFlag,
+    applyMarkedChanged,
+    urgentFlagBusy,
+    changedFlagBusy,
+  ])
 
   // 可点击列配置：柜号列可点击跳转到入库管理详情
   const customClickableColumns: ClickableColumnConfig<any>[] = React.useMemo(() => [
@@ -295,13 +349,19 @@ export function InboundReceiptTable() {
   const customCellRenderers = React.useMemo(() => ({
     container_number: ({ row }: { row: any }) => {
       const isUrgent = Boolean(row?.original?.is_urgent)
+      const isChanged = Boolean(row?.original?.is_changed)
       const text = row?.original?.container_number || '-'
       const clickable = Boolean(row?.original?.inbound_receipt_id)
+      const colorClass = isUrgent
+        ? 'text-red-600 dark:text-red-400'
+        : isChanged
+          ? 'text-orange-600 dark:text-orange-400'
+          : ''
 
       return (
         <button
           type="button"
-          className={`inline-flex items-center gap-1 font-semibold ${isUrgent ? 'text-red-600 dark:text-red-400' : ''} ${clickable ? 'hover:underline' : 'cursor-default'}`}
+          className={`inline-flex items-center gap-1 font-semibold ${colorClass} ${clickable ? 'hover:underline' : 'cursor-default'}`}
           disabled={!clickable}
           onClick={() => {
             if (clickable) {

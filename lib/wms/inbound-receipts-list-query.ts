@@ -67,6 +67,7 @@ export async function runInboundReceiptListQuery(
     'received_by',
     'notes',
     'is_urgent',
+    'is_changed',
   ]
   const mainTableConditions: any[] = []
   const ordersConditions: any = {}
@@ -176,6 +177,7 @@ export async function runInboundReceiptListQuery(
     'status',
     'arrived_at_warehouse',
     'is_urgent',
+    'is_changed',
     'planned_unload_at',
     'unloaded_by',
     'received_by',
@@ -358,10 +360,9 @@ export async function runInboundReceiptListQuery(
       })
       const warehousePointCount = Array.isArray(orderDetails) ? orderDetails.length : 0
       const currentLocation = order?.pickup_management?.current_location ?? null
-      const displayStatus = resolveInboundDisplayStatus(
-        currentLocation,
-        serialized.status
-      )
+      const displayStatus = serialized.is_changed
+        ? 'pending'
+        : resolveInboundDisplayStatus(currentLocation, serialized.status)
 
       return {
         ...serialized,

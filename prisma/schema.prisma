@@ -983,6 +983,8 @@ model inbound_receipt {
   arrived_at_warehouse                     Boolean?         @default(false)
   /// 列表「加急」标红，全员可见（存库，非浏览器本地）
   is_urgent                                Boolean          @default(false)
+  /// 列表「已变更」标橙，全员可见；批量「已变更」时置 true 且状态改待处理
+  is_changed                               Boolean          @default(false)
   users_inbound_receipt_created_byTousers  users?           @relation("inbound_receipt_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   orders                                   orders           @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)
   users_inbound_receipt_unloaded_byTousers users?           @relation("inbound_receipt_unloaded_byTousers", fields: [unloaded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)

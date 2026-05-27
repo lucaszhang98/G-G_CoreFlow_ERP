@@ -118,6 +118,13 @@ export const inboundReceiptConfig: EntityConfig = {
       sortable: true,
       hidden: true,
     },
+    is_changed: {
+      key: 'is_changed',
+      label: '已变更',
+      type: 'boolean',
+      sortable: true,
+      hidden: true,
+    },
     planned_unload_at: {
       key: 'planned_unload_at',
       label: '拆柜日期',
