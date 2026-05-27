@@ -6,6 +6,8 @@ import {
   prismaAppointmentDetailLinesWhereParentAppointmentActive,
 } from '@/lib/utils/delivery-appointment-enabled'
 import { serializeBigInt } from '@/lib/api/helpers'
+import { formatEstimatedWindowPeriodForApi } from '@/lib/oms/estimated-window-period'
+import { initialEstimatedWindowPeriodFieldsForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
 
 function pickPreferredInventoryLot<T extends { inbound_receipt_id: bigint | null; inventory_lot_id: bigint }>(
@@ -65,7 +67,6 @@ export async function GET(request: NextRequest) {
               select: {
                 order_id: true,
                 order_number: true,
-                pickup_date: true,
                 customers: {
                   select: {
                     name: true,
@@ -208,8 +209,13 @@ export async function GET(request: NextRequest) {
         order_number: orderDetailOrders?.order_number || null,
         // 客户名称（来自订单）
         customer_name: orderDetailOrders?.customers?.name || null,
-        // 提柜时间：明细对应订单的 pickup_date
-        pickup_time: orderDetailOrders?.pickup_date ?? null,
+        // 预计窗口期（存于 appointment_detail_lines；人工锁定后不再随提柜变）
+        estimated_window_period: formatEstimatedWindowPeriodForApi(
+          (serialized as { estimated_window_period?: Date | null }).estimated_window_period
+        ),
+        estimated_window_period_locked:
+          (serialized as { estimated_window_period_locked?: boolean }).estimated_window_period_locked ===
+          true,
         // 拆柜时间：根据明细对应订单，从入库管理（inbound_receipt）取该订单的 planned_unload_at
         unload_time: orderDetail.order_id != null ? unloadTimeMap.get(String(orderDetail.order_id)) ?? null : null,
         // 送货时间：预约的确认开始时间，用于与拆柜时间对比（柜号红/黄/绿）
@@ -349,6 +355,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    const orderDetailForInit = await prisma.order_detail.findUnique({
+      where: { id: orderDetailId },
+      select: { order_id: true },
+    })
+    const estimatedWindowInit = orderDetailForInit?.order_id
+      ? await initialEstimatedWindowPeriodFieldsForOrder(orderDetailForInit.order_id)
+      : { estimated_window_period: null, estimated_window_period_locked: false }
+
     const { recalcUnbookedRemainingForOrderDetail } = await import('@/lib/services/recalc-unbooked-remaining.service')
 
     // 使用事务确保数据一致性
@@ -367,6 +381,8 @@ export async function POST(request: NextRequest) {
           estimated_pallets: estimatedPalletsValue,
           rejected_pallets: 0,
           total_pallets_at_time: totalPalletsAtTime,
+          estimated_window_period: estimatedWindowInit.estimated_window_period,
+          estimated_window_period_locked: estimatedWindowInit.estimated_window_period_locked,
           created_by: session.user.id ? BigInt(session.user.id) : null,
           updated_by: session.user.id ? BigInt(session.user.id) : null,
         } as import('@prisma/client').Prisma.appointment_detail_linesUncheckedCreateInput,

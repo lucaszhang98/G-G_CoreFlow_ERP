@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
+import { parseEstimatedWindowPeriodInput } from '@/lib/oms/estimated-window-period'
 import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
 
 function pickPreferredInventoryLot<T extends { inbound_receipt_id: bigint | null; inventory_lot_id: bigint }>(
@@ -34,6 +35,7 @@ export async function PUT(
       bol_notes,
       ignore_unload_time_check,
       storage_location_code,
+      estimated_window_period,
     } = body
 
     // 获取当前预约明细（含 rejected_pallets）
@@ -106,6 +108,15 @@ export async function PUT(
       if (load_sheet_notes !== undefined) updateData.load_sheet_notes = load_sheet_notes == null || load_sheet_notes === '' ? null : String(load_sheet_notes)
       if (bol_notes !== undefined) updateData.bol_notes = bol_notes == null || bol_notes === '' ? null : String(bol_notes)
       if (ignore_unload_time_check !== undefined) updateData.ignore_unload_time_check = Boolean(ignore_unload_time_check)
+      if (estimated_window_period !== undefined) {
+        try {
+          updateData.estimated_window_period = parseEstimatedWindowPeriodInput(estimated_window_period)
+          updateData.estimated_window_period_locked = true
+        } catch (parseErr: unknown) {
+          const message = parseErr instanceof Error ? parseErr.message : '预计窗口期格式无效'
+          throw new Error(message)
+        }
+      }
 
       const appointmentDetailLine = await tx.appointment_detail_lines.update({
         where: { id: BigInt(resolvedParams.id) },

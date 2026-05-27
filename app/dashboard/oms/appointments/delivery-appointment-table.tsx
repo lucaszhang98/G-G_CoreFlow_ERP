@@ -287,7 +287,6 @@ export function DeliveryAppointmentTable() {
     showColumns: {
       orderNumber: true,
       customerName: true,
-      pickupTime: true,
       location: true,
       locationType: true,
       estimatedPallets: true, // 排车板数（原预计板数）

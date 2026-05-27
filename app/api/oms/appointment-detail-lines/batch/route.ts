@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
+import { initialEstimatedWindowPeriodFieldsForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
 
 const MAX_LINES = 50
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
 
         const orderDetailForCap = await tx.order_detail.findUnique({
           where: { id: orderDetailId },
-          select: { estimated_pallets: true },
+          select: { estimated_pallets: true, order_id: true },
         })
         const estCap = orderDetailForCap?.estimated_pallets ?? 0
         const baseCap = inventoryLot
@@ -139,6 +140,10 @@ export async function POST(request: NextRequest) {
           )
         }
 
+        const estimatedWindowInit = orderDetailForCap?.order_id
+          ? await initialEstimatedWindowPeriodFieldsForOrder(orderDetailForCap.order_id, tx)
+          : { estimated_window_period: null, estimated_window_period_locked: false }
+
         const row = await tx.appointment_detail_lines.create({
           data: {
             appointment_id: appointmentId,
@@ -146,6 +151,8 @@ export async function POST(request: NextRequest) {
             estimated_pallets: estimated_pallets,
             rejected_pallets: 0,
             total_pallets_at_time: totalPalletsAtTime,
+            estimated_window_period: estimatedWindowInit.estimated_window_period,
+            estimated_window_period_locked: estimatedWindowInit.estimated_window_period_locked,
             created_by: createdBy,
             updated_by: createdBy,
           } as import('@prisma/client').Prisma.appointment_detail_linesUncheckedCreateInput,

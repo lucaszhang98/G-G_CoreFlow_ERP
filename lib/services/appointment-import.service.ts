@@ -580,6 +580,13 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
                 : (orderDetail.remaining_pallets ?? orderDetail.estimated_pallets ?? 0)
 
               const { recalcUnbookedRemainingForOrderDetail } = await import('./recalc-unbooked-remaining.service')
+              const { initialEstimatedWindowPeriodFieldsForOrder } = await import(
+                '@/lib/oms/sync-appointment-estimated-window-period'
+              )
+              const estimatedWindowInit = await initialEstimatedWindowPeriodFieldsForOrder(
+                rowOrder.order_id,
+                outerTx
+              )
               await outerTx.appointment_detail_lines.create({
                 data: {
                   appointment_id: appointment.appointment_id,
@@ -587,6 +594,8 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
                   estimated_pallets: row.estimated_pallets,
                   rejected_pallets: 0,
                   total_pallets_at_time: availablePallets,
+                  estimated_window_period: estimatedWindowInit.estimated_window_period,
+                  estimated_window_period_locked: estimatedWindowInit.estimated_window_period_locked,
                 },
               })
               await recalcUnbookedRemainingForOrderDetail(orderDetail.id, outerTx)

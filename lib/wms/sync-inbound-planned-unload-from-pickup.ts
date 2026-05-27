@@ -4,6 +4,7 @@
  * - 否则（含从查验/封闭区改为其他现在位置）=> 状态固定改回待处理，拆柜日期按提柜/ETA重算
  */
 import prisma from '@/lib/prisma'
+import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 import { resolveInboundStatusFromCurrentLocation } from '@/lib/wms/current-location-blocks-unload'
 
@@ -36,7 +37,14 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
     }),
   ])
 
-  if (!order || !inbound) return
+  if (!order) return
+
+  await syncAppointmentEstimatedWindowPeriodForOrder({
+    orderId,
+    pickupDate: order.pickup_date,
+  })
+
+  if (!inbound) return
 
   const resolvedStatus = resolveInboundStatusFromCurrentLocation(
     pickup?.current_location

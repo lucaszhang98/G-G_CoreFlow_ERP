@@ -84,8 +84,9 @@ export interface DetailData {
   order_detail_id?: string | number | null
   order_number?: string | null
   customer_name?: string | null
-  /** 提柜时间：明细对应订单的 pickup_date */
-  pickup_time?: string | Date | null
+  /** 预计窗口期（appointment_detail_lines，人工修改后锁定） */
+  estimated_window_period?: string | null
+  estimated_window_period_locked?: boolean
   /** 拆柜时间：来自入库管理（inbound_receipt.planned_unload_at），按明细对应订单关联 */
   unload_time?: string | Date | null
   /** 忽略：为 true 时柜号强制绿色，与拒收等字段一样需点铅笔编辑后保存 */
@@ -133,27 +134,6 @@ export interface DetailTableConfig {
   }
   getLocationName?: (detail: DetailData, context?: any) => string
   getOrderNumber?: (detail: DetailData, context?: any) => string
-}
-
-function detailDateOnlyPart(value: string | Date | null | undefined): string | null {
-  if (value == null || value === '') return null
-  if (typeof value === 'string') {
-    const part = value.split('T')[0]?.trim()
-    return part || null
-  }
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return null
-  return d.toISOString().split('T')[0]
-}
-
-/** 提柜日期（日历日）往后推 3 天，仅用于预约明细展示 */
-function estimatedWindowPeriodFromPickup(pickup: string | Date | null | undefined): string | null {
-  const base = detailDateOnlyPart(pickup)
-  if (!base) return null
-  const [y, m, day] = base.split('-').map(Number)
-  if (!y || !m || !day) return null
-  const dt = new Date(Date.UTC(y, m - 1, day + 3))
-  return dt.toISOString().split('T')[0]
 }
 
 interface DetailTableProps {
@@ -384,6 +364,7 @@ export function DetailTable({
       if (appointmentId) {
         for (const detailId of Object.keys(batchEditValues)) {
           const values = batchEditValues[detailId]
+          const detail = orderDetails.find((d: any) => String(d.id) === String(detailId))
           const requestBody: any = {
             estimated_pallets: values?.estimated_pallets,
             rejected_pallets: values?.rejected_pallets,
@@ -391,6 +372,13 @@ export function DetailTable({
             load_sheet_notes: values?.load_sheet_notes,
             bol_notes: values?.bol_notes,
             storage_location_code: values?.storage_location_code,
+          }
+          if (values?.estimated_window_period !== undefined) {
+            const orig = (detail as any)?.estimated_window_period ?? null
+            const next = values.estimated_window_period || null
+            if (next !== orig) {
+              requestBody.estimated_window_period = next
+            }
           }
           
           const response = await fetch(`/api/oms/appointment-detail-lines/${detailId}`, {
@@ -404,7 +392,6 @@ export function DetailTable({
             throw new Error(`更新明细 ${detailId} 失败: ${errorData.error || errorData.message || '未知错误'}`)
           }
           // 备注存于 order_detail，若有修改则更新订单明细
-          const detail = orderDetails.find((d: any) => String(d.id) === String(detailId))
           if (values?.notes !== undefined && detail?.order_detail_id) {
             const odRes = await fetch(`/api/order-details/${detail.order_detail_id}`, {
               method: 'PUT',
@@ -464,6 +451,7 @@ export function DetailTable({
         bol_notes: (detail as any).bol_notes ?? null,
         notes: detail.notes ?? null,
         storage_location_code: (detail as any).storage_location_code ?? null,
+        estimated_window_period: (detail as any).estimated_window_period ?? null,
       })
     } else {
       setEditingData({
@@ -493,6 +481,7 @@ export function DetailTable({
         let response: Response
         let responseText: string = ''
         
+        const currentDetailForSave = orderDetails.find((d: any) => String(d.id) === String(editingRowId))
         const requestBody: any = {
           estimated_pallets: editingData.estimated_pallets,
           rejected_pallets: editingData.rejected_pallets,
@@ -500,6 +489,13 @@ export function DetailTable({
           load_sheet_notes: editingData.load_sheet_notes,
           bol_notes: editingData.bol_notes,
           storage_location_code: editingData.storage_location_code,
+        }
+        if (editingData.estimated_window_period !== undefined) {
+          const orig = (currentDetailForSave as any)?.estimated_window_period ?? null
+          const next = editingData.estimated_window_period || null
+          if (next !== orig) {
+            requestBody.estimated_window_period = next
+          }
         }
         
         try {
@@ -538,9 +534,8 @@ export function DetailTable({
         }
         
         // 备注存于 order_detail，若修改了备注则单独更新订单明细
-        const currentDetail = orderDetails.find((d: any) => String(d.id) === String(editingRowId))
-        if (editingData.notes !== undefined && currentDetail?.order_detail_id) {
-          const odRes = await fetch(`/api/order-details/${currentDetail.order_detail_id}`, {
+        if (editingData.notes !== undefined && currentDetailForSave?.order_detail_id) {
+          const odRes = await fetch(`/api/order-details/${currentDetailForSave.order_detail_id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ notes: editingData.notes }),
@@ -1280,7 +1275,12 @@ export function DetailTable({
                         case 'customerName':
                           return <td key={col} className="p-2 text-sm">{(detail as any).customer_name || '-'}</td>
                         case 'pickupTime': {
-                          const formatted = detailDateOnlyPart((detail as any).pickup_time)
+                          const formatted =
+                            (detail as any).pickup_time && typeof (detail as any).pickup_time === 'string'
+                              ? (detail as any).pickup_time.split('T')[0]
+                              : (detail as any).pickup_time
+                                ? new Date((detail as any).pickup_time).toISOString().split('T')[0]
+                                : null
                           return (
                             <td key={col} className="p-2 text-sm min-w-[110px]">
                               {formatted ?? ''}
@@ -1288,13 +1288,38 @@ export function DetailTable({
                           )
                         }
                         case 'estimatedWindowPeriod': {
-                          const pickupDate = detailDateOnlyPart((detail as any).pickup_time)
-                          const estimated = pickupDate
-                            ? estimatedWindowPeriodFromPickup((detail as any).pickup_time)
-                            : null
+                          const stored = (detail as any).estimated_window_period as string | null | undefined
+                          if ((isBatchEditMode || editingRowId === detailId) && appointmentId) {
+                            const currentValue = isBatchEditMode
+                              ? (batchEditValues[detailId]?.estimated_window_period ?? stored ?? '')
+                              : (editingData?.estimated_window_period ?? stored ?? '')
+                            return (
+                              <td key={col} className="p-2 text-sm min-w-[130px]">
+                                <Input
+                                  type="date"
+                                  value={currentValue || ''}
+                                  onChange={(e) => {
+                                    const next = e.target.value || null
+                                    if (isBatchEditMode) {
+                                      setBatchEditValues((prev) => ({
+                                        ...prev,
+                                        [detailId]: {
+                                          ...prev[detailId],
+                                          estimated_window_period: next,
+                                        },
+                                      }))
+                                    } else {
+                                      setEditingData({ ...editingData, estimated_window_period: next })
+                                    }
+                                  }}
+                                  className="w-full min-w-[130px]"
+                                />
+                              </td>
+                            )
+                          }
                           return (
                             <td key={col} className="p-2 text-sm min-w-[110px]">
-                              {estimated ?? ''}
+                              {stored ?? ''}
                             </td>
                           )
                         }

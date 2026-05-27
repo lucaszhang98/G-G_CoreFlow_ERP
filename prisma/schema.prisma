@@ -60,6 +60,8 @@ model appointment_detail_lines {
   load_sheet_notes                                 String?                @db.VarChar(2000) // 装车单明细备注（操作员写给仓库）
   bol_notes                                        String?                @db.VarChar(2000) // BOL 明细备注（操作员写给仓库）
   ignore_unload_time_check                         Boolean?               @default(false) // 忽略：为 true 时柜号强制显示绿色，不参与拆柜时间与送货时间对比
+  estimated_window_period                          DateTime?              @db.Date // 预计窗口期（默认提柜日+3；人工修改后锁定不再随提柜变）
+  estimated_window_period_locked                   Boolean                @default(false) // true=已人工修改，不再随提柜日期自动更新
   // po 字段已移除，PO 应该从 order_detail.po 读取
   created_at                                       DateTime?             @default(now()) @db.Timestamptz(6)
   updated_at                                       DateTime?             @default(now()) @db.Timestamptz(6)
