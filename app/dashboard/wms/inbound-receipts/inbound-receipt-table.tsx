@@ -248,6 +248,42 @@ export function InboundReceiptTable() {
     }
   }, [selectedInboundRows])
 
+  const applyCancelChanged = React.useCallback(async () => {
+    const changedRows = selectedInboundRows.filter((row: any) => Boolean(row.is_changed))
+    const selectedIds = changedRows
+      .map((row: any) => row[INBOUND_ID_FIELD])
+      .filter(Boolean)
+      .map((id: any) => String(id))
+
+    if (selectedIds.length === 0) {
+      return
+    }
+
+    setChangedFlagBusy(true)
+    try {
+      const res = await fetch('/api/wms/inbound-receipts/batch-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: selectedIds,
+          updates: { status: 'printed', is_changed: false },
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg = typeof payload.error === 'string' ? payload.error : '操作失败'
+        toast.error(msg)
+        return
+      }
+      toast.success(`已取消 ${selectedIds.length} 条记录的变更标记（状态：已打印）`)
+      setRefreshKey((k) => k + 1)
+    } catch {
+      toast.error('网络错误，请重试')
+    } finally {
+      setChangedFlagBusy(false)
+    }
+  }, [selectedInboundRows])
+
   const customBatchActions = React.useMemo(() => (
     <>
       <Button size="sm" variant="outline" onClick={openBatchUnloadSheet} className="min-w-[100px]">
@@ -315,6 +351,15 @@ export function InboundReceiptTable() {
       >
         {changedFlagBusy ? '处理中…' : '已变更'}
       </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="min-w-[100px]"
+        disabled={changedFlagBusy || urgentFlagBusy}
+        onClick={() => void applyCancelChanged()}
+      >
+        取消变更
+      </Button>
     </>
   ), [
     openBatchUnloadSheet,
@@ -322,6 +367,7 @@ export function InboundReceiptTable() {
     handleCopyContainerNumbers,
     applyUrgentFlag,
     applyMarkedChanged,
+    applyCancelChanged,
     urgentFlagBusy,
     changedFlagBusy,
   ])
