@@ -963,7 +963,8 @@ export function DetailTable({
     // 预约明细子表前几位：柜号、拆柜时间、实际板数、排车板数
     if (config.showColumns?.orderNumber) cols.push('orderNumber')
     if (config.showColumns?.customerName) cols.push('customerName')
-    if (appointmentId && config.showColumns?.pickupTime) cols.push('pickupTime')
+    // 预约明细子表不展示提柜时间（产品需求已取消该列）
+    if (!appointmentId && config.showColumns?.pickupTime) cols.push('pickupTime')
     if (appointmentId && config.showColumns?.unloadTime) cols.push('unloadTime')
     if (config.showColumns?.windowPeriod) cols.push('windowPeriod')
     if (config.showColumns?.estimatedWindowPeriod) cols.push('estimatedWindowPeriod')
