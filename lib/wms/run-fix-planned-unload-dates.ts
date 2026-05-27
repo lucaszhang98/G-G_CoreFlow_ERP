@@ -4,8 +4,9 @@
 import prisma from '@/lib/prisma'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 import {
-  includesInspectionKeyword,
+  currentLocationBlocksPlannedUnload,
   pickupCurrentLocationBlocksUnloadWhere,
+  resolveInboundStatusFromCurrentLocation,
 } from '@/lib/wms/current-location-blocks-unload'
 
 export interface FixPlannedUnloadDatesErrorRow {
@@ -18,6 +19,7 @@ export interface RunFixPlannedUnloadDatesResult {
   success: boolean
   message: string
   cleared_stale_inspection_dates: number
+  status_synced: number
   fixed: number
   failed: number
   total_candidates: number
@@ -34,24 +36,46 @@ export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDat
     },
     data: {
       planned_unload_at: null,
-      status: 'inspection',
       updated_at: new Date(),
     },
   })
 
-  const statusSynced = await prisma.inbound_receipt.updateMany({
+  const pickupRows = await prisma.inbound_receipt.findMany({
     where: {
-      status: { not: 'inspection' },
       orders: {
         pickup_management: pickupCurrentLocationBlocksUnloadWhere(),
       },
     },
-    data: {
-      status: 'inspection',
-      planned_unload_at: null,
-      updated_at: new Date(),
+    select: {
+      inbound_receipt_id: true,
+      status: true,
+      planned_unload_at: true,
+      orders: {
+        select: {
+          pickup_management: {
+            select: { current_location: true },
+          },
+        },
+      },
     },
   })
+
+  let statusSynced = 0
+  for (const row of pickupRows) {
+    const loc = row.orders?.pickup_management?.current_location
+    const expectedStatus = resolveInboundStatusFromCurrentLocation(loc)
+    if (!expectedStatus) continue
+    if (row.status === expectedStatus && row.planned_unload_at === null) continue
+    await prisma.inbound_receipt.update({
+      where: { inbound_receipt_id: row.inbound_receipt_id },
+      data: {
+        status: expectedStatus,
+        planned_unload_at: null,
+        updated_at: new Date(),
+      },
+    })
+    statusSynced++
+  }
 
   const inboundReceipts = await prisma.inbound_receipt.findMany({
     where: {
@@ -82,7 +106,7 @@ export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDat
   for (const receipt of inboundReceipts) {
     try {
       const loc = receipt.orders.pickup_management?.current_location
-      if (includesInspectionKeyword(loc)) {
+      if (currentLocationBlocksPlannedUnload(loc)) {
         continue
       }
 
@@ -121,13 +145,14 @@ export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDat
 
   const message =
     inboundReceipts.length === 0
-      ? '没有需要按规则回填的记录'
-      : `查验/封闭区脏数据已清理 ${cleared.count} 条、状态同步 ${statusSynced.count} 条；回填完成：成功 ${results.fixed} 条，失败 ${results.failed} 条`
+      ? `查验/封闭区拆柜日期已清理 ${cleared.count} 条、状态同步 ${statusSynced} 条；无待回填记录`
+      : `查验/封闭区拆柜日期已清理 ${cleared.count} 条、状态同步 ${statusSynced} 条；回填完成：成功 ${results.fixed} 条，失败 ${results.failed} 条`
 
   return {
     success: true,
     message,
     cleared_stale_inspection_dates: cleared.count,
+    status_synced: statusSynced,
     fixed: results.fixed,
     failed: results.failed,
     total_candidates: inboundReceipts.length,

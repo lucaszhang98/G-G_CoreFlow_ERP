@@ -9,6 +9,7 @@ const STATUS_LABEL: Record<string, string> = {
   received: '已入库',
   printed: '已打印',
   inspection: '查验',
+  closed_area: '封闭区',
 }
 
 function formatDate(date: Date | string | null | undefined): string {

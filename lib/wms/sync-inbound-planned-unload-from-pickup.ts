@@ -1,13 +1,20 @@
 /**
  * 按提柜「现在位置」与订单提柜/ETA，将入库拆柜日期与状态与数据库对齐。
- * - 现在位置含「查验」或「封闭区」=> 拆柜日期置空、入库状态=inspection（查验）
+ * - 现在位置含「查验」=> status=inspection；含「封闭区」=> status=closed_area；均清空拆柜日期
  * - 否则 => 状态=待处理、拆柜日期按 calculateUnloadDate(pickup_date, eta_date)
  */
 import prisma from '@/lib/prisma'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
-import { includesInspectionKeyword } from '@/lib/wms/current-location-blocks-unload'
+import { resolveInboundStatusFromCurrentLocation } from '@/lib/wms/current-location-blocks-unload'
 
-export { includesInspectionKeyword } from '@/lib/wms/current-location-blocks-unload'
+export {
+  includesInspectionKeyword,
+  includesClosedAreaKeyword,
+  currentLocationBlocksPlannedUnload,
+  resolveInboundStatusFromCurrentLocation,
+  inboundStatusBlocksUnload,
+  inboundRowShouldHighlightAsInspection,
+} from '@/lib/wms/current-location-blocks-unload'
 
 export async function syncInboundPlannedUnloadAtByPickupState(args: {
   orderId: bigint
@@ -31,13 +38,17 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
 
   if (!order || !inbound) return
 
-  const inspection = includesInspectionKeyword(pickup?.current_location)
-  const plannedUnloadAt = inspection ? null : calculateUnloadDate(order.pickup_date, order.eta_date)
+  const resolvedStatus = resolveInboundStatusFromCurrentLocation(
+    pickup?.current_location
+  )
+  const plannedUnloadAt = resolvedStatus
+    ? null
+    : calculateUnloadDate(order.pickup_date, order.eta_date)
 
   await prisma.inbound_receipt.update({
     where: { inbound_receipt_id: inbound.inbound_receipt_id },
     data: {
-      status: inspection ? 'inspection' : 'pending',
+      status: resolvedStatus ?? 'pending',
       planned_unload_at: plannedUnloadAt,
       updated_by: userId,
       updated_at: new Date(),

@@ -8,7 +8,10 @@ import { inboundReceiptUpdateSchema } from '@/lib/validations/inbound-receipt';
 import { inboundReceiptConfig } from '@/lib/crud/configs/inbound-receipts';
 import prisma from '@/lib/prisma';
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
-import { includesInspectionKeyword } from '@/lib/wms/current-location-blocks-unload';
+import {
+  inboundStatusBlocksUnload,
+  resolveInboundStatusFromCurrentLocation,
+} from '@/lib/wms/current-location-blocks-unload';
 
 /**
  * POST /api/wms/inbound-receipts/batch-update
@@ -77,6 +80,15 @@ export async function POST(request: NextRequest) {
     // 自动添加系统维护字段（只更新修改人/时间）
     await addSystemFields(updateData, currentUser, false);
 
+    if (
+      data.status !== undefined &&
+      inboundStatusBlocksUnload(data.status) &&
+      !hasCurrentLocationUpdate &&
+      data.planned_unload_at === undefined
+    ) {
+      updateData.planned_unload_at = null;
+    }
+
     const inboundReceiptIds = ids.map((id: string | number) => BigInt(id));
     let result: { count: number };
 
@@ -95,15 +107,16 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const inspection = includesInspectionKeyword(normalizedCurrentLocation);
+      const resolvedStatus =
+        resolveInboundStatusFromCurrentLocation(normalizedCurrentLocation);
       const actorId = currentUser?.id ? BigInt(currentUser.id) : null;
 
       await prisma.$transaction(async (tx) => {
         for (const row of targets) {
           const perRowUpdateData = {
             ...updateData,
-            status: inspection ? 'inspection' : 'pending',
-            planned_unload_at: inspection
+            status: resolvedStatus ?? 'pending',
+            planned_unload_at: resolvedStatus
               ? null
               : calculateUnloadDate(row.orders?.pickup_date, row.orders?.eta_date),
           };

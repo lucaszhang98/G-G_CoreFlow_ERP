@@ -6,7 +6,10 @@ import prisma from '@/lib/prisma';
 import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled';
 import { computeInboundReceiptHeaderDeliveryProgress } from '@/lib/utils/inbound-delivery-progress';
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
-import { includesInspectionKeyword } from '@/lib/wms/current-location-blocks-unload';
+import {
+  inboundStatusBlocksUnload,
+  resolveInboundStatusFromCurrentLocation,
+} from '@/lib/wms/current-location-blocks-unload';
 
 /**
  * GET /api/wms/inbound-receipts/:id
@@ -237,14 +240,23 @@ export async function PUT(
       }
     }
 
-    // 业务规则：现在位置含「查验」或「封闭区」时，入库状态=查验 且拆柜日期置空；
+    // 业务规则：现在位置含「查验」/「封闭区」时，入库状态对应且拆柜日期置空；
     // 不含时，入库状态=待处理 且按提柜/ETA自动回算拆柜日期。
     if (hasCurrentLocationUpdate) {
-      const inspection = includesInspectionKeyword(normalizedCurrentLocation);
-      updateData.status = inspection ? 'inspection' : 'pending';
-      updateData.planned_unload_at = inspection
+      const resolvedStatus =
+        resolveInboundStatusFromCurrentLocation(normalizedCurrentLocation);
+      updateData.status = resolvedStatus ?? 'pending';
+      updateData.planned_unload_at = resolvedStatus
         ? null
         : calculateUnloadDate(existing.orders?.pickup_date, existing.orders?.eta_date);
+    }
+
+    if (
+      data.status !== undefined &&
+      inboundStatusBlocksUnload(data.status) &&
+      data.planned_unload_at === undefined
+    ) {
+      updateData.planned_unload_at = null;
     }
 
     // 自动添加系统维护字段（只更新修改人/时间）

@@ -7,7 +7,8 @@ export const inboundReceiptCreateSchema = z.object({
   warehouse_id: z.number()
     .int()
     .positive('仓库ID必须为正整数'),
-  status: z.enum(['pending', 'arrived', 'received', 'printed', 'inspection'])
+  status: z
+    .enum(['pending', 'arrived', 'received', 'printed', 'inspection', 'closed_area'])
     .default('pending'),
   arrived_at_warehouse: z.boolean().optional().nullable(),
   planned_unload_at: z.string()
@@ -51,7 +52,8 @@ export const inboundReceiptUpdateSchema = z.object({
     .int()
     .positive('仓库ID必须为正整数')
     .optional(),
-  status: z.enum(['pending', 'arrived', 'received', 'printed', 'inspection'])
+  status: z
+    .enum(['pending', 'arrived', 'received', 'printed', 'inspection', 'closed_area'])
     .optional(),
   planned_unload_at: z.string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, '拆柜日期格式必须为 YYYY-MM-DD')
