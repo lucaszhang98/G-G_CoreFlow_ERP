@@ -34,6 +34,21 @@ export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDat
     },
     data: {
       planned_unload_at: null,
+      status: 'inspection',
+      updated_at: new Date(),
+    },
+  })
+
+  const statusSynced = await prisma.inbound_receipt.updateMany({
+    where: {
+      status: { not: 'inspection' },
+      orders: {
+        pickup_management: pickupCurrentLocationBlocksUnloadWhere(),
+      },
+    },
+    data: {
+      status: 'inspection',
+      planned_unload_at: null,
       updated_at: new Date(),
     },
   })
@@ -107,7 +122,7 @@ export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDat
   const message =
     inboundReceipts.length === 0
       ? '没有需要按规则回填的记录'
-      : `查验脏数据已清理 ${cleared.count} 条；回填完成：成功 ${results.fixed} 条，失败 ${results.failed} 条`
+      : `查验/封闭区脏数据已清理 ${cleared.count} 条、状态同步 ${statusSynced.count} 条；回填完成：成功 ${results.fixed} 条，失败 ${results.failed} 条`
 
   return {
     success: true,

@@ -41,6 +41,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import {
+  includesInspectionKeyword,
+  inboundRowShouldHighlightAsInspection,
+} from "@/lib/wms/current-location-blocks-unload"
 
 /** 未传 extraListParams 时使用同一引用。默认写 `= {}` 会在每次渲染新建对象，使 fetchData / URL 同步的依赖变化 → 无限请求 + 地址栏不停 replace（列表「跳」、数据被 Abort 覆盖）。 */
 const EMPTY_EXTRA_LIST_PARAMS: Record<string, string> = {}
@@ -3225,10 +3229,7 @@ export function EntityTable<T = any>({
           config.name === 'pickup_management'
             ? (row: any) => {
                 const loc = row.current_location
-                if (
-                  typeof loc === 'string' &&
-                  (loc.includes('查验') || loc.includes('封闭区'))
-                ) {
+                if (includesInspectionKeyword(loc)) {
                   return "bg-gradient-to-r from-red-200 via-red-100 to-red-200 dark:from-red-900/60 dark:via-red-950/50 dark:to-red-900/60 hover:from-red-300 hover:via-red-200 hover:to-red-300 dark:hover:from-red-800/65 dark:hover:via-red-900/55 dark:hover:to-red-800/65"
                 }
                 // 如果提柜时间字段有值，返回绿色背景（符合系统风格）
@@ -3239,8 +3240,8 @@ export function EntityTable<T = any>({
               }
             : config.name === 'inbound_receipt'
             ? (row: any) => {
-                // 状态为「查验」时整行红色
-                if (row.status === 'inspection') {
+                // 状态为「查验」或现在位置含「查验」/「封闭区」时整行红色
+                if (inboundRowShouldHighlightAsInspection(row)) {
                   return "bg-gradient-to-r from-red-100 via-red-50/80 to-red-100 dark:from-red-900/40 dark:via-red-900/30 dark:to-red-900/40 hover:from-red-200 hover:via-red-100/80 hover:to-red-200 dark:hover:from-red-800/50 dark:hover:via-red-800/40 dark:hover:to-red-800/50"
                 }
                 // 拆柜人员有值视为已录入，与提柜管理一致的浅绿色

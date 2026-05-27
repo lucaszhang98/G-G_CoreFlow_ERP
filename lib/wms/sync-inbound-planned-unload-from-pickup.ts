@@ -1,7 +1,7 @@
 /**
- * 按提柜「现在位置」与订单提柜/ETA，将入库拆柜日期 `planned_unload_at` 与数据库对齐。
- * - 现在位置含「查验」或「封闭区」=> 置空
- * - 否则 => 按 calculateUnloadDate(pickup_date, eta_date)
+ * 按提柜「现在位置」与订单提柜/ETA，将入库拆柜日期与状态与数据库对齐。
+ * - 现在位置含「查验」或「封闭区」=> 拆柜日期置空、入库状态=inspection（查验）
+ * - 否则 => 状态=待处理、拆柜日期按 calculateUnloadDate(pickup_date, eta_date)
  */
 import prisma from '@/lib/prisma'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
@@ -37,6 +37,7 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
   await prisma.inbound_receipt.update({
     where: { inbound_receipt_id: inbound.inbound_receipt_id },
     data: {
+      status: inspection ? 'inspection' : 'pending',
       planned_unload_at: plannedUnloadAt,
       updated_by: userId,
       updated_at: new Date(),

@@ -25,3 +25,12 @@ export function pickupCurrentLocationBlocksUnloadWhere() {
     })),
   }
 }
+
+/** 入库列表行：状态为查验，或现在位置含查验/封闭区 */
+export function inboundRowShouldHighlightAsInspection(row: {
+  status?: string | null
+  current_location?: string | null
+}): boolean {
+  if (row.status === 'inspection') return true
+  return includesInspectionKeyword(row.current_location)
+}
