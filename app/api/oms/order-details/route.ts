@@ -33,6 +33,7 @@ import { computeOrderDetailUnbookedPallets } from '@/lib/orders/order-detail-unb
  * - filter_delivery_location_code: 仓点筛选
  * - filter_booking_status: 预约状态筛选（unbooked/fully_booked/overbooked）
  * - filter_planned_unload_at_from/to: 预计拆柜日期范围筛选
+ * - filter_pickup_date_from/to: 提柜日期范围筛选（订单级，按 UTC 日历日）
  * - filter_earliest_appointment_time_from/to: 最早预约时间范围（计算字段，先全量算 id 再分页）
  * - filter_inbound_receipt_status_scope: received=仅关联入库单状态为已入库；__all__ 或不传=不按入库状态限制
  * 
@@ -171,6 +172,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const pickup_date_from = searchParams.get('filter_pickup_date_from')
+    const pickup_date_to = searchParams.get('filter_pickup_date_to')
+    if (pickup_date_from || pickup_date_to) {
+      where.orders = {
+        ...where.orders,
+        pickup_date: {},
+      }
+      if (pickup_date_from) {
+        const fromDay = pickup_date_from.trim().split('T')[0]
+        where.orders.pickup_date.gte = new Date(`${fromDay}T00:00:00.000Z`)
+      }
+      if (pickup_date_to) {
+        const toDay = pickup_date_to.trim().split('T')[0]
+        where.orders.pickup_date.lte = new Date(`${toDay}T23:59:59.999Z`)
+      }
+    }
+
     // 仅显示入库管理中状态为「已入库」的订单下的明细（与列表筛选「仅已入库」一致）
     const inboundReceiptStatusScope = searchParams.get('filter_inbound_receipt_status_scope')
     if (inboundReceiptStatusScope === 'received') {
@@ -191,6 +209,8 @@ export async function GET(request: NextRequest) {
       orderBy.orders = { customers: { name: order } }
     } else if (sort === 'planned_unload_at') {
       orderBy.orders = { inbound_receipt: { planned_unload_at: order } }
+    } else if (sort === 'pickup_date') {
+      orderBy.orders = { pickup_date: order }
     } else if (sort === 'delivery_location_code') {
       orderBy.locations_order_detail_delivery_location_idTolocations = {
         location_code: order,
@@ -484,6 +504,7 @@ export async function GET(request: NextRequest) {
         customer_name: customer?.name || null,
         container_number: item.orders?.order_number || null, // container_number 实际是 order_number
         planned_unload_at: ir?.planned_unload_at || null,
+        pickup_date: item.orders?.pickup_date ?? null,
         delivery_location: delivery_location_code, // 使用 location_code 作为 delivery_location
         delivery_location_code,
         delivery_nature: item.delivery_nature,
