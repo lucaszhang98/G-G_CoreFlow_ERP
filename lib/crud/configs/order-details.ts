@@ -195,6 +195,7 @@ export const orderDetailConfig: EntityConfig = {
       'customer_name',
       'delivery_location_code',
       'delivery_nature',
+      'window_period',
       'private_warehouse_info',
       'planned_unload_at',
       'estimated_pallets',

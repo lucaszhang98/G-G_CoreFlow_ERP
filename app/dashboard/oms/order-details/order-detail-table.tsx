@@ -41,12 +41,12 @@ import {
 
 const EMPTY_EXTRA_LIST_PARAMS: Record<string, string> = {}
 
-/** 关闭通用行内编辑（避免误调不存在的 /api/oms/order-details/:id）；实际板数用专用内联格 */
+/** 仅窗口期走 /api/order-details/:id；板数仍用专用内联格 */
 const orderDetailListConfig = {
   ...orderDetailConfig,
   list: {
     ...orderDetailConfig.list,
-    inlineEdit: { enabled: false as const },
+    inlineEdit: { enabled: true, fields: ['window_period'], cellClickToEdit: true },
   },
 }
 
@@ -144,6 +144,25 @@ export function OrderDetailTable() {
     window.addEventListener("beforeunload", onBeforeUnload)
     return () => window.removeEventListener("beforeunload", onBeforeUnload)
   }, [palletDrafts])
+
+  const saveWindowPeriod = React.useCallback(async (row: any, updates: Record<string, any>) => {
+    const detailId = row?.id
+    if (!detailId) throw new Error('缺少订单明细 ID')
+    const res = await fetch(`/api/order-details/${detailId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        window_period:
+          updates.window_period === '' || updates.window_period == null
+            ? null
+            : String(updates.window_period),
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : '保存窗口期失败')
+    }
+  }, [])
 
   const customCellRenderers = React.useMemo(
     () => ({
@@ -899,6 +918,7 @@ export function OrderDetailTable() {
       config={orderDetailListConfig}
       initialFilterValues={{ inbound_receipt_status_scope: 'received' }}
       refreshKey={tableRefreshKey}
+      customSaveHandler={saveWindowPeriod}
       customCellRenderers={customCellRenderers}
       customClickableColumns={customClickableColumns}
       customActions={customActions}
