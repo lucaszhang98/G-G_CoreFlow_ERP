@@ -6,6 +6,7 @@ export const paymentCreateSchema = z.object({
   amount: z.number().min(0, '金额不能小于 0'),
   currency: z.string().max(10).optional().default('USD'),
   bank_reference: z.string().max(100).optional(),
+  write_off: z.boolean().optional().default(false),
   notes: z.string().optional(),
 })
 

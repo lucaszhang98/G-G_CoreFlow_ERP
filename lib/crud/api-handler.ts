@@ -49,6 +49,25 @@ function checkEntityPermission(allowedRoles: string[], config: EntityConfig) {
   )
 }
 
+async function buildListSummary(
+  prismaModel: { aggregate: (args: { where: unknown; _sum: Record<string, boolean> }) => Promise<{ _sum: Record<string, unknown> }> },
+  where: unknown,
+  aggregates?: EntityConfig['list']['listAggregates']
+): Promise<Record<string, number>> {
+  const summary: Record<string, number> = {}
+  if (!aggregates?.length) return summary
+  for (const agg of aggregates) {
+    if ((agg.op ?? 'sum') !== 'sum') continue
+    const result = await prismaModel.aggregate({
+      where,
+      _sum: { [agg.field]: true },
+    })
+    const raw = result._sum?.[agg.field]
+    summary[agg.key] = raw != null && raw !== '' ? Number(raw) : 0
+  }
+  return summary
+}
+
 function getPrismaModel(config: EntityConfig) {
   const modelName = config.prisma?.model || config.name
   let prismaModel = (prisma as any)[modelName]
@@ -853,9 +872,16 @@ export function createListHandler(config: EntityConfig) {
         }
       })
 
-      return NextResponse.json(
-        buildPaginationResponse(transformedItems, total, page, limit)
+      const summary = await buildListSummary(
+        prismaModel,
+        where,
+        enhancedConfig.list.listAggregates
       )
+
+      return NextResponse.json({
+        ...buildPaginationResponse(transformedItems, total, page, limit),
+        summary,
+      })
     } catch (error: any) {
       console.error(`[createListHandler] 获取${config.displayName}列表失败:`, error)
       console.error('错误详情:', {

@@ -27,6 +27,7 @@ import { toast } from "sonner"
 import { EntityForm } from "./entity-form"
 import { filterAuditFields, getIdField as getConfigIdField } from "@/lib/crud/constants"
 import { autoFormatDateField, formatDateDisplay, formatDateTimeDisplay } from "@/lib/utils/date-format"
+import { formatCurrency, formatNumber } from "@/lib/utils/format"
 import { SearchModule } from "./search-module"
 import { InlineEditCell } from "./inline-edit-cell"
 import { LocationSelect } from "@/components/ui/location-select"
@@ -465,6 +466,7 @@ export function EntityTable<T = any>({
     return !Number.isNaN(n) && n >= 1 ? n : defaultPageSize
   })
   const [total, setTotal] = React.useState(0)
+  const [listSummary, setListSummary] = React.useState<Record<string, number>>({})
   const [sort, setSort] = React.useState(config.list.defaultSort)
   const [order, setOrder] = React.useState<'asc' | 'desc'>(config.list.defaultOrder)
   const [sorting, setSorting] = React.useState([{ 
@@ -814,6 +816,9 @@ export function EntityTable<T = any>({
       setData(result.data || [])
       const newTotal = result.pagination?.total ?? result.total ?? 0
       setTotal(newTotal)
+      setListSummary(
+        result.summary && typeof result.summary === 'object' ? result.summary : {}
+      )
       
       // 触发回调
       if (onSearchParamsChange) {
@@ -835,6 +840,7 @@ export function EntityTable<T = any>({
       toast.error(errorMsg)
       setData([])
       setTotal(0)
+      setListSummary({})
       if (onTotalChange) onTotalChange(0)
       if (onFilteredTotalChange) onFilteredTotalChange(0)
     } finally {
@@ -3111,6 +3117,24 @@ export function EntityTable<T = any>({
       <div className="flex flex-col gap-2 w-full px-0.5">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>共 <span className="font-semibold text-foreground">{total}</span> 条记录</span>
+          {enhancedConfig.list.listSummaryDisplay?.map((item) => {
+            const raw = listSummary[item.key]
+            const display =
+              item.format === 'currency'
+                ? formatCurrency(raw)
+                : item.format === 'number'
+                  ? formatNumber(raw)
+                  : raw != null && !Number.isNaN(Number(raw))
+                    ? String(raw)
+                    : '-'
+            return (
+              <span key={item.key} className="text-muted-foreground">
+                <span className="mx-1.5 text-border">|</span>
+                {item.label}
+                <span className="ml-1 font-semibold text-foreground tabular-nums">{display}</span>
+              </span>
+            )
+          })}
           {hasAnyDraftsToSave && (
             <Button
               type="button"

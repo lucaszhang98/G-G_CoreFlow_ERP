@@ -139,6 +139,8 @@ export const receivableConfig: EntityConfig = {
       },
     ],
     pageSize: 100,
+    listAggregates: [{ field: 'balance', key: 'balance_sum', op: 'sum' }],
+    listSummaryDisplay: [{ key: 'balance_sum', label: '余额合计', format: 'currency' }],
     batchOperations: {
       enabled: true,
       edit: { enabled: true },

@@ -345,7 +345,7 @@ export function InboundReceiptTable() {
       <Button
         size="sm"
         variant="outline"
-        className="min-w-[90px] text-orange-600 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-950/40"
+        className="min-w-[90px] text-green-600 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-950/40"
         disabled={changedFlagBusy || urgentFlagBusy}
         onClick={() => void applyMarkedChanged()}
       >
@@ -401,7 +401,7 @@ export function InboundReceiptTable() {
       const colorClass = isUrgent
         ? 'text-red-600 dark:text-red-400'
         : isChanged
-          ? 'text-orange-600 dark:text-orange-400'
+          ? 'text-green-600 dark:text-green-400'
           : ''
 
       return (

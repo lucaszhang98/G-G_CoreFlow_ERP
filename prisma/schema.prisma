@@ -353,6 +353,8 @@ model payments {
   currency                                     String?   @default("USD") @db.VarChar(10)
   payment_method                               String?   @db.VarChar(50)
   bank_reference                               String?   @db.VarChar(100)
+  /// 销帐标记（收款是否已销帐）
+  write_off                                    Boolean   @default(false)
   notes                                        String?
   created_at                                   DateTime? @default(now()) @db.Timestamptz(6)
   updated_at                                   DateTime? @default(now()) @db.Timestamptz(6)

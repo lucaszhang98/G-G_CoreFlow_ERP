@@ -161,6 +161,18 @@ export interface EntityConfig {
      * 为 true 时：发票列表只保留关联订单非「已取消」的行（与直送账单规则一致；依赖 orders 关联）
      */
     excludeCancelledOrders?: boolean
+    /** 列表 API 在相同筛选条件下聚合（如应收余额合计） */
+    listAggregates?: Array<{
+      field: string
+      key: string
+      op?: 'sum'
+    }>
+    /** 在「共 N 条记录」旁展示 listAggregates 结果 */
+    listSummaryDisplay?: Array<{
+      key: string
+      label: string
+      format?: 'currency' | 'number'
+    }>
   }
 
   /**

@@ -61,6 +61,12 @@ export const paymentConfig: EntityConfig = {
       label: '银行参考',
       type: 'text',
     },
+    write_off: {
+      key: 'write_off',
+      label: '销帐',
+      type: 'boolean',
+      sortable: true,
+    },
     notes: {
       key: 'notes',
       label: '备注',
@@ -85,21 +91,24 @@ export const paymentConfig: EntityConfig = {
   list: {
     defaultSort: 'payment_date',
     defaultOrder: 'desc',
-    columns: ['customer_id', 'payment_date', 'amount', 'currency', 'bank_reference', 'notes'],
+    columns: ['customer_id', 'payment_date', 'amount', 'currency', 'write_off', 'bank_reference', 'notes'],
     searchFields: ['bank_reference'],
     pageSize: 100,
     batchOperations: {
       enabled: true,
-      edit: { enabled: true, fields: ['payment_date', 'amount', 'bank_reference', 'notes'] },
+      edit: {
+        enabled: true,
+        fields: ['payment_date', 'amount', 'write_off', 'bank_reference', 'notes'],
+      },
       delete: { enabled: true },
     },
     inlineEdit: {
       enabled: true,
-      fields: ['payment_date', 'amount', 'bank_reference', 'notes'],
+      fields: ['payment_date', 'amount', 'write_off', 'bank_reference', 'notes'],
     },
   },
 
-  formFields: ['customer_id', 'payment_date', 'amount', 'bank_reference', 'notes'],
+  formFields: ['customer_id', 'payment_date', 'amount', 'write_off', 'bank_reference', 'notes'],
 
   permissions: {
     list: ['admin', 'oms_manager', 'employee', 'user', 'oms_operator'],
