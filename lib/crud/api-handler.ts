@@ -32,6 +32,10 @@ import {
 } from '@/lib/orders/order-visibility'
 import { purgeOperationalDataForCancelledOrder } from '@/lib/orders/cancelled-order-cleanup'
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
+import {
+  applyPickupDateEnteredAtToOrderUpdate,
+  hasPickupDateValue,
+} from '@/lib/oms/pickup-date-entered'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
 /**
@@ -1170,6 +1174,9 @@ export function createCreateHandler(config: EntityConfig) {
       // 对于订单表，创建时设置 container_volume = 0（新建订单时没有明细，体积为 0）
       if (config.prisma?.model === 'orders') {
         processedData.container_volume = 0
+        if (hasPickupDateValue(processedData.pickup_date)) {
+          processedData.pickup_date_entered_at = new Date()
+        }
       }
 
       // 对于应收表：已核销/余额/状态仅由收款核销与发票同步计算，创建时默认 allocated=0 并推导 balance、status
@@ -1552,13 +1559,28 @@ export function createUpdateHandler(config: EntityConfig) {
       }
       
       let item: any
-      let ordersBeforeUpdate: { status: string | null; operation_mode: string | null } | null =
-        null
+      let ordersBeforeUpdate: {
+        status: string | null
+        operation_mode: string | null
+        pickup_date: Date | null
+        pickup_date_entered_at: Date | null
+      } | null = null
       if (config.prisma?.model === 'orders') {
         ordersBeforeUpdate = await prisma.orders.findUnique({
           where: { order_id: BigInt(resolvedParams.id) },
-          select: { status: true, operation_mode: true },
+          select: {
+            status: true,
+            operation_mode: true,
+            pickup_date: true,
+            pickup_date_entered_at: true,
+          },
         })
+        if (processedData.pickup_date !== undefined && ordersBeforeUpdate) {
+          applyPickupDateEnteredAtToOrderUpdate(processedData, {
+            previousPickup: ordersBeforeUpdate.pickup_date,
+            existingEnteredAt: ordersBeforeUpdate.pickup_date_entered_at,
+          })
+        }
         item = await prisma.$transaction(async (tx) => {
           const updated = await tx.orders.update({
             where: { order_id: BigInt(resolvedParams.id) },

@@ -87,8 +87,8 @@ export interface DetailData {
   /** 预计窗口期（appointment_detail_lines，人工修改后锁定） */
   estimated_window_period?: string | null
   estimated_window_period_locked?: boolean
-  /** 提柜日期为本机「今天」时，预计窗口期标红 */
-  pickup_date_is_today?: boolean
+  /** 提柜日期今天从空录入时，预计窗口期标红（仅录入当天） */
+  pickup_date_entered_today?: boolean
   /** 拆柜时间：来自入库管理（inbound_receipt.planned_unload_at），按明细对应订单关联 */
   unload_time?: string | Date | null
   /** 忽略：为 true 时柜号强制绿色，与拒收等字段一样需点铅笔编辑后保存 */
@@ -1292,7 +1292,7 @@ export function DetailTable({
                         }
                         case 'estimatedWindowPeriod': {
                           const stored = (detail as any).estimated_window_period as string | null | undefined
-                          const highlightPickupToday = Boolean((detail as any).pickup_date_is_today)
+                          const highlightPickupToday = Boolean((detail as any).pickup_date_entered_today)
                           const highlightClass = highlightPickupToday
                             ? 'text-red-600 dark:text-red-400 font-medium'
                             : ''

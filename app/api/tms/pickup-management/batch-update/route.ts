@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth, serializeBigInt, addSystemFields } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
+import { applyPickupDateEnteredAtToOrderUpdate } from '@/lib/oms/pickup-date-entered'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
 // POST - 批量更新提柜管理记录
@@ -179,10 +180,28 @@ export async function POST(request: NextRequest) {
     // 更新 orders 表（如果有关联字段需要更新）
     if (Object.keys(orderUpdateData).length > 0) {
       await addSystemFields(orderUpdateData, user, false)
-      await prisma.orders.updateMany({
-        where: { order_id: { in: orderIds } },
-        data: orderUpdateData,
-      })
+      if (orderUpdateData.pickup_date !== undefined) {
+        const ordersBefore = await prisma.orders.findMany({
+          where: { order_id: { in: orderIds } },
+          select: { order_id: true, pickup_date: true, pickup_date_entered_at: true },
+        })
+        for (const orderBefore of ordersBefore) {
+          const perOrderData = { ...orderUpdateData }
+          applyPickupDateEnteredAtToOrderUpdate(perOrderData, {
+            previousPickup: orderBefore.pickup_date,
+            existingEnteredAt: orderBefore.pickup_date_entered_at,
+          })
+          await prisma.orders.update({
+            where: { order_id: orderBefore.order_id },
+            data: perOrderData,
+          })
+        }
+      } else {
+        await prisma.orders.updateMany({
+          where: { order_id: { in: orderIds } },
+          data: orderUpdateData,
+        })
+      }
     }
 
     // 批量更新后统一同步入库拆柜日期：

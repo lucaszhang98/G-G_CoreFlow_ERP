@@ -16,6 +16,7 @@ import {
   type PickupManagementMergedRow,
 } from '@/lib/validations/pickup-management-import'
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
+import { applyPickupDateEnteredAtToOrderUpdate } from '@/lib/oms/pickup-date-entered'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
 const SHEET1_NAME = '提柜数据1'
@@ -329,7 +330,17 @@ async function executeImport(
     if (row.container_type !== undefined) orderUpdate.container_type = row.container_type || null
     if (row.eta_date !== undefined) orderUpdate.eta_date = parseDate(row.eta_date)
     if (row.lfd_date !== undefined) orderUpdate.lfd_date = parseDate(row.lfd_date)
-    if (row.pickup_date !== undefined) orderUpdate.pickup_date = parseDateTime(row.pickup_date)
+    if (row.pickup_date !== undefined) {
+      orderUpdate.pickup_date = parseDateTime(row.pickup_date)
+      const existingOrder = await prisma.orders.findUnique({
+        where: { order_id: orderId },
+        select: { pickup_date: true, pickup_date_entered_at: true },
+      })
+      applyPickupDateEnteredAtToOrderUpdate(orderUpdate, {
+        previousPickup: existingOrder?.pickup_date,
+        existingEnteredAt: existingOrder?.pickup_date_entered_at,
+      })
+    }
     if (row.carrier_name !== undefined) {
       orderUpdate.carrier_id = masterData.carrierByName.get(row.carrier_name) ?? null
     }

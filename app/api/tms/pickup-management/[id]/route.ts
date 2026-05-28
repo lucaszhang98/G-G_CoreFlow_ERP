@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth, serializeBigInt, addSystemFields } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
+import { applyPickupDateEnteredAtToOrderUpdate } from '@/lib/oms/pickup-date-entered'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
 // GET - 获取单个提柜管理记录
@@ -189,7 +190,12 @@ async function updatePickupManagement(
     // 获取 pickup_management 记录，以获取关联的 order_id
     const pickup = await prisma.pickup_management.findUnique({
       where: { pickup_id: BigInt(pickupId) },
-      select: { order_id: true },
+      select: {
+        order_id: true,
+        orders: {
+          select: { pickup_date: true, pickup_date_entered_at: true },
+        },
+      },
     })
 
     if (!pickup) {
@@ -300,6 +306,12 @@ async function updatePickupManagement(
     // 更新 orders 表（如果有关联字段需要更新）
     if (Object.keys(orderUpdateData).length > 0) {
       await addSystemFields(orderUpdateData, user, false)
+      if (orderUpdateData.pickup_date !== undefined) {
+        applyPickupDateEnteredAtToOrderUpdate(orderUpdateData, {
+          previousPickup: pickup.orders?.pickup_date,
+          existingEnteredAt: pickup.orders?.pickup_date_entered_at,
+        })
+      }
       console.log('[提柜管理更新] 准备更新 orders')
       await prisma.orders.update({
         where: { order_id: pickup.order_id },

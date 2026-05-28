@@ -37,24 +37,6 @@ export function formatEstimatedWindowPeriodForApi(
   return dateOnlyPart(value)
 }
 
-/** 按本机日历日判断（与入库管理「显示当天」一致） */
-function localCalendarDatePart(value: Date | string | null | undefined): string | null {
-  if (value == null || value === '') return null
-  const d = typeof value === 'string' ? new Date(value) : value
-  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-/** 提柜日期是否为今天（本机日历日） */
-export function isPickupDateToday(pickupDate: Date | string | null | undefined): boolean {
-  const pickupPart = localCalendarDatePart(pickupDate)
-  if (!pickupPart) return false
-  return pickupPart === localCalendarDatePart(new Date())
-}
-
 /** PUT/表单：undefined=未传；null/''=清空 */
 export function parseEstimatedWindowPeriodInput(
   value: unknown

@@ -6,7 +6,7 @@ import {
   prismaAppointmentDetailLinesWhereParentAppointmentActive,
 } from '@/lib/utils/delivery-appointment-enabled'
 import { serializeBigInt } from '@/lib/api/helpers'
-import { isPickupDateToday } from '@/lib/oms/estimated-window-period'
+import { isPickupDateEnteredHighlightToday } from '@/lib/oms/pickup-date-entered'
 import {
   initialEstimatedWindowPeriodFieldsForOrder,
   resolveEstimatedWindowPeriodForLine,
@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
                 order_id: true,
                 order_number: true,
                 pickup_date: true,
+                pickup_date_entered_at: true,
                 customers: {
                   select: {
                     name: true,
@@ -228,7 +229,9 @@ export async function GET(request: NextRequest) {
         estimated_window_period_locked:
           (serialized as { estimated_window_period_locked?: boolean }).estimated_window_period_locked ===
           true,
-        pickup_date_is_today: isPickupDateToday(orderDetailOrders?.pickup_date ?? null),
+        pickup_date_entered_today: isPickupDateEnteredHighlightToday(
+          orderDetailOrders?.pickup_date_entered_at ?? null
+        ),
         // 拆柜时间：根据明细对应订单，从入库管理（inbound_receipt）取该订单的 planned_unload_at
         unload_time: orderDetail.order_id != null ? unloadTimeMap.get(String(orderDetail.order_id)) ?? null : null,
         // 送货时间：预约的确认开始时间，用于与拆柜时间对比（柜号红/黄/绿）

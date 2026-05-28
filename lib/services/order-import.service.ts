@@ -288,6 +288,7 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
             eta_date: new Date(firstRow.eta_date),
             lfd_date: firstRow.lfd_date ? new Date(firstRow.lfd_date) : null,
             pickup_date: firstRow.pickup_date ? new Date(firstRow.pickup_date) : null,
+            pickup_date_entered_at: firstRow.pickup_date ? new Date() : null,
             ready_date: firstRow.ready_date ? new Date(firstRow.ready_date) : null,
             return_deadline: firstRow.return_deadline
               ? new Date(firstRow.return_deadline)
