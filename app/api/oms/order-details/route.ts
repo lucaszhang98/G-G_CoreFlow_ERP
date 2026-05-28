@@ -33,7 +33,7 @@ import { computeOrderDetailUnbookedPallets } from '@/lib/orders/order-detail-unb
  * - filter_delivery_location_code: 仓点筛选
  * - filter_booking_status: 预约状态筛选（unbooked/fully_booked/overbooked）
  * - filter_planned_unload_at_from/to: 预计拆柜日期范围筛选
- * - filter_pickup_date_from/to: 提柜日期范围筛选（订单级，按 UTC 日历日）
+ * - filter_pickup_date_from/to: 提柜时间范围筛选（订单级，按 UTC 日历日，精确到日）
  * - filter_earliest_appointment_time_from/to: 最早预约时间范围（计算字段，先全量算 id 再分页）
  * - filter_inbound_receipt_status_scope: received=仅关联入库单状态为已入库；__all__ 或不传=不按入库状态限制
  * 
@@ -504,7 +504,11 @@ export async function GET(request: NextRequest) {
         customer_name: customer?.name || null,
         container_number: item.orders?.order_number || null, // container_number 实际是 order_number
         planned_unload_at: ir?.planned_unload_at || null,
-        pickup_date: item.orders?.pickup_date ?? null,
+        pickup_date: item.orders?.pickup_date
+          ? item.orders.pickup_date instanceof Date
+            ? item.orders.pickup_date.toISOString().split('T')[0]
+            : String(item.orders.pickup_date).split('T')[0]
+          : null,
         delivery_location: delivery_location_code, // 使用 location_code 作为 delivery_location
         delivery_location_code,
         delivery_nature: item.delivery_nature,

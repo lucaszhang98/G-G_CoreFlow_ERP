@@ -65,11 +65,10 @@ export const orderDetailConfig: EntityConfig = {
     },
     pickup_date: {
       key: 'pickup_date',
-      label: '提柜日期',
+      label: '提柜时间',
       type: 'date',
       sortable: true,
       readonly: true,
-      computed: true,
     },
     delivery_location_code: {
       key: 'delivery_location_code',
@@ -192,12 +191,12 @@ export const orderDetailConfig: EntityConfig = {
     columns: [
       'container_number',
       'operation_mode',
+      'pickup_date',
       'customer_name',
       'delivery_location_code',
       'delivery_nature',
       'private_warehouse_info',
       'planned_unload_at',
-      'pickup_date',
       'estimated_pallets',
       'actual_pallets',
       'unbooked_pallets',
@@ -233,6 +232,12 @@ export const orderDetailConfig: EntityConfig = {
         ],
       },
       {
+        field: 'pickup_date',
+        label: '提柜时间',
+        type: 'dateRange',
+        dateFields: ['pickup_date'],
+      },
+      {
         field: 'delivery_nature',
         label: '送仓性质',
         type: 'select',
@@ -259,12 +264,6 @@ export const orderDetailConfig: EntityConfig = {
         label: '预计拆柜日期',
         type: 'dateRange',
         dateFields: ['planned_unload_at'],
-      },
-      {
-        field: 'pickup_date',
-        label: '提柜日期',
-        type: 'dateRange',
-        dateFields: ['pickup_date'],
       },
       {
         field: 'booking_status',
