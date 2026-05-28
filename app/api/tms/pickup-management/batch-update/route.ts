@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth, serializeBigInt, addSystemFields } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
+import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
 // POST - 批量更新提柜管理记录
@@ -197,6 +198,9 @@ export async function POST(request: NextRequest) {
       )
       const actorId = user?.id ? BigInt(user.id) : null
       for (const orderId of uniqueOrderIds) {
+        if (updates.pickup_date !== undefined) {
+          await syncAppointmentEstimatedWindowPeriodForOrder({ orderId })
+        }
         await syncInboundPlannedUnloadAtByPickupState({
           orderId,
           userId: actorId,

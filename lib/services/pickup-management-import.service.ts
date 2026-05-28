@@ -15,6 +15,7 @@ import {
   type PickupManagementSheet2Row,
   type PickupManagementMergedRow,
 } from '@/lib/validations/pickup-management-import'
+import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
 const SHEET1_NAME = '提柜数据1'
@@ -370,6 +371,9 @@ async function executeImport(
 
     // 每行导入都会写入现在位置；同步入库 status（查验/封闭区或改回待处理）与拆柜日期
     if (pickupWasUpdated || orderUpdate.pickup_date !== undefined || orderUpdate.eta_date !== undefined) {
+      if (orderUpdate.pickup_date !== undefined) {
+        await syncAppointmentEstimatedWindowPeriodForOrder({ orderId })
+      }
       await syncInboundPlannedUnloadAtByPickupState({
         orderId,
         userId,

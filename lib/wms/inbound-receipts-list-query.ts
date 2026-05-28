@@ -360,9 +360,8 @@ export async function runInboundReceiptListQuery(
       })
       const warehousePointCount = Array.isArray(orderDetails) ? orderDetails.length : 0
       const currentLocation = order?.pickup_management?.current_location ?? null
-      const displayStatus = serialized.is_changed
-        ? 'pending'
-        : resolveInboundDisplayStatus(currentLocation, serialized.status)
+      // is_changed 仅用于柜号橙色展示；状态以库内值为准，便于「已变更」后继续编辑状态
+      const displayStatus = resolveInboundDisplayStatus(currentLocation, serialized.status)
 
       return {
         ...serialized,

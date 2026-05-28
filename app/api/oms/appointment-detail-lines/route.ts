@@ -6,8 +6,12 @@ import {
   prismaAppointmentDetailLinesWhereParentAppointmentActive,
 } from '@/lib/utils/delivery-appointment-enabled'
 import { serializeBigInt } from '@/lib/api/helpers'
-import { formatEstimatedWindowPeriodForApi } from '@/lib/oms/estimated-window-period'
-import { initialEstimatedWindowPeriodFieldsForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
+import { isPickupDateToday } from '@/lib/oms/estimated-window-period'
+import {
+  initialEstimatedWindowPeriodFieldsForOrder,
+  resolveEstimatedWindowPeriodForLine,
+  syncEstimatedWindowPeriodForAppointment,
+} from '@/lib/oms/sync-appointment-estimated-window-period'
 import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
 
 function pickPreferredInventoryLot<T extends { inbound_receipt_id: bigint | null; inventory_lot_id: bigint }>(
@@ -33,10 +37,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '缺少 appointmentId 参数' }, { status: 400 })
     }
 
+    const appointmentIdBig = BigInt(appointmentId)
+    await syncEstimatedWindowPeriodForAppointment(appointmentIdBig)
+
     // 仅返回所属预约仍启用的明细（与订单明细 API 一致；已停用预约不在此展示占用）
     const appointmentDetailLines = await prisma.appointment_detail_lines.findMany({
       where: {
-        appointment_id: BigInt(appointmentId),
+        appointment_id: appointmentIdBig,
         ...prismaAppointmentDetailLinesWhereParentAppointmentActive,
       },
       include: {
@@ -67,6 +74,7 @@ export async function GET(request: NextRequest) {
               select: {
                 order_id: true,
                 order_number: true,
+                pickup_date: true,
                 customers: {
                   select: {
                     name: true,
@@ -209,13 +217,18 @@ export async function GET(request: NextRequest) {
         order_number: orderDetailOrders?.order_number || null,
         // 客户名称（来自订单）
         customer_name: orderDetailOrders?.customers?.name || null,
-        // 预计窗口期（存于 appointment_detail_lines；人工锁定后不再随提柜变）
-        estimated_window_period: formatEstimatedWindowPeriodForApi(
-          (serialized as { estimated_window_period?: Date | null }).estimated_window_period
-        ),
+        // 预计窗口期（未锁定且后来补录提柜日时，按提柜日+3 展示并已在上方同步落库）
+        estimated_window_period: resolveEstimatedWindowPeriodForLine({
+          stored: (serialized as { estimated_window_period?: Date | null }).estimated_window_period,
+          locked:
+            (serialized as { estimated_window_period_locked?: boolean }).estimated_window_period_locked ===
+            true,
+          pickupDate: orderDetailOrders?.pickup_date ?? null,
+        }),
         estimated_window_period_locked:
           (serialized as { estimated_window_period_locked?: boolean }).estimated_window_period_locked ===
           true,
+        pickup_date_is_today: isPickupDateToday(orderDetailOrders?.pickup_date ?? null),
         // 拆柜时间：根据明细对应订单，从入库管理（inbound_receipt）取该订单的 planned_unload_at
         unload_time: orderDetail.order_id != null ? unloadTimeMap.get(String(orderDetail.order_id)) ?? null : null,
         // 送货时间：预约的确认开始时间，用于与拆柜时间对比（柜号红/黄/绿）

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth, serializeBigInt, addSystemFields } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
+import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
 // GET - 获取单个提柜管理记录
@@ -314,6 +315,11 @@ async function updatePickupManagement(
       body.current_location !== undefined
     if (shouldSyncInbound) {
       try {
+        if (body.pickup_date !== undefined) {
+          await syncAppointmentEstimatedWindowPeriodForOrder({
+            orderId: pickup.order_id,
+          })
+        }
         await syncInboundPlannedUnloadAtByPickupState({
           orderId: pickup.order_id,
           userId: user?.id ? BigInt(user.id) : null,

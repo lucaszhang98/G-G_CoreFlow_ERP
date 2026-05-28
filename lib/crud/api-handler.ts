@@ -31,6 +31,7 @@ import {
   ordersWhereRootExcludeCancelledOnly,
 } from '@/lib/orders/order-visibility'
 import { purgeOperationalDataForCancelledOrder } from '@/lib/orders/cancelled-order-cleanup'
+import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
 /**
@@ -1706,12 +1707,17 @@ export function createUpdateHandler(config: EntityConfig) {
         (processedData.pickup_date !== undefined || processedData.eta_date !== undefined)
       ) {
         try {
+          if (processedData.pickup_date !== undefined) {
+            await syncAppointmentEstimatedWindowPeriodForOrder({
+              orderId: item.order_id,
+            })
+          }
           await syncInboundPlannedUnloadAtByPickupState({
             orderId: item.order_id,
             userId: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
           })
         } catch (syncErr: any) {
-          console.warn('[订单更新] 同步入库拆柜日期失败:', syncErr)
+          console.warn('[订单更新] 同步入库/预计窗口期失败:', syncErr)
         }
       }
 
