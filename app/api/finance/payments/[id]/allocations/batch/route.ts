@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma'
 import { checkPermission, serializeBigInt } from '@/lib/api/helpers'
 import { paymentConfig } from '@/lib/crud/configs/payments'
 import { deriveReceivableBalanceAndStatus } from '@/lib/finance/invoice-receivable-sync'
+import { syncPaymentWriteOffById } from '@/lib/finance/payment-write-off-sync'
 
 type Item = { receivable_id: string | number; allocated_amount: number }
 
@@ -137,6 +138,8 @@ export async function POST(
 
         created.push(row)
       }
+
+      await syncPaymentWriteOffById(tx, paymentId)
 
       return created
     })

@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma'
 import { checkPermission, serializeBigInt } from '@/lib/api/helpers'
 import { paymentConfig } from '@/lib/crud/configs/payments'
 import { deriveReceivableBalanceAndStatus } from '@/lib/finance/invoice-receivable-sync'
+import { syncPaymentWriteOffById } from '@/lib/finance/payment-write-off-sync'
 
 function receivableOpenBalance(r: {
   receivable_amount: unknown
@@ -171,6 +172,8 @@ export async function POST(
           updated_by: userId,
         },
       })
+
+      await syncPaymentWriteOffById(tx, paymentId)
 
       return tx.payment_allocations.findUnique({
         where: { id: created.id },

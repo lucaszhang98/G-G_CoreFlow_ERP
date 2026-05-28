@@ -36,6 +36,7 @@ import {
   applyPickupDateEnteredAtToOrderUpdate,
   hasPickupDateValue,
 } from '@/lib/oms/pickup-date-entered'
+import { shouldPaymentWriteOff } from '@/lib/finance/payment-write-off-sync'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
 /**
@@ -1233,6 +1234,8 @@ export function createCreateHandler(config: EntityConfig) {
       if (config.prisma?.model === 'payments') {
         processedData.currency = processedData.currency || 'USD'
         processedData.payment_method = null
+        const amount = Number(processedData.amount ?? 0)
+        processedData.write_off = shouldPaymentWriteOff(amount, 0)
       }
 
       // 账单总金额由明细汇总，创建时主表 total_amount 仅允许默认 0（表单已不提交该字段）
@@ -1474,6 +1477,22 @@ export function createUpdateHandler(config: EntityConfig) {
         if (processedData.currency !== undefined) {
           processedData.currency = processedData.currency || 'USD'
         }
+        const existingPayment = await prisma.payments.findUnique({
+          where: { payment_id: BigInt(resolvedParams.id) },
+          select: { amount: true },
+        })
+        if (!existingPayment) {
+          return NextResponse.json({ error: `${config.displayName}不存在` }, { status: 404 })
+        }
+        const sumAgg = await prisma.payment_allocations.aggregate({
+          where: { payment_id: BigInt(resolvedParams.id) },
+          _sum: { allocated_amount: true },
+        })
+        const allocatedTotal = Number(sumAgg._sum.allocated_amount ?? 0)
+        const effectiveAmount = Number(
+          processedData.amount !== undefined ? processedData.amount : existingPayment.amount
+        )
+        processedData.write_off = shouldPaymentWriteOff(effectiveAmount, allocatedTotal)
       }
 
       const prismaModel = getPrismaModel(config)
