@@ -8,6 +8,7 @@ import {
   pickupCurrentLocationBlocksUnloadWhere,
   resolveInboundStatusFromCurrentLocation,
 } from '@/lib/wms/current-location-blocks-unload'
+import { isInboundPlannedUnloadAtAutoUpdateBlocked } from '@/lib/wms/planned-unload-auto-update'
 
 export interface FixPlannedUnloadDatesErrorRow {
   inbound_receipt_id: string
@@ -30,6 +31,7 @@ export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDat
   const cleared = await prisma.inbound_receipt.updateMany({
     where: {
       planned_unload_at: { not: null },
+      unloaded_by: null,
       orders: {
         pickup_management: pickupCurrentLocationBlocksUnloadWhere(),
       },
@@ -50,6 +52,7 @@ export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDat
       inbound_receipt_id: true,
       status: true,
       planned_unload_at: true,
+      unloaded_by: true,
       orders: {
         select: {
           pickup_management: {
@@ -66,13 +69,16 @@ export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDat
     const expectedStatus = resolveInboundStatusFromCurrentLocation(loc)
     if (!expectedStatus) continue
     if (row.status === expectedStatus && row.planned_unload_at === null) continue
+    const data: { status: string; updated_at: Date; planned_unload_at?: null } = {
+      status: expectedStatus,
+      updated_at: new Date(),
+    }
+    if (!isInboundPlannedUnloadAtAutoUpdateBlocked(row.unloaded_by)) {
+      data.planned_unload_at = null
+    }
     await prisma.inbound_receipt.update({
       where: { inbound_receipt_id: row.inbound_receipt_id },
-      data: {
-        status: expectedStatus,
-        planned_unload_at: null,
-        updated_at: new Date(),
-      },
+      data,
     })
     statusSynced++
   }

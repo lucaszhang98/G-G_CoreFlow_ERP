@@ -12,6 +12,11 @@ import {
   inboundStatusBlocksUnload,
   resolveInboundStatusFromCurrentLocation,
 } from '@/lib/wms/current-location-blocks-unload';
+import {
+  guardInboundPlannedUnloadAtInUpdate,
+  isInboundPlannedUnloadAtAutoUpdateBlocked,
+  resolveEffectiveInboundUnloadedBy,
+} from '@/lib/wms/planned-unload-auto-update';
 
 /**
  * POST /api/wms/inbound-receipts/batch-update
@@ -81,15 +86,14 @@ export async function POST(request: NextRequest) {
     // 自动添加系统维护字段（只更新修改人/时间）
     await addSystemFields(updateData, currentUser, false);
 
-    if (
+    // 批量改状态时清空拆柜日：仅对未填拆柜人员的行生效（见 per-row 逻辑）
+    const batchClearUnloadDateOnBlockedStatus =
       data.status !== undefined &&
       inboundStatusBlocksUnload(data.status) &&
       !hasCurrentLocationUpdate &&
-      data.planned_unload_at === undefined
-    ) {
-      updateData.planned_unload_at = null;
-    }
+      data.planned_unload_at === undefined;
 
+    const manualPlannedUnloadAtInRequest = data.planned_unload_at !== undefined;
     const inboundReceiptIds = ids.map((id: string | number) => BigInt(id));
     let result: { count: number };
 
@@ -99,6 +103,7 @@ export async function POST(request: NextRequest) {
         select: {
           inbound_receipt_id: true,
           order_id: true,
+          unloaded_by: true,
           orders: {
             select: {
               pickup_date: true,
@@ -114,17 +119,26 @@ export async function POST(request: NextRequest) {
 
       await prisma.$transaction(async (tx) => {
         for (const row of targets) {
-          const perRowUpdateData = {
+          const effectiveUnloadedBy = resolveEffectiveInboundUnloadedBy({
+            stored: row.unloaded_by,
+            inRequest: data.unloaded_by,
+          });
+          const perRowUpdateData: Record<string, unknown> = {
             ...updateData,
             status: resolvedStatus ?? 'pending',
-            planned_unload_at: resolvedStatus
-              ? null
-              : calculateUnloadDate(row.orders?.pickup_date, row.orders?.eta_date),
           };
+          if (!isInboundPlannedUnloadAtAutoUpdateBlocked(effectiveUnloadedBy)) {
+            perRowUpdateData.planned_unload_at = resolvedStatus
+              ? null
+              : calculateUnloadDate(row.orders?.pickup_date, row.orders?.eta_date);
+          }
 
           await tx.inbound_receipt.update({
             where: { inbound_receipt_id: row.inbound_receipt_id },
-            data: perRowUpdateData,
+            data: guardInboundPlannedUnloadAtInUpdate(perRowUpdateData, {
+              unloadedBy: effectiveUnloadedBy,
+              manualPlannedUnloadAtInRequest,
+            }),
           });
 
           await tx.pickup_management.upsert({
@@ -145,8 +159,62 @@ export async function POST(request: NextRequest) {
       });
 
       result = { count: targets.length };
+    } else if (batchClearUnloadDateOnBlockedStatus) {
+      const targets = await prisma.inbound_receipt.findMany({
+        where: { inbound_receipt_id: { in: inboundReceiptIds } },
+        select: { inbound_receipt_id: true, unloaded_by: true },
+      });
+
+      await prisma.$transaction(async (tx) => {
+        for (const row of targets) {
+          const effectiveUnloadedBy = resolveEffectiveInboundUnloadedBy({
+            stored: row.unloaded_by,
+            inRequest: data.unloaded_by,
+          });
+          const perRowUpdateData: Record<string, unknown> = { ...updateData };
+          if (!isInboundPlannedUnloadAtAutoUpdateBlocked(effectiveUnloadedBy)) {
+            perRowUpdateData.planned_unload_at = null;
+          }
+          await tx.inbound_receipt.update({
+            where: { inbound_receipt_id: row.inbound_receipt_id },
+            data: guardInboundPlannedUnloadAtInUpdate(perRowUpdateData, {
+              unloadedBy: effectiveUnloadedBy,
+              manualPlannedUnloadAtInRequest,
+            }),
+          });
+        }
+      });
+
+      result = { count: targets.length };
+    } else if (
+      manualPlannedUnloadAtInRequest ||
+      data.unloaded_by !== undefined
+    ) {
+      // 含拆柜日期或拆柜人员变更：按行应用锁定规则
+      const targets = await prisma.inbound_receipt.findMany({
+        where: { inbound_receipt_id: { in: inboundReceiptIds } },
+        select: { inbound_receipt_id: true, unloaded_by: true },
+      });
+
+      await prisma.$transaction(async (tx) => {
+        for (const row of targets) {
+          const effectiveUnloadedBy = resolveEffectiveInboundUnloadedBy({
+            stored: row.unloaded_by,
+            inRequest: data.unloaded_by,
+          });
+          await tx.inbound_receipt.update({
+            where: { inbound_receipt_id: row.inbound_receipt_id },
+            data: guardInboundPlannedUnloadAtInUpdate(updateData, {
+              unloadedBy: effectiveUnloadedBy,
+              manualPlannedUnloadAtInRequest,
+            }),
+          });
+        }
+      });
+
+      result = { count: targets.length };
     } else {
-      // 普通批量更新
+      // 普通批量更新（不涉及拆柜日期/拆柜人员）
       result = await prisma.inbound_receipt.updateMany({
         where: {
           inbound_receipt_id: {

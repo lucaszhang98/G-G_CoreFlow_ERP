@@ -10,6 +10,11 @@ import {
   inboundStatusBlocksUnload,
   resolveInboundStatusFromCurrentLocation,
 } from '@/lib/wms/current-location-blocks-unload';
+import {
+  guardInboundPlannedUnloadAtInUpdate,
+  isInboundPlannedUnloadAtAutoUpdateBlocked,
+  resolveEffectiveInboundUnloadedBy,
+} from '@/lib/wms/planned-unload-auto-update';
 
 /**
  * GET /api/wms/inbound-receipts/:id
@@ -241,27 +246,45 @@ export async function PUT(
       }
     }
 
+    const effectiveUnloadedBy = resolveEffectiveInboundUnloadedBy({
+      stored: existing.unloaded_by,
+      inRequest: data.unloaded_by,
+    });
+    const blockAutoPlannedUnloadAt = isInboundPlannedUnloadAtAutoUpdateBlocked(
+      effectiveUnloadedBy
+    );
+    const manualPlannedUnloadAtInRequest = data.planned_unload_at !== undefined;
+
     // 业务规则：现在位置含「查验」/「封闭区」时，入库状态对应且拆柜日期置空；
     // 不含时，入库状态=待处理 且按提柜/ETA自动回算拆柜日期。
+    // 已填拆柜人员（含本次请求新指定）时不做任何自动拆柜日期变更。
     if (hasCurrentLocationUpdate) {
       const resolvedStatus =
         resolveInboundStatusFromCurrentLocation(normalizedCurrentLocation);
       updateData.status = resolvedStatus ?? 'pending';
-      updateData.planned_unload_at = resolvedStatus
-        ? null
-        : calculateUnloadDate(existing.orders?.pickup_date, existing.orders?.eta_date);
+      if (!blockAutoPlannedUnloadAt) {
+        updateData.planned_unload_at = resolvedStatus
+          ? null
+          : calculateUnloadDate(existing.orders?.pickup_date, existing.orders?.eta_date);
+      }
     }
 
     if (
       data.status !== undefined &&
       inboundStatusBlocksUnload(data.status) &&
-      data.planned_unload_at === undefined
+      !manualPlannedUnloadAtInRequest &&
+      !blockAutoPlannedUnloadAt
     ) {
       updateData.planned_unload_at = null;
     }
 
     // 自动添加系统维护字段（只更新修改人/时间）
     await addSystemFields(updateData, currentUser, false);
+
+    const guardedUpdateData = guardInboundPlannedUnloadAtInUpdate(updateData, {
+      unloadedBy: effectiveUnloadedBy,
+      manualPlannedUnloadAtInRequest,
+    });
 
     // 同步写入提柜管理的现在位置（order级字段）
     if (hasCurrentLocationUpdate) {
@@ -282,12 +305,12 @@ export async function PUT(
     // 更新拆柜规划
     // 添加调试日志
     if (process.env.NODE_ENV === 'development') {
-      console.log('[inbound-receipts PUT] 更新数据:', updateData)
+      console.log('[inbound-receipts PUT] 更新数据:', guardedUpdateData)
     }
     
     const inboundReceipt = await prisma.inbound_receipt.update({
       where: { inbound_receipt_id: BigInt(resolvedParams.id) },
-      data: updateData,
+      data: guardedUpdateData,
       include: {
         ...inboundReceiptConfig.prisma?.include,
         inventory_lots: {
