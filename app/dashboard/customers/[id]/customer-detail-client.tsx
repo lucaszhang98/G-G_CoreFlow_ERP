@@ -32,6 +32,7 @@ export function CustomerDetailClient({ config, data }: CustomerDetailClientProps
     name: data.name,
     company_name: data.company_name || null,
     status: data.status || "active",
+    fist: data.fist === true,
     credit_limit: data.credit_limit ? String(data.credit_limit) : null,
     contact: contactData ? {
       name: contactData.name || "",

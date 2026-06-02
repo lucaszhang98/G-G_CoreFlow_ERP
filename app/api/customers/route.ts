@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
         company_name: data.company_name,
         credit_limit: data.credit_limit !== undefined && data.credit_limit !== null ? data.credit_limit : 0, // 默认值为 0
         status: data.status,
+        fist: data.fist ?? false,
         contact_id: null, // 先设置为 null，创建联系人后再更新
       };
       // 自动添加系统维护字段（在事务内部，跳过用户验证以避免嵌套查询）

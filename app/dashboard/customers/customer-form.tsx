@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface Customer {
   id: string
@@ -23,6 +24,7 @@ interface Customer {
   name: string
   company_name?: string | null
   status?: string | null
+  fist?: boolean
   credit_limit?: string | null
   contact?: {
     name: string
@@ -65,6 +67,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
             ? parseFloat(customer.credit_limit)
             : undefined,
           status: ((customer.status as "active" | "inactive") || "active") as "active" | "inactive",
+          fist: customer.fist === true,
           contact: customer.contact
             ? {
                 name: customer.contact.name || "",
@@ -81,10 +84,12 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         }
       : {
           status: "active",
+          fist: false,
         },
   })
 
   const status = watch("status")
+  const fist = watch("fist")
 
   const onSubmit = async (data: any) => {
     try {
@@ -95,6 +100,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         code: data.code,
         name: data.name,
         status: data.status,
+        fist: data.fist === true,
       }
 
       // 可选字段
@@ -234,6 +240,20 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                 {errors.credit_limit.message}
               </p>
             )}
+          </div>
+
+          <div className="space-y-2 flex flex-col justify-end">
+            <Label htmlFor="fist">FIST</Label>
+            <div className="flex items-center gap-2 h-10">
+              <Checkbox
+                id="fist"
+                checked={fist === true}
+                onCheckedChange={(checked) => setValue("fist", checked === true)}
+              />
+              <span className="text-sm text-muted-foreground">
+                {fist === true ? "是" : "否"}
+              </span>
+            </div>
           </div>
         </div>
       </div>

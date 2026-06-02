@@ -126,6 +126,7 @@ export async function PUT(
       updateData.credit_limit = data.credit_limit !== null ? data.credit_limit : 0;
     }
     if (data.status) updateData.status = data.status;
+    if (data.fist !== undefined) updateData.fist = data.fist;
 
     // 处理联系人更新
     // 注意：数据库要求 contact_roles.name 非空，所以只有当提供了 name 时才创建/更新联系人
