@@ -1801,7 +1801,7 @@ export function createUpdateHandler(config: EntityConfig) {
         }
       }
 
-      // 订单修改提柜/到港日期后，与入库状态、拆柜日期对齐（现在位置含查验/封闭区则对应状态，否则待处理）
+      // 订单修改提柜/到港日期后：预计窗口期同步；入库仅查验/封闭区联动
       if (
         config.prisma?.model === 'orders' &&
         (processedData.pickup_date !== undefined || processedData.eta_date !== undefined)

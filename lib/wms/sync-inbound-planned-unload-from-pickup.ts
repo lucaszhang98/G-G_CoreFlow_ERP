@@ -1,13 +1,14 @@
 /**
- * 按提柜「现在位置」与订单提柜/ETA，将入库拆柜日期与状态与数据库对齐。
+ * 提柜侧触发入库联动（**仅查验/封闭区**）：
  * - 现在位置含「查验」=> status=inspection；含「封闭区」=> status=closed_area；未填拆柜人员时清空拆柜日期
- * - 否则（含从查验/封闭区改为其他现在位置）=> 状态固定改回待处理，未填拆柜人员时拆柜日期按提柜/ETA重算
- * - 已填拆柜人员：仅同步入库状态，绝不自动改 planned_unload_at
+ * - 库内原为查验/封闭区、现在位置已不含关键词 => 改回待处理，未填拆柜人员时按提柜/ETA 重算拆柜日期
+ * - 仅改提柜日/ETA/普通现在位置 => **不修改** inbound_receipt（预计窗口期仍走 OMS 同步）
+ * - 已填拆柜人员：仅同步 status，不自动改 planned_unload_at
  */
 import prisma from '@/lib/prisma'
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
-import { resolveInboundStatusFromCurrentLocation } from '@/lib/wms/current-location-blocks-unload'
+import { buildInboundInspectionAreaSyncPatch } from '@/lib/wms/current-location-blocks-unload'
 import { isInboundPlannedUnloadAtAutoUpdateBlocked } from '@/lib/wms/planned-unload-auto-update'
 
 export {
@@ -17,6 +18,8 @@ export {
   resolveInboundStatusFromCurrentLocation,
   inboundStatusBlocksUnload,
   inboundRowShouldHighlightAsInspection,
+  shouldSyncInboundFromPickupLocation,
+  buildInboundInspectionAreaSyncPatch,
 } from '@/lib/wms/current-location-blocks-unload'
 
 export async function syncInboundPlannedUnloadAtByPickupState(args: {
@@ -35,7 +38,12 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
     }),
     prisma.inbound_receipt.findUnique({
       where: { order_id: orderId },
-      select: { inbound_receipt_id: true, unloaded_by: true },
+      select: {
+        inbound_receipt_id: true,
+        unloaded_by: true,
+        status: true,
+        planned_unload_at: true,
+      },
     }),
   ])
 
@@ -48,22 +56,24 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
 
   if (!inbound) return
 
-  const resolvedStatus = resolveInboundStatusFromCurrentLocation(
-    pickup?.current_location
-  )
-  const plannedUnloadAt = resolvedStatus
-    ? null
-    : calculateUnloadDate(order.pickup_date, order.eta_date)
+  const patch = buildInboundInspectionAreaSyncPatch({
+    currentLocation: pickup?.current_location,
+    storedStatus: inbound.status,
+    storedPlannedUnloadAt: inbound.planned_unload_at,
+    pickupDate: order.pickup_date,
+    etaDate: order.eta_date,
+    blockAutoPlannedUnloadAt: isInboundPlannedUnloadAtAutoUpdateBlocked(
+      inbound.unloaded_by
+    ),
+    recalculatePlannedUnloadAt: calculateUnloadDate,
+  })
 
-  const blockAutoDate = isInboundPlannedUnloadAtAutoUpdateBlocked(
-    inbound.unloaded_by
-  )
+  if (!patch) return
 
   await prisma.inbound_receipt.update({
     where: { inbound_receipt_id: inbound.inbound_receipt_id },
     data: {
-      status: resolvedStatus ?? 'pending',
-      ...(blockAutoDate ? {} : { planned_unload_at: plannedUnloadAt }),
+      ...patch,
       updated_by: userId,
       updated_at: new Date(),
     },

@@ -320,7 +320,7 @@ async function updatePickupManagement(
 
     }
 
-    // 提柜日期 / ETA / 现在位置任一变更：同步入库状态 + 拆柜日期（现在位置决定 status，否则待处理）
+    // 提柜日期 / ETA / 现在位置变更：预计窗口期 + 入库（仅查验/封闭区联动）
     const shouldSyncInbound =
       body.pickup_date !== undefined ||
       body.eta_date !== undefined ||

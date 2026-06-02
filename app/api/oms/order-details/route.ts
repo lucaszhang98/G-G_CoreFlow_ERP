@@ -18,6 +18,33 @@ import {
 import { computeOrderDetailUnbookedPallets } from '@/lib/orders/order-detail-unbooked-pallets'
 import { resolveOrderFistFromRelation } from '@/lib/wms/resolve-order-fist-display'
 
+/** 列表展示所需订单字段；显式 select，避免 include 全表 scalar 在迁移未部署时拖垮列表 */
+const orderDetailsOrdersSelect = {
+  order_number: true,
+  operation_mode: true,
+  pickup_date: true,
+  fist: true,
+  customers: {
+    select: {
+      id: true,
+      name: true,
+      code: true,
+    },
+  },
+  pickup_management: {
+    select: {
+      current_location: true,
+    },
+  },
+  inbound_receipt: {
+    select: {
+      inbound_receipt_id: true,
+      planned_unload_at: true,
+      status: true,
+    },
+  },
+} as const
+
 /**
  * GET /api/oms/order-details
  * 获取所有订单明细（已入库 + 未入库）
@@ -337,27 +364,7 @@ export async function GET(request: NextRequest) {
         take: queryLimit,
         include: {
           orders: {
-            include: {
-              customers: {
-                select: {
-                  id: true,
-                  name: true,
-                  code: true,
-                },
-              },
-              pickup_management: {
-                select: {
-                  current_location: true,
-                },
-              },
-              inbound_receipt: {
-                select: {
-                  inbound_receipt_id: true,
-                  planned_unload_at: true,
-                  status: true,
-                },
-              },
-            },
+            select: orderDetailsOrdersSelect,
           },
           inventory_lots: {
             select: {

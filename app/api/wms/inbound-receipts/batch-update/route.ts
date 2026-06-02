@@ -10,7 +10,8 @@ import prisma from '@/lib/prisma';
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
 import {
   inboundStatusBlocksUnload,
-  resolveInboundStatusFromCurrentLocation,
+  buildInboundInspectionAreaSyncPatch,
+  inboundReceiptUpdateHasBusinessFields,
 } from '@/lib/wms/current-location-blocks-unload';
 import {
   guardInboundPlannedUnloadAtInUpdate,
@@ -104,6 +105,8 @@ export async function POST(request: NextRequest) {
           inbound_receipt_id: true,
           order_id: true,
           unloaded_by: true,
+          status: true,
+          planned_unload_at: true,
           orders: {
             select: {
               pickup_date: true,
@@ -113,8 +116,6 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const resolvedStatus =
-        resolveInboundStatusFromCurrentLocation(normalizedCurrentLocation);
       const actorId = currentUser?.id ? BigInt(currentUser.id) : null;
 
       await prisma.$transaction(async (tx) => {
@@ -123,23 +124,44 @@ export async function POST(request: NextRequest) {
             stored: row.unloaded_by,
             inRequest: data.unloaded_by,
           });
+          const inspectionPatch = buildInboundInspectionAreaSyncPatch({
+            currentLocation: normalizedCurrentLocation,
+            storedStatus: row.status,
+            storedPlannedUnloadAt: row.planned_unload_at,
+            pickupDate: row.orders?.pickup_date,
+            etaDate: row.orders?.eta_date,
+            blockAutoPlannedUnloadAt: isInboundPlannedUnloadAtAutoUpdateBlocked(
+              effectiveUnloadedBy
+            ),
+            recalculatePlannedUnloadAt: calculateUnloadDate,
+          })
           const perRowUpdateData: Record<string, unknown> = {
             ...updateData,
-            status: resolvedStatus ?? 'pending',
-          };
-          if (!isInboundPlannedUnloadAtAutoUpdateBlocked(effectiveUnloadedBy)) {
-            perRowUpdateData.planned_unload_at = resolvedStatus
-              ? null
-              : calculateUnloadDate(row.orders?.pickup_date, row.orders?.eta_date);
+          }
+          if (inspectionPatch?.status !== undefined) {
+            perRowUpdateData.status = inspectionPatch.status
+          }
+          if (inspectionPatch?.planned_unload_at !== undefined) {
+            perRowUpdateData.planned_unload_at = inspectionPatch.planned_unload_at
           }
 
-          await tx.inbound_receipt.update({
-            where: { inbound_receipt_id: row.inbound_receipt_id },
-            data: guardInboundPlannedUnloadAtInUpdate(perRowUpdateData, {
+          const guardedRowData = guardInboundPlannedUnloadAtInUpdate(
+            perRowUpdateData,
+            {
               unloadedBy: effectiveUnloadedBy,
               manualPlannedUnloadAtInRequest,
-            }),
-          });
+            }
+          )
+          // 仅改普通现在位置、且非查验/封闭区：不写 inbound，避免误触 updated_at
+          if (
+            inspectionPatch != null ||
+            inboundReceiptUpdateHasBusinessFields(guardedRowData)
+          ) {
+            await tx.inbound_receipt.update({
+              where: { inbound_receipt_id: row.inbound_receipt_id },
+              data: guardedRowData,
+            })
+          }
 
           await tx.pickup_management.upsert({
             where: { order_id: row.order_id },

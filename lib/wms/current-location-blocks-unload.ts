@@ -20,6 +20,20 @@ export type InboundStatusFromCurrentLocation =
   | typeof INBOUND_STATUS_INSPECTION
   | typeof INBOUND_STATUS_CLOSED_AREA
 
+export type InboundInspectionAreaSyncPatch = {
+  status?: string
+  planned_unload_at?: Date | null
+}
+
+const INBOUND_UPDATE_META_KEYS = new Set(['updated_by', 'updated_at'])
+
+/** 除 updated_by/updated_at 外是否还有入库字段待写入 */
+export function inboundReceiptUpdateHasBusinessFields(
+  data: Record<string, unknown>
+): boolean {
+  return Object.keys(data).some((k) => !INBOUND_UPDATE_META_KEYS.has(k))
+}
+
 export function includesInspectionKeyword(
   currentLocation: string | null | undefined
 ): boolean {
@@ -48,7 +62,7 @@ export function currentLocationBlocksPlannedUnload(
   )
 }
 
-/** 根据现在位置解析入库状态；无关键词则返回 null（表示恢复待处理） */
+/** 根据现在位置解析入库状态；无关键词则返回 null */
 export function resolveInboundStatusFromCurrentLocation(
   currentLocation: string | null | undefined
 ): InboundStatusFromCurrentLocation | null {
@@ -59,6 +73,84 @@ export function resolveInboundStatusFromCurrentLocation(
     return INBOUND_STATUS_CLOSED_AREA
   }
   return null
+}
+
+/**
+ * 是否需联动入库管理：现在位置含查验/封闭区，或库内仍为查验/封闭区待退出。
+ */
+export function shouldSyncInboundFromPickupLocation(
+  currentLocation: string | null | undefined,
+  storedStatus: string | null | undefined
+): boolean {
+  if (currentLocationBlocksPlannedUnload(currentLocation)) return true
+  if (inboundStatusBlocksUnload(storedStatus)) return true
+  return false
+}
+
+/**
+ * 提柜/入库同步时写入的 status（仅 shouldSync 为 true 时调用）：
+ * - 现在位置含查验/封闭区 => 对应状态
+ * - 库内原为查验/封闭区、现在位置已不含关键词 => 待处理
+ */
+export function resolveInboundStatusOnPickupSync(
+  currentLocation: string | null | undefined,
+  storedStatus: string | null | undefined
+): string | undefined {
+  const fromLocation = resolveInboundStatusFromCurrentLocation(currentLocation)
+  if (fromLocation) return fromLocation
+  if (inboundStatusBlocksUnload(storedStatus)) return 'pending'
+  return undefined
+}
+
+/**
+ * 仅查验/封闭区相关时生成入库更新补丁；无关时返回 null（不写库）。
+ */
+export function buildInboundInspectionAreaSyncPatch(args: {
+  currentLocation: string | null | undefined
+  storedStatus: string
+  storedPlannedUnloadAt: Date | null | undefined
+  pickupDate: Date | null | undefined
+  etaDate: Date | null | undefined
+  blockAutoPlannedUnloadAt: boolean
+  recalculatePlannedUnloadAt: (
+    pickupDate: Date | null | undefined,
+    etaDate: Date | null | undefined
+  ) => Date | null
+}): InboundInspectionAreaSyncPatch | null {
+  if (
+    !shouldSyncInboundFromPickupLocation(args.currentLocation, args.storedStatus)
+  ) {
+    return null
+  }
+
+  const statusFromLocation = resolveInboundStatusOnPickupSync(
+    args.currentLocation,
+    args.storedStatus
+  )
+  if (statusFromLocation === undefined) {
+    return null
+  }
+
+  const patch: InboundInspectionAreaSyncPatch = {}
+  if (statusFromLocation !== args.storedStatus) {
+    patch.status = statusFromLocation
+  }
+
+  if (!args.blockAutoPlannedUnloadAt) {
+    const blocksUnload =
+      statusFromLocation === INBOUND_STATUS_INSPECTION ||
+      statusFromLocation === INBOUND_STATUS_CLOSED_AREA
+    const next = blocksUnload
+      ? null
+      : args.recalculatePlannedUnloadAt(args.pickupDate, args.etaDate)
+    const prevMs = args.storedPlannedUnloadAt?.getTime() ?? null
+    const nextMs = next?.getTime() ?? null
+    if (prevMs !== nextMs) {
+      patch.planned_unload_at = next
+    }
+  }
+
+  return Object.keys(patch).length > 0 ? patch : null
 }
 
 export function inboundStatusBlocksUnload(

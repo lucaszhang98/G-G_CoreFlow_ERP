@@ -9,7 +9,8 @@ import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
 import { resolveOrderFistFromRelation } from '@/lib/wms/resolve-order-fist-display';
 import {
   inboundStatusBlocksUnload,
-  resolveInboundStatusFromCurrentLocation,
+  buildInboundInspectionAreaSyncPatch,
+  inboundReceiptUpdateHasBusinessFields,
 } from '@/lib/wms/current-location-blocks-unload';
 import {
   guardInboundPlannedUnloadAtInUpdate,
@@ -257,17 +258,23 @@ export async function PUT(
     );
     const manualPlannedUnloadAtInRequest = data.planned_unload_at !== undefined;
 
-    // 业务规则：现在位置含「查验」/「封闭区」时，入库状态对应且拆柜日期置空；
-    // 不含时，入库状态=待处理 且按提柜/ETA自动回算拆柜日期。
-    // 已填拆柜人员（含本次请求新指定）时不做任何自动拆柜日期变更。
+    // 业务规则：仅现在位置/库内状态涉及「查验」「封闭区」时联动 status 与拆柜日期。
+    // 已填拆柜人员时不自动改 planned_unload_at。
     if (hasCurrentLocationUpdate) {
-      const resolvedStatus =
-        resolveInboundStatusFromCurrentLocation(normalizedCurrentLocation);
-      updateData.status = resolvedStatus ?? 'pending';
-      if (!blockAutoPlannedUnloadAt) {
-        updateData.planned_unload_at = resolvedStatus
-          ? null
-          : calculateUnloadDate(existing.orders?.pickup_date, existing.orders?.eta_date);
+      const inspectionPatch = buildInboundInspectionAreaSyncPatch({
+        currentLocation: normalizedCurrentLocation,
+        storedStatus: existing.status,
+        storedPlannedUnloadAt: existing.planned_unload_at,
+        pickupDate: existing.orders?.pickup_date,
+        etaDate: existing.orders?.eta_date,
+        blockAutoPlannedUnloadAt: blockAutoPlannedUnloadAt,
+        recalculatePlannedUnloadAt: calculateUnloadDate,
+      })
+      if (inspectionPatch?.status !== undefined) {
+        updateData.status = inspectionPatch.status
+      }
+      if (inspectionPatch?.planned_unload_at !== undefined) {
+        updateData.planned_unload_at = inspectionPatch.planned_unload_at
       }
     }
 
@@ -310,7 +317,24 @@ export async function PUT(
       console.log('[inbound-receipts PUT] 更新数据:', guardedUpdateData)
     }
     
-    const inboundReceipt = await prisma.inbound_receipt.update({
+    const skipInboundWrite =
+      hasCurrentLocationUpdate &&
+      !inboundReceiptUpdateHasBusinessFields(guardedUpdateData)
+
+    const inboundReceipt = skipInboundWrite
+      ? await prisma.inbound_receipt.findUniqueOrThrow({
+          where: { inbound_receipt_id: BigInt(resolvedParams.id) },
+          include: {
+            ...inboundReceiptConfig.prisma?.include,
+            inventory_lots: {
+              select: {
+                delivery_progress: true,
+                pallet_count: true,
+              },
+            },
+          },
+        })
+      : await prisma.inbound_receipt.update({
       where: { inbound_receipt_id: BigInt(resolvedParams.id) },
       data: guardedUpdateData,
       include: {

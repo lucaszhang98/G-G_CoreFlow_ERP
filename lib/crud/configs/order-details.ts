@@ -58,6 +58,7 @@ export const orderDetailConfig: EntityConfig = {
       sortable: true,
       readonly: true,
       computed: true,
+      omitFromAdvancedSearch: true,
     },
     container_number: {
       key: 'container_number',
