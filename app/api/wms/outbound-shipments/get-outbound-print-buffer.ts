@@ -13,11 +13,7 @@ import {
   prismaDeliveryAppointmentNotDisabled,
 } from '@/lib/utils/delivery-appointment-enabled'
 import { serializeBigInt } from '@/lib/api/helpers'
-import {
-  formatOrderFistDisplay,
-  resolveAppointmentFist,
-  resolveOrderFistFromRelation,
-} from '@/lib/wms/resolve-order-fist-display'
+import { resolveOrderFistFromRelation } from '@/lib/wms/resolve-order-fist-display'
 
 function formatPrintTime(date: Date): string {
   const y = date.getFullYear()
@@ -54,7 +50,6 @@ export async function getBOLPdfBuffer(appointmentId: string): Promise<Buffer | n
   const appointment = await prisma.delivery_appointments.findUnique({
     where: { appointment_id: BigInt(appointmentId) },
     include: {
-      orders: { select: { fist: true } },
       locations: {
         select: {
           location_code: true,
@@ -137,13 +132,6 @@ export async function getBOLPdfBuffer(appointmentId: string): Promise<Buffer | n
       }
     })
 
-  const fistSummary = formatOrderFistDisplay(
-    resolveAppointmentFist({
-      orders: appointment?.orders ?? null,
-      appointment_detail_lines: lines.map((l) => ({ order_detail: l.order_detail })),
-    })
-  )
-
   const logoDataUrl = await resolveLogoDataUrl()
   const data: OAKBOLData = {
     printTime: formatPrintTime(new Date()),
@@ -153,7 +141,6 @@ export async function getBOLPdfBuffer(appointmentId: string): Promise<Buffer | n
     appointmentTime,
     seal: '',
     container: '',
-    fistSummary,
     lines: bolLines,
     logoDataUrl: logoDataUrl ?? undefined,
   }
@@ -180,7 +167,7 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
         ...prismaDeliveryAppointmentNotDisabled,
       },
       include: {
-        orders: { select: { status: true, fist: true } },
+        orders: { select: { status: true } },
         locations: {
           select: {
             location_code: true,
@@ -285,12 +272,6 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
           po_id: poRaw,
         }
       })
-    const fistSummary = formatOrderFistDisplay(
-      resolveAppointmentFist({
-        orders: appointment.orders,
-        appointment_detail_lines: lines.map((l) => ({ order_detail: l.order_detail })),
-      })
-    )
     result.push({
       printTime: formatPrintTime(new Date()),
       shipFrom: BOL_SHIP_FROM,
@@ -304,7 +285,6 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
       appointmentTime,
       seal: '',
       container: '',
-      fistSummary,
       lines: bolLines,
       logoDataUrl: undefined,
     })

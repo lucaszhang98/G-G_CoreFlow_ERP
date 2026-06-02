@@ -6,10 +6,7 @@
 import React from 'react'
 import { Document, Page, Text, View, Image } from '@react-pdf/renderer'
 import { OAKBOLData } from './types'
-import {
-  formatContainerNumberWithFistMark,
-  formatOrderFistDisplay,
-} from '@/lib/wms/resolve-order-fist-display'
+import { formatContainerNumberWithFistMark } from '@/lib/wms/resolve-order-fist-display'
 import { PageSizes } from './print-templates'
 import { pdfFontFamily } from './register-pdf-font'
 
@@ -262,7 +259,6 @@ export function BOLDocument({ data }: { data: OAKBOLData }) {
     appointmentTime,
     seal,
     container,
-    fistSummary,
     lines,
     logoDataUrl,
   } = data
@@ -326,12 +322,6 @@ export function BOLDocument({ data }: { data: OAKBOLData }) {
                   <View style={[styles.info4Value, { width: '25%' }]}><Text>{seal}</Text></View>
                   <View style={[styles.info4Label, { width: '25%', borderLeftWidth: borderWidth }]}><Text>Container</Text></View>
                   <View style={[styles.info4Value, { width: '25%', borderRightWidth: 0 }]}><Text>{container}</Text></View>
-                </View>
-                <View style={styles.infoRow4}>
-                  <View style={[styles.info4Label, { width: '25%' }]}><Text>FIST</Text></View>
-                  <View style={[styles.info4Value, { width: '75%', borderRightWidth: 0 }]}>
-                    <Text>{fistSummary ?? formatOrderFistDisplay(false)}</Text>
-                  </View>
                 </View>
               </View>
             </>

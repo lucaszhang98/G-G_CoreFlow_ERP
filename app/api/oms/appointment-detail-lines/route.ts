@@ -13,6 +13,7 @@ import {
   syncEstimatedWindowPeriodForAppointment,
 } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
+import { resolveOrderFistFromRelation } from '@/lib/wms/resolve-order-fist-display'
 
 function pickPreferredInventoryLot<T extends { inbound_receipt_id: bigint | null; inventory_lot_id: bigint }>(
   lots: T[]
@@ -74,6 +75,7 @@ export async function GET(request: NextRequest) {
               select: {
                 order_id: true,
                 order_number: true,
+                fist: true,
                 pickup_date: true,
                 pickup_date_entered_at: true,
                 customers: {
@@ -216,6 +218,8 @@ export async function GET(request: NextRequest) {
         reference_number: deliveryAppointment.reference_number,
         // 从 order_detail.orders 获取柜号（order_number）
         order_number: orderDetailOrders?.order_number || null,
+        // 订单级 FIST（该明细关联订单的 orders.fist）
+        fist: resolveOrderFistFromRelation(orderDetailOrders),
         // 客户名称（来自订单）
         customer_name: orderDetailOrders?.customers?.name || null,
         // 预计窗口期（未锁定且后来补录提柜日时，按提柜日+3 展示并已在上方同步落库）

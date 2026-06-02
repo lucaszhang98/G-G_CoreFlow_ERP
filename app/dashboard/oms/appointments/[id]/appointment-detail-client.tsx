@@ -26,7 +26,7 @@ export function AppointmentDetailClient({ appointmentId, appointment, showOutbou
       orderNumber: true,
       // 出库详情：显示订单明细所属订单的客户名称；不显示「忽略」
       ...(showOutboundLineNotes
-        ? { customerName: true, ignoreUnloadTimeCheck: false }
+        ? { customerName: true, fist: true, ignoreUnloadTimeCheck: false }
         : { ignoreUnloadTimeCheck: true }),
       location: true,
       locationType: true,

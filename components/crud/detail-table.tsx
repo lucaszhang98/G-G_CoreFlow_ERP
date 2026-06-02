@@ -99,6 +99,8 @@ export interface DetailData {
   inventory_lot_id?: string | null
   /** 未约板数（订单明细动态计算，只读） */
   unbooked_pallets?: number | null
+  /** 订单级 FIST（该明细关联 orders.fist） */
+  fist?: boolean
 }
 
 export interface DetailTableConfig {
@@ -107,6 +109,7 @@ export interface DetailTableConfig {
   showColumns?: {
     orderNumber?: boolean // 柜号
     customerName?: boolean // 客户名称
+    fist?: boolean // 订单级 FIST（按明细关联订单）
     pickupTime?: boolean // 提柜时间（订单 pickup_date）
     location?: boolean // 仓点
     locationType?: boolean // 仓点类型（性质）
@@ -965,6 +968,7 @@ export function DetailTable({
     // 预约明细子表前几位：柜号、拆柜时间、实际板数、排车板数
     if (config.showColumns?.orderNumber) cols.push('orderNumber')
     if (config.showColumns?.customerName) cols.push('customerName')
+    if (config.showColumns?.fist) cols.push('fist')
     // 预约明细子表不展示提柜时间（产品需求已取消该列）
     if (!appointmentId && config.showColumns?.pickupTime) cols.push('pickupTime')
     if (appointmentId && config.showColumns?.unloadTime) cols.push('unloadTime')
@@ -1115,6 +1119,8 @@ export function DetailTable({
                     return <th key={col} className="text-left p-2 font-semibold text-sm">柜号</th>
                   case 'customerName':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">客户名称</th>
+                  case 'fist':
+                    return <th key={col} className="text-left p-2 font-semibold text-sm w-16">FIST</th>
                   case 'pickupTime':
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[110px]">提柜时间</th>
                   case 'location':
@@ -1277,6 +1283,12 @@ export function DetailTable({
                         }
                         case 'customerName':
                           return <td key={col} className="p-2 text-sm">{(detail as any).customer_name || '-'}</td>
+                        case 'fist':
+                          return (
+                            <td key={col} className="p-2 text-sm">
+                              {detail.fist === true ? '是' : '否'}
+                            </td>
+                          )
                         case 'pickupTime': {
                           const formatted =
                             (detail as any).pickup_time && typeof (detail as any).pickup_time === 'string'

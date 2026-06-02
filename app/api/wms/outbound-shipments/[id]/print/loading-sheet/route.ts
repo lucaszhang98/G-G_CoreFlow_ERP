@@ -8,15 +8,10 @@ import {
   checkAuth,
   checkPermission,
   WMS_FULL_ACCESS_PERMISSION_OPTIONS,
-  serializeBigInt,
 } from '@/lib/api/helpers'
 import { outboundShipmentConfig } from '@/lib/crud/configs/outbound-shipments'
 import { getOutboundShipmentDetail } from '@/lib/services/outbound-shipment-detail'
-import { generateLoadingSheetPDF } from '@/lib/services/print/loading-sheet.service'
-import { resolveLogoDataUrl } from '@/lib/services/print/resolve-logo'
-import type { OAKLoadSheetData } from '@/lib/services/print/types'
-import { formatDate } from '@/lib/services/print/print-templates'
-import prisma from '@/lib/prisma'
+import { getLoadingSheetPdfBuffer } from '@/app/api/wms/outbound-shipments/get-outbound-print-buffer'
 
 export async function GET(
   request: NextRequest,
@@ -41,98 +36,9 @@ export async function GET(
       )
     }
 
-    const lines = await prisma.appointment_detail_lines.findMany({
-      where: { appointment_id: BigInt(appointmentId) },
-      include: {
-        order_detail: {
-          select: {
-            id: true,
-            order_id: true,
-            estimated_pallets: true,
-            remaining_pallets: true,
-            delivery_nature: true,
-            notes: true,
-            locations_order_detail_delivery_location_idTolocations: {
-              select: { location_code: true, name: true },
-            },
-            order_detail_item_order_detail_item_detail_idToorder_detail: {
-              select: { detail_name: true },
-            },
-            orders: {
-              select: { order_number: true },
-            },
-            inventory_lots: { select: { storage_location_code: true } },
-          },
-        },
-      },
-    })
-
-    // 不设默认值：没有的留空，打印后手工填写
-    const destinationCode = detail.destination_location ?? ''
-    const appointmentTime = (detail.confirmed_start ?? detail.requested_start)
-      ? formatDate(detail.confirmed_start ?? detail.requested_start, 'long')
-      : '-'
-
-    const sheetLines = lines
-      .filter((l) => l.order_detail)
-      .map((l) => {
-        const od = serializeBigInt(l.order_detail!)
-        const containerNumber = (od.orders && (od.orders as any).order_number) || ''
-        const lineWithNotes = l as { load_sheet_notes?: string | null }
-        // 柜号列：装车单第一列只显示柜号，不显示 -仓点
-        // 仓储位置：入库管理明细行（inventory_lots）的仓库位置，如 B9/B10
-        const lots = (od.inventory_lots as { storage_location_code?: string | null }[]) || []
-        const storageCodes = [...new Set(lots.map((lot) => lot.storage_location_code).filter(Boolean))] as string[]
-        const storageLocation = storageCodes.join('/')
-        return {
-          container_number: containerNumber,
-          storage_location: storageLocation,
-          load_sheet_notes: lineWithNotes.load_sheet_notes ?? null,
-          planned_pallets: Number(l.estimated_pallets) || 0,
-          loaded_pallets: '',   // 留空，手工填写
-          remaining_pallets: '', // 留空，手工填写
-          is_clear: '',         // 留空，手工填写
-        }
-      })
-
-    const totalPlannedPallets = sheetLines.reduce(
-      (sum, l) => sum + l.planned_pallets,
-      0
-    )
-
-    const logoDataUrl = await resolveLogoDataUrl()
-    const data: OAKLoadSheetData = {
-      destinationLabel: '卸货仓',
-      destinationCode,
-      trailer: detail.trailer_code ?? '',
-      loadNumber: detail.reference_number ?? '',
-      sealNumber: '',
-      appointmentTime,
-      delivery_address: detail.delivery_address ?? null,
-      contact_name: detail.contact_name ?? null,
-      contact_phone: detail.contact_phone ?? null,
-      lines: sheetLines,
-      totalPlannedPallets,
-      totalIsClearLabel: detail.appointment_type ?? '', // 类型（地板/卡板），来自预约
-      deliveryMethod: detail.delivery_method ?? null,   // 派送方式（卡派/自提等），来自预约
-      logoDataUrl: logoDataUrl ?? undefined,
-    }
-
-    let pdfBuffer: Buffer
-    try {
-      pdfBuffer = await generateLoadingSheetPDF(data)
-    } catch (pdfErr: unknown) {
-      const e = pdfErr as { code?: string; errno?: number }
-      if (e?.code === 'Z_DATA_ERROR' || e?.errno === -3) {
-        throw new Error('生成 PDF 时发生压缩/解压异常，请稍后重试')
-      }
-      throw pdfErr
-    }
-
-    const PDF_HEADER = Buffer.from('%PDF-')
-    if (!Buffer.isBuffer(pdfBuffer) || pdfBuffer.length < 100 || !pdfBuffer.subarray(0, 5).equals(PDF_HEADER)) {
-      console.error('[Loading Sheet Print] 生成的 buffer 无效，长度:', pdfBuffer?.length)
-      return NextResponse.json({ error: '生成装车单失败：PDF 内容异常' }, { status: 500 })
+    const pdfBuffer = await getLoadingSheetPdfBuffer(appointmentId)
+    if (!pdfBuffer) {
+      return NextResponse.json({ error: '生成装车单失败：无明细数据' }, { status: 404 })
     }
 
     const numberPart = detail.reference_number || appointmentId

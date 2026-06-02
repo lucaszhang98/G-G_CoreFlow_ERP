@@ -226,8 +226,6 @@ export interface OAKBOLData {
   seal: string
   /** Container（留空） */
   container: string
-  /** 预约关联订单 FIST 汇总（多柜时见明细 [FIST] 标记） */
-  fistSummary?: string
   /** 明细行：Container | 备注(bol_notes) | FBA | Qty (PLTS) | Box | Storage | PO */
   lines: Array<{
     container_number: string

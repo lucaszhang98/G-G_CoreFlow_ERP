@@ -192,14 +192,6 @@ export const outboundShipmentConfig: EntityConfig = {
       label: '订单号',
       type: 'text',
     },
-    fist: {
-      key: 'fist',
-      label: 'FIST',
-      type: 'boolean',
-      sortable: true,
-      readonly: true,
-      computed: true,
-    },
     // 隐藏字段：outbound_shipment_id, trailer_id, loaded_by
     outbound_shipment_id: {
       key: 'outbound_shipment_id',
@@ -226,7 +218,6 @@ export const outboundShipmentConfig: EntityConfig = {
     defaultOrder: 'desc',
     columns: [
       'reference_number',
-      'fist',
       'delivery_method',
       'rejected',
       'verify_loading_sheet',
