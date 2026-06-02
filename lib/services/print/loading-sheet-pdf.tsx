@@ -1,13 +1,13 @@
 /**
- * 装车单 PDF 组件（7 列布局）
+ * 装车单 PDF 组件（8 列布局）
  *
- * 全表 7 列：
- * - 第 1 行：第 1、2 列合并放 Logo；第 3 列「卸货仓」；第 4、5、6、7 列合并放目的地代码
- * - 第 2 行：Trailer | 空 | Load# | 预约号码(5+6+7 合并)
- * - 第 3 行：SEAL# | 空（工人填写） | 预约时间 | 具体预约时间(5+6+7 合并)
- * - 第 4 行：柜号 | 仓储位置 | 计划板数 | 备注 | 装车板数 | 剩余板数 | 是否清空
- * - 第 5 行起：明细（有几条生成几条）
- * - 最后一行：第 1、2 列合并「合计」| 总板数 | 空 | 空 | 空 | 地板/卡板
+ * 全表 8 列：
+ * - 第 1 行：第 1、2 列合并放 Logo；第 3 列「卸货仓」；第 4–8 列合并放目的地代码
+ * - 第 2 行：Trailer | 空 | Load# | 预约号码(合并)
+ * - 第 3 行：SEAL# | 空 | 预约时间 | 具体预约时间(合并)
+ * - 第 4 行：柜号 | 仓储位置 | 计划板数 | FIST | 备注 | 装车板数 | 剩余板数 | 是否清空
+ * - 第 5 行起：明细
+ * - 最后一行：合计 | 总板数 | 空 | 空 | 空 | 地板/卡板
  */
 
 import React from 'react'
@@ -15,7 +15,7 @@ import { Document, Page, Text, View, Image } from '@react-pdf/renderer'
 import JsBarcode from 'jsbarcode'
 import { createCanvas } from 'canvas'
 import { OAKLoadSheetData } from './types'
-import { formatContainerNumberWithFistMark } from '@/lib/wms/resolve-order-fist-display'
+import { formatOrderFistDisplay } from '@/lib/wms/resolve-order-fist-display'
 import { PageSizes } from './print-templates'
 import { pdfFontFamily } from './register-pdf-font'
 
@@ -29,16 +29,17 @@ const borderWidth = 1
 const cellPadding = 5
 const minRowHeight = 22
 
-// 7 列宽度（%）：柜号 | 仓储位置 | 计划板数 | 备注 | 装车板数 | 剩余板数 | 是否清空
-const W1 = 20   // 柜号列加宽，避免显示不全
-const W2 = 12
-const W3 = 12   // 计划板数
-const W4 = 18   // 备注
-const W5 = 12
-const W6 = 12
-const W7 = 14
+// 8 列宽度（%）：柜号 | 仓储位置 | 计划板数 | FIST | 备注 | 装车板数 | 剩余板数 | 是否清空
+const W1 = 18
+const W2 = 11
+const W3 = 10
+const W_FIST = 8
+const W4 = 14
+const W5 = 11
+const W6 = 11
+const W7 = 17
 const W1_2 = W1 + W2
-const W4_5_6_7 = W4 + W5 + W6 + W7  // 第 4+5+6+7 列合并（预约号码/预约时间）
+const W4_8 = W3 + W_FIST + W4 + W5 + W6 + W7
 
 const cellBase = {
   padding: cellPadding,
@@ -112,20 +113,17 @@ const styles = {
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
   },
-  /** 柜号列：加粗加大，与其余列区分 */
   cellContainerNumber: {
     ...cellCenter,
     overflow: 'hidden' as const,
     fontSize: 12,
     fontWeight: 'bold' as const,
   },
-  /** 备注列：可换行、缩小字体，避免溢出 */
   cellRemarks: {
     ...cellLeft,
     overflow: 'hidden' as const,
     fontSize: 8,
   },
-  /** 第一行仓点单元格：仓点文字 + 下方条形码（预约号码） */
   destinationCell: {
     ...cellCenter,
     flexDirection: 'column' as const,
@@ -140,9 +138,6 @@ const styles = {
   },
 }
 
-/**
- * 生成条形码图片（Base64），内容为预约号码
- */
 function generateBarcodeImage(barcodeText: string): string {
   try {
     const canvas = createCanvas(200, 60)
@@ -167,7 +162,6 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
     destinationCode,
     loadNumber,
     appointmentTime,
-    delivery_address,
     lines,
     totalPlannedPallets,
     totalIsClearLabel,
@@ -185,7 +179,6 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
     <Document>
       <Page size="A4" orientation="portrait" style={styles.page} wrap={false}>
         <View style={styles.tableWrap}>
-          {/* 第 1 行：第 1、2 列合并 Logo；第 3 列「卸货仓」；第 4、5、6 列合并 仓点 + 下方条形码（预约号码） */}
           <View style={styles.tableRow}>
             <View style={[styles.logoCell, { width: `${W1_2}%` }]}>
               {logoSrc ? <Image src={logoSrc} style={styles.logo} /> : <Text> </Text>}
@@ -193,59 +186,54 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
             <View style={[styles.headerCell, { width: `${W3}%` }]}>
               <Text>{destinationLabel}</Text>
             </View>
-            <View style={[styles.destinationCell, { width: `${W4_5_6_7}%`, borderRightWidth: 0 }]}>
+            <View style={[styles.destinationCell, { width: `${W4_8}%`, borderRightWidth: 0 }]}>
               <Text>{destinationCode}</Text>
               {barcodeDataUrl ? <Image src={barcodeDataUrl} style={styles.barcodeImage} /> : null}
             </View>
           </View>
 
-          {/* 第 2 行：Trailer | 空 | Load# | 预约号码(5+6+7 合并) */}
           <View style={styles.tableRow}>
             <View style={[styles.headerCellLeft, { width: `${W1}%` }]}><Text>Trailer</Text></View>
             <View style={[styles.cell, { width: `${W2}%` }]}><Text></Text></View>
             <View style={[styles.headerCell, { width: `${W3}%` }]}><Text>Load#</Text></View>
-            <View style={[styles.cell, { width: `${W4_5_6_7}%`, borderRightWidth: 0 }]}>
+            <View style={[styles.cell, { width: `${W4_8}%`, borderRightWidth: 0 }]}>
               <Text>{loadNumber}</Text>
             </View>
           </View>
 
-          {/* 第 3 行：SEAL# | 空（工人填写） | 预约时间 | 具体预约时间(5+6+7 合并) */}
           <View style={styles.tableRow}>
             <View style={[styles.headerCellLeft, { width: `${W1}%` }]}><Text>SEAL#</Text></View>
             <View style={[styles.cell, { width: `${W2}%` }]}><Text></Text></View>
             <View style={[styles.headerCell, { width: `${W3}%` }]}><Text>预约时间</Text></View>
-            <View style={[styles.cell, { width: `${W4_5_6_7}%`, borderRightWidth: 0 }]}>
+            <View style={[styles.cell, { width: `${W4_8}%`, borderRightWidth: 0 }]}>
               <Text>{appointmentTime}</Text>
             </View>
           </View>
 
-          {/* 第 4 行：表头 柜号 | 仓储位置 | 计划板数 | 备注 | 装车板数 | 剩余板数 | 是否清空 */}
           <View style={styles.tableRow}>
             <View style={[styles.headerCell, { width: `${W1}%` }]}><Text>柜号</Text></View>
             <View style={[styles.headerCell, { width: `${W2}%` }]}><Text>仓储位置</Text></View>
             <View style={[styles.headerCell, { width: `${W3}%` }]}><Text>计划板数</Text></View>
+            <View style={[styles.headerCell, { width: `${W_FIST}%` }]}><Text>FIST</Text></View>
             <View style={[styles.headerCell, { width: `${W4}%` }]}><Text>备注</Text></View>
             <View style={[styles.headerCell, { width: `${W5}%` }]}><Text>装车板数</Text></View>
             <View style={[styles.headerCell, { width: `${W6}%` }]}><Text>剩余板数</Text></View>
             <View style={[styles.headerCell, { width: `${W7}%`, borderRightWidth: 0 }]}><Text>是否清空</Text></View>
           </View>
 
-          {/* 明细行：柜号加粗加大；第3列计划板数、第4列备注 */}
           {lines.map((line, i) => (
             <View key={i} style={styles.tableRow}>
               <View style={[styles.cellContainerNumber, { width: `${W1}%` }]}>
-                <Text wrap>
-                  {formatContainerNumberWithFistMark(
-                    line.container_number,
-                    line.order_fist
-                  )}
-                </Text>
+                <Text wrap>{line.container_number}</Text>
               </View>
               <View style={[styles.cell, { width: `${W2}%` }]}>
                 <Text wrap>{line.storage_location}</Text>
               </View>
               <View style={[styles.cell, { width: `${W3}%` }]}>
                 <Text>{String(line.planned_pallets)}</Text>
+              </View>
+              <View style={[styles.cell, { width: `${W_FIST}%` }]}>
+                <Text>{formatOrderFistDisplay(line.order_fist)}</Text>
               </View>
               <View style={[styles.cellRemarks, { width: `${W4}%` }]}>
                 <Text wrap>{(line.load_sheet_notes ?? '').toString()}</Text>
@@ -262,7 +250,6 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
             </View>
           ))}
 
-          {/* 最后一行：第 1、2 列合并「合计」| 空 | 总板数(计划板数列) | 空 | 空 | 地板/卡板 */}
           <View style={[styles.tableRow, styles.totalRow]}>
             <View style={[styles.headerCell, { width: `${W1_2}%` }]}>
               <Text>合计</Text>
@@ -270,6 +257,7 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
             <View style={[styles.cell, { width: `${W3}%` }]}>
               <Text>{totalPlannedPallets}</Text>
             </View>
+            <View style={[styles.cell, { width: `${W_FIST}%` }]}><Text></Text></View>
             <View style={[styles.cell, { width: `${W4}%` }]}><Text></Text></View>
             <View style={[styles.cell, { width: `${W5}%` }]}><Text></Text></View>
             <View style={[styles.cell, { width: `${W6}%` }]}><Text></Text></View>

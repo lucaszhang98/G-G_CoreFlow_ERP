@@ -6,7 +6,7 @@
 import React from 'react'
 import { Document, Page, Text, View, Image } from '@react-pdf/renderer'
 import { OAKBOLData } from './types'
-import { formatContainerNumberWithFistMark } from '@/lib/wms/resolve-order-fist-display'
+import { formatOrderFistDisplayEn } from '@/lib/wms/resolve-order-fist-display'
 import { PageSizes } from './print-templates'
 import { pdfFontFamily } from './register-pdf-font'
 
@@ -142,13 +142,14 @@ const styles = {
   dataCellCenter: {
     ...cellCenter,
   },
-  colContainer: { width: '14%' },
-  colRemarks: { width: '16%' },  // BOL 明细备注（Container 与 FBA 之间）
-  colFba: { width: '14%' },
+  colContainer: { width: '13%' },
+  colRemarks: { width: '14%' },
+  colFist: { width: '8%' },
+  colFba: { width: '13%' },
   colQty: { width: '10%' },
   colBox: { width: '10%' },
-  colStorage: { width: '18%' },
-  colPo: { width: '18%' },
+  colStorage: { width: '17%' },
+  colPo: { width: '15%' },
   disclaimer: {
     marginTop: 10,
     padding: 8,
@@ -203,6 +204,7 @@ function BOLTableHeader() {
     <View style={styles.tableRow}>
       <View style={[styles.headerCell, styles.colContainer]}><Text>Container</Text></View>
       <View style={[styles.headerCell, styles.colRemarks]}><Text>备注</Text></View>
+      <View style={[styles.headerCell, styles.colFist]}><Text>FIST</Text></View>
       <View style={[styles.headerCell, styles.colFba]}><Text>FBA</Text></View>
       <View style={[styles.headerCell, styles.colQty]}><Text>Qty (PLTS)</Text></View>
       <View style={[styles.headerCell, styles.colBox]}><Text>Box</Text></View>
@@ -218,15 +220,13 @@ function BOLTableRows({ lines }: { lines: OAKBOLData['lines'] }) {
       {lines.map((line, i) => (
         <View key={i} style={styles.tableRow}>
           <View style={[styles.dataCell, styles.colContainer]}>
-            <Text>
-              {formatContainerNumberWithFistMark(
-                line.container_number,
-                line.order_fist
-              )}
-            </Text>
+            <Text>{line.container_number}</Text>
           </View>
           <View style={[styles.dataCell, styles.colRemarks]}>
             <Text>{(line.bol_notes ?? '').toString()}</Text>
+          </View>
+          <View style={[styles.dataCellCenter, styles.colFist]}>
+            <Text>{formatOrderFistDisplayEn(line.order_fist)}</Text>
           </View>
           <View style={[styles.dataCell, styles.colFba]}>
             <Text>{line.fba_id}</Text>
