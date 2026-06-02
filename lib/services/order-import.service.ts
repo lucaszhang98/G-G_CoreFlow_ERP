@@ -281,6 +281,7 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
             order_number: firstRow.order_number,
             customer_id: customerId,
             fist: customerFist,
+            fist_manual: false,
             order_date: new Date(firstRow.order_date),
             status: firstRow.status,
             operation_mode: firstRow.operation_mode,

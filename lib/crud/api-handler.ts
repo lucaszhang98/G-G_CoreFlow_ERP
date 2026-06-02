@@ -36,7 +36,10 @@ import {
   applyPickupDateEnteredAtToOrderUpdate,
   hasPickupDateValue,
 } from '@/lib/oms/pickup-date-entered'
-import { applyOrderFistFromCustomerOnWrite } from '@/lib/oms/sync-order-fist-from-customer'
+import {
+  applyOrderFistOnOrderWrite,
+  syncOrdersFistAfterCustomerUpdate,
+} from '@/lib/oms/sync-order-fist-from-customer'
 import { shouldPaymentWriteOff } from '@/lib/finance/payment-write-off-sync'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
@@ -1153,6 +1156,10 @@ export function createCreateHandler(config: EntityConfig) {
 
       const data = validationResult.data
       const submitData = data // 提交数据转换在需要时处理
+      const fistExplicitlyInPayload = Object.prototype.hasOwnProperty.call(
+        submitData as object,
+        'fist'
+      )
 
       // 处理 BigInt 字段和日期字段
       const processedData: any = {}
@@ -1211,7 +1218,10 @@ export function createCreateHandler(config: EntityConfig) {
         if (hasPickupDateValue(processedData.pickup_date)) {
           processedData.pickup_date_entered_at = new Date()
         }
-        await applyOrderFistFromCustomerOnWrite(processedData, { isCreate: true })
+        await applyOrderFistOnOrderWrite(processedData, {
+          isCreate: true,
+          fistExplicitlyInPayload,
+        })
       }
 
       // 对于应收表：已核销/余额/状态仅由收款核销与发票同步计算，创建时默认 allocated=0 并推导 balance、status
@@ -1391,6 +1401,10 @@ export function createUpdateHandler(config: EntityConfig) {
 
       const data = validationResult.data
       const submitData = data // 提交数据转换在需要时处理
+      const fistExplicitlyInPayload = Object.prototype.hasOwnProperty.call(
+        submitData as object,
+        'fist'
+      )
 
       // 获取主键字段名（默认为 'id'）
       const idField = config.idField || 'id'
@@ -1618,6 +1632,8 @@ export function createUpdateHandler(config: EntityConfig) {
         pickup_date: Date | null
         pickup_date_entered_at: Date | null
         customer_id: bigint | null
+        fist: boolean | null
+        fist_manual: boolean | null
       } | null = null
       if (config.prisma?.model === 'orders') {
         ordersBeforeUpdate = await prisma.orders.findUnique({
@@ -1628,6 +1644,8 @@ export function createUpdateHandler(config: EntityConfig) {
             pickup_date: true,
             pickup_date_entered_at: true,
             customer_id: true,
+            fist: true,
+            fist_manual: true,
           },
         })
         if (processedData.pickup_date !== undefined && ordersBeforeUpdate) {
@@ -1636,9 +1654,10 @@ export function createUpdateHandler(config: EntityConfig) {
             existingEnteredAt: ordersBeforeUpdate.pickup_date_entered_at,
           })
         }
-        await applyOrderFistFromCustomerOnWrite(processedData, {
+        await applyOrderFistOnOrderWrite(processedData, {
           isCreate: false,
-          existingCustomerId: ordersBeforeUpdate?.customer_id ?? null,
+          existing: ordersBeforeUpdate,
+          fistExplicitlyInPayload,
         })
         item = await prisma.$transaction(async (tx) => {
           const updated = await tx.orders.update({
@@ -2150,6 +2169,29 @@ export function createBatchUpdateHandler(config: EntityConfig) {
 
       // 执行批量更新（订单批量改「已取消」时，同步清理下游关联）
       let result: { count: number }
+      let customerFistSyncPlan: Array<{
+        customerId: bigint
+        newFist: boolean
+      }> = []
+
+      if (
+        config.prisma?.model === 'customers' &&
+        processedUpdates.fist !== undefined
+      ) {
+        const newFist = processedUpdates.fist === true
+        customerFistSyncPlan = bigIntIds.map((customerId) => ({
+          customerId,
+          newFist,
+        }))
+      }
+
+      if (
+        config.prisma?.model === 'orders' &&
+        processedUpdates.fist !== undefined
+      ) {
+        processedUpdates.fist_manual = true
+      }
+
       if (
         config.prisma?.model === 'orders' &&
         processedUpdates.status === ORDER_STATUS_CANCELLED
@@ -2177,6 +2219,12 @@ export function createBatchUpdateHandler(config: EntityConfig) {
           },
           data: processedUpdates,
         })
+      }
+
+      if (customerFistSyncPlan.length > 0) {
+        for (const plan of customerFistSyncPlan) {
+          await syncOrdersFistAfterCustomerUpdate(plan.customerId, plan.newFist)
+        }
       }
 
       if (config.prisma?.model === 'delivery_appointments' && result.count > 0) {

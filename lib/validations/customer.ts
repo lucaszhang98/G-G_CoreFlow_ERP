@@ -33,7 +33,11 @@ export const customerCreateSchema = z.object({
   }).optional()
 });
 
-export const customerUpdateSchema = customerCreateSchema.partial();
+export const customerUpdateSchema = customerCreateSchema
+  .partial()
+  .extend({
+    fist: z.boolean().optional(),
+  });
 
 export type CustomerCreateInput = z.infer<typeof customerCreateSchema>;
 export type CustomerUpdateInput = z.infer<typeof customerUpdateSchema>;

@@ -649,6 +649,8 @@ model orders {
   mbl_number                                       String?                   @db.VarChar(100)
   do_issued                                        Boolean?                  @default(false)
   fist                                             Boolean                   @default(false)
+  /// true = 订单 FIST 已在订单管理手改，不再随客户 fist 自动同步
+  fist_manual                                      Boolean                   @default(false)
   warehouse_account                                String?                   @db.VarChar(100)
   port_location                                    String?                   @db.VarChar(200)
   port_location_id                                 BigInt?

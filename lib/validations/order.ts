@@ -36,6 +36,8 @@ export const orderCreateSchema = z.object({
   mbl_number: z.string().max(100).optional().nullable(),
   do_issued: z.boolean().optional().nullable(),
   fist: z.boolean().optional().nullable(),
+  /** 服务端维护：订单 FIST 是否手改，客户端不可直接写入 */
+  fist_manual: z.boolean().optional().nullable(),
   warehouse_account: z.string().max(100).optional().nullable(),
   pickup_driver_id: z.number().optional().nullable(),
   return_driver_id: z.number().optional().nullable(),

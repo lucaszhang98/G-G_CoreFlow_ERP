@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth, checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import { customerUpdateSchema } from '@/lib/validations/customer';
 import prisma from '@/lib/prisma';
-import { mergeOrdersRelationExcludeArchived, parseIncludeArchived } from '@/lib/orders/order-visibility';
+import { mergeOrdersRelationExcludeArchived, parseIncludeArchived } from '@/lib/orders/order-visibility'
+import { syncOrdersFistAfterCustomerUpdate } from '@/lib/oms/sync-order-fist-from-customer';
 
 /**
  * GET /api/customers/:id
@@ -195,7 +196,14 @@ export async function PUT(
       include: {
         contact_roles: true,
       },
-    });
+    })
+
+    if (data.fist !== undefined) {
+      await syncOrdersFistAfterCustomerUpdate(
+        existing.id,
+        data.fist === true
+      )
+    }
 
     return NextResponse.json({
       data: serializeBigInt(customer),
