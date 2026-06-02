@@ -23,6 +23,7 @@ export async function GET(
   let containerNumber: string = ''
   let orderDetails: any[] = []
   let customerCode: string | undefined
+  let fist: boolean | undefined
   let orderNotes: string | undefined
   let unloadedBy: string | undefined
   let receivedBy: string | undefined
@@ -41,6 +42,9 @@ export async function GET(
     if (searchParams.get('containerNumber') && orderDetailsJson) {
       containerNumber = searchParams.get('containerNumber')!
       customerCode = searchParams.get('customerCode') || undefined
+      const fistParam = searchParams.get('fist')
+      if (fistParam === 'true' || fistParam === '1') fist = true
+      else if (fistParam === 'false' || fistParam === '0') fist = false
       orderNotes = searchParams.get('orderNotes') || undefined
       unloadedBy = searchParams.get('unloadedBy') || undefined
       receivedBy = searchParams.get('receivedBy') || undefined
@@ -50,9 +54,17 @@ export async function GET(
         return NextResponse.json({ error: '订单明细数据不能为空' }, { status: 400 })
       }
       // 详情页未传 orderNotes 时，从数据库补取订单备注
-      if ((orderNotes == null || orderNotes === '') && resolvedParams.id) {
+      if (
+        ((orderNotes == null || orderNotes === '') || fist === undefined) &&
+        resolvedParams.id
+      ) {
         const loaded = await loadInboundReceiptForPrint(resolvedParams.id)
-        orderNotes = loaded?.orderNotes ?? undefined
+        if (orderNotes == null || orderNotes === '') {
+          orderNotes = loaded?.orderNotes ?? undefined
+        }
+        if (fist === undefined) {
+          fist = loaded?.fist
+        }
       }
     } else {
       const loaded = await loadInboundReceiptForPrint(resolvedParams.id)
@@ -64,6 +76,7 @@ export async function GET(
       }
       containerNumber = loaded.containerNumber
       customerCode = loaded.customerCode || undefined
+      fist = loaded.fist
       orderNotes = loaded.orderNotes || undefined
       unloadedBy = loaded.unloadedBy || undefined
       receivedBy = loaded.receivedBy || undefined
@@ -74,6 +87,7 @@ export async function GET(
     const unloadSheetData: UnloadSheetData = {
       containerNumber,
       customerCode,
+      fist,
       orderNotes,
       unloadedBy,
       receivedBy,

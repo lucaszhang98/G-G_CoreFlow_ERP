@@ -8,6 +8,7 @@ import type { UnloadSheetData, LabelData } from '@/lib/services/print/types'
 import { loadInboundReceiptForPrint } from './[id]/print/load-receipt-for-print'
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
+import { resolveOrderFistFromRelation } from '@/lib/wms/resolve-order-fist-display'
 
 export async function getUnloadSheetPdfBuffer(
   inboundReceiptId: string
@@ -17,6 +18,7 @@ export async function getUnloadSheetPdfBuffer(
   const unloadSheetData: UnloadSheetData = {
     containerNumber: loaded.containerNumber,
     customerCode: loaded.customerCode || undefined,
+    fist: loaded.fist,
     orderNotes: loaded.orderNotes || undefined,
     unloadedBy: loaded.unloadedBy || undefined,
     receivedBy: loaded.receivedBy || undefined,
@@ -85,6 +87,7 @@ export async function loadBatchUnloadSheetData(
         select: {
           order_number: true,
           notes: true,
+          fist: true,
           customers: { select: { code: true } },
           order_detail: {
             select: {
@@ -150,6 +153,7 @@ export async function loadBatchUnloadSheetData(
     result.push({
       containerNumber,
       customerCode: customerCode || undefined,
+      fist: resolveOrderFistFromRelation(orderData),
       orderNotes: orderData?.notes != null ? String(orderData.notes) : undefined,
       unloadedBy: unloadedByName,
       receivedBy: receivedByName,

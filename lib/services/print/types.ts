@@ -13,6 +13,8 @@ export interface UnloadSheetData {
   orderNotes?: string // 订单备注（显示在单据最上方）
   containerNumber: string // 柜号
   customerCode?: string // 客户代码
+  /** 订单级 FIST（orders.fist，只读来源） */
+  fist?: boolean
   unloadedBy?: string // 拆柜人员
   receivedBy?: string // 入库人员
   unloadDate?: Date | string // 拆柜日期
@@ -110,6 +112,8 @@ export interface OAKLoadSheetData {
   /** 明细行（装车板数、剩余板数、是否清空留空供手填；备注=装车单明细备注） */
   lines: Array<{
     container_number: string
+    /** 该行对应订单 orders.fist */
+    order_fist?: boolean
     storage_location: string
     /** 装车单明细备注（第3列，仓储位置与计划板数之间） */
     load_sheet_notes?: string | null
@@ -222,9 +226,12 @@ export interface OAKBOLData {
   seal: string
   /** Container（留空） */
   container: string
+  /** 预约关联订单 FIST 汇总（多柜时见明细 [FIST] 标记） */
+  fistSummary?: string
   /** 明细行：Container | 备注(bol_notes) | FBA | Qty (PLTS) | Box | Storage | PO */
   lines: Array<{
     container_number: string
+    order_fist?: boolean
     /** BOL 明细备注（第2列，Container 与 FBA 之间） */
     bol_notes?: string | null
     fba_id: string

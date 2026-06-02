@@ -3,10 +3,12 @@
  */
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
+import { resolveOrderFistFromRelation } from '@/lib/wms/resolve-order-fist-display'
 
 export interface LoadedReceiptForPrint {
   containerNumber: string
   customerCode: string
+  fist: boolean
   orderNotes?: string // 订单备注
   plannedUnloadDate: string
   unloadedBy: string
@@ -35,6 +37,7 @@ export async function loadInboundReceiptForPrint(
         select: {
           order_number: true,
           notes: true,
+          fist: true,
           customers: { select: { code: true } },
           order_detail: {
             select: {
@@ -97,6 +100,7 @@ export async function loadInboundReceiptForPrint(
   return {
     containerNumber,
     customerCode,
+    fist: resolveOrderFistFromRelation(orderData),
     orderNotes,
     plannedUnloadDate,
     unloadedBy,

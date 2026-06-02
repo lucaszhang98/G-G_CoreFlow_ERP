@@ -13,6 +13,11 @@ import {
   prismaDeliveryAppointmentNotDisabled,
 } from '@/lib/utils/delivery-appointment-enabled'
 import { serializeBigInt } from '@/lib/api/helpers'
+import {
+  formatOrderFistDisplay,
+  resolveAppointmentFist,
+  resolveOrderFistFromRelation,
+} from '@/lib/wms/resolve-order-fist-display'
 
 function formatPrintTime(date: Date): string {
   const y = date.getFullYear()
@@ -49,6 +54,7 @@ export async function getBOLPdfBuffer(appointmentId: string): Promise<Buffer | n
   const appointment = await prisma.delivery_appointments.findUnique({
     where: { appointment_id: BigInt(appointmentId) },
     include: {
+      orders: { select: { fist: true } },
       locations: {
         select: {
           location_code: true,
@@ -74,7 +80,7 @@ export async function getBOLPdfBuffer(appointmentId: string): Promise<Buffer | n
           quantity: true,
           fba: true,
           po: true,
-          orders: { select: { order_number: true } },
+          orders: { select: { order_number: true, fist: true } },
           order_detail_item_order_detail_detail_idToorder_detail_item: { select: { fba: true } },
         },
       },
@@ -110,7 +116,7 @@ export async function getBOLPdfBuffer(appointmentId: string): Promise<Buffer | n
         fba?: string | null
         po?: string | null
         quantity?: number | null
-        orders?: { order_number?: string } | null
+        orders?: { order_number?: string; fist?: boolean | null } | null
         order_detail_item_order_detail_detail_idToorder_detail_item?: { fba?: string | null } | null
       }
       const order = od.orders
@@ -121,6 +127,7 @@ export async function getBOLPdfBuffer(appointmentId: string): Promise<Buffer | n
       const lineWithNotes = l as { bol_notes?: string | null }
       return {
         container_number: order?.order_number ?? '',
+        order_fist: resolveOrderFistFromRelation(order),
         bol_notes: lineWithNotes.bol_notes ?? null,
         fba_id: fbaRaw,
         qty_plts: Number(l.estimated_pallets) ?? '',
@@ -129,6 +136,13 @@ export async function getBOLPdfBuffer(appointmentId: string): Promise<Buffer | n
         po_id: poRaw,
       }
     })
+
+  const fistSummary = formatOrderFistDisplay(
+    resolveAppointmentFist({
+      orders: appointment?.orders ?? null,
+      appointment_detail_lines: lines.map((l) => ({ order_detail: l.order_detail })),
+    })
+  )
 
   const logoDataUrl = await resolveLogoDataUrl()
   const data: OAKBOLData = {
@@ -139,6 +153,7 @@ export async function getBOLPdfBuffer(appointmentId: string): Promise<Buffer | n
     appointmentTime,
     seal: '',
     container: '',
+    fistSummary,
     lines: bolLines,
     logoDataUrl: logoDataUrl ?? undefined,
   }
@@ -165,7 +180,7 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
         ...prismaDeliveryAppointmentNotDisabled,
       },
       include: {
-        orders: { select: { status: true } },
+        orders: { select: { status: true, fist: true } },
         locations: {
           select: {
             location_code: true,
@@ -200,7 +215,7 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
             quantity: true,
             fba: true,
             po: true,
-            orders: { select: { order_number: true } },
+            orders: { select: { order_number: true, fist: true } },
             order_detail_item_order_detail_detail_idToorder_detail_item: { select: { fba: true } },
           },
         },
@@ -250,7 +265,7 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
           fba?: string | null
           po?: string | null
           quantity?: number | null
-          orders?: { order_number?: string } | null
+          orders?: { order_number?: string; fist?: boolean | null } | null
           order_detail_item_order_detail_detail_idToorder_detail_item?: { fba?: string | null } | null
         }
         const order = od.orders
@@ -261,6 +276,7 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
         const lineWithNotes = l as { bol_notes?: string | null }
         return {
           container_number: order?.order_number ?? '',
+          order_fist: resolveOrderFistFromRelation(order),
           bol_notes: lineWithNotes.bol_notes ?? null,
           fba_id: fbaRaw,
           qty_plts: Number(l.estimated_pallets) ?? '',
@@ -269,6 +285,12 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
           po_id: poRaw,
         }
       })
+    const fistSummary = formatOrderFistDisplay(
+      resolveAppointmentFist({
+        orders: appointment.orders,
+        appointment_detail_lines: lines.map((l) => ({ order_detail: l.order_detail })),
+      })
+    )
     result.push({
       printTime: formatPrintTime(new Date()),
       shipFrom: BOL_SHIP_FROM,
@@ -282,6 +304,7 @@ export async function loadBatchBOLData(ids: string[]): Promise<(OAKBOLData | nul
       appointmentTime,
       seal: '',
       container: '',
+      fistSummary,
       lines: bolLines,
       logoDataUrl: undefined,
     })
@@ -307,7 +330,7 @@ export async function getLoadingSheetPdfBuffer(appointmentId: string): Promise<B
           notes: true,
           locations_order_detail_delivery_location_idTolocations: { select: { location_code: true, name: true } },
           order_detail_item_order_detail_item_detail_idToorder_detail: { select: { detail_name: true } },
-          orders: { select: { order_number: true } },
+          orders: { select: { order_number: true, fist: true } },
           inventory_lots: { select: { storage_location_code: true } },
         },
       },
@@ -330,8 +353,10 @@ export async function getLoadingSheetPdfBuffer(appointmentId: string): Promise<B
       const lots = (od.inventory_lots as { storage_location_code?: string | null }[]) || []
       const storageCodes = [...new Set(lots.map((lot) => lot.storage_location_code).filter(Boolean))] as string[]
       const storageLocation = storageCodes.join('/')
+      const orderRel = od.orders as { order_number?: string; fist?: boolean | null } | null | undefined
       return {
         container_number: containerNumber,
+        order_fist: resolveOrderFistFromRelation(orderRel),
         storage_location: storageLocation,
         load_sheet_notes: lineWithNotes.load_sheet_notes ?? null,
         planned_pallets: Number(l.estimated_pallets) || 0,
@@ -408,7 +433,7 @@ export async function loadBatchLoadingSheetData(
             notes: true,
             locations_order_detail_delivery_location_idTolocations: { select: { location_code: true, name: true } },
             order_detail_item_order_detail_item_detail_idToorder_detail: { select: { detail_name: true } },
-            orders: { select: { order_number: true } },
+            orders: { select: { order_number: true, fist: true } },
             inventory_lots: { select: { storage_location_code: true } },
           },
         },
@@ -451,13 +476,15 @@ export async function loadBatchLoadingSheetData(
       .filter((l) => l.order_detail)
       .map((l) => {
         const od = serializeBigInt(l.order_detail!)
-        const containerNumber = (od.orders && (od.orders as any).order_number) || ''
+        const orderRel = od.orders as { order_number?: string; fist?: boolean | null } | null | undefined
+        const containerNumber = orderRel?.order_number || ''
         const lineWithNotes = l as { load_sheet_notes?: string | null }
         const lots = (od.inventory_lots as { storage_location_code?: string | null }[]) || []
         const storageCodes = [...new Set(lots.map((lot) => lot.storage_location_code).filter(Boolean))] as string[]
         const storageLocation = storageCodes.join('/')
         return {
           container_number: containerNumber,
+          order_fist: resolveOrderFistFromRelation(orderRel),
           storage_location: storageLocation,
           load_sheet_notes: lineWithNotes.load_sheet_notes ?? null,
           planned_pallets: Number(l.estimated_pallets) || 0,

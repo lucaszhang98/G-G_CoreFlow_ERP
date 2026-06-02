@@ -15,6 +15,7 @@ import { Document, Page, Text, View, Image } from '@react-pdf/renderer'
 import JsBarcode from 'jsbarcode'
 import { createCanvas } from 'canvas'
 import { OAKLoadSheetData } from './types'
+import { formatContainerNumberWithFistMark } from '@/lib/wms/resolve-order-fist-display'
 import { PageSizes } from './print-templates'
 import { pdfFontFamily } from './register-pdf-font'
 
@@ -233,7 +234,12 @@ export function LoadingSheetDocument({ data }: { data: OAKLoadSheetData }) {
           {lines.map((line, i) => (
             <View key={i} style={styles.tableRow}>
               <View style={[styles.cellContainerNumber, { width: `${W1}%` }]}>
-                <Text wrap>{line.container_number}</Text>
+                <Text wrap>
+                  {formatContainerNumberWithFistMark(
+                    line.container_number,
+                    line.order_fist
+                  )}
+                </Text>
               </View>
               <View style={[styles.cell, { width: `${W2}%` }]}>
                 <Text wrap>{line.storage_location}</Text>

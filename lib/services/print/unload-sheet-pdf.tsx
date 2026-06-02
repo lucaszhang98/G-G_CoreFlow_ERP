@@ -8,6 +8,7 @@ import React from 'react'
 import { Document, Page, Text, View, Image } from '@react-pdf/renderer'
 import { UnloadSheetData } from './types'
 import { formatDate } from './print-templates'
+import { formatOrderFistDisplay } from '@/lib/wms/resolve-order-fist-display'
 import { pdfFontRegistered, pdfFontFamily } from './register-pdf-font'
 import JsBarcode from 'jsbarcode'
 import { createCanvas } from 'canvas'
@@ -519,6 +520,12 @@ export function UnloadSheetDocument({ data }: { data: UnloadSheetData }) {
             <View style={styles.headerItem}>
               <Text style={styles.headerLabel}>客户代码：</Text>
               <Text style={styles.headerValue}>{data.customerCode || '-'}</Text>
+            </View>
+            <View style={styles.headerItem}>
+              <Text style={styles.headerLabel}>FIST：</Text>
+              <Text style={styles.headerValue}>
+                {formatOrderFistDisplay(data.fist)}
+              </Text>
             </View>
             <View style={styles.headerItem}>
               <Text style={styles.headerLabel}>拆柜人员：</Text>
