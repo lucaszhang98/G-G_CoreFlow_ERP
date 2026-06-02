@@ -197,6 +197,8 @@ export async function GET(request: NextRequest) {
       orderBy.orders = { order_number: order };
     } else if (sort === 'customer_name') {
       orderBy.orders = { customers: { name: order } };
+    } else if (sort === 'fist') {
+      orderBy.orders = { fist: order };
     } else if (sort === 'planned_unload_at') {
       orderBy.inbound_receipt = { planned_unload_at: order };
     } else if (sort === 'delivery_location') {
@@ -255,6 +257,7 @@ export async function GET(request: NextRequest) {
             order_id: true,
             order_number: true,
             order_date: true,
+            fist: true,
             delivery_appointments: {
               where: prismaDeliveryAppointmentNotDisabled,
               select: {
@@ -421,6 +424,7 @@ export async function GET(request: NextRequest) {
         return {
           ...serialized,
           customer_name: customerName,
+          fist: order?.fist ?? false,
           container_number: containerNumber,
           planned_unload_at: plannedUnloadAt,
           delivery_location: deliveryLocation,
@@ -438,6 +442,7 @@ export async function GET(request: NextRequest) {
         return {
           ...serializeBigInt(item),
           customer_name: null,
+          fist: false,
           container_number: null,
           planned_unload_at: null,
           delivery_location: null,

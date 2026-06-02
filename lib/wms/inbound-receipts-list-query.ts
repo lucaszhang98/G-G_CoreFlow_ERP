@@ -367,6 +367,7 @@ export async function runInboundReceiptListQuery(
         ...serialized,
         status: displayStatus,
         customer_name: customerName,
+        fist: order?.fist ?? false,
         container_number: containerNumber,
         warehouse_point_count: warehousePointCount,
         order_date: order?.order_date || null,
@@ -392,6 +393,7 @@ export async function runInboundReceiptListQuery(
       return {
         ...serializeBigInt(item),
         customer_name: null,
+        fist: false,
         container_number: null,
         order_date: null,
         eta_date: null,

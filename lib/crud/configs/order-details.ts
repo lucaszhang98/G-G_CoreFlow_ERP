@@ -51,6 +51,14 @@ export const orderDetailConfig: EntityConfig = {
       type: 'text',
       searchable: true,
     },
+    fist: {
+      key: 'fist',
+      label: 'FIST',
+      type: 'boolean',
+      sortable: true,
+      readonly: true,
+      computed: true,
+    },
     container_number: {
       key: 'container_number',
       label: '柜号',
@@ -193,6 +201,7 @@ export const orderDetailConfig: EntityConfig = {
       'operation_mode',
       'pickup_date',
       'customer_name',
+      'fist',
       'delivery_location_code',
       'delivery_nature',
       'window_period',
@@ -237,6 +246,15 @@ export const orderDetailConfig: EntityConfig = {
         label: '提柜时间',
         type: 'dateRange',
         dateFields: ['pickup_date'],
+      },
+      {
+        field: 'fist',
+        label: 'FIST',
+        type: 'select',
+        options: [
+          { label: '是', value: 'true' },
+          { label: '否', value: 'false' },
+        ],
       },
       {
         field: 'delivery_nature',

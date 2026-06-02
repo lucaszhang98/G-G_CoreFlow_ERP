@@ -35,6 +35,7 @@ export const orderCreateSchema = z.object({
   container_volume: z.number().min(0).optional().nullable(), // 计算字段，由系统自动计算，用户不能填写
   mbl_number: z.string().max(100).optional().nullable(),
   do_issued: z.boolean().optional().nullable(),
+  fist: z.boolean().optional().nullable(),
   warehouse_account: z.string().max(100).optional().nullable(),
   pickup_driver_id: z.number().optional().nullable(),
   return_driver_id: z.number().optional().nullable(),

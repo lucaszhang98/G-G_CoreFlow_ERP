@@ -142,6 +142,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const filter_fist = searchParams.get('filter_fist')
+    if (filter_fist && filter_fist !== '__all__') {
+      where.orders = {
+        ...where.orders,
+        fist: filter_fist === 'true',
+      }
+    }
+
     // 预约状态筛选（由于未约板数是实时计算的，需要在查询后筛选）
     // 先不在这里处理，在查询后根据计算出的未约板数筛选
     const booking_status_filter = searchParams.get('filter_booking_status')
@@ -217,6 +225,8 @@ export async function GET(request: NextRequest) {
       }
     } else if (sort === 'operation_mode') {
       orderBy.orders = { operation_mode: order }
+    } else if (sort === 'fist') {
+      orderBy.orders = { fist: order }
     } else if (sort === 'storage_location_code') {
       // 仓库位置来自 inventory_lots，在下方对结果集内存排序；此处仅稳定 DB 返回顺序
       orderBy.id = order === 'asc' ? 'asc' : 'desc'
@@ -502,6 +512,7 @@ export async function GET(request: NextRequest) {
         order_number: item.orders?.order_number || null,
         operation_mode: item.orders?.operation_mode ?? null,
         customer_name: customer?.name || null,
+        fist: item.orders?.fist ?? false,
         container_number: item.orders?.order_number || null, // container_number 实际是 order_number
         planned_unload_at: ir?.planned_unload_at || null,
         pickup_date: item.orders?.pickup_date

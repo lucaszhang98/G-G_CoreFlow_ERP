@@ -30,6 +30,14 @@ export const inventoryLotConfig: EntityConfig = {
       type: 'text',
       searchable: true,
     },
+    fist: {
+      key: 'fist',
+      label: 'FIST',
+      type: 'boolean',
+      sortable: true,
+      readonly: true,
+      computed: true,
+    },
     container_number: {
       key: 'container_number',
       label: '柜号',
@@ -192,6 +200,7 @@ export const inventoryLotConfig: EntityConfig = {
     defaultOrder: 'desc',
     columns: [
       'customer_name',
+      'fist',
       'container_number',
       'planned_unload_at',
       'delivery_nature',

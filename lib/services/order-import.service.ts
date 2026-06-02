@@ -17,6 +17,7 @@ import {
   OrderImportRow,
 } from '@/lib/validations/order-import'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
+import { fetchCustomerFist } from '@/lib/oms/sync-order-fist-from-customer'
 import {
   ORDER_STATUS_ARCHIVED,
   ORDER_STATUS_CANCELLED,
@@ -271,11 +272,15 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
       for (const [orderNumber, rows] of orderGroups) {
         const firstRow = rows[0]
 
+        const customerId = customerMap.get(firstRow.customer_code)!
+        const customerFist = await fetchCustomerFist(customerId, tx)
+
         // 创建订单
         const order = await tx.orders.create({
           data: {
             order_number: firstRow.order_number,
-            customer_id: customerMap.get(firstRow.customer_code)!,
+            customer_id: customerId,
+            fist: customerFist,
             order_date: new Date(firstRow.order_date),
             status: firstRow.status,
             operation_mode: firstRow.operation_mode,

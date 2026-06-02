@@ -36,6 +36,7 @@ import {
   applyPickupDateEnteredAtToOrderUpdate,
   hasPickupDateValue,
 } from '@/lib/oms/pickup-date-entered'
+import { applyOrderFistFromCustomerOnWrite } from '@/lib/oms/sync-order-fist-from-customer'
 import { shouldPaymentWriteOff } from '@/lib/finance/payment-write-off-sync'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
@@ -1167,6 +1168,12 @@ export function createCreateHandler(config: EntityConfig) {
         if (fieldConfig?.readonly || fieldConfig?.computed) {
           continue
         }
+        if (fieldConfig?.type === 'boolean') {
+          if (value !== undefined && value !== null) {
+            processedData[key] = Boolean(value)
+          }
+          continue
+        }
         if (fieldConfig?.relation && fieldConfig.relation.valueField) {
           if (value !== undefined && value !== null && value !== '') {
             const targetField = key.endsWith('_id') ? key : fieldConfig.relation.valueField
@@ -1204,6 +1211,7 @@ export function createCreateHandler(config: EntityConfig) {
         if (hasPickupDateValue(processedData.pickup_date)) {
           processedData.pickup_date_entered_at = new Date()
         }
+        await applyOrderFistFromCustomerOnWrite(processedData, { isCreate: true })
       }
 
       // 对于应收表：已核销/余额/状态仅由收款核销与发票同步计算，创建时默认 allocated=0 并推导 balance、status
@@ -1609,6 +1617,7 @@ export function createUpdateHandler(config: EntityConfig) {
         operation_mode: string | null
         pickup_date: Date | null
         pickup_date_entered_at: Date | null
+        customer_id: bigint | null
       } | null = null
       if (config.prisma?.model === 'orders') {
         ordersBeforeUpdate = await prisma.orders.findUnique({
@@ -1618,6 +1627,7 @@ export function createUpdateHandler(config: EntityConfig) {
             operation_mode: true,
             pickup_date: true,
             pickup_date_entered_at: true,
+            customer_id: true,
           },
         })
         if (processedData.pickup_date !== undefined && ordersBeforeUpdate) {
@@ -1626,6 +1636,10 @@ export function createUpdateHandler(config: EntityConfig) {
             existingEnteredAt: ordersBeforeUpdate.pickup_date_entered_at,
           })
         }
+        await applyOrderFistFromCustomerOnWrite(processedData, {
+          isCreate: false,
+          existingCustomerId: ordersBeforeUpdate?.customer_id ?? null,
+        })
         item = await prisma.$transaction(async (tx) => {
           const updated = await tx.orders.update({
             where: { order_id: BigInt(resolvedParams.id) },

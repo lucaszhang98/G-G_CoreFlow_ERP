@@ -215,6 +215,7 @@ model customers {
   company_name                      String?        @db.VarChar(200)
   credit_limit                      Decimal?       @default(0) @db.Decimal(12, 2)
   status                            String?        @default("active") @db.VarChar(20)
+  fist                              Boolean        @default(false)
   created_at                        DateTime?      @default(now()) @db.Timestamptz(6)
   updated_at                        DateTime?      @default(now()) @db.Timestamptz(6)
   contact_id                        BigInt?
@@ -647,6 +648,7 @@ model orders {
   container_volume                                 Decimal?                  @default(0) @db.Decimal(12, 2)
   mbl_number                                       String?                   @db.VarChar(100)
   do_issued                                        Boolean?                  @default(false)
+  fist                                             Boolean                   @default(false)
   warehouse_account                                String?                   @db.VarChar(100)
   port_location                                    String?                   @db.VarChar(200)
   port_location_id                                 BigInt?

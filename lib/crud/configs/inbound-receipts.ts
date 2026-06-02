@@ -28,6 +28,14 @@ export const inboundReceiptConfig: EntityConfig = {
       type: 'text',
       searchable: true,
     },
+    fist: {
+      key: 'fist',
+      label: 'FIST',
+      type: 'boolean',
+      sortable: true,
+      readonly: true,
+      computed: true,
+    },
     container_number: {
       key: 'container_number',
       label: '柜号',
@@ -209,6 +217,7 @@ export const inboundReceiptConfig: EntityConfig = {
     defaultOrder: 'asc',
     columns: [
       'customer_name',
+      'fist',
       'container_number',
       'warehouse_point_count',
       'order_date',
@@ -365,6 +374,7 @@ export const inboundReceiptConfig: EntityConfig = {
           ready_date: true,
           lfd_date: true,
           pickup_date: true,
+          fist: true,
           carrier_id: true,
           customers: {
             select: {

@@ -6,6 +6,19 @@ import { outboundShipmentConfig } from '@/lib/crud/configs/outbound-shipments';
 import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper';
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
 
+function resolveAppointmentFist(appointment: {
+  orders?: { fist?: boolean } | null
+  appointment_detail_lines?: Array<{
+    order_detail?: { orders?: { fist?: boolean } | null } | null
+  }> | null
+}): boolean {
+  if (appointment.orders?.fist) return true
+  for (const line of appointment.appointment_detail_lines ?? []) {
+    if (line.order_detail?.orders?.fist) return true
+  }
+  return false
+}
+
 // GET - 获取出库管理列表（从 outbound_shipments 表查询，关联 delivery_appointments 获取其他字段）
 export async function GET(request: NextRequest) {
   try {
@@ -152,6 +165,7 @@ export async function GET(request: NextRequest) {
               select: {
                 order_id: true,
                 status: true,
+                fist: true,
               },
             },
             locations: {
@@ -187,6 +201,13 @@ export async function GET(request: NextRequest) {
             appointment_detail_lines: {
               select: {
                 estimated_pallets: true,
+                order_detail: {
+                  select: {
+                    orders: {
+                      select: { fist: true },
+                    },
+                  },
+                },
               },
             },
           },
@@ -235,6 +256,7 @@ export async function GET(request: NextRequest) {
         // 从 delivery_appointments 获取的字段
         appointment_id: serializedAppointment.appointment_id.toString(),
         reference_number: serializedAppointment.reference_number || null,
+        fist: resolveAppointmentFist(serializedAppointment),
         delivery_method: serializedAppointment.delivery_method || null,
         rejected: serializedAppointment.rejected || false,
         appointment_account: serializedAppointment.appointment_account || null,

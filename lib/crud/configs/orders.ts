@@ -185,6 +185,12 @@ export const orderConfig: EntityConfig = {
       label: 'DO已签发',
       type: 'boolean',
     },
+    fist: {
+      key: 'fist',
+      label: 'FIST',
+      type: 'boolean',
+      sortable: true,
+    },
     // 以下字段隐藏，不在前端显示
     warehouse_account: {
       key: 'warehouse_account',
@@ -266,7 +272,7 @@ export const orderConfig: EntityConfig = {
   list: {
     defaultSort: 'order_date',
     defaultOrder: 'desc',
-    columns: ['order_number', 'customer', 'user_id', 'order_date', 'created_at', 'status', 'operation_mode', 'delivery_location', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'container_volume', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'notes'],
+    columns: ['order_number', 'customer', 'fist', 'user_id', 'order_date', 'created_at', 'status', 'operation_mode', 'delivery_location', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'container_type', 'container_volume', 'eta_date', 'lfd_date', 'pickup_date', 'ready_date', 'return_deadline', 'mbl_number', 'do_issued', 'notes'],
     searchFields: ['order_number'], // 只搜索订单号（最重要的字段）
     pageSize: 100,
     // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
@@ -281,6 +287,7 @@ export const orderConfig: EntityConfig = {
       fields: [
         'order_number',
         'customer',
+        'fist',
         'user_id',
         'order_date',
         'status',
@@ -304,6 +311,7 @@ export const orderConfig: EntityConfig = {
         fields: [
           'order_number',
           'customer',
+          'fist',
           'user_id',
           'order_date',
           'status',

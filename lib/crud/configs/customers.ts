@@ -58,6 +58,12 @@ export const customerConfig: EntityConfig = {
         { label: '停用', value: 'inactive' },
       ],
     },
+    fist: {
+      key: 'fist',
+      label: 'FIST',
+      type: 'boolean',
+      sortable: true,
+    },
     credit_limit: {
       key: 'credit_limit',
       label: '信用额度',
@@ -85,7 +91,7 @@ export const customerConfig: EntityConfig = {
   list: {
     defaultSort: 'code',
     defaultOrder: 'asc',
-    columns: ['code', 'name', 'company_name', 'status', 'credit_limit', 'contact'],
+    columns: ['code', 'name', 'company_name', 'status', 'fist', 'credit_limit', 'contact'],
     searchFields: ['code'], // 只搜索客户代码（最重要的字段）
     pageSize: 100,
     // 筛选配置（快速筛选）- 已自动生成，包含所有 select/relation/date/datetime 字段
@@ -97,7 +103,7 @@ export const customerConfig: EntityConfig = {
       enabled: true,
       edit: {
         enabled: true,
-        fields: ['code', 'name', 'company_name', 'status', 'credit_limit'], // 可批量编辑的字段
+        fields: ['code', 'name', 'company_name', 'status', 'fist', 'credit_limit'], // 可批量编辑的字段
       },
       delete: {
         enabled: true,
@@ -106,7 +112,7 @@ export const customerConfig: EntityConfig = {
     // 行内编辑配置
     inlineEdit: {
       enabled: true,
-      fields: ['code', 'name', 'company_name', 'status', 'credit_limit'], // 可编辑的字段
+      fields: ['code', 'name', 'company_name', 'status', 'fist', 'credit_limit'], // 可编辑的字段
     },
     // 批量导入配置
     import: {
@@ -114,7 +120,7 @@ export const customerConfig: EntityConfig = {
     },
   },
   
-  formFields: ['code', 'name', 'company_name', 'status', 'credit_limit', 'contact'],
+  formFields: ['code', 'name', 'company_name', 'status', 'fist', 'credit_limit', 'contact'],
   
   permissions: {
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],

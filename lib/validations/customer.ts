@@ -16,6 +16,7 @@ export const customerCreateSchema = z.object({
     .nullable(),  // 数据库可以为空，默认值为 0
   status: z.enum(['active', 'inactive'])
     .default('active'),
+  fist: z.boolean().optional().default(false),
   contact: z.object({
     name: z.string().max(100).optional().nullable(),  // 联系人姓名可以为空（如果为空则不创建联系人）
     phone: z.string().max(50).optional().nullable(),
