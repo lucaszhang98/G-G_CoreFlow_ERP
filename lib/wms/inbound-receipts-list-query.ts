@@ -5,9 +5,10 @@ import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
 import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper'
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator'
-import { computeInboundReceiptHeaderDeliveryProgress } from '@/lib/utils/inbound-delivery-progress'
+import { resolveOrderFistFromRelation } from '@/lib/wms/resolve-order-fist-display'
 import { resolveInboundDisplayStatus } from '@/lib/wms/current-location-blocks-unload'
 import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled'
+import { computeInboundReceiptHeaderDeliveryProgress } from '@/lib/utils/inbound-delivery-progress'
 import {
   applyArchivedFilterToInboundReceiptWhere,
   parseIncludeArchived,
@@ -227,6 +228,7 @@ export async function runInboundReceiptListQuery(
         ready_date: true,
         lfd_date: true,
         pickup_date: true,
+        fist: true,
         carrier_id: true,
         customers: {
           select: {
@@ -367,7 +369,7 @@ export async function runInboundReceiptListQuery(
         ...serialized,
         status: displayStatus,
         customer_name: customerName,
-        fist: order?.fist ?? false,
+        fist: resolveOrderFistFromRelation(order),
         container_number: containerNumber,
         warehouse_point_count: warehousePointCount,
         order_date: order?.order_date || null,

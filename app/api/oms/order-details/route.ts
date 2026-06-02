@@ -16,6 +16,7 @@ import {
   intersectOrderDetailIdFilter,
 } from '@/lib/orders/order-detail-earliest-appointment-filter'
 import { computeOrderDetailUnbookedPallets } from '@/lib/orders/order-detail-unbooked-pallets'
+import { resolveOrderFistFromRelation } from '@/lib/wms/resolve-order-fist-display'
 
 /**
  * GET /api/oms/order-details
@@ -512,7 +513,7 @@ export async function GET(request: NextRequest) {
         order_number: item.orders?.order_number || null,
         operation_mode: item.orders?.operation_mode ?? null,
         customer_name: customer?.name || null,
-        fist: item.orders?.fist ?? false,
+        fist: resolveOrderFistFromRelation(item.orders),
         container_number: item.orders?.order_number || null, // container_number 实际是 order_number
         planned_unload_at: ir?.planned_unload_at || null,
         pickup_date: item.orders?.pickup_date

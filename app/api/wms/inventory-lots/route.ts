@@ -11,6 +11,7 @@ import {
   computeInboundOrderDetailDeliveryState,
   resolveAppointmentsFromOrderDetail,
 } from '@/lib/utils/inbound-delivery-progress';
+import { resolveOrderFistFromRelation } from '@/lib/wms/resolve-order-fist-display';
 import {
   applyArchivedFilterToInventoryLotsWhere,
   parseIncludeArchived,
@@ -424,7 +425,7 @@ export async function GET(request: NextRequest) {
         return {
           ...serialized,
           customer_name: customerName,
-          fist: order?.fist ?? false,
+          fist: resolveOrderFistFromRelation(order),
           container_number: containerNumber,
           planned_unload_at: plannedUnloadAt,
           delivery_location: deliveryLocation,

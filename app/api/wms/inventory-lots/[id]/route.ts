@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import { inventoryLotUpdateSchema } from '@/lib/validations/inventory-lot';
+import { resolveOrderFistFromRelation } from '@/lib/wms/resolve-order-fist-display';
 import prisma from '@/lib/prisma';
 import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled';
 
@@ -71,7 +72,7 @@ export async function GET(
       data: {
         ...serialized,
         customer_name: order?.customers?.name || null,
-        fist: order?.fist ?? false,
+        fist: resolveOrderFistFromRelation(order),
         container_number: order?.order_number || null,
         planned_unload_at: inboundReceipt?.planned_unload_at || null,
         delivery_location: orderDetail?.locations_order_detail_delivery_location_idTolocations?.location_code || null,
@@ -295,7 +296,7 @@ export async function PUT(
       data: {
         ...serialized,
         customer_name: order?.customers?.name || null,
-        fist: order?.fist ?? false,
+        fist: resolveOrderFistFromRelation(order),
         container_number: order?.order_number || null,
         planned_unload_at: inboundReceipt?.planned_unload_at || null,
         delivery_location: orderDetail?.locations_order_detail_delivery_location_idTolocations?.location_code || null,

@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma';
 import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled';
 import { computeInboundReceiptHeaderDeliveryProgress } from '@/lib/utils/inbound-delivery-progress';
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date';
+import { resolveOrderFistFromRelation } from '@/lib/wms/resolve-order-fist-display';
 import {
   inboundStatusBlocksUnload,
   resolveInboundStatusFromCurrentLocation,
@@ -145,6 +146,7 @@ export async function GET(
       data: {
         ...serialized,
         customer_name: orderData?.customers?.name || null,
+        fist: resolveOrderFistFromRelation(orderData),
         container_number: orderData?.order_number || null,
         order_date: orderData?.order_date || null,
         eta_date: orderData?.eta_date || null,
@@ -378,6 +380,7 @@ export async function PUT(
       data: {
         ...serialized,
         customer_name: orderData?.customers?.name || null,
+        fist: resolveOrderFistFromRelation(orderData),
         container_number: orderData?.order_number || null,
         order_date: orderData?.order_date || null,
         eta_date: orderData?.eta_date || null,

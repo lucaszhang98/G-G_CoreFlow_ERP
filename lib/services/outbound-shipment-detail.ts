@@ -4,6 +4,9 @@
 
 import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
+import {
+  resolveAppointmentFist,
+} from '@/lib/wms/resolve-order-fist-display'
 
 export interface OutboundShipmentDetailPayload {
   appointment_id: string
@@ -35,6 +38,7 @@ export interface OutboundShipmentDetailPayload {
   created_at: string | null
   updated_at: string | null
   order_number: string | null
+  fist: boolean
 }
 
 /**
@@ -52,13 +56,23 @@ export async function getOutboundShipmentDetail(
     where: { appointment_id: BigInt(appointmentId) },
     include: {
       appointment_detail_lines: {
-        select: { estimated_pallets: true },
+        select: {
+          estimated_pallets: true,
+          order_detail: {
+            select: {
+              orders: {
+                select: { fist: true },
+              },
+            },
+          },
+        },
       },
       orders: {
         select: {
           order_id: true,
           order_number: true,
           status: true,
+          fist: true,
           order_detail: {
             select: {
               id: true,
@@ -149,5 +163,6 @@ export async function getOutboundShipmentDetail(
     created_at: serialized.created_at || null,
     updated_at: serialized.updated_at || null,
     order_number: serialized.orders?.order_number || null,
+    fist: resolveAppointmentFist(serialized),
   }
 }
