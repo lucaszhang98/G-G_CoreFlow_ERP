@@ -25,7 +25,7 @@ export type InboundInspectionAreaSyncPatch = {
   planned_unload_at?: Date | null
 }
 
-/** 人工推进后的入库状态：放出时不得改回待处理 */
+/** 列表展示用：已打印/已入库/已到仓在「待放出」场景仍展示库内真实值 */
 export const INBOUND_WORKFLOW_STATUSES = [
   'printed',
   'received',
@@ -110,7 +110,6 @@ export function isExitingInspectionArea(
   if (currentLocationBlocksPlannedUnload(newLocation)) return false
   if (!currentLocationBlocksPlannedUnload(previousLocation)) return false
   if (!inboundStatusBlocksUnload(storedStatus)) return false
-  if (isInboundWorkflowStatus(storedStatus)) return false
   return true
 }
 
@@ -160,9 +159,6 @@ export function buildInboundInspectionAreaSyncPatch(args: {
   }
 
   if (isExitingInspectionArea(args.previousLocation, next, args.storedStatus)) {
-    if (isInboundWorkflowStatus(args.storedStatus)) {
-      return null
-    }
     if (args.storedStatus !== 'pending') {
       patch.status = 'pending'
     }

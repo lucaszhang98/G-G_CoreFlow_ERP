@@ -124,6 +124,12 @@ function parseDateTime(value: string | number | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d
 }
 
+function dateTimeMs(d: Date | null | undefined): number | null {
+  if (!d) return null
+  const t = d.getTime()
+  return Number.isFinite(t) ? t : null
+}
+
 function parseBoolean(value: unknown): boolean | undefined {
   if (value === '' || value === null || value === undefined) return undefined
   if (typeof value === 'boolean') return value
@@ -350,24 +356,45 @@ async function executeImport(
     if (!orderInfo) continue
     const orderId = orderInfo.order_id
 
+    const existingOrder =
+      row.pickup_date !== undefined || row.eta_date !== undefined
+        ? await prisma.orders.findUnique({
+            where: { order_id: orderId },
+            select: {
+              pickup_date: true,
+              eta_date: true,
+              pickup_date_entered_at: true,
+            },
+          })
+        : null
+
     const orderUpdate: any = { updated_by: userId, updated_at: new Date() }
+    let orderPickupDateTouched = false
+    let orderEtaTouched = false
+
     if (row.mbl !== undefined) orderUpdate.mbl_number = row.mbl || null
     if (row.port_location_code !== undefined) {
       orderUpdate.port_location_id = masterData.locationByCode.get(row.port_location_code) ?? null
     }
     if (row.container_type !== undefined) orderUpdate.container_type = row.container_type || null
-    if (row.eta_date !== undefined) orderUpdate.eta_date = parseDate(row.eta_date)
+    if (row.eta_date !== undefined) {
+      const nextEta = parseDate(row.eta_date)
+      if (dateTimeMs(existingOrder?.eta_date) !== dateTimeMs(nextEta)) {
+        orderUpdate.eta_date = nextEta
+        orderEtaTouched = true
+      }
+    }
     if (row.lfd_date !== undefined) orderUpdate.lfd_date = parseDate(row.lfd_date)
     if (row.pickup_date !== undefined) {
-      orderUpdate.pickup_date = parseDateTime(row.pickup_date)
-      const existingOrder = await prisma.orders.findUnique({
-        where: { order_id: orderId },
-        select: { pickup_date: true, pickup_date_entered_at: true },
-      })
-      applyPickupDateEnteredAtToOrderUpdate(orderUpdate, {
-        previousPickup: existingOrder?.pickup_date,
-        existingEnteredAt: existingOrder?.pickup_date_entered_at,
-      })
+      const nextPickup = parseDateTime(row.pickup_date)
+      if (dateTimeMs(existingOrder?.pickup_date) !== dateTimeMs(nextPickup)) {
+        orderUpdate.pickup_date = nextPickup
+        orderPickupDateTouched = true
+        applyPickupDateEnteredAtToOrderUpdate(orderUpdate, {
+          previousPickup: existingOrder?.pickup_date,
+          existingEnteredAt: existingOrder?.pickup_date_entered_at,
+        })
+      }
     }
     if (row.carrier_name !== undefined) {
       orderUpdate.carrier_id = masterData.carrierByName.get(row.carrier_name) ?? null
@@ -413,20 +440,17 @@ async function executeImport(
       }
     })
 
-    // 提柜/ETA/现在位置变更：查验进出按库内 status 判断；正常柜仅重算拆柜日
-    if (pickupWasUpdated || orderUpdate.pickup_date !== undefined || orderUpdate.eta_date !== undefined) {
-      const pickupDateTouched = orderUpdate.pickup_date !== undefined
-      if (pickupDateTouched) {
+    // 提柜/现在位置/提柜日/ETA 有实际变更时联动入库（查验进出 + 正常柜重算拆柜日）
+    if (pickupWasUpdated || orderPickupDateTouched || orderEtaTouched) {
+      if (orderPickupDateTouched) {
         await syncAppointmentEstimatedWindowPeriodForOrder({ orderId })
       }
       await syncInboundPlannedUnloadAtByPickupState({
         orderId,
         userId,
         previousLocation,
-        skipAppointmentSync: pickupDateTouched,
-        recalcNormalPlannedUnload:
-          orderUpdate.pickup_date !== undefined ||
-          orderUpdate.eta_date !== undefined,
+        skipAppointmentSync: orderPickupDateTouched,
+        recalcNormalPlannedUnload: orderPickupDateTouched || orderEtaTouched,
       })
     }
     successCount++

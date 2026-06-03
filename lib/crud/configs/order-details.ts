@@ -222,6 +222,13 @@ export const orderDetailConfig: EntityConfig = {
     ],
     searchFields: ['container_number', 'order_number', 'private_warehouse_info'],
     pageSize: 100,
+    /** 批量编辑与单行内联一致：仅窗口期（板数走「保存修改」专用接口） */
+    batchOperations: {
+      edit: {
+        enabled: true,
+        fields: ['window_period'],
+      },
+    },
     // 筛选配置
     filterFields: [
       {

@@ -1,8 +1,8 @@
 /**
  * 提柜侧触发入库联动：
- * 1. 进入查验/封闭区（新现在位置含关键词）=> status + 清空拆柜日
- * 2. 放出（库内原为查验/封闭区且新位置无关键词）=> 待处理 + 重算拆柜日
- * 3. 正常柜 => 仅按老逻辑重算拆柜日（不改 status）
+ * 1. 进入：新现在位置含「查验」/「封闭区」=> 对应 status + 清空拆柜日（可覆盖已打印/已入库/已到仓）
+ * 2. 放出：且仅当库内 status 为查验/封闭区，且更新前位置含关键词、更新后不含 => 待处理 + 按提柜/ETA 重算拆柜日
+ * 3. 正常柜：只重算拆柜日，绝不把 status 写成待处理
  */
 import prisma from '@/lib/prisma'
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
@@ -11,7 +11,6 @@ import {
   buildInboundInspectionAreaSyncPatch,
   buildNormalPlannedUnloadSyncPatch,
   inboundStatusBlocksUnload,
-  isInboundWorkflowStatus,
   type InboundInspectionAreaSyncPatch,
 } from '@/lib/wms/current-location-blocks-unload'
 import { isInboundPlannedUnloadAtAutoUpdateBlocked } from '@/lib/wms/planned-unload-auto-update'
@@ -30,7 +29,6 @@ export {
   buildNormalPlannedUnloadSyncPatch,
 } from '@/lib/wms/current-location-blocks-unload'
 
-/** 构造入库写入字段：正常柜重算拆柜日时绝不带 status（堵住历史「一律 pending」） */
 function buildInboundSyncUpdateData(args: {
   inboundStatus: string
   patch: InboundInspectionAreaSyncPatch
@@ -49,15 +47,15 @@ function buildInboundSyncUpdateData(args: {
     hasBusinessField = true
   }
 
-  if (allowStatusChange && patch.status !== undefined) {
-    if (isInboundWorkflowStatus(inboundStatus)) {
-      // 已打印/已入库/已到仓：丢弃 status
-    } else if (
-      patch.status === 'pending' &&
-      !inboundStatusBlocksUnload(inboundStatus)
-    ) {
-      // 禁止把普通柜 sync 成 pending（仅允许从 inspection/closed_area 放出）
-    } else if (patch.status !== inboundStatus) {
+  if (allowStatusChange && patch.status !== undefined && patch.status !== inboundStatus) {
+    if (patch.status === 'pending') {
+      // 仅允许：库内原为查验/封闭区，且正在「放出」（由 buildInboundInspectionAreaSyncPatch 判定）
+      if (inboundStatusBlocksUnload(inboundStatus)) {
+        data.status = patch.status
+        hasBusinessField = true
+      }
+    } else {
+      // 进入查验/封闭区：允许从已打印/待处理等变为 inspection / closed_area
       data.status = patch.status
       hasBusinessField = true
     }
