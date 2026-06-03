@@ -179,6 +179,14 @@ export function buildInboundInspectionAreaSyncPatch(args: {
     }
   }
 
+  // 仅允许 inspection/closed_area 被同步为 pending（放出）；已打印/已入库/已到仓/普通待处理不得被写成 pending
+  if (
+    patch.status === 'pending' &&
+    !inboundStatusBlocksUnload(args.storedStatus)
+  ) {
+    delete patch.status
+  }
+
   return Object.keys(patch).length > 0 ? patch : null
 }
 

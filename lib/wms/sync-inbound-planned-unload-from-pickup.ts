@@ -8,7 +8,10 @@
 import prisma from '@/lib/prisma'
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
-import { buildInboundInspectionAreaSyncPatch } from '@/lib/wms/current-location-blocks-unload'
+import {
+  buildInboundInspectionAreaSyncPatch,
+  shouldSyncInboundFromPickupLocation,
+} from '@/lib/wms/current-location-blocks-unload'
 import { isInboundPlannedUnloadAtAutoUpdateBlocked } from '@/lib/wms/planned-unload-auto-update'
 
 export {
@@ -25,8 +28,10 @@ export {
 export async function syncInboundPlannedUnloadAtByPickupState(args: {
   orderId: bigint
   userId: bigint | null
+  /** 提柜导入等场景已单独同步过预计窗口期时为 true，避免重复写库 */
+  skipAppointmentSync?: boolean
 }): Promise<void> {
-  const { orderId, userId } = args
+  const { orderId, userId, skipAppointmentSync = false } = args
   const [order, pickup, inbound] = await Promise.all([
     prisma.orders.findUnique({
       where: { order_id: orderId },
@@ -49,12 +54,24 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
 
   if (!order) return
 
-  await syncAppointmentEstimatedWindowPeriodForOrder({
-    orderId,
-    pickupDate: order.pickup_date,
-  })
+  if (!skipAppointmentSync) {
+    await syncAppointmentEstimatedWindowPeriodForOrder({
+      orderId,
+      pickupDate: order.pickup_date,
+    })
+  }
 
   if (!inbound) return
+
+  // 正常柜（非查验/封闭区、且库内非查验/封闭区）：只同步预计窗口期，不改入库 status/拆柜日
+  if (
+    !shouldSyncInboundFromPickupLocation(
+      pickup?.current_location,
+      inbound.status
+    )
+  ) {
+    return
+  }
 
   const patch = buildInboundInspectionAreaSyncPatch({
     currentLocation: pickup?.current_location,

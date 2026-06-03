@@ -18,6 +18,7 @@ import {
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { applyPickupDateEnteredAtToOrderUpdate } from '@/lib/oms/pickup-date-entered'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
+import { shouldSyncInboundFromPickupLocation } from '@/lib/wms/current-location-blocks-unload'
 
 const SHEET1_NAME = '提柜数据1'
 const SHEET2_NAME = '提柜数据2'
@@ -222,6 +223,12 @@ function validateRows<T>(
   return { validRows, errors }
 }
 
+function mergeOptionalField<T>(next: T | undefined, existing: T | undefined): T | undefined {
+  if (next === undefined || next === null) return existing
+  if (typeof next === 'string' && next.trim() === '') return existing
+  return next
+}
+
 function mergeByContainerNumber(
   sheet1: PickupManagementSheet1Row[],
   sheet2: PickupManagementSheet2Row[]
@@ -250,15 +257,21 @@ function mergeByContainerNumber(
       pickup_out: r.pickup_out,
       report_empty: r.report_empty,
       return_empty: r.return_empty,
-      port_location_code: r.port_location_code ?? existing.port_location_code,
-      port_text: r.port_text,
-      container_type: r.container_type,
-      shipping_line: r.shipping_line,
-      pickup_date: r.pickup_date ?? existing.pickup_date,
-      lfd_date: r.lfd_date ?? existing.lfd_date,
-      mbl: r.mbl ?? existing.mbl,
-      driver_name: r.driver_name,
-      current_location: r.current_location ?? existing.current_location,
+      port_location_code: mergeOptionalField(
+        r.port_location_code,
+        existing.port_location_code
+      ),
+      port_text: mergeOptionalField(r.port_text, existing.port_text),
+      container_type: mergeOptionalField(r.container_type, existing.container_type),
+      shipping_line: mergeOptionalField(r.shipping_line, existing.shipping_line),
+      pickup_date: mergeOptionalField(r.pickup_date, existing.pickup_date),
+      lfd_date: mergeOptionalField(r.lfd_date, existing.lfd_date),
+      mbl: mergeOptionalField(r.mbl, existing.mbl),
+      driver_name: mergeOptionalField(r.driver_name, existing.driver_name),
+      current_location: mergeOptionalField(
+        r.current_location,
+        existing.current_location
+      ),
     })
   }
   return Array.from(map.values())
@@ -380,15 +393,28 @@ async function executeImport(
       }
     })
 
-    // 每行导入都会写入现在位置；同步入库 status（查验/封闭区或改回待处理）与拆柜日期
+    // 提柜/ETA 变更：预计窗口期；入库仅当现在位置或库内状态涉及查验/封闭区时才联动
     if (pickupWasUpdated || orderUpdate.pickup_date !== undefined || orderUpdate.eta_date !== undefined) {
-      if (orderUpdate.pickup_date !== undefined) {
+      const pickupDateTouched = orderUpdate.pickup_date !== undefined
+      if (pickupDateTouched) {
         await syncAppointmentEstimatedWindowPeriodForOrder({ orderId })
       }
-      await syncInboundPlannedUnloadAtByPickupState({
-        orderId,
-        userId,
+      const inboundForSync = await prisma.inbound_receipt.findUnique({
+        where: { order_id: orderId },
+        select: { status: true },
       })
+      if (
+        shouldSyncInboundFromPickupLocation(
+          currentLocationVal,
+          inboundForSync?.status
+        )
+      ) {
+        await syncInboundPlannedUnloadAtByPickupState({
+          orderId,
+          userId,
+          skipAppointmentSync: pickupDateTouched,
+        })
+      }
     }
     successCount++
   }
