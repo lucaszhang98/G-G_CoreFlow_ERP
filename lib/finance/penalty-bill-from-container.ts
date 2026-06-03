@@ -10,7 +10,10 @@ import { Prisma } from '@prisma/client'
 import { getNextPenaltyInvoiceNumber } from '@/lib/finance/next-penalty-invoice-number'
 import { recalcInvoiceTotal } from '@/lib/finance/recalc-invoice-total'
 import { feeMatchesContainer } from '@/lib/finance/fee-matching'
-import { isOrderCancelledStatus } from '@/lib/orders/order-visibility'
+import {
+  findOperationalOrderByNumber,
+  formatOperationalOrderNotFoundMessage,
+} from '@/lib/orders/operational-order-lookup'
 
 const REBATE_LINE_NOTES = '返利'
 const DEFAULT_REBATE_UNIT_PRICE = -100
@@ -87,10 +90,8 @@ export async function createPenaltyRebateInvoiceFromContainerNumber(
     return { ok: false, error: '请输入柜号', status: 400 }
   }
 
-  const order = await prisma.orders.findFirst({
-    where: {
-      order_number: { equals: trimmed, mode: 'insensitive' },
-    },
+  const order = await findOperationalOrderByNumber({
+    orderNumber: trimmed,
     select: {
       order_id: true,
       customer_id: true,
@@ -98,21 +99,17 @@ export async function createPenaltyRebateInvoiceFromContainerNumber(
       container_type: true,
       status: true,
     },
-    orderBy: { order_id: 'desc' },
   })
 
   if (!order) {
-    return { ok: false, error: '未找到该柜号对应的订单', status: 404 }
+    const msg = await formatOperationalOrderNotFoundMessage(trimmed)
+    return { ok: false, error: msg, status: 404 }
   }
 
   if (order.customer_id == null) {
     return { ok: false, error: '该订单未关联客户，无法创建负数账单', status: 400 }
   }
   const customerId = order.customer_id
-
-  if (isOrderCancelledStatus(order.status)) {
-    return { ok: false, error: '该订单已取消，无法创建负数账单', status: 400 }
-  }
 
   const existing = await prisma.invoices.findFirst({
     where: { order_id: order.order_id, invoice_type: 'penalty' },

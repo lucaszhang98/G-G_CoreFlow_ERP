@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { syncOrderAppointmentInfo, syncMultipleOrdersAppointmentInfo } from '@/lib/services/sync-order-appointment-info'
 import prisma from '@/lib/prisma'
+import { ordersWhereOperational } from '@/lib/orders/operational-order-lookup'
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
     } else {
       // 同步所有订单
       const allOrders = await prisma.orders.findMany({
+        where: ordersWhereOperational(),
         select: {
           order_id: true,
         },

@@ -18,7 +18,11 @@ import {
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { applyPickupDateEnteredAtToOrderUpdate } from '@/lib/oms/pickup-date-entered'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
-import { ordersWhereRootExcludeArchived } from '@/lib/orders/order-visibility'
+import {
+  buildOperationalOrderByNumberMap,
+  formatOperationalOrderNotFoundMessage,
+  ordersWhereOperational,
+} from '@/lib/orders/operational-order-lookup'
 
 const SHEET1_NAME = '提柜数据1'
 const SHEET2_NAME = '提柜数据2'
@@ -287,7 +291,7 @@ export interface PickupImportResult {
 async function loadMasterData(): Promise<PickupMasterData> {
   const [orders, carriers, locations] = await Promise.all([
     prisma.orders.findMany({
-      where: ordersWhereRootExcludeArchived(),
+      where: ordersWhereOperational(),
       select: { order_id: true, order_number: true },
       orderBy: { order_id: 'desc' },
     }),
@@ -297,15 +301,7 @@ async function loadMasterData(): Promise<PickupMasterData> {
       select: { location_id: true, location_code: true, name: true },
     }),
   ])
-  // 同柜号只保留一条（排除 archived 后仍可能重复时取 order_id 最大 = 最新）
-  const orderByNumber = new Map<string, { order_id: bigint }>()
-  for (const o of orders) {
-    const key = o.order_number?.trim()
-    if (!key) continue
-    if (!orderByNumber.has(key)) {
-      orderByNumber.set(key, { order_id: o.order_id })
-    }
-  }
+  const orderByNumber = buildOperationalOrderByNumberMap(orders)
   const carrierByName = new Map<string, bigint>()
   carriers.forEach((c) => {
     if (c.name) carrierByName.set(c.name.trim(), c.carrier_id)
@@ -321,18 +317,25 @@ async function loadMasterData(): Promise<PickupMasterData> {
   return { orderByNumber, carrierByName, locationByCode }
 }
 
-function checkDuplicates(merged: PickupManagementMergedRow[], master: PickupMasterData): ImportError[] {
+async function checkDuplicates(
+  merged: PickupManagementMergedRow[],
+  master: PickupMasterData
+): Promise<ImportError[]> {
   const errors: ImportError[] = []
-  merged.forEach((row, i) => {
+  for (let i = 0; i < merged.length; i++) {
+    const row = merged[i]
     const order = master.orderByNumber.get(row.container_number)
     if (!order) {
+      const message = await formatOperationalOrderNotFoundMessage(
+        row.container_number
+      )
       errors.push({
         row: i + 2,
         field: '柜号',
-        message: `未找到柜号对应的有效订单（已排除完成留档/已取消）："${row.container_number}"，导入仅支持更新在途订单`,
+        message,
       })
     }
-  })
+  }
   return errors
 }
 
@@ -484,7 +487,7 @@ export const pickupManagementImportService = {
     }
 
     const masterData = await loadMasterData()
-    const dupErrors = checkDuplicates(merged, masterData)
+    const dupErrors = await checkDuplicates(merged, masterData)
     if (dupErrors.length > 0) {
       return { success: false, total: merged.length, errors: dupErrors.slice(0, 20) }
     }

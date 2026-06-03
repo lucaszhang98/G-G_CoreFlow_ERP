@@ -19,6 +19,10 @@ import {
   AppointmentImportRow,
 } from '@/lib/validations/appointment-import'
 import { parseDateTimeAsUTC } from '@/lib/utils/datetime-pst'
+import {
+  formatOperationalOrderNotFoundMessage,
+  ordersWhereOperational,
+} from '@/lib/orders/operational-order-lookup'
 
 /**
  * 主数据（用于验证和关联）
@@ -64,6 +68,8 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
     
     // 查订单（包含明细）
     const orders = await prisma.orders.findMany({
+      where: ordersWhereOperational(),
+      orderBy: { order_id: 'desc' },
       select: {
         order_id: true,
         order_number: true,
@@ -113,10 +119,11 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
       },
     })
 
-    // 构建Map
-    const ordersMap = new Map(
-      orders.map(o => [o.order_number as string, o])
-    )
+    const ordersMap = new Map<string, (typeof orders)[number]>()
+    for (const o of orders) {
+      const key = o.order_number as string
+      if (!ordersMap.has(key)) ordersMap.set(key, o)
+    }
 
     const locationsMap = new Map(
       locations.map(l => [l.location_code as string, l.location_id])
@@ -178,17 +185,20 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
     // 第1步：验证每一行的基础数据
     const validatedRows: any[] = []
     
-    data.forEach((row, index) => {
-      const rowIndex = row.rowIndex || (index + 2) // 如果没有rowIndex，使用索引+2（Excel行号）
+    for (let index = 0; index < data.length; index++) {
+      const row = data[index]
+      const rowIndex = row.rowIndex || (index + 2)
 
-      // 1. 验证订单号是否存在
       if (!ordersMap.has(row.order_number)) {
+        const message = await formatOperationalOrderNotFoundMessage(
+          row.order_number
+        )
         errors.push({
           row: rowIndex,
           field: '订单号',
-          message: `订单号"${row.order_number}"不存在`,
+          message: message || `订单号「${row.order_number}」不存在`,
         })
-        return  // 订单不存在，后续校验无意义
+        continue
       }
 
       // 2. 验证位置是否存在（起始地为可选字段）
@@ -214,7 +224,7 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
           field: '仓点',
           message: `位置代码"${row.detail_location_code}"不存在`,
         })
-        return  // 仓点不存在，后续校验无意义
+        continue
       }
 
       // 3. 验证订单明细是否存在（订单号+仓点+性质）
@@ -233,16 +243,15 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
           field: '仓点',
           message: `订单"${row.order_number}"中不存在仓点"${row.detail_location_code}"、性质"${row.delivery_nature}"的明细`,
         })
-        return  // 明细不存在，后续校验无意义
+        continue
       }
 
-      // 记录找到的订单明细ID（用于后续累加检查）
       validatedRows.push({
         ...row,
         rowIndex,
         orderDetailId: orderDetail.id,
       })
-    })
+    }
 
     // 如果基础验证失败，直接返回
     if (errors.length > 0) {

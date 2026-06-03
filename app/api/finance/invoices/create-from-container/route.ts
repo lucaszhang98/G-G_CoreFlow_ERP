@@ -11,9 +11,9 @@ import { syncDirectDeliveryInvoiceForOrder } from '@/lib/finance/direct-delivery
 import { syncContainerUnloadInvoiceForOrder } from '@/lib/finance/container-unload-sync'
 import { syncStorageInvoiceForOrder } from '@/lib/finance/storage-invoice-sync'
 import {
-  ORDER_STATUS_CANCELLED,
-  ORDER_STATUS_CANCELED_US,
-} from '@/lib/orders/order-visibility'
+  findOperationalOrderByNumber,
+  formatOperationalOrderNotFoundMessage,
+} from '@/lib/orders/operational-order-lookup'
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,10 +29,8 @@ export async function POST(request: NextRequest) {
 
     const userId = perm.user?.id != null ? BigInt(perm.user.id) : null
 
-    const order = await prisma.orders.findFirst({
-      where: {
-        order_number: { equals: container_number, mode: 'insensitive' },
-      },
+    const order = await findOperationalOrderByNumber({
+      orderNumber: container_number,
       select: {
         order_id: true,
         customer_id: true,
@@ -40,22 +38,15 @@ export async function POST(request: NextRequest) {
         operation_mode: true,
         status: true,
       },
-      orderBy: { order_id: 'desc' },
     })
 
     if (!order) {
-      return NextResponse.json({ error: '未找到该柜号对应的订单' }, { status: 404 })
+      const msg = await formatOperationalOrderNotFoundMessage(container_number)
+      return NextResponse.json({ error: msg }, { status: 404 })
     }
 
     if (order.customer_id == null) {
       return NextResponse.json({ error: '该订单未关联客户，无法创建账单' }, { status: 400 })
-    }
-
-    if (
-      order.status === ORDER_STATUS_CANCELLED ||
-      order.status === ORDER_STATUS_CANCELED_US
-    ) {
-      return NextResponse.json({ error: '该订单已取消，不生成账单' }, { status: 400 })
     }
 
     if (order.operation_mode !== 'direct_delivery' && order.operation_mode !== 'unload') {

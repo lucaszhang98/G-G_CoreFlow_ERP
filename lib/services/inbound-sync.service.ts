@@ -7,6 +7,7 @@
  */
 
 import prisma from '@/lib/prisma'
+import { ordersWhereOperational } from '@/lib/orders/operational-order-lookup'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 
 export interface InboundSyncResult {
@@ -196,8 +197,10 @@ export async function syncAllMissingInboundReceipts(
     // 查找所有需要同步的订单
     const ordersToSync = await prisma.orders.findMany({
       where: {
-        operation_mode: 'unload',
-        inbound_receipt: null,
+        AND: [
+          ordersWhereOperational(),
+          { operation_mode: 'unload', inbound_receipt: null },
+        ],
       },
       select: {
         order_id: true,

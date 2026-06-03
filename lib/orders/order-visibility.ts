@@ -2,6 +2,9 @@
  * 订单可见性约定 — 与列表默认排除「完成留档」「已取消」、?includeArchived=true 查看历史 对齐。
  * 已取消订单在业务侧还应通过 cancelled-order-cleanup 清掉下游表数据；此处过滤用于列表与历史切换一致。
  *
+ * 业务活动（导入、同步、按柜号查单等）须用 lib/orders/operational-order-lookup.ts，
+ * 不得把 archived/cancelled 当作在途订单使用。
+ *
  * 使用处：各 GET 列表在默认情况下对关联 orders 或 orders 主表追加非 archived / 非 cancelled 条件。
  * 未在此处理的接口：部分出库列表（产品要求暂缓）；订单主表列表由 createListHandler 处理。
  */

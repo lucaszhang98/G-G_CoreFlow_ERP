@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth, serializeBigInt, addSystemFields } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
+import { ordersWhereOperational } from '@/lib/orders/operational-order-lookup'
 
 // POST - 初始化提柜管理记录
 export async function POST(request: NextRequest) {
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
     // 查找所有没有对应提柜管理记录的订单
     const ordersWithoutPickup = await prisma.orders.findMany({
       where: {
-        pickup_management: null, // 没有对应的提柜管理记录
+        AND: [ordersWhereOperational(), { pickup_management: null }],
       },
       select: {
         order_id: true,
