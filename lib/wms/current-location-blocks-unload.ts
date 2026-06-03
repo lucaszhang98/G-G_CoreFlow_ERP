@@ -25,6 +25,22 @@ export type InboundInspectionAreaSyncPatch = {
   planned_unload_at?: Date | null
 }
 
+/** 人工推进后的入库状态：提柜同步不得改回待处理 */
+export const INBOUND_WORKFLOW_STATUSES = [
+  'printed',
+  'received',
+  'arrived',
+] as const
+
+export function isInboundWorkflowStatus(
+  status: string | null | undefined
+): boolean {
+  return (
+    status != null &&
+    (INBOUND_WORKFLOW_STATUSES as readonly string[]).includes(status)
+  )
+}
+
 const INBOUND_UPDATE_META_KEYS = new Set(['updated_by', 'updated_at'])
 
 /** 除 updated_by/updated_at 外是否还有入库字段待写入 */
@@ -83,7 +99,11 @@ export function shouldSyncInboundFromPickupLocation(
   storedStatus: string | null | undefined
 ): boolean {
   if (currentLocationBlocksPlannedUnload(currentLocation)) return true
-  if (inboundStatusBlocksUnload(storedStatus)) return true
+  if (inboundStatusBlocksUnload(storedStatus)) {
+    // 库内仍为查验/封闭区待「放出」；已打印/已入库/已到仓不再被提柜同步改写
+    if (isInboundWorkflowStatus(storedStatus)) return false
+    return true
+  }
   return false
 }
 
@@ -98,7 +118,10 @@ export function resolveInboundStatusOnPickupSync(
 ): string | undefined {
   const fromLocation = resolveInboundStatusFromCurrentLocation(currentLocation)
   if (fromLocation) return fromLocation
-  if (inboundStatusBlocksUnload(storedStatus)) return 'pending'
+  if (inboundStatusBlocksUnload(storedStatus)) {
+    if (isInboundWorkflowStatus(storedStatus)) return undefined
+    return 'pending'
+  }
   return undefined
 }
 
@@ -132,7 +155,13 @@ export function buildInboundInspectionAreaSyncPatch(args: {
   }
 
   const patch: InboundInspectionAreaSyncPatch = {}
-  if (statusFromLocation !== args.storedStatus) {
+  if (
+    statusFromLocation !== args.storedStatus &&
+    !(
+      statusFromLocation === 'pending' &&
+      isInboundWorkflowStatus(args.storedStatus)
+    )
+  ) {
     patch.status = statusFromLocation
   }
 
@@ -181,7 +210,9 @@ export function inboundRowShouldHighlightAsInspection(row: {
 }
 
 /**
- * 列表展示用状态：以提柜「现在位置」为准；非查验/封闭区时固定展示待处理（不沿用库内旧的 inspection/closed_area）。
+ * 列表展示用状态：现在位置含查验/封闭区时优先展示对应状态；
+ * 库内仍为查验/封闭区但位置已不含关键词时展示待处理（待放出）；
+ * 已打印/已入库/已到仓始终展示库内真实状态，避免列表误显示为待处理。
  */
 export function resolveInboundDisplayStatus(
   currentLocation: string | null | undefined,
@@ -189,7 +220,10 @@ export function resolveInboundDisplayStatus(
 ): string {
   const fromLocation = resolveInboundStatusFromCurrentLocation(currentLocation)
   if (fromLocation) return fromLocation
-  if (inboundStatusBlocksUnload(storedStatus)) {
+  if (
+    inboundStatusBlocksUnload(storedStatus) &&
+    !isInboundWorkflowStatus(storedStatus)
+  ) {
     return 'pending'
   }
   return storedStatus ?? 'pending'
