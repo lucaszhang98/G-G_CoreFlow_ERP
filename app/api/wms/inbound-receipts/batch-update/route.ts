@@ -116,6 +116,15 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      const orderIds = [...new Set(targets.map((t) => t.order_id))];
+      const pickupsBefore = await prisma.pickup_management.findMany({
+        where: { order_id: { in: orderIds } },
+        select: { order_id: true, current_location: true },
+      });
+      const previousLocationByOrderId = new Map(
+        pickupsBefore.map((p) => [p.order_id.toString(), p.current_location])
+      );
+
       const actorId = currentUser?.id ? BigInt(currentUser.id) : null;
 
       await prisma.$transaction(async (tx) => {
@@ -125,6 +134,9 @@ export async function POST(request: NextRequest) {
             inRequest: data.unloaded_by,
           });
           const inspectionPatch = buildInboundInspectionAreaSyncPatch({
+            previousLocation: previousLocationByOrderId.get(
+              row.order_id.toString()
+            ),
             currentLocation: normalizedCurrentLocation,
             storedStatus: row.status,
             storedPlannedUnloadAt: row.planned_unload_at,

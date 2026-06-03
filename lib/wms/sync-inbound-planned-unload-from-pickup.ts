@@ -1,16 +1,15 @@
 /**
- * 提柜侧触发入库联动（**仅查验/封闭区**）：
- * - 现在位置含「查验」=> status=inspection；含「封闭区」=> status=closed_area；未填拆柜人员时清空拆柜日期
- * - 库内原为查验/封闭区、现在位置已不含关键词 => 改回待处理，未填拆柜人员时按提柜/ETA 重算拆柜日期
- * - 仅改提柜日/ETA/普通现在位置 => **不修改** inbound_receipt（预计窗口期仍走 OMS 同步）
- * - 已填拆柜人员：仅同步 status，不自动改 planned_unload_at
+ * 提柜侧触发入库联动：
+ * 1. 进入查验/封闭区（新现在位置含关键词）=> status + 清空拆柜日
+ * 2. 放出（库内原为查验/封闭区且新位置无关键词）=> 待处理 + 重算拆柜日
+ * 3. 正常柜 => 仅按老逻辑重算拆柜日（不改 status）
  */
 import prisma from '@/lib/prisma'
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 import {
   buildInboundInspectionAreaSyncPatch,
-  shouldSyncInboundFromPickupLocation,
+  buildNormalPlannedUnloadSyncPatch,
 } from '@/lib/wms/current-location-blocks-unload'
 import { isInboundPlannedUnloadAtAutoUpdateBlocked } from '@/lib/wms/planned-unload-auto-update'
 
@@ -21,17 +20,30 @@ export {
   resolveInboundStatusFromCurrentLocation,
   inboundStatusBlocksUnload,
   inboundRowShouldHighlightAsInspection,
+  isEnteringInspectionArea,
+  isExitingInspectionArea,
   shouldSyncInboundFromPickupLocation,
   buildInboundInspectionAreaSyncPatch,
+  buildNormalPlannedUnloadSyncPatch,
 } from '@/lib/wms/current-location-blocks-unload'
 
 export async function syncInboundPlannedUnloadAtByPickupState(args: {
   orderId: bigint
   userId: bigint | null
-  /** 提柜导入等场景已单独同步过预计窗口期时为 true，避免重复写库 */
+  /** 更新前的提柜现在位置（判断「放出」瞬间；导入/改位置时必传） */
+  previousLocation?: string | null
   skipAppointmentSync?: boolean
+  /** 提柜日/ETA 变更时，正常柜也按老逻辑重算拆柜日期 */
+  recalcNormalPlannedUnload?: boolean
 }): Promise<void> {
-  const { orderId, userId, skipAppointmentSync = false } = args
+  const {
+    orderId,
+    userId,
+    previousLocation,
+    skipAppointmentSync = false,
+    recalcNormalPlannedUnload = false,
+  } = args
+
   const [order, pickup, inbound] = await Promise.all([
     prisma.orders.findUnique({
       where: { order_id: orderId },
@@ -63,27 +75,33 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
 
   if (!inbound) return
 
-  // 正常柜（非查验/封闭区、且库内非查验/封闭区）：只同步预计窗口期，不改入库 status/拆柜日
-  if (
-    !shouldSyncInboundFromPickupLocation(
-      pickup?.current_location,
-      inbound.status
-    )
-  ) {
-    return
-  }
+  const blockAutoPlannedUnloadAt = isInboundPlannedUnloadAtAutoUpdateBlocked(
+    inbound.unloaded_by
+  )
+  const recalc = calculateUnloadDate
 
-  const patch = buildInboundInspectionAreaSyncPatch({
+  const inspectionPatch = buildInboundInspectionAreaSyncPatch({
+    previousLocation,
     currentLocation: pickup?.current_location,
     storedStatus: inbound.status,
     storedPlannedUnloadAt: inbound.planned_unload_at,
     pickupDate: order.pickup_date,
     etaDate: order.eta_date,
-    blockAutoPlannedUnloadAt: isInboundPlannedUnloadAtAutoUpdateBlocked(
-      inbound.unloaded_by
-    ),
-    recalculatePlannedUnloadAt: calculateUnloadDate,
+    blockAutoPlannedUnloadAt,
+    recalculatePlannedUnloadAt: recalc,
   })
+
+  let patch = inspectionPatch
+
+  if (!patch && recalcNormalPlannedUnload) {
+    patch = buildNormalPlannedUnloadSyncPatch({
+      storedPlannedUnloadAt: inbound.planned_unload_at,
+      pickupDate: order.pickup_date,
+      etaDate: order.eta_date,
+      blockAutoPlannedUnloadAt,
+      recalculatePlannedUnloadAt: recalc,
+    })
+  }
 
   if (!patch) return
 

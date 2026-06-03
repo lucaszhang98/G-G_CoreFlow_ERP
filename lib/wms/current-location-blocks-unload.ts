@@ -1,8 +1,8 @@
 /**
- * 提柜「现在位置」与入库 status 联动：
- * - 含「查验」=> status=inspection，拆柜日期置空，列表标红
- * - 含「封闭区」=> status=closed_area，拆柜日期置空，列表标红
- * （同时含两者时优先查验）
+ * 提柜「现在位置」与入库联动（须对比更新前/后的现在位置）：
+ * 1. 新位置含「查验」/「封闭区」=> status 对应 + 清空拆柜日期
+ * 2. 仅当库内原为查验/封闭区，且新位置不再含关键词 => status=待处理 + 按提柜/ETA 重算拆柜日期
+ * 3. 正常柜（从未进入查验/封闭区）=> 只走拆柜日期老逻辑，不改 status
  */
 
 export const INBOUND_STATUS_INSPECTION = 'inspection' as const
@@ -25,7 +25,7 @@ export type InboundInspectionAreaSyncPatch = {
   planned_unload_at?: Date | null
 }
 
-/** 人工推进后的入库状态：提柜同步不得改回待处理 */
+/** 人工推进后的入库状态：放出时不得改回待处理 */
 export const INBOUND_WORKFLOW_STATUSES = [
   'printed',
   'received',
@@ -68,7 +68,7 @@ export function includesClosedAreaKeyword(
   )
 }
 
-/** 现在位置是否需要清空拆柜日期（查验或封闭区） */
+/** 现在位置是否含查验/封闭区关键词 */
 export function currentLocationBlocksPlannedUnload(
   currentLocation: string | null | undefined
 ): boolean {
@@ -91,44 +91,44 @@ export function resolveInboundStatusFromCurrentLocation(
   return null
 }
 
+/** 进入查验/封闭区：仅看更新后的现在位置 */
+export function isEnteringInspectionArea(
+  newLocation: string | null | undefined
+): boolean {
+  return currentLocationBlocksPlannedUnload(newLocation)
+}
+
 /**
- * 是否需联动入库管理：现在位置含查验/封闭区，或库内仍为查验/封闭区待退出。
+ * 放出查验/封闭区：库内 status 仍为 inspection/closed_area，且新位置不再含关键词。
+ * 不因「普通备注无关键词」或「本来就一直为空」而触发（库内须曾是查验/封闭区）。
  */
-export function shouldSyncInboundFromPickupLocation(
-  currentLocation: string | null | undefined,
+export function isExitingInspectionArea(
+  newLocation: string | null | undefined,
   storedStatus: string | null | undefined
 ): boolean {
-  if (currentLocationBlocksPlannedUnload(currentLocation)) return true
-  if (inboundStatusBlocksUnload(storedStatus)) {
-    // 库内仍为查验/封闭区待「放出」；已打印/已入库/已到仓不再被提柜同步改写
-    if (isInboundWorkflowStatus(storedStatus)) return false
-    return true
-  }
-  return false
+  if (currentLocationBlocksPlannedUnload(newLocation)) return false
+  if (!inboundStatusBlocksUnload(storedStatus)) return false
+  if (isInboundWorkflowStatus(storedStatus)) return false
+  return true
 }
 
-/**
- * 提柜/入库同步时写入的 status（仅 shouldSync 为 true 时调用）：
- * - 现在位置含查验/封闭区 => 对应状态
- * - 库内原为查验/封闭区、现在位置已不含关键词 => 待处理
- */
-export function resolveInboundStatusOnPickupSync(
-  currentLocation: string | null | undefined,
+/** @deprecated 使用 isEnteringInspectionArea / isExitingInspectionArea */
+export function shouldSyncInboundFromPickupLocation(
+  previousLocation: string | null | undefined,
+  newLocation: string | null | undefined,
   storedStatus: string | null | undefined
-): string | undefined {
-  const fromLocation = resolveInboundStatusFromCurrentLocation(currentLocation)
-  if (fromLocation) return fromLocation
-  if (inboundStatusBlocksUnload(storedStatus)) {
-    if (isInboundWorkflowStatus(storedStatus)) return undefined
-    return 'pending'
-  }
-  return undefined
+): boolean {
+  return (
+    isEnteringInspectionArea(newLocation) ||
+    isExitingInspectionArea(newLocation, storedStatus)
+  )
 }
 
 /**
- * 仅查验/封闭区相关时生成入库更新补丁；无关时返回 null（不写库）。
+ * 查验/封闭区进出：生成 status / 拆柜日期补丁。
  */
 export function buildInboundInspectionAreaSyncPatch(args: {
+  previousLocation?: string | null | undefined
   currentLocation: string | null | undefined
   storedStatus: string
   storedPlannedUnloadAt: Date | null | undefined
@@ -140,54 +140,63 @@ export function buildInboundInspectionAreaSyncPatch(args: {
     etaDate: Date | null | undefined
   ) => Date | null
 }): InboundInspectionAreaSyncPatch | null {
-  if (
-    !shouldSyncInboundFromPickupLocation(args.currentLocation, args.storedStatus)
-  ) {
-    return null
-  }
-
-  const statusFromLocation = resolveInboundStatusOnPickupSync(
-    args.currentLocation,
-    args.storedStatus
-  )
-  if (statusFromLocation === undefined) {
-    return null
-  }
-
+  const next = args.currentLocation
   const patch: InboundInspectionAreaSyncPatch = {}
-  if (
-    statusFromLocation !== args.storedStatus &&
-    !(
-      statusFromLocation === 'pending' &&
-      isInboundWorkflowStatus(args.storedStatus)
-    )
-  ) {
-    patch.status = statusFromLocation
-  }
 
-  if (!args.blockAutoPlannedUnloadAt) {
-    const blocksUnload =
-      statusFromLocation === INBOUND_STATUS_INSPECTION ||
-      statusFromLocation === INBOUND_STATUS_CLOSED_AREA
-    const next = blocksUnload
-      ? null
-      : args.recalculatePlannedUnloadAt(args.pickupDate, args.etaDate)
-    const prevMs = args.storedPlannedUnloadAt?.getTime() ?? null
-    const nextMs = next?.getTime() ?? null
-    if (prevMs !== nextMs) {
-      patch.planned_unload_at = next
+  if (isEnteringInspectionArea(next)) {
+    const statusFromLocation = resolveInboundStatusFromCurrentLocation(next)
+    if (statusFromLocation && statusFromLocation !== args.storedStatus) {
+      patch.status = statusFromLocation
     }
+    if (!args.blockAutoPlannedUnloadAt) {
+      const prevMs = args.storedPlannedUnloadAt?.getTime() ?? null
+      if (prevMs !== null) {
+        patch.planned_unload_at = null
+      }
+    }
+    return Object.keys(patch).length > 0 ? patch : null
   }
 
-  // 仅允许 inspection/closed_area 被同步为 pending（放出）；已打印/已入库/已到仓/普通待处理不得被写成 pending
-  if (
-    patch.status === 'pending' &&
-    !inboundStatusBlocksUnload(args.storedStatus)
-  ) {
-    delete patch.status
+  if (isExitingInspectionArea(next, args.storedStatus)) {
+    if (args.storedStatus !== 'pending') {
+      patch.status = 'pending'
+    }
+    if (!args.blockAutoPlannedUnloadAt) {
+      const nextPlanned = args.recalculatePlannedUnloadAt(
+        args.pickupDate,
+        args.etaDate
+      )
+      const prevMs = args.storedPlannedUnloadAt?.getTime() ?? null
+      const nextMs = nextPlanned?.getTime() ?? null
+      if (prevMs !== nextMs) {
+        patch.planned_unload_at = nextPlanned
+      }
+    }
+    return Object.keys(patch).length > 0 ? patch : null
   }
 
-  return Object.keys(patch).length > 0 ? patch : null
+  return null
+}
+
+/**
+ * 正常柜：仅按提柜/ETA 重算拆柜日期（老逻辑），不改 status。
+ */
+export function buildNormalPlannedUnloadSyncPatch(args: {
+  storedPlannedUnloadAt: Date | null | undefined
+  pickupDate: Date | null | undefined
+  etaDate: Date | null | undefined
+  blockAutoPlannedUnloadAt: boolean
+  recalculatePlannedUnloadAt: (
+    pickupDate: Date | null | undefined,
+    etaDate: Date | null | undefined
+  ) => Date | null
+}): InboundInspectionAreaSyncPatch | null {
+  if (args.blockAutoPlannedUnloadAt) return null
+  const next = args.recalculatePlannedUnloadAt(args.pickupDate, args.etaDate)
+  const prevMs = args.storedPlannedUnloadAt?.getTime() ?? null
+  const nextMs = next?.getTime() ?? null
+  if (prevMs === nextMs) return null
+  return { planned_unload_at: next }
 }
 
 export function inboundStatusBlocksUnload(
@@ -218,9 +227,8 @@ export function inboundRowShouldHighlightAsInspection(row: {
 }
 
 /**
- * 列表展示用状态：现在位置含查验/封闭区时优先展示对应状态；
- * 库内仍为查验/封闭区但位置已不含关键词时展示待处理（待放出）；
- * 已打印/已入库/已到仓始终展示库内真实状态，避免列表误显示为待处理。
+ * 列表展示：新位置含关键词优先；库内查验/封闭区且新位置无关键词时展示待处理（待放出）；
+ * 已打印/已入库/已到仓展示库内真实值。
  */
 export function resolveInboundDisplayStatus(
   currentLocation: string | null | undefined,
@@ -230,7 +238,8 @@ export function resolveInboundDisplayStatus(
   if (fromLocation) return fromLocation
   if (
     inboundStatusBlocksUnload(storedStatus) &&
-    !isInboundWorkflowStatus(storedStatus)
+    !isInboundWorkflowStatus(storedStatus) &&
+    !currentLocationBlocksPlannedUnload(currentLocation)
   ) {
     return 'pending'
   }

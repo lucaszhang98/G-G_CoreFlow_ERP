@@ -192,15 +192,17 @@ async function updatePickupManagement(
       where: { pickup_id: BigInt(pickupId) },
       select: {
         order_id: true,
+        current_location: true,
         orders: {
           select: { pickup_date: true, pickup_date_entered_at: true },
         },
       },
     })
-
     if (!pickup) {
       return NextResponse.json({ error: '提柜管理记录不存在' }, { status: 404 })
     }
+
+    const previousPickupLocation = pickup.current_location
 
     // 构建更新数据
     const pickupUpdateData: any = {}
@@ -335,6 +337,13 @@ async function updatePickupManagement(
         await syncInboundPlannedUnloadAtByPickupState({
           orderId: pickup.order_id,
           userId: user?.id ? BigInt(user.id) : null,
+          previousLocation:
+            body.current_location !== undefined
+              ? previousPickupLocation
+              : undefined,
+          skipAppointmentSync: body.pickup_date !== undefined,
+          recalcNormalPlannedUnload:
+            body.pickup_date !== undefined || body.eta_date !== undefined,
         })
       } catch (syncError: any) {
         console.warn('[提柜管理更新] 同步入库状态与拆柜日期失败:', syncError)

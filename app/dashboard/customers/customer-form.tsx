@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useForm } from "react-hook-form"
+import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { customerCreateSchema, customerUpdateSchema, CustomerCreateInput, CustomerUpdateInput } from "@/lib/validations/customer"
 import { Button } from "@/components/ui/button"
@@ -55,6 +55,8 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
     formState: { errors },
     setValue,
     watch,
+    control,
+    getValues,
   } = useForm({
     // 使用条件类型处理编辑和创建的不同 schema
     resolver: zodResolver(isEditing ? customerUpdateSchema : customerCreateSchema) as any,
@@ -89,18 +91,20 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
   })
 
   const status = watch("status")
-  const fist = watch("fist")
 
   const onSubmit = async (data: any) => {
     try {
       setLoading(true)
+
+      // FIST 用 Controller 绑定；提交时再读 getValues，避免未 register 时 false 丢失
+      const fistValue = getValues("fist") === true
 
       // 准备提交数据，确保格式正确
       const submitData: any = {
         code: data.code,
         name: data.name,
         status: data.status,
-        fist: data.fist === true,
+        fist: fistValue,
       }
 
       // 可选字段
@@ -244,16 +248,22 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
 
           <div className="space-y-2 flex flex-col justify-end">
             <Label htmlFor="fist">FIST</Label>
-            <div className="flex items-center gap-2 h-10">
-              <Checkbox
-                id="fist"
-                checked={fist === true}
-                onCheckedChange={(checked) => setValue("fist", checked === true)}
-              />
-              <span className="text-sm text-muted-foreground">
-                {fist === true ? "是" : "否"}
-              </span>
-            </div>
+            <Controller
+              name="fist"
+              control={control}
+              render={({ field }) => (
+                <div className="flex items-center gap-2 h-10">
+                  <Checkbox
+                    id="fist"
+                    checked={field.value === true}
+                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {field.value === true ? "是" : "否"}
+                  </span>
+                </div>
+              )}
+            />
           </div>
         </div>
       </div>

@@ -260,8 +260,15 @@ export async function PUT(
 
     // 业务规则：仅现在位置/库内状态涉及「查验」「封闭区」时联动 status 与拆柜日期。
     // 已填拆柜人员时不自动改 planned_unload_at。
+    let previousPickupLocation: string | null | undefined
     if (hasCurrentLocationUpdate) {
+      const pickupBefore = await prisma.pickup_management.findUnique({
+        where: { order_id: targetOrderId },
+        select: { current_location: true },
+      })
+      previousPickupLocation = pickupBefore?.current_location ?? null
       const inspectionPatch = buildInboundInspectionAreaSyncPatch({
+        previousLocation: previousPickupLocation,
         currentLocation: normalizedCurrentLocation,
         storedStatus: existing.status,
         storedPlannedUnloadAt: existing.planned_unload_at,

@@ -4,6 +4,7 @@ import { customerUpdateSchema } from '@/lib/validations/customer';
 import prisma from '@/lib/prisma';
 import { mergeOrdersRelationExcludeArchived, parseIncludeArchived } from '@/lib/orders/order-visibility'
 import { syncOrdersFistAfterCustomerUpdate } from '@/lib/oms/sync-order-fist-from-customer';
+import { hasOwnPropertyKey } from '@/lib/crud/boolean-field';
 
 /**
  * GET /api/customers/:id
@@ -102,6 +103,7 @@ export async function PUT(
     }
 
     const data = validationResult.data;
+    const fistInBody = hasOwnPropertyKey(body, 'fist');
 
     // 如果修改了代码，检查是否冲突
     if (data.code && data.code !== existing.code) {
@@ -127,7 +129,7 @@ export async function PUT(
       updateData.credit_limit = data.credit_limit !== null ? data.credit_limit : 0;
     }
     if (data.status) updateData.status = data.status;
-    if (data.fist !== undefined) updateData.fist = data.fist;
+    if (fistInBody) updateData.fist = data.fist === true;
 
     // 处理联系人更新
     // 注意：数据库要求 contact_roles.name 非空，所以只有当提供了 name 时才创建/更新联系人
@@ -198,7 +200,7 @@ export async function PUT(
       },
     })
 
-    if (data.fist !== undefined) {
+    if (fistInBody) {
       await syncOrdersFistAfterCustomerUpdate(
         existing.id,
         data.fist === true

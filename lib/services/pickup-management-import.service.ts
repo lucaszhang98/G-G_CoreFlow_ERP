@@ -18,7 +18,6 @@ import {
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { applyPickupDateEnteredAtToOrderUpdate } from '@/lib/oms/pickup-date-entered'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
-import { shouldSyncInboundFromPickupLocation } from '@/lib/wms/current-location-blocks-unload'
 
 const SHEET1_NAME = '提柜数据1'
 const SHEET2_NAME = '提柜数据2'
@@ -376,8 +375,9 @@ async function executeImport(
 
     const existingPickup = await prisma.pickup_management.findUnique({
       where: { order_id: orderId },
-      select: { pickup_id: true },
+      select: { pickup_id: true, current_location: true },
     })
+    const previousLocation = existingPickup?.current_location ?? null
 
     let pickupWasUpdated = false
     await prisma.$transaction(async (tx) => {
@@ -393,28 +393,21 @@ async function executeImport(
       }
     })
 
-    // 提柜/ETA 变更：预计窗口期；入库仅当现在位置或库内状态涉及查验/封闭区时才联动
+    // 提柜/ETA/现在位置变更：查验进出按库内 status 判断；正常柜仅重算拆柜日
     if (pickupWasUpdated || orderUpdate.pickup_date !== undefined || orderUpdate.eta_date !== undefined) {
       const pickupDateTouched = orderUpdate.pickup_date !== undefined
       if (pickupDateTouched) {
         await syncAppointmentEstimatedWindowPeriodForOrder({ orderId })
       }
-      const inboundForSync = await prisma.inbound_receipt.findUnique({
-        where: { order_id: orderId },
-        select: { status: true },
+      await syncInboundPlannedUnloadAtByPickupState({
+        orderId,
+        userId,
+        previousLocation,
+        skipAppointmentSync: pickupDateTouched,
+        recalcNormalPlannedUnload:
+          orderUpdate.pickup_date !== undefined ||
+          orderUpdate.eta_date !== undefined,
       })
-      if (
-        shouldSyncInboundFromPickupLocation(
-          currentLocationVal,
-          inboundForSync?.status
-        )
-      ) {
-        await syncInboundPlannedUnloadAtByPickupState({
-          orderId,
-          userId,
-          skipAppointmentSync: pickupDateTouched,
-        })
-      }
     }
     successCount++
   }

@@ -156,8 +156,11 @@ export async function POST(request: NextRequest) {
     // 获取所有 pickup_management 记录，以获取关联的 order_id
     const pickups = await prisma.pickup_management.findMany({
       where: { pickup_id: { in: bigIntIds } },
-      select: { pickup_id: true, order_id: true },
+      select: { pickup_id: true, order_id: true, current_location: true },
     })
+    const previousLocationByOrderId = new Map(
+      pickups.map((p) => [p.order_id.toString(), p.current_location])
+    )
 
     if (pickups.length === 0) {
       return NextResponse.json(
@@ -221,6 +224,14 @@ export async function POST(request: NextRequest) {
         await syncInboundPlannedUnloadAtByPickupState({
           orderId,
           userId: actorId,
+          previousLocation:
+            updates.current_location !== undefined
+              ? previousLocationByOrderId.get(orderId.toString())
+              : undefined,
+          skipAppointmentSync: updates.pickup_date !== undefined,
+          recalcNormalPlannedUnload:
+            updates.pickup_date !== undefined ||
+            updates.eta_date !== undefined,
         })
       }
       try {

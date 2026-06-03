@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
+import { coerceExplicitBoolean } from '@/lib/crud/boolean-field'
 
 type DbClient = Prisma.TransactionClient | typeof prisma
 
@@ -35,9 +36,13 @@ export async function applyOrderFistOnOrderWrite(
   const client = ctx.client ?? prisma
 
   if (ctx.isCreate) {
-    if (ctx.fistExplicitlyInPayload && processedData.fist !== undefined) {
-      processedData.fist_manual = true
-      return
+    if (ctx.fistExplicitlyInPayload) {
+      const explicit = coerceExplicitBoolean(processedData.fist)
+      if (explicit !== undefined) {
+        processedData.fist = explicit
+        processedData.fist_manual = true
+        return
+      }
     }
     processedData.fist_manual = false
     const customerId = processedData.customer_id as bigint | null | undefined
@@ -55,9 +60,13 @@ export async function applyOrderFistOnOrderWrite(
       (ctx.existing?.customer_id?.toString() ?? null)
 
   if (customerChanged) {
-    if (ctx.fistExplicitlyInPayload && processedData.fist !== undefined) {
-      processedData.fist_manual = true
-      return
+    if (ctx.fistExplicitlyInPayload) {
+      const explicit = coerceExplicitBoolean(processedData.fist)
+      if (explicit !== undefined) {
+        processedData.fist = explicit
+        processedData.fist_manual = true
+        return
+      }
     }
     const newCustomerId = processedData.customer_id as bigint | null
     processedData.fist = await fetchCustomerFist(newCustomerId ?? undefined, client)
@@ -65,8 +74,12 @@ export async function applyOrderFistOnOrderWrite(
     return
   }
 
-  if (ctx.fistExplicitlyInPayload && processedData.fist !== undefined) {
-    processedData.fist_manual = true
+  if (ctx.fistExplicitlyInPayload) {
+    const explicit = coerceExplicitBoolean(processedData.fist)
+    if (explicit !== undefined) {
+      processedData.fist = explicit
+      processedData.fist_manual = true
+    }
   }
 }
 

@@ -40,6 +40,7 @@ import {
   applyOrderFistOnOrderWrite,
   syncOrdersFistAfterCustomerUpdate,
 } from '@/lib/oms/sync-order-fist-from-customer'
+import { coerceExplicitBoolean } from '@/lib/crud/boolean-field'
 import { shouldPaymentWriteOff } from '@/lib/finance/payment-write-off-sync'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 
@@ -1176,8 +1177,9 @@ export function createCreateHandler(config: EntityConfig) {
           continue
         }
         if (fieldConfig?.type === 'boolean') {
-          if (value !== undefined && value !== null) {
-            processedData[key] = Boolean(value)
+          const boolVal = coerceExplicitBoolean(value)
+          if (boolVal !== undefined) {
+            processedData[key] = boolVal
           }
           continue
         }
@@ -1423,10 +1425,11 @@ export function createUpdateHandler(config: EntityConfig) {
           continue
         }
 
-        // 处理 boolean 字段：确保转换为布尔类型
+        // 处理 boolean 字段：false 为有效写入
         if (fieldConfig?.type === 'boolean') {
-          if (value !== undefined && value !== null) {
-            processedData[key] = Boolean(value)
+          const boolVal = coerceExplicitBoolean(value)
+          if (boolVal !== undefined) {
+            processedData[key] = boolVal
           }
           continue // 跳过后续处理
         }
@@ -1814,7 +1817,10 @@ export function createUpdateHandler(config: EntityConfig) {
           }
           await syncInboundPlannedUnloadAtByPickupState({
             orderId: item.order_id,
-            userId: permissionResult.user?.id ? BigInt(permissionResult.user.id) : null,
+            userId: permissionResult.user?.id
+              ? BigInt(permissionResult.user.id)
+              : null,
+            recalcNormalPlannedUnload: true,
           })
         } catch (syncErr: any) {
           console.warn('[订单更新] 同步入库/预计窗口期失败:', syncErr)
@@ -2105,11 +2111,11 @@ export function createBatchUpdateHandler(config: EntityConfig) {
           actualKey = 'location_id'
         }
         
-        // 处理 boolean 字段：确保 false 值不被过滤，并转换为布尔类型
+        // 处理 boolean 字段：false 为有效写入
         if (fieldConfig?.type === 'boolean') {
-          // boolean 字段：false 和 true 都是有效值
-          if (value !== undefined && value !== null) {
-            processedUpdates[actualKey] = Boolean(value)
+          const boolVal = coerceExplicitBoolean(value)
+          if (boolVal !== undefined) {
+            processedUpdates[actualKey] = boolVal
           }
           return // 跳过后续处理
         }

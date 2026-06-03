@@ -74,6 +74,7 @@ export function CustomerDetailClient({ config, data }: CustomerDetailClientProps
             </DialogDescription>
           </DialogHeader>
           <CustomerForm
+            key={customerData.id}
             customer={customerData}
             onSuccess={handleFormSuccess}
             onCancel={() => {

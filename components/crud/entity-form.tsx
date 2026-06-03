@@ -5,7 +5,7 @@
 "use client"
 
 import * as React from "react"
-import { useForm } from "react-hook-form"
+import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { EntityConfig, FieldConfig } from "@/lib/crud/types"
 import { getSchema } from "@/lib/crud/schema-loader"
@@ -180,6 +180,12 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
     }
     delete defaults.department
 
+    for (const [key, field] of Object.entries(config.fields)) {
+      if (field.type === 'boolean' && key in defaults) {
+        defaults[key] = defaults[key] === true
+      }
+    }
+
     return defaults
   }, [data, isEditing, config.name, ggLocationId])
 
@@ -190,6 +196,7 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
     setValue,
     watch,
     getValues,
+    control,
   } = useForm({
     resolver: zodResolver(schema as any) as any,
     defaultValues: processedDefaultValues,
@@ -860,19 +867,25 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
       case 'boolean':
         return (
           <div key={fieldKey} className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <input
-                id={fieldKey}
-                type="checkbox"
-                checked={fieldValue === true || fieldValue === 'true'}
-                onChange={(e) => setValue(fieldKey, e.target.checked, { shouldValidate: true, shouldDirty: true, shouldTouch: true })}
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-              />
-              <Label htmlFor={fieldKey} className="text-sm font-medium text-foreground cursor-pointer">
-                {fieldConfig.label}
-                {fieldConfig.required && <span className="text-red-500 ml-1">*</span>}
-              </Label>
-            </div>
+            <Controller
+              name={fieldKey}
+              control={control}
+              render={({ field }) => (
+                <div className="flex items-center space-x-2">
+                  <input
+                    id={fieldKey}
+                    type="checkbox"
+                    checked={field.value === true}
+                    onChange={(e) => field.onChange(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor={fieldKey} className="text-sm font-medium text-foreground cursor-pointer">
+                    {fieldConfig.label}
+                    {fieldConfig.required && <span className="text-red-500 ml-1">*</span>}
+                  </Label>
+                </div>
+              )}
+            />
             {errors[fieldKey] && (
               <p className="text-sm text-red-500 mt-1">{(errors[fieldKey] as any)?.message}</p>
             )}
