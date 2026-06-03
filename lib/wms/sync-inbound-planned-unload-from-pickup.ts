@@ -106,11 +106,19 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
 
   if (!patch) return
 
-  // 已打印/已入库/已到仓：绝不因提柜同步改写 status
+  // 已打印/已入库/已到仓：绝不因提柜同步改写 status（含误写的 pending）
   if (patch.status != null && isInboundWorkflowStatus(inbound.status)) {
     const { status: _omit, ...rest } = patch
     patch = Object.keys(rest).length > 0 ? rest : null
     if (!patch) return
+  }
+
+  // 仅重算拆柜日时不应携带 status；若仅有 status=pending 且库内为 workflow 则整单跳过
+  if (
+    patch.status === 'pending' &&
+    isInboundWorkflowStatus(inbound.status)
+  ) {
+    return
   }
 
   await prisma.inbound_receipt.update({

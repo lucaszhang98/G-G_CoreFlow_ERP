@@ -18,6 +18,7 @@ import {
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { applyPickupDateEnteredAtToOrderUpdate } from '@/lib/oms/pickup-date-entered'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
+import { ordersWhereRootExcludeArchived } from '@/lib/orders/order-visibility'
 
 const SHEET1_NAME = '提柜数据1'
 const SHEET2_NAME = '提柜数据2'
@@ -285,14 +286,26 @@ export interface PickupImportResult {
 
 async function loadMasterData(): Promise<PickupMasterData> {
   const [orders, carriers, locations] = await Promise.all([
-    prisma.orders.findMany({ select: { order_id: true, order_number: true } }),
+    prisma.orders.findMany({
+      where: ordersWhereRootExcludeArchived(),
+      select: { order_id: true, order_number: true },
+      orderBy: { order_id: 'desc' },
+    }),
     prisma.carriers.findMany({ select: { carrier_id: true, name: true, carrier_code: true } }),
     prisma.locations.findMany({
       where: { location_type: 'port' },
       select: { location_id: true, location_code: true, name: true },
     }),
   ])
-  const orderByNumber = new Map(orders.map((o) => [o.order_number, { order_id: o.order_id }]))
+  // 同柜号只保留一条（排除 archived 后仍可能重复时取 order_id 最大 = 最新）
+  const orderByNumber = new Map<string, { order_id: bigint }>()
+  for (const o of orders) {
+    const key = o.order_number?.trim()
+    if (!key) continue
+    if (!orderByNumber.has(key)) {
+      orderByNumber.set(key, { order_id: o.order_id })
+    }
+  }
   const carrierByName = new Map<string, bigint>()
   carriers.forEach((c) => {
     if (c.name) carrierByName.set(c.name.trim(), c.carrier_id)
@@ -316,7 +329,7 @@ function checkDuplicates(merged: PickupManagementMergedRow[], master: PickupMast
       errors.push({
         row: i + 2,
         field: '柜号',
-        message: `未找到柜号对应的订单："${row.container_number}"，导入仅支持更新已有订单`,
+        message: `未找到柜号对应的有效订单（已排除完成留档/已取消）："${row.container_number}"，导入仅支持更新在途订单`,
       })
     }
   })

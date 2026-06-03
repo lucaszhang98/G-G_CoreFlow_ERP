@@ -160,6 +160,9 @@ export function buildInboundInspectionAreaSyncPatch(args: {
   }
 
   if (isExitingInspectionArea(args.previousLocation, next, args.storedStatus)) {
+    if (isInboundWorkflowStatus(args.storedStatus)) {
+      return null
+    }
     if (args.storedStatus !== 'pending') {
       patch.status = 'pending'
     }
