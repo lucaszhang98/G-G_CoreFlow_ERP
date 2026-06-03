@@ -47,6 +47,13 @@ const orderDetailListConfig = {
   list: {
     ...orderDetailConfig.list,
     inlineEdit: { enabled: true, fields: ['window_period'], cellClickToEdit: true },
+    // 与单行编辑一致，批量弹窗只显示窗口期（避免部署/配置遗漏时回退成「全部字段」）
+    batchOperations: {
+      edit: {
+        enabled: true,
+        fields: ['window_period'],
+      },
+    },
   },
 }
 

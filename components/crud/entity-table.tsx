@@ -700,17 +700,29 @@ export function EntityTable<T = any>({
   // 获取可批量编辑的字段列表（使用 useMemo 避免每次渲染重新计算）
   const batchEditableFields = React.useMemo(() => {
     const idField = config.idField || 'id'
-    return config.list.batchOperations?.edit?.fields || 
-      Object.keys(config.fields).filter(key => {
+    const explicit = config.list.batchOperations?.edit?.fields
+    if (explicit?.length) {
+      return explicit.filter((key) => {
         const field = config.fields[key]
-        return (
-          key !== idField &&
-          field.type !== 'relation' &&
-          !field.readonly &&
-          !field.computed
-        )
+        return field && !field.hidden
       })
-  }, [config.list.batchOperations?.edit?.fields, config.fields, config.idField])
+    }
+    return Object.keys(config.fields).filter((key) => {
+      const field = config.fields[key]
+      return (
+        key !== idField &&
+        field.type !== 'relation' &&
+        field.type !== 'location' &&
+        !field.readonly &&
+        !field.computed &&
+        !field.hidden
+      )
+    })
+  }, [
+    config.list.batchOperations?.edit?.fields,
+    config.fields,
+    config.idField,
+  ])
 
   const fetchAbortRef = React.useRef<AbortController | null>(null)
   // 获取列表数据（新请求会取消上一次未完成的请求，避免刷新后 page=1 的响应覆盖 page=7）
