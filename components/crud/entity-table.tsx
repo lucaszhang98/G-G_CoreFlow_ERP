@@ -2605,7 +2605,17 @@ export function EntityTable<T = any>({
           )
         }
         if (fieldConfig.type === 'select') {
-          const value = (dPref !== undefined ? dPref : row.getValue(fieldKey)) as string
+          let value = (dPref !== undefined ? dPref : row.getValue(fieldKey)) as string
+          // 入库列表：展示用 display_status（待放出），库内 status 仍用于批量编辑/保存
+          if (
+            config.name === 'inbound_receipt' &&
+            fieldKey === 'status' &&
+            dPref === undefined
+          ) {
+            const displayStatus = (row.original as { display_status?: string })
+              ?.display_status
+            if (displayStatus) value = displayStatus
+          }
           const option = fieldConfig.options?.find(opt => opt.value === value)
           const displayText = option?.label || value || '-'
           const isRedText = fieldKey === 'delivery_nature' && value === '扣货'

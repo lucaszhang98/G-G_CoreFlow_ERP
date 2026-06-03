@@ -75,7 +75,7 @@ async function main() {
     const prev =
       r.orders.pickup_management?.current_location ?? null
     const entering = isEnteringInspectionArea(newLoc)
-    const exiting = isExitingInspectionArea(newLoc, r.status)
+    const exiting = isExitingInspectionArea(prev, newLoc, r.status)
     if (!entering && !exiting) {
       noInspectionChange++
       continue

@@ -10,6 +10,7 @@ import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 import {
   buildInboundInspectionAreaSyncPatch,
   buildNormalPlannedUnloadSyncPatch,
+  isInboundWorkflowStatus,
 } from '@/lib/wms/current-location-blocks-unload'
 import { isInboundPlannedUnloadAtAutoUpdateBlocked } from '@/lib/wms/planned-unload-auto-update'
 
@@ -104,6 +105,13 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
   }
 
   if (!patch) return
+
+  // 已打印/已入库/已到仓：绝不因提柜同步改写 status
+  if (patch.status != null && isInboundWorkflowStatus(inbound.status)) {
+    const { status: _omit, ...rest } = patch
+    patch = Object.keys(rest).length > 0 ? rest : null
+    if (!patch) return
+  }
 
   await prisma.inbound_receipt.update({
     where: { inbound_receipt_id: inbound.inbound_receipt_id },

@@ -99,14 +99,16 @@ export function isEnteringInspectionArea(
 }
 
 /**
- * 放出查验/封闭区：库内 status 仍为 inspection/closed_area，且新位置不再含关键词。
- * 不因「普通备注无关键词」或「本来就一直为空」而触发（库内须曾是查验/封闭区）。
+ * 放出查验/封闭区：更新前现在位置含关键词、更新后不含，且库内 status 为 inspection/closed_area。
+ * 不因 Excel 空位置、普通备注或「库内误标查验但从未在提柜位置出现关键词」而触发。
  */
 export function isExitingInspectionArea(
+  previousLocation: string | null | undefined,
   newLocation: string | null | undefined,
   storedStatus: string | null | undefined
 ): boolean {
   if (currentLocationBlocksPlannedUnload(newLocation)) return false
+  if (!currentLocationBlocksPlannedUnload(previousLocation)) return false
   if (!inboundStatusBlocksUnload(storedStatus)) return false
   if (isInboundWorkflowStatus(storedStatus)) return false
   return true
@@ -120,7 +122,7 @@ export function shouldSyncInboundFromPickupLocation(
 ): boolean {
   return (
     isEnteringInspectionArea(newLocation) ||
-    isExitingInspectionArea(newLocation, storedStatus)
+    isExitingInspectionArea(previousLocation, newLocation, storedStatus)
   )
 }
 
@@ -157,7 +159,7 @@ export function buildInboundInspectionAreaSyncPatch(args: {
     return Object.keys(patch).length > 0 ? patch : null
   }
 
-  if (isExitingInspectionArea(next, args.storedStatus)) {
+  if (isExitingInspectionArea(args.previousLocation, next, args.storedStatus)) {
     if (args.storedStatus !== 'pending') {
       patch.status = 'pending'
     }

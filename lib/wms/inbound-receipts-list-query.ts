@@ -367,7 +367,8 @@ export async function runInboundReceiptListQuery(
 
       return {
         ...serialized,
-        status: displayStatus,
+        status: serialized.status,
+        display_status: displayStatus,
         customer_name: customerName,
         fist: resolveOrderFistFromRelation(order),
         container_number: containerNumber,
