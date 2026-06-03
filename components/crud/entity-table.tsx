@@ -2034,8 +2034,28 @@ export function EntityTable<T = any>({
         }
         throw new Error(errorMessage)
       }
-      
-      toast.success(`成功更新 ${ids.length} 条${config.displayName}记录`)
+
+      let batchPayload: { status_printed_count?: number } = {}
+      try {
+        batchPayload = await response.json()
+      } catch {
+        /* 空响应体 */
+      }
+
+      const requestedPrinted =
+        config.name === 'inbound_receipt' && processedUpdates.status === 'printed'
+      const confirmedPrinted = batchPayload.status_printed_count
+      if (
+        requestedPrinted &&
+        confirmedPrinted != null &&
+        confirmedPrinted < ids.length
+      ) {
+        toast.warning(
+          `已提交 ${ids.length} 条，库内确认为已打印 ${confirmedPrinted} 条，请刷新列表核对`
+        )
+      } else {
+        toast.success(`成功更新 ${ids.length} 条${config.displayName}记录`)
+      }
       setBatchEditDialogOpen(false)
       setBatchEditValues({})
       setSelectedRows([])

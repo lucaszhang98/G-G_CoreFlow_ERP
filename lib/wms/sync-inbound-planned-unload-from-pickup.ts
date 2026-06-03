@@ -10,7 +10,9 @@ import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 import {
   buildInboundInspectionAreaSyncPatch,
   buildNormalPlannedUnloadSyncPatch,
+  inboundStatusBlocksUnload,
   isInboundWorkflowStatus,
+  type InboundInspectionAreaSyncPatch,
 } from '@/lib/wms/current-location-blocks-unload'
 import { isInboundPlannedUnloadAtAutoUpdateBlocked } from '@/lib/wms/planned-unload-auto-update'
 
@@ -27,6 +29,42 @@ export {
   buildInboundInspectionAreaSyncPatch,
   buildNormalPlannedUnloadSyncPatch,
 } from '@/lib/wms/current-location-blocks-unload'
+
+/** 构造入库写入字段：正常柜重算拆柜日时绝不带 status（堵住历史「一律 pending」） */
+function buildInboundSyncUpdateData(args: {
+  inboundStatus: string
+  patch: InboundInspectionAreaSyncPatch
+  allowStatusChange: boolean
+  userId: bigint | null
+}): Record<string, unknown> | null {
+  const { inboundStatus, patch, allowStatusChange, userId } = args
+  const data: Record<string, unknown> = {
+    updated_by: userId,
+    updated_at: new Date(),
+  }
+  let hasBusinessField = false
+
+  if (patch.planned_unload_at !== undefined) {
+    data.planned_unload_at = patch.planned_unload_at
+    hasBusinessField = true
+  }
+
+  if (allowStatusChange && patch.status !== undefined) {
+    if (isInboundWorkflowStatus(inboundStatus)) {
+      // 已打印/已入库/已到仓：丢弃 status
+    } else if (
+      patch.status === 'pending' &&
+      !inboundStatusBlocksUnload(inboundStatus)
+    ) {
+      // 禁止把普通柜 sync 成 pending（仅允许从 inspection/closed_area 放出）
+    } else if (patch.status !== inboundStatus) {
+      data.status = patch.status
+      hasBusinessField = true
+    }
+  }
+
+  return hasBusinessField ? data : null
+}
 
 export async function syncInboundPlannedUnloadAtByPickupState(args: {
   orderId: bigint
@@ -92,41 +130,43 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
     recalculatePlannedUnloadAt: recalc,
   })
 
-  let patch = inspectionPatch
-
-  if (!patch && recalcNormalPlannedUnload) {
-    patch = buildNormalPlannedUnloadSyncPatch({
-      storedPlannedUnloadAt: inbound.planned_unload_at,
-      pickupDate: order.pickup_date,
-      etaDate: order.eta_date,
-      blockAutoPlannedUnloadAt,
-      recalculatePlannedUnloadAt: recalc,
+  if (inspectionPatch) {
+    const data = buildInboundSyncUpdateData({
+      inboundStatus: inbound.status,
+      patch: inspectionPatch,
+      allowStatusChange: true,
+      userId,
     })
-  }
-
-  if (!patch) return
-
-  // 已打印/已入库/已到仓：绝不因提柜同步改写 status（含误写的 pending）
-  if (patch.status != null && isInboundWorkflowStatus(inbound.status)) {
-    const { status: _omit, ...rest } = patch
-    patch = Object.keys(rest).length > 0 ? rest : null
-    if (!patch) return
-  }
-
-  // 仅重算拆柜日时不应携带 status；若仅有 status=pending 且库内为 workflow 则整单跳过
-  if (
-    patch.status === 'pending' &&
-    isInboundWorkflowStatus(inbound.status)
-  ) {
+    if (data) {
+      await prisma.inbound_receipt.update({
+        where: { inbound_receipt_id: inbound.inbound_receipt_id },
+        data,
+      })
+    }
     return
   }
 
+  if (!recalcNormalPlannedUnload) return
+
+  const datePatch = buildNormalPlannedUnloadSyncPatch({
+    storedPlannedUnloadAt: inbound.planned_unload_at,
+    pickupDate: order.pickup_date,
+    etaDate: order.eta_date,
+    blockAutoPlannedUnloadAt,
+    recalculatePlannedUnloadAt: recalc,
+  })
+  if (!datePatch) return
+
+  const data = buildInboundSyncUpdateData({
+    inboundStatus: inbound.status,
+    patch: datePatch,
+    allowStatusChange: false,
+    userId,
+  })
+  if (!data) return
+
   await prisma.inbound_receipt.update({
     where: { inbound_receipt_id: inbound.inbound_receipt_id },
-    data: {
-      ...patch,
-      updated_by: userId,
-      updated_at: new Date(),
-    },
+    data,
   })
 }

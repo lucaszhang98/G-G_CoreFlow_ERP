@@ -277,9 +277,21 @@ export async function POST(request: NextRequest) {
       console.warn('[inbound-receipts batch-update] 仓储账单同步调度失败', e)
     }
 
+    let statusPrintedCount: number | undefined
+    if (data.status === 'printed') {
+      const printedRows = await prisma.inbound_receipt.findMany({
+        where: { inbound_receipt_id: { in: inboundReceiptIds }, status: 'printed' },
+        select: { inbound_receipt_id: true },
+      })
+      statusPrintedCount = printedRows.length
+    }
+
     return NextResponse.json({
       message: `成功更新 ${result.count} 条记录`,
       count: result.count,
+      ...(statusPrintedCount !== undefined
+        ? { status_printed_count: statusPrintedCount }
+        : {}),
     });
   } catch (error: any) {
     return handleError(error, '批量更新入库管理记录失败');
