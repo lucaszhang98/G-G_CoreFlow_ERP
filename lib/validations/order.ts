@@ -4,6 +4,13 @@
 
 import { z } from 'zod'
 
+/** 外键 ID：行内编辑/下拉框常以字符串提交，须与 delivery_location_id 一致 */
+const optionalNumericId = () =>
+  z
+    .union([z.number(), z.string().regex(/^\d+$/, 'ID须为数字')])
+    .optional()
+    .nullable()
+
 // 创建订单 Schema（只包含订单主表字段）
 export const orderCreateSchema = z.object({
   order_number: z
@@ -11,8 +18,8 @@ export const orderCreateSchema = z.object({
     .min(1, '订单号不能为空')
     .max(50, '订单号不能超过50个字符')
     .refine((val) => !/\s/.test(val), '柜号不允许包含空格'),
-  customer_id: z.number().optional().nullable(),
-  user_id: z.number().optional().nullable(),
+  customer_id: optionalNumericId(),
+  user_id: optionalNumericId(),
   order_date: z.string().or(z.date()),
   status: z.enum(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'archived']).optional(),
   operation_mode: z.enum(['unload', 'direct_delivery']).optional().nullable(),
@@ -39,8 +46,8 @@ export const orderCreateSchema = z.object({
   /** 服务端维护：订单 FIST 是否手改，客户端不可直接写入 */
   fist_manual: z.boolean().optional().nullable(),
   warehouse_account: z.string().max(100).optional().nullable(),
-  pickup_driver_id: z.number().optional().nullable(),
-  return_driver_id: z.number().optional().nullable(),
+  pickup_driver_id: optionalNumericId(),
+  return_driver_id: optionalNumericId(),
 })
 
 // 更新订单 Schema
