@@ -221,11 +221,9 @@ export async function loadImportDraftCorrectionExamples(
   })
 }
 
-function dedupeByContainer(
-  rows: Array<{ container_number: string; created_at: Date }>
-) {
+function dedupeByContainer<T extends { container_number: string }>(rows: T[]): T[] {
   const seen = new Set<string>()
-  const out: typeof rows = []
+  const out: T[] = []
   for (const row of rows) {
     if (seen.has(row.container_number)) continue
     seen.add(row.container_number)
