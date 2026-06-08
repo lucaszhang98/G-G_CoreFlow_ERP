@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { auth } from '@/auth'
 import { redirect } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
+import { canAccessMailAssistant } from '@/lib/mail-assistant/mail-assistant-permissions'
 import { Loader2 } from 'lucide-react'
 import { ForecastFileClient } from './forecast-file-client'
 
@@ -13,6 +14,9 @@ export default async function ForecastFilePage() {
   const session = await auth()
   if (!session?.user) {
     redirect('/login')
+  }
+  if (!canAccessMailAssistant(session.user.role)) {
+    redirect('/dashboard')
   }
 
   return (

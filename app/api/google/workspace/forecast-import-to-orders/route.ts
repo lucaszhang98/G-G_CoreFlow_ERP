@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { checkPermission } from '@/lib/api/helpers'
+import { checkMailAssistantPermission } from '@/lib/mail-assistant/mail-assistant-permissions'
 import { canImportOrders } from '@/lib/orders/order-import-permissions'
 import { importForecastDraftsToOrders } from '@/lib/mail-assistant/import-forecast-drafts-to-orders'
 
@@ -9,7 +9,7 @@ const bodySchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
-  const perm = await checkPermission(['admin'])
+  const perm = await checkMailAssistantPermission()
   if (perm.error) return perm.error
 
   if (!canImportOrders(perm.user?.role)) {

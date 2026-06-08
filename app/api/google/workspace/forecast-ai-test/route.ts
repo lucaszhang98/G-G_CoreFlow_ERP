@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { checkPermission } from '@/lib/api/helpers'
+import { checkMailAssistantPermission } from '@/lib/mail-assistant/mail-assistant-permissions'
 import { getForecastAiStatus, isForecastAiEnabled } from '@/lib/mail-assistant/forecast-ai-config'
 import { geminiGenerateContent } from '@/lib/mail-assistant/gemini-client'
 
 /** 验证 Gemini API Key 是否可用 */
 export async function POST() {
-  const perm = await checkPermission(['admin'])
+  const perm = await checkMailAssistantPermission()
   if (perm.error) return perm.error
 
   if (!isForecastAiEnabled()) {

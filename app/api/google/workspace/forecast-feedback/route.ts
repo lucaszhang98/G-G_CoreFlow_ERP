@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkPermission } from '@/lib/api/helpers'
+import { checkMailAssistantPermission } from '@/lib/mail-assistant/mail-assistant-permissions'
 import { saveForecastFeedback } from '@/lib/mail-assistant/forecast-feedback-store'
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024
 
 export async function POST(request: NextRequest) {
-  const perm = await checkPermission(['admin'])
+  const perm = await checkMailAssistantPermission()
   if (perm.error) return perm.error
 
   const userId = perm.user?.id ? BigInt(perm.user.id) : null

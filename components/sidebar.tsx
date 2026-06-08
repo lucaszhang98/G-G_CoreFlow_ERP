@@ -306,27 +306,31 @@ const menuItems: MenuItem[] = [
   {
     title: "系统工具",
     icon: Settings,
-    roles: ["admin"],
+    roles: ["admin", "oms_manager", "oms_operator"],
     children: [
       {
         title: "邮件助手",
         icon: Mail,
         href: "/dashboard/settings/mail-assistant",
+        roles: ["admin", "oms_manager", "oms_operator"],
       },
       {
         title: "系统配置",
         icon: Settings,
         href: "/dashboard/settings/system",
+        roles: ["admin"],
       },
       {
         title: "角色权限",
         icon: ClipboardCheck,
         href: "/dashboard/settings/roles",
+        roles: ["admin"],
       },
       {
         title: "操作日志",
         icon: FileCheck,
         href: "/dashboard/settings/logs",
+        roles: ["admin"],
       },
     ],
   },

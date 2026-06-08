@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkPermission } from '@/lib/api/helpers'
+import { checkMailAssistantPermission } from '@/lib/mail-assistant/mail-assistant-permissions'
 import { getGoogleWorkspaceConnectionStatus } from '@/lib/google/workspace-oauth'
 import { downloadGmailAttachment } from '@/lib/google/gmail-forecast'
 
 export async function GET(request: NextRequest) {
-  const perm = await checkPermission(['admin'])
+  const perm = await checkMailAssistantPermission()
   if (perm.error) return perm.error
 
   const status = await getGoogleWorkspaceConnectionStatus()

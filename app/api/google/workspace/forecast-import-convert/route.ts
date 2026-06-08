@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { checkPermission } from '@/lib/api/helpers'
+import { checkMailAssistantPermission } from '@/lib/mail-assistant/mail-assistant-permissions'
 import { getGoogleWorkspaceConnectionStatus } from '@/lib/google/workspace-oauth'
 import { convertImportDraftsBatch } from '@/lib/mail-assistant/forecast-persistence'
 
@@ -9,7 +9,7 @@ const bodySchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
-  const perm = await checkPermission(['admin'])
+  const perm = await checkMailAssistantPermission()
   if (perm.error) return perm.error
 
   const status = await getGoogleWorkspaceConnectionStatus()

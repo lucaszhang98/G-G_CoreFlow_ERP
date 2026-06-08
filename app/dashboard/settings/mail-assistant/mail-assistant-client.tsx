@@ -50,6 +50,7 @@ import {
   FolderInput,
 } from "lucide-react"
 import { toast } from "sonner"
+import { isMailAssistantAdmin } from "@/lib/mail-assistant/mail-assistant-permissions"
 
 const MAIL_FILTER_FIELDS: FilterFieldConfig[] = [
   {
@@ -131,8 +132,13 @@ function StatCard({
   )
 }
 
-export function MailAssistantClient() {
+type MailAssistantClientProps = {
+  userRole?: string | null
+}
+
+export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
   const searchParams = useSearchParams()
+  const isAdmin = isMailAssistantAdmin(userRole)
   const [status, setStatus] = React.useState<ConnectionStatus | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [disconnecting, setDisconnecting] = React.useState(false)
@@ -690,7 +696,7 @@ export function MailAssistantClient() {
                 连接账号
               </Button>
             )}
-            {connected && (
+            {connected && isAdmin && (
               <Button size="sm" variant="outline" onClick={handleDisconnect} disabled={disconnecting}>
                 {disconnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink className="h-4 w-4 mr-1.5" />}
                 断开

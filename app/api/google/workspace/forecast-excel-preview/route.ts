@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkPermission } from '@/lib/api/helpers'
+import { checkMailAssistantPermission } from '@/lib/mail-assistant/mail-assistant-permissions'
 import { buildGmailMessageWebUrl, downloadGmailAttachment } from '@/lib/google/gmail-forecast'
 import { getGoogleWorkspaceConnectionStatus } from '@/lib/google/workspace-oauth'
 import { buildExcelPreviewPayload } from '@/lib/mail-assistant/excel-preview'
@@ -11,7 +11,7 @@ import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template
 import prisma from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
-  const perm = await checkPermission(['admin'])
+  const perm = await checkMailAssistantPermission()
   if (perm.error) return perm.error
 
   const kind = request.nextUrl.searchParams.get('kind')

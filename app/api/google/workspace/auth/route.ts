@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkPermission } from '@/lib/api/helpers'
+import { checkMailAssistantPermission } from '@/lib/mail-assistant/mail-assistant-permissions'
 import {
   buildGoogleOAuthRedirectUri,
   getGoogleAuthUrl,
@@ -8,7 +8,7 @@ import { cookies } from 'next/headers'
 import { randomBytes } from 'crypto'
 
 export async function GET(request: NextRequest) {
-  const perm = await checkPermission(['admin'])
+  const perm = await checkMailAssistantPermission()
   if (perm.error) return perm.error
 
   try {

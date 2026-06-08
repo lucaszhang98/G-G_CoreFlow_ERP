@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkPermission } from '@/lib/api/helpers'
+import { checkMailAssistantPermission } from '@/lib/mail-assistant/mail-assistant-permissions'
 import { getGoogleWorkspaceConnectionStatus } from '@/lib/google/workspace-oauth'
 import {
   getImportDraftBuffer,
@@ -12,7 +12,7 @@ import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template
 import prisma from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
-  const perm = await checkPermission(['admin'])
+  const perm = await checkMailAssistantPermission()
   if (perm.error) return perm.error
 
   const status = await getGoogleWorkspaceConnectionStatus()
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const perm = await checkPermission(['admin'])
+  const perm = await checkMailAssistantPermission()
   if (perm.error) return perm.error
 
   const status = await getGoogleWorkspaceConnectionStatus()
