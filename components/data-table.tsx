@@ -382,17 +382,27 @@ export function DataTable<TData, TValue>({
   const [pageSize, setPageSize] = React.useState(DEFAULT_LIST_PAGE_SIZE)
   const [pageInputValue, setPageInputValue] = React.useState<string>("")
 
-  // 同步外部控制的行选择状态
+  const rowSelectionRecordsEqual = React.useCallback(
+    (a: RowSelectionState, b: RowSelectionState) => {
+      const aKeys = Object.keys(a).filter((k) => a[k])
+      const bKeys = Object.keys(b).filter((k) => b[k])
+      if (aKeys.length !== bKeys.length) return false
+      return aKeys.every((k) => b[k])
+    },
+    []
+  )
+
+  // 同步外部控制的行选择状态（避免与下方 onRowSelectionChange 形成更新环）
   React.useEffect(() => {
-    if (externalSelectedRows !== undefined && getIdValue) {
-      const newSelection: Record<string, boolean> = {}
-      externalSelectedRows.forEach(row => {
-        const id = String(getIdValue(row))
-        newSelection[id] = true
-      })
-      setRowSelection(newSelection)
-    }
-  }, [externalSelectedRows, getIdValue])
+    if (externalSelectedRows === undefined || !getIdValue) return
+    const newSelection: RowSelectionState = {}
+    externalSelectedRows.forEach((row) => {
+      newSelection[String(getIdValue(row))] = true
+    })
+    setRowSelection((prev) =>
+      rowSelectionRecordsEqual(prev, newSelection) ? prev : newSelection
+    )
+  }, [externalSelectedRows, getIdValue, rowSelectionRecordsEqual])
 
   // 使用外部分页状态或内部状态
   const currentPage = externalPage !== undefined ? externalPage - 1 : pageIndex
@@ -542,19 +552,23 @@ export function DataTable<TData, TValue>({
     return [selectColumn, ...columns]
   }, [enableRowSelection, columns, isRowEditing, getIdValue, onCancelEdit, cancelEditOnSelectionChange])
 
-  // 行选择变化处理
-  const handleRowSelectionChange = React.useCallback((updater: any) => {
-    setRowSelection((prev) => (typeof updater === 'function' ? updater(prev) : updater))
-  }, [])
-
-  React.useEffect(() => {
-    if (!enableRowSelection || !onRowSelectionChange || !getIdValue) return
-    const selectedRows = data.filter((row) => {
-      const rowId = String(getIdValue(row))
-      return rowSelection[rowId] === true
-    }) as TData[]
-    onRowSelectionChange(selectedRows)
-  }, [rowSelection, data, getIdValue, onRowSelectionChange, enableRowSelection])
+  // 行选择变化处理：仅在用户操作时通知父组件，勿用 useEffect 监听 rowSelection（受控 selectedRows 会死循环）
+  const handleRowSelectionChange = React.useCallback(
+    (updater: RowSelectionState | ((old: RowSelectionState) => RowSelectionState)) => {
+      setRowSelection((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater
+        if (enableRowSelection && onRowSelectionChange && getIdValue) {
+          const selected = data.filter((row) => {
+            const rowId = String(getIdValue(row))
+            return next[rowId] === true
+          }) as TData[]
+          queueMicrotask(() => onRowSelectionChange(selected))
+        }
+        return next
+      })
+    },
+    [enableRowSelection, onRowSelectionChange, getIdValue, data]
+  )
 
   const table = useReactTable({
     data,
