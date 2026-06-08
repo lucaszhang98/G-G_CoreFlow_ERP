@@ -205,43 +205,41 @@ export function ForecastFileClient() {
         if (cancelled) return
         setMeta(metaJson)
 
-        if (!metaJson.useOfficeViewer) {
-          const fileRes = await fetch(metaJson.downloadUrl, { cache: "no-store" })
-          if (!fileRes.ok) throw new Error("无法读取 Excel 原文件")
-          const buf = await fileRes.arrayBuffer()
-          const wb = XLSX.read(buf, { type: "array", cellDates: true })
+        const fileRes = await fetch(metaJson.downloadUrl, { cache: "no-store" })
+        if (!fileRes.ok) throw new Error("无法读取 Excel 原文件")
+        const buf = await fileRes.arrayBuffer()
+        const wb = XLSX.read(buf, { type: "array", cellDates: true })
 
-          const parsed: SheetView[] = wb.SheetNames.map((name) => {
-            const rows = matrixFromSheet(wb, name)
-            return {
-              name,
-              rows,
-              editable: kind === "import" && name === IMPORT_EDITABLE_SHEET,
-            }
-          })
-
-          const templateSheet = parsed.find((s) => s.name === IMPORT_EDITABLE_SHEET)
-          const templateMatrix = templateSheet?.rows ?? parsed[0]?.rows ?? []
-
-          const displaySheets =
-            kind === "import" && templateMatrix.length
-              ? [buildImportPreviewSheet(templateMatrix as unknown[][]), ...parsed]
-              : parsed
-
-          const defaultActive =
-            kind === "import"
-              ? Math.max(
-                  0,
-                  displaySheets.findIndex((s) => s.name === IMPORT_EDITABLE_SHEET)
-                )
-              : 0
-
-          if (!cancelled) {
-            setSheets(displaySheets)
-            setActiveSheet(defaultActive >= 0 ? defaultActive : 0)
-            setSheetEdits({})
-            setDirty(false)
+        const parsed: SheetView[] = wb.SheetNames.map((name) => {
+          const rows = matrixFromSheet(wb, name)
+          return {
+            name,
+            rows,
+            editable: kind === "import" && name === IMPORT_EDITABLE_SHEET,
           }
+        })
+
+        const templateSheet = parsed.find((s) => s.name === IMPORT_EDITABLE_SHEET)
+        const templateMatrix = templateSheet?.rows ?? parsed[0]?.rows ?? []
+
+        const displaySheets =
+          kind === "import" && templateMatrix.length
+            ? [buildImportPreviewSheet(templateMatrix as unknown[][]), ...parsed]
+            : parsed
+
+        const defaultActive =
+          kind === "import"
+            ? Math.max(
+                0,
+                displaySheets.findIndex((s) => s.name === IMPORT_EDITABLE_SHEET)
+              )
+            : 0
+
+        if (!cancelled) {
+          setSheets(displaySheets)
+          setActiveSheet(defaultActive >= 0 ? defaultActive : 0)
+          setSheetEdits({})
+          setDirty(false)
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "加载失败")
@@ -345,15 +343,7 @@ export function ForecastFileClient() {
         </div>
       </header>
 
-      {meta.useOfficeViewer && meta.officeEmbedUrl ? (
-        <iframe
-          title={meta.filename}
-          src={meta.officeEmbedUrl}
-          className="flex-1 w-full border-0 bg-white"
-          allowFullScreen
-        />
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
           {canEdit && (
             <p className="border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground shrink-0">
               在「{IMPORT_EDITABLE_SHEET}」工作表中直接修改单元格，完成后点击「保存」写回数据库。
@@ -420,7 +410,6 @@ export function ForecastFileClient() {
             )}
           </div>
         </div>
-      )}
     </div>
   )
 }

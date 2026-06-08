@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkPermission } from '@/lib/api/helpers'
 import { getAppBaseUrl, getGoogleWorkspaceConnectionStatus } from '@/lib/google/workspace-oauth'
 import { buildGmailMessageWebUrl, resolveGmailThreadId } from '@/lib/google/gmail-forecast'
-import {
-  buildOfficeOnlineEmbedUrl,
-  signForecastFileToken,
-} from '@/lib/mail-assistant/forecast-file-token'
+import { signForecastFileToken } from '@/lib/mail-assistant/forecast-file-token'
 import {
   buildImportDraftDownloadUrl,
   getImportDraftBuffer,
@@ -77,12 +74,12 @@ export async function GET(request: NextRequest) {
       : row.source_filename ?? `源预报_${cn}.xlsx`
 
   const requestOrigin = request.nextUrl.origin
-  const baseUrl = getAppBaseUrl()
+  const baseUrl = getAppBaseUrl() || requestOrigin
   const token = signForecastFileToken({ kind, containerNumber: cn })
   const publicFileUrl = `${baseUrl}/api/public/forecast-file?token=${encodeURIComponent(token)}`
 
-  const isLocalhost = /localhost|127\.0\.0\.1/i.test(requestOrigin)
-  const officeEmbedUrl = isLocalhost ? null : buildOfficeOnlineEmbedUrl(publicFileUrl)
+  // 统一使用前端 SheetJS 内联预览（Office Online 需公网可拉取文件，正式环境常失败）
+  const officeEmbedUrl = null
 
   let threadId = row.thread_id
   if (row.message_id && !threadId) {
@@ -102,9 +99,8 @@ export async function GET(request: NextRequest) {
       ? buildGmailMessageWebUrl(row.message_id, workspaceEmail, threadId)
       : undefined,
     officeEmbedUrl,
-    publicFileUrl: isLocalhost ? null : publicFileUrl,
-    // 导入预报需内联编辑，不使用 Office 只读预览
-    useOfficeViewer: kind === 'source' && Boolean(officeEmbedUrl),
+    publicFileUrl,
+    useOfficeViewer: false,
     editable: kind === 'import',
     detailRowCount,
     fileVersion: fileUpdatedAt,
