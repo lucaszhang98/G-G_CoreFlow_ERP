@@ -128,7 +128,8 @@ export function MailAssistantFeedbackSheet({
             预报纠错反馈
           </SheetTitle>
           <SheetDescription>
-            已勾选 {rows.length} 条。可说明找错原因，并可选上传正确源预报 Excel，系统将纳入后续 AI 参考样例。
+            已勾选 {rows.length} 条。用于<strong className="text-foreground">找预报找错</strong>等情形。
+            导入预报在编辑页保存后，系统会自动对比并学习，无需在此重复填写。
           </SheetDescription>
         </SheetHeader>
 

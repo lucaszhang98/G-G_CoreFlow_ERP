@@ -750,9 +750,9 @@ export function DataTable<TData, TValue>({
   }, [enableViewManager, viewManagerTableName, table, columnVisibility])
 
   const handlePageChange = (newPage: number) => {
-    if (serverSidePagination && onPageChange) {
-      onPageChange(newPage + 1) // 转换为1-based
-    } else {
+    onPageChange?.(newPage + 1) // 转换为 1-based
+    // 客户端分页且未由父组件受控时，同步内部状态
+    if (!serverSidePagination && externalPage === undefined) {
       setPageIndex(newPage)
       table.setPageIndex(newPage)
     }
@@ -786,9 +786,8 @@ export function DataTable<TData, TValue>({
   }
 
   const handlePageSizeChange = (newPageSize: number) => {
-    if (serverSidePagination && onPageSizeChange) {
-      onPageSizeChange(newPageSize)
-    } else {
+    onPageSizeChange?.(newPageSize)
+    if (!serverSidePagination && externalPageSize === undefined) {
       setPageSize(newPageSize)
       table.setPageSize(newPageSize)
     }

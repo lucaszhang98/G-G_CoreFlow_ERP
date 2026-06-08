@@ -1232,8 +1232,10 @@ model mail_container_forecast {
   resolve_reason            String?   @db.Text
   ai_resolved               Boolean?  @default(false)
   score                     Int?
-  import_draft_data         Bytes?
-  import_draft_warnings     String?   @db.Text
+  import_draft_data          Bytes?
+  /// 系统首次转换生成的导入表快照，用于与同事改后版本自动对比学习
+  import_draft_baseline_data Bytes?
+  import_draft_warnings      String?   @db.Text
   looked_up_at              DateTime  @default(now()) @db.Timestamptz(6)
   created_at                DateTime  @default(now()) @db.Timestamptz(6)
   updated_at                DateTime  @default(now()) @db.Timestamptz(6)

@@ -55,7 +55,11 @@ export async function resolveForecastWithAi(
   }
 
   const templateHint = getOrderForecastTemplateHint()
-  const correctionExamples = await loadForecastCorrectionExamples(5)
+  const correctionExamples = await loadForecastCorrectionExamples({
+    containerNumber,
+    candidateFilenames: candidates.map((c) => c.filename),
+    limit: 8,
+  })
 
   const enriched = candidates.map((c) => ({
     index: c.index,
@@ -81,7 +85,7 @@ export async function resolveForecastWithAi(
 - 同一份 Excel 可含多个柜号（同批预报），只要表内包含 ${containerNumber} 即可
 - **不是**源预报：提柜作业表（码头/LFD/提柜日期为主）、账单、工资、内部统计、与柜号无关的文件
 
-## 人工纠正样例（请避免重复同类错误）
+## 人工纠正样例（按相关性排序，请避免重复同类错误）
 ${correctionExamples.length ? JSON.stringify(correctionExamples, null, 2) : '（暂无）'}
 
 ## 候选附件

@@ -176,7 +176,11 @@ export function ForecastFileClient() {
         setSheetEdits((prev) => ({ ...prev, [IMPORT_EDITABLE_SHEET]: savedRows }))
       }
 
-      toast.success(`已保存，共 ${json.detailRowCount} 行明细`)
+      toast.success(
+        json.trainingRecorded
+          ? `已保存，共 ${json.detailRowCount} 行明细；修改已自动记入 AI 学习样例`
+          : `已保存，共 ${json.detailRowCount} 行明细`
+      )
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "保存失败")
     } finally {

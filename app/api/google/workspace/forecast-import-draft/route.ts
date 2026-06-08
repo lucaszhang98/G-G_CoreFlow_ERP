@@ -53,10 +53,12 @@ export async function GET(request: NextRequest) {
     })
 
     const cn = normalizeContainerNumber(containerNumber)
+    const draftBytes = Uint8Array.from(buffer) as Uint8Array<ArrayBuffer>
     await prisma.mail_container_forecast.updateMany({
       where: { container_number: cn },
       data: {
-        import_draft_data: Uint8Array.from(buffer) as Uint8Array<ArrayBuffer>,
+        import_draft_data: draftBytes,
+        import_draft_baseline_data: draftBytes,
         import_draft_warnings: warnings.join('; ') || null,
         import_draft_download_url: buildImportDraftDownloadUrl(cn),
         updated_at: new Date(),
@@ -110,12 +112,16 @@ export async function PUT(request: NextRequest) {
 
   try {
     const cn = normalizeContainerNumber(containerNumber)
-    const result = await saveImportDraftMatrix(cn, trimImportEditableRows(rows))
+    const userId = perm.user?.id ? BigInt(perm.user.id) : null
+    const result = await saveImportDraftMatrix(cn, trimImportEditableRows(rows), {
+      createdBy: userId,
+    })
     return NextResponse.json({
       ok: true,
       containerNumber: cn,
       detailRowCount: result.detailRowCount,
       fileVersion: result.updatedAt.getTime(),
+      trainingRecorded: result.trainingRecorded,
     })
   } catch (error) {
     console.error('forecast-import-draft PUT error:', error)

@@ -615,38 +615,6 @@ export function MailAssistantClient() {
     }
   }, [loadStatus])
 
-  const handleCopyContainers = React.useCallback(
-    async (mode: "selected" | "filtered" | "notImported", format: "line" | "comma" = "line") => {
-      let list: string[] = []
-      if (mode === "selected") {
-        if (selectedRows.length === 0) {
-          toast.error("请先勾选要复制的记录")
-          return
-        }
-        list = selectedRows.map((r) => r.containerNumber)
-      } else if (mode === "filtered") {
-        list = filteredImportRows.map((r) => r.containerNumber)
-      } else {
-        list = filteredImportRows.filter((r) => !r.imported).map((r) => r.containerNumber)
-      }
-
-      const unique = [...new Set(list.filter(Boolean))]
-      if (unique.length === 0) {
-        toast.error("当前没有可复制的柜号")
-        return
-      }
-
-      const text = format === "comma" ? unique.join(", ") : unique.join("\n")
-      try {
-        await copyTextToClipboard(text)
-        toast.success(`已复制 ${unique.length} 个柜号`)
-      } catch {
-        toast.error("复制失败，请使用行内复制按钮或手动选择文本")
-      }
-    },
-    [selectedRows, filteredImportRows]
-  )
-
   const handleCopyConnectedEmail = React.useCallback(async () => {
     const email = status?.email?.trim()
     if (!email) {
@@ -660,27 +628,6 @@ export function MailAssistantClient() {
       toast.error("复制失败，请手动选择邮箱地址")
     }
   }, [status?.email])
-
-  React.useEffect(() => {
-    const isEditableTarget = (el: EventTarget | null) => {
-      if (!el || !(el instanceof HTMLElement)) return false
-      const tag = el.tagName
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true
-      if (el.isContentEditable) return true
-      return Boolean(el.closest('[contenteditable="true"]'))
-    }
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.key !== "c") return
-      if (isEditableTarget(e.target)) return
-      if (selectedRows.length === 0) return
-      e.preventDefault()
-      void handleCopyContainers("selected")
-    }
-
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [handleCopyContainers, selectedRows.length])
 
   const handleDisconnect = async () => {
     setDisconnecting(true)
@@ -820,130 +767,138 @@ export function MailAssistantClient() {
             onAdvancedSearch={() => {}}
             onResetAdvancedSearch={() => {}}
             extraFilterContent={
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9">
-                      <Copy className="h-4 w-4 mr-1.5" />
-                      复制柜号
-                      <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuLabel>复制格式：换行分隔</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleCopyContainers("selected")}>
-                      复制勾选柜号
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleCopyContainers("notImported")}>
-                      复制未导入柜号（当前筛选）
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleCopyContainers("filtered")}>
-                      复制当前筛选全部柜号
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9"
-                  disabled={selectedRows.length === 0}
-                  onClick={() => setFeedbackOpen(true)}
-                >
-                  <MessageSquareWarning className="h-4 w-4 mr-1.5" />
-                  预报纠错
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="default" size="sm" className="h-9" disabled={findingForecast}>
-                      {findingForecast ? (
-                        <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                      ) : (
-                        <FileSearch className="h-4 w-4 mr-1.5" />
-                      )}
-                      找预报
-                      <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>
-                      {aiReady ? "AI 审阅邮箱 Excel 附件" : "规则模式搜索 Excel"}
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleFindForecast("selected")}>
-                      查找勾选柜号
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleFindForecast("notImported")}>
-                      查找未导入（当前筛选）
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleFindForecast("filtered")}>
-                      查找当前筛选全部
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="secondary" size="sm" className="h-9" disabled={convertingImport}>
-                      {convertingImport ? (
-                        <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                      ) : (
-                        <FileInput className="h-4 w-4 mr-1.5" />
-                      )}
-                      转换源预报
-                      <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>源预报 → 订单导入 Excel</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleConvertImportDraft("selected")}>
-                      转换勾选柜号
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleConvertImportDraft("notImported")}>
-                      转换未导入（当前筛选）
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleConvertImportDraft("filtered")}>
-                      转换当前筛选全部
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="h-9 bg-emerald-600 hover:bg-emerald-700"
-                  disabled={importingToOrders || selectedWithImportDraft.length === 0}
-                  onClick={() => void handleImportSelectedToOrders()}
-                  title={
-                    selectedWithImportDraft.length === 0
-                      ? "请勾选已有导入预报的行"
-                      : `将 ${selectedWithImportDraft.length} 个柜号写入订单管理`
-                  }
-                >
-                  {importingToOrders ? (
-                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                  ) : (
-                    <FolderInput className="h-4 w-4 mr-1.5" />
-                  )}
-                  导入到订单
-                  {selectedWithImportDraft.length > 0 && (
-                    <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px] bg-white/20 text-white">
-                      {selectedWithImportDraft.length}
-                    </Badge>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9"
-                  onClick={loadImportCheck}
-                  disabled={loadingImportCheck}
-                >
-                  <RefreshCw className={cn("h-4 w-4 mr-1.5", loadingImportCheck && "animate-spin")} />
-                  刷新数据
-                </Button>
-              </>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
+                onClick={loadImportCheck}
+                disabled={loadingImportCheck}
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-1.5", loadingImportCheck && "animate-spin")} />
+                刷新数据
+              </Button>
             }
           />
+        )}
+
+        {connected && importCheck && (
+          <div className="flex flex-col gap-2 w-full px-0.5">
+            {selectedRows.length > 0 && (
+              <div className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                已选择 <span className="font-bold">{selectedRows.length}</span> 条
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2 w-full">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 min-w-[100px]"
+                onClick={() => {
+                  if (selectedRows.length === 0) {
+                    toast.error("请先勾选要纠错的记录")
+                    return
+                  }
+                  setFeedbackOpen(true)
+                }}
+              >
+                <MessageSquareWarning className="h-4 w-4 mr-1.5" />
+                预报纠错
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-9 min-w-[100px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                    disabled={findingForecast}
+                  >
+                    {findingForecast ? (
+                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <FileSearch className="h-4 w-4 mr-1.5" />
+                    )}
+                    找预报
+                    <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel>
+                    {aiReady ? "AI 审阅邮箱 Excel 附件" : "规则模式搜索 Excel"}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => handleFindForecast("selected")}>
+                    查找勾选柜号
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleFindForecast("notImported")}>
+                    查找未导入（当前筛选）
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleFindForecast("filtered")}>
+                    查找当前筛选全部
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="secondary" size="sm" className="h-9 min-w-[100px]" disabled={convertingImport}>
+                    {convertingImport ? (
+                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <FileInput className="h-4 w-4 mr-1.5" />
+                    )}
+                    转换源预报
+                    <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel>源预报 → 订单导入 Excel</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => handleConvertImportDraft("selected")}>
+                    转换勾选柜号
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleConvertImportDraft("notImported")}>
+                    转换未导入（当前筛选）
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleConvertImportDraft("filtered")}>
+                    转换当前筛选全部
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="default"
+                size="sm"
+                className="h-9 min-w-[100px] bg-emerald-600 hover:bg-emerald-700"
+                disabled={importingToOrders || selectedWithImportDraft.length === 0}
+                onClick={() => void handleImportSelectedToOrders()}
+                title={
+                  selectedWithImportDraft.length === 0
+                    ? "请勾选已有导入预报的行"
+                    : `将 ${selectedWithImportDraft.length} 个柜号写入订单管理`
+                }
+              >
+                {importingToOrders ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <FolderInput className="h-4 w-4 mr-1.5" />
+                )}
+                导入到订单
+                {selectedWithImportDraft.length > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px] bg-white/20 text-white">
+                    {selectedWithImportDraft.length}
+                  </Badge>
+                )}
+              </Button>
+              {selectedRows.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 min-w-[100px]"
+                  onClick={() => setSelectedRows([])}
+                >
+                  取消选择
+                </Button>
+              )}
+            </div>
+          </div>
         )}
 
         {!connected && (
@@ -1035,11 +990,12 @@ export function MailAssistantClient() {
                   <li>点击 <strong className="text-foreground">刷新数据</strong>，获取表格最新内容（数据不会自动更新，需手动刷新）。</li>
                   <li>查看顶部统计卡片，了解清单总数、已导入与未导入数量。</li>
                   <li>使用搜索与筛选：按柜号模糊搜索、按订单日期范围筛选、按导入状态筛选。</li>
-                  <li>对未导入记录：可勾选行后点击 <strong className="text-foreground">复制柜号</strong>，或悬停柜号行点击复制图标，再到订单管理模块补录。</li>
+                  <li>对未导入记录：可悬停柜号行点击复制图标，再到订单管理模块补录。</li>
                   <li>补录完成后，返回本页再次刷新，确认状态已变为「已导入」。</li>
                   <li><strong className="text-foreground">找预报</strong>：在 Gmail 中定位源 Excel，并保存「源预报」链接；<strong className="text-foreground">转换源预报</strong>：将已找到的源预报转为订单导入 Excel 并保存「导入预报」链接。两步结果均写入数据库，刷新页面不会丢失。</li>
                   <li>勾选已有「导入预报」的行，点击 <strong className="text-foreground">导入到订单</strong>，系统会合并导入表并写入订单管理（与订单模块批量导入相同校验规则）。</li>
                   <li>对仍显示「暂无」的柜号，系统每 <strong className="text-foreground">12 小时</strong> 自动在邮箱中重新查找一次（无需人工操作）。</li>
+                  <li><strong className="text-foreground">AI 越用越准</strong>：找预报错了可用「预报纠错」反馈；导入预报在预览页改完点保存后，系统会自动对比系统版与同事改后版并记入学习样例，无需额外填表。</li>
                 </ol>
               </section>
 

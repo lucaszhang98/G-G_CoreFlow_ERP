@@ -22,6 +22,7 @@
     "remediate:receivable-allocations-zero": "tsx scripts/remediate-zero-receivable-allocations.ts",
     "backfill:receivable-due-from-invoice": "tsx scripts/backfill-receivable-due-one-month-after-invoice.ts",
     "backfill:private-warehouse-info": "tsx scripts/backfill-private-warehouse-info.ts",
+    "backfill:imported-container-forecasts": "tsx scripts/backfill-imported-container-forecasts.ts",
     "schemaspy": "node scripts/generate_schemaspy.js",
     "build:exe": "node scripts/build-exe.js",
     "package:exe": "pkg scripts/excel-transfer-standalone.ts --targets node18-win-x64 --output-path dist"

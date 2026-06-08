@@ -10,6 +10,9 @@ import {
   isImportDraftCacheStale,
 } from '@/lib/mail-assistant/import-draft-buffer'
 import { applyImportDraftMatrix } from '@/lib/mail-assistant/import-draft-editor'
+import { diffImportDraftMatrices } from '@/lib/mail-assistant/import-draft-diff'
+import { extractImportDraftMatrix } from '@/lib/mail-assistant/import-draft-matrix-io'
+import { recordAutoImportDraftCorrection } from '@/lib/mail-assistant/forecast-feedback-store'
 import type { SourceForecastLookupResult } from '@/lib/mail-assistant/find-source-forecast'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
 
@@ -214,10 +217,12 @@ export async function convertImportDraftForContainer(
       filename: row.source_filename ?? 'source.xlsx',
     })
     const importDraftDownloadUrl = buildImportDraftDownloadUrl(cn)
+    const draftBytes = toPrismaBytes(draft.buffer)
     await prisma.mail_container_forecast.update({
       where: { container_number: cn },
       data: {
-        import_draft_data: toPrismaBytes(draft.buffer),
+        import_draft_data: draftBytes,
+        import_draft_baseline_data: draftBytes,
         import_draft_warnings: draft.warnings.join('; ') || null,
         import_draft_download_url: importDraftDownloadUrl,
         updated_at: new Date(),
@@ -358,10 +363,12 @@ async function persistImportDraft(
   cn: string,
   draft: { buffer: Buffer; warnings: string[] }
 ): Promise<void> {
+  const draftBytes = toPrismaBytes(draft.buffer)
   await prisma.mail_container_forecast.update({
     where: { container_number: cn },
     data: {
-      import_draft_data: toPrismaBytes(draft.buffer),
+      import_draft_data: draftBytes,
+      import_draft_baseline_data: draftBytes,
       import_draft_warnings: draft.warnings.join('; ') || null,
       import_draft_download_url: buildImportDraftDownloadUrl(cn),
       updated_at: new Date(),
@@ -430,17 +437,20 @@ export async function ensureImportDraftCached(containerNumber: string): Promise<
   return Boolean(result)
 }
 
-/** 保存手动编辑后的导入预报矩阵 */
+/** 保存手动编辑后的导入预报矩阵；若与系统 baseline 有差异则自动记入训练样例 */
 export async function saveImportDraftMatrix(
   containerNumber: string,
-  rows: string[][]
-): Promise<{ detailRowCount: number; updatedAt: Date }> {
+  rows: string[][],
+  options?: { createdBy?: bigint | null }
+): Promise<{ detailRowCount: number; updatedAt: Date; trainingRecorded: boolean }> {
   const cn = normalizeContainerNumber(containerNumber)
   const row = await prisma.mail_container_forecast.findUnique({
     where: { container_number: cn },
     select: {
       import_draft_data: true,
+      import_draft_baseline_data: true,
       import_draft_warnings: true,
+      source_filename: true,
       status: true,
     },
   })
@@ -450,6 +460,12 @@ export async function saveImportDraftMatrix(
   }
 
   const current = Buffer.from(row.import_draft_data)
+  const baselineBuffer =
+    row.import_draft_baseline_data && row.import_draft_baseline_data.length > 0
+      ? Buffer.from(row.import_draft_baseline_data)
+      : current
+
+  const diff = diffImportDraftMatrices(extractImportDraftMatrix(baselineBuffer), rows)
   const updated = await applyImportDraftMatrix(current, rows)
   const warnings = row.import_draft_warnings?.split('; ').filter(Boolean) ?? []
 
@@ -463,8 +479,24 @@ export async function saveImportDraftMatrix(
     },
   })
 
+  let trainingRecorded = false
+  if (diff.hasChanges) {
+    await recordAutoImportDraftCorrection({
+      containerNumber: cn,
+      sourceFilename: row.source_filename,
+      fieldChanges: diff.fieldChanges,
+      summary: diff.summary,
+      beforeDetailRows: diff.beforeDetailRows,
+      afterDetailRows: diff.afterDetailRows,
+      correctedFileBuffer: updated,
+      createdBy: options?.createdBy ?? null,
+    })
+    trainingRecorded = true
+  }
+
   return {
     detailRowCount: countImportDraftDetailRows(updated),
     updatedAt: new Date(),
+    trainingRecorded,
   }
 }
