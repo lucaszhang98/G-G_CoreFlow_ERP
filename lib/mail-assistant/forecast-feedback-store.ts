@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { buildExcelPreviewForAi } from '@/lib/mail-assistant/forecast-excel-scorer'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
@@ -20,9 +21,13 @@ export async function saveForecastFeedback(input: SaveForecastFeedbackInput) {
       order_date_key: input.orderDateKey?.trim() || null,
       issue_type: input.issueType,
       comment: input.comment?.trim() || null,
-      wrong_source_meta: input.wrongSourceMeta ?? undefined,
+      wrong_source_meta: input.wrongSourceMeta
+        ? (input.wrongSourceMeta as Prisma.InputJsonValue)
+        : undefined,
       correct_filename: input.correctFilename?.trim() || null,
-      correct_file_data: input.correctFileBuffer ?? undefined,
+      correct_file_data: input.correctFileBuffer
+        ? (Uint8Array.from(input.correctFileBuffer) as Uint8Array<ArrayBuffer>)
+        : undefined,
       use_in_training: true,
       created_by: input.createdBy ?? undefined,
     },

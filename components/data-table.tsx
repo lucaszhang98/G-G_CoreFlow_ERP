@@ -9,6 +9,7 @@ import {
   VisibilityState,
   ColumnOrderState,
   ColumnSizingState,
+  RowSelectionState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -374,7 +375,7 @@ export function DataTable<TData, TValue>({
   const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>({})
   const [columnOrder, setColumnOrder] = React.useState<ColumnOrderState>([])
   
-  const [rowSelection, setRowSelection] = React.useState({})
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
   /** 当前页内行下标，用于 Shift+点击复选框做区间选择（与 Excel 类似） */
   const shiftSelectAnchorIndexRef = React.useRef<number | null>(null)
   const [pageIndex, setPageIndex] = React.useState(0)

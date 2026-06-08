@@ -97,7 +97,7 @@ export async function saveGoogleWorkspaceEmail(email: string) {
 export async function clearGoogleWorkspaceCredentials() {
   await Promise.all([
     deleteSystemConfigValue(GOOGLE_WORKSPACE_CONFIG_KEYS.refreshToken),
-    deleteSystemConfigValue(GOGLE_WORKSPACE_CONFIG_KEYS.email),
+    deleteSystemConfigValue(GOOGLE_WORKSPACE_CONFIG_KEYS.email),
   ])
 }
 

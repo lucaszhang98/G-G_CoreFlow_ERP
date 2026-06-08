@@ -55,10 +55,10 @@ export async function searchGmailByQuery(
 
     for (const uid of uidList) {
       const message = await client.fetchOne(uid, { source: true, envelope: true }, { uid: true })
-      if (!message?.source) continue
+      if (!message || !message.source) continue
 
       const parsed = await simpleParser(message.source)
-      const attachments = (parsed.attachments ?? []).map((att) => ({
+      const attachments = (parsed.attachments ?? []).map((att: { filename?: string; size?: number }) => ({
         filename: att.filename || 'attachment',
         size: att.size ?? 0,
       }))

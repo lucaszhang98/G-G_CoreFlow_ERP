@@ -34,7 +34,8 @@ export async function applyImportDraftMatrix(
   rows: string[][]
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.load(buffer)
+  // ExcelJS 类型与 Node Buffer 泛型声明不完全兼容
+  await workbook.xlsx.load(buffer as unknown as Parameters<ExcelJS.Workbook['xlsx']['load']>[0])
   const sheet = workbook.getWorksheet(IMPORT_EDITABLE_SHEET)
   if (!sheet) throw new Error('找不到「订单导入模板」工作表')
 
