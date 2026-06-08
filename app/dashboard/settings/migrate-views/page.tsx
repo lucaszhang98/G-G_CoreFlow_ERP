@@ -6,7 +6,7 @@
 import { MigrateViewsClient } from './migrate-views-client'
 
 export const metadata = {
-  title: '视图配置迁移 | 系统设置',
+  title: '视图配置迁移 | 系统工具',
   description: '将本地存储的视图配置迁移到数据库',
 }
 

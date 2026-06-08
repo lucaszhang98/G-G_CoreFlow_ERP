@@ -26,8 +26,21 @@ export class BaseImportService<T> {
    */
   async import(file: File, userId: bigint): Promise<ImportResult> {
     try {
-      // 1. 读取Excel
-      const rawData = await this.parseExcel(file)
+      const buffer = Buffer.from(await file.arrayBuffer())
+      return this.importFromBuffer(buffer, userId)
+    } catch (error: any) {
+      console.error('导入失败:', error)
+      return {
+        success: false,
+        errors: [{ row: 0, field: 'system', message: error.message || '导入失败' }],
+      }
+    }
+  }
+
+  /** 从 Excel 二进制执行导入（供邮件助手等服务端流程复用） */
+  async importFromBuffer(buffer: Buffer, userId: bigint): Promise<ImportResult> {
+    try {
+      const rawData = this.parseExcelBuffer(buffer)
 
       if (rawData.length < 2) {
         return {
@@ -93,12 +106,11 @@ export class BaseImportService<T> {
   }
 
   /**
-   * 解析Excel文件
+   * 解析 Excel 二进制
    * @private
    */
-  private async parseExcel(file: File): Promise<any[]> {
-    const buffer = await file.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: 'array' })
+  private parseExcelBuffer(buffer: Buffer): any[] {
+    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true })
     
     console.log('[Excel解析] 所有工作表:', workbook.SheetNames)
     

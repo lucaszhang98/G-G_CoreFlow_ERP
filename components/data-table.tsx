@@ -543,20 +543,17 @@ export function DataTable<TData, TValue>({
 
   // 行选择变化处理
   const handleRowSelectionChange = React.useCallback((updater: any) => {
-    const newSelection = typeof updater === 'function' ? updater(rowSelection) : updater
-    setRowSelection(newSelection)
-    
-    // 通知外部行选择变化
-    if (onRowSelectionChange && getIdValue) {
-      // 按照 data 数组的顺序来构建 selectedRows，确保顺序正确
-      const selectedRows = data
-        .filter(row => {
-          const rowId = String(getIdValue(row))
-          return newSelection[rowId] === true
-        }) as TData[]
-      onRowSelectionChange(selectedRows)
-    }
-  }, [rowSelection, onRowSelectionChange, getIdValue, data])
+    setRowSelection((prev) => (typeof updater === 'function' ? updater(prev) : updater))
+  }, [])
+
+  React.useEffect(() => {
+    if (!enableRowSelection || !onRowSelectionChange || !getIdValue) return
+    const selectedRows = data.filter((row) => {
+      const rowId = String(getIdValue(row))
+      return rowSelection[rowId] === true
+    }) as TData[]
+    onRowSelectionChange(selectedRows)
+  }, [rowSelection, data, getIdValue, onRowSelectionChange, enableRowSelection])
 
   const table = useReactTable({
     data,

@@ -34,6 +34,7 @@ import {
   ClipboardCheck,
   UserCog,
   FileCheck,
+  Mail,
   Activity,
   Banknote,
   Wallet,
@@ -303,10 +304,15 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
-    title: "系统设置",
+    title: "系统工具",
     icon: Settings,
     roles: ["admin"],
     children: [
+      {
+        title: "邮件助手",
+        icon: Mail,
+        href: "/dashboard/settings/mail-assistant",
+      },
       {
         title: "系统配置",
         icon: Settings,
@@ -353,10 +359,11 @@ function getModuleFromPath(pathname: string): string | null {
   if (pathname.startsWith('/dashboard/finance')) {
     return '财务'
   }
-  if (pathname.startsWith('/dashboard/settings/system') ||
+  if (pathname.startsWith('/dashboard/settings/mail-assistant') ||
+      pathname.startsWith('/dashboard/settings/system') ||
       pathname.startsWith('/dashboard/settings/roles') ||
       pathname.startsWith('/dashboard/settings/logs')) {
-    return '系统设置'
+    return '系统工具'
   }
   if (pathname.startsWith('/dashboard/oms')) return '订单管理 (OMS)'
   if (pathname.startsWith('/dashboard/tms')) return '运输管理 (TMS)'

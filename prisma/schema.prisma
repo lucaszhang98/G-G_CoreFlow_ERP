@@ -1217,3 +1217,45 @@ model table_views {
   @@index([user_id, table_name, is_default], map: "idx_table_views_default")
   @@schema("public")
 }
+
+/// 邮件助手 — 柜号源预报 / 导入预报持久化缓存
+model mail_container_forecast {
+  container_number          String    @id @db.VarChar(32)
+  status                    String    @db.VarChar(32)
+  source_filename           String?   @db.Text
+  message_id                String?   @db.Text
+  thread_id                 String?   @db.Text
+  attachment_id             String?   @db.Text
+  source_download_url       String?   @db.Text
+  gmail_url                 String?   @db.Text
+  import_draft_download_url String?   @db.Text
+  resolve_reason            String?   @db.Text
+  ai_resolved               Boolean?  @default(false)
+  score                     Int?
+  import_draft_data         Bytes?
+  import_draft_warnings     String?   @db.Text
+  looked_up_at              DateTime  @default(now()) @db.Timestamptz(6)
+  created_at                DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([status, looked_up_at], map: "idx_mail_container_forecast_status_lookup")
+  @@schema("public")
+}
+
+/// 邮件助手 — 源预报找错反馈（用于人工纠正与 AI 样例学习）
+model mail_forecast_feedback {
+  feedback_id       BigInt    @id @default(autoincrement())
+  container_number  String    @db.VarChar(20)
+  order_date_key    String?   @db.VarChar(10)
+  issue_type        String    @db.VarChar(30)
+  comment           String?
+  wrong_source_meta Json?
+  correct_filename  String?   @db.Text
+  correct_file_data Bytes?
+  use_in_training   Boolean   @default(true)
+  created_by        BigInt?
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([container_number, created_at(sort: Desc)], map: "idx_mail_forecast_feedback_cn")
+  @@schema("public")
+}
