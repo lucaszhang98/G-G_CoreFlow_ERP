@@ -10,7 +10,7 @@ import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template
 export type SaveForecastFeedbackInput = {
   containerNumber: string
   orderDateKey?: string | null
-  issueType: 'wrong_file' | 'not_found' | 'import_wrong' | 'auto_import_edit' | 'other'
+  issueType: 'wrong_file' | 'not_found' | 'auto_import_edit' | 'other'
   comment?: string | null
   wrongSourceMeta?: Record<string, unknown> | null
   correctFilename?: string | null
@@ -19,7 +19,7 @@ export type SaveForecastFeedbackInput = {
 }
 
 /** 找预报 AI 参考的反馈类型（排除导入表自动纠正） */
-const FIND_FORECAST_TRAINING_ISSUE_TYPES = ['wrong_file', 'not_found', 'import_wrong', 'other'] as const
+const FIND_FORECAST_TRAINING_ISSUE_TYPES = ['wrong_file', 'not_found', 'other'] as const
 
 export type LoadForecastCorrectionOptions = {
   containerNumber?: string
@@ -115,7 +115,6 @@ function scoreFindForecastFeedback(
 
   if (row.issue_type === 'wrong_file') score += 3
   if (row.issue_type === 'not_found') score += 2
-  if (row.issue_type === 'import_wrong') score += 1
 
   return score
 }

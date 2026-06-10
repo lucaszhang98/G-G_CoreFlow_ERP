@@ -143,6 +143,81 @@ export function matchMasterCode(
   return { code: null, matchKind: 'none' }
 }
 
+function hasOakSuffix(code: string): boolean {
+  return code.trim().toLowerCase().endsWith('oak')
+}
+
+function compareOakSuffixPriority(aCode: string, bCode: string): number {
+  return (hasOakSuffix(bCode) ? 1 : 0) - (hasOakSuffix(aCode) ? 1 : 0)
+}
+
+/**
+ * 码头提柜表 F 列客户 → 系统客户代码：模糊匹配，同等相似度下优先 code 以 oak 结尾的条目。
+ */
+export function matchCustomerCodeFromSheet(
+  raw: string,
+  items: Array<{ code: string; name: string }>
+): CodeMatchResult {
+  const norm = normalizeKey(raw)
+  if (!norm) return { code: null, matchKind: 'none' }
+
+  for (const item of items) {
+    if (normalizeKey(item.code) === norm) {
+      return { code: item.code, matchKind: 'exact_code' }
+    }
+  }
+
+  const fuzzyCodeMatches = items.filter((item) => {
+    const codeNorm = normalizeKey(item.code)
+    return codeNorm.includes(norm) || norm.includes(codeNorm)
+  })
+  if (fuzzyCodeMatches.length) {
+    fuzzyCodeMatches.sort(
+      (a, b) =>
+        compareOakSuffixPriority(a.code, b.code) ||
+        Math.abs(a.code.length - norm.length) - Math.abs(b.code.length - norm.length)
+    )
+    return { code: fuzzyCodeMatches[0].code, matchKind: 'fuzzy_code' }
+  }
+
+  for (const item of items) {
+    if (normalizeKey(item.name) === norm) {
+      return { code: item.code, matchKind: 'exact_name' }
+    }
+  }
+
+  const fuzzyNameMatches = items.filter((item) => {
+    const nameNorm = normalizeKey(item.name)
+    if (!nameNorm) return false
+    return nameNorm.includes(norm) || norm.includes(nameNorm)
+  })
+  if (fuzzyNameMatches.length) {
+    fuzzyNameMatches.sort((a, b) => compareOakSuffixPriority(a.code, b.code))
+    return { code: fuzzyNameMatches[0].code, matchKind: 'fuzzy_name' }
+  }
+
+  const threshold = Math.max(3, Math.floor(norm.length * 0.35))
+  const similarCandidates: Array<{ code: string; dist: number }> = []
+  for (const item of items) {
+    for (const candidate of [normalizeKey(item.code), normalizeKey(item.name)]) {
+      if (!candidate) continue
+      if (isCjkText(norm) !== isCjkText(candidate)) continue
+      const dist = levenshtein(norm, candidate)
+      if (dist <= threshold) {
+        similarCandidates.push({ code: item.code, dist })
+      }
+    }
+  }
+  if (similarCandidates.length) {
+    similarCandidates.sort(
+      (a, b) => a.dist - b.dist || compareOakSuffixPriority(a.code, b.code)
+    )
+    return { code: similarCandidates[0].code, matchKind: 'similar' }
+  }
+
+  return { code: null, matchKind: 'none' }
+}
+
 const CONTAINER_TYPES = ['40DH', '45DH', '40RH', '45RH', '20GP', '其他'] as const
 
 export function matchContainerType(raw: string): (typeof CONTAINER_TYPES)[number] {

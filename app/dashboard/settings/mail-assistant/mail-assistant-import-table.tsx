@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   XCircle,
   Container,
+  Building2,
   CalendarDays,
   CircleCheck,
   Copy,
@@ -45,6 +46,9 @@ export type ImportDraftCell = {
 
 export type MailAssistantImportRow = {
   containerNumber: string
+  customerRaw?: string | null
+  customerCode?: string | null
+  customerMatchKind?: string | null
   orderDate: string
   orderDateKey: string
   imported: boolean
@@ -114,6 +118,37 @@ function buildColumns(
           </Button>
         </div>
       ),
+    },
+    {
+      accessorKey: "customerCode",
+      id: "customerCode",
+      header: () => <ColumnHeader icon={Building2} label="客户" className="justify-start" />,
+      size: 120,
+      minSize: 96,
+      meta: { alignLeft: true },
+      cell: ({ row }) => {
+        const code = row.original.customerCode
+        const raw = row.original.customerRaw
+        if (!code && !raw) {
+          return <span className="text-muted-foreground/60">—</span>
+        }
+        if (!code) {
+          return (
+            <span className="text-amber-700 dark:text-amber-300" title={`表格原文：${raw}`}>
+              {raw}
+            </span>
+          )
+        }
+        const title =
+          raw && raw.trim().toLowerCase() !== code.trim().toLowerCase()
+            ? `表格：${raw}`
+            : undefined
+        return (
+          <span className="font-medium text-foreground" title={title}>
+            {code}
+          </span>
+        )
+      },
     },
     {
       accessorKey: "orderDateKey",

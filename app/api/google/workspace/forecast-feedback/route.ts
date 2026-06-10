@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '缺少柜号' }, { status: 400 })
     }
 
-    const allowed = ['wrong_file', 'not_found', 'import_wrong', 'other']
+    const allowed = ['wrong_file', 'not_found', 'other']
     if (!allowed.includes(issueType)) {
       return NextResponse.json({ error: '无效的问题类型' }, { status: 400 })
     }
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const row = await saveForecastFeedback({
       containerNumber,
       orderDateKey,
-      issueType: issueType as 'wrong_file' | 'not_found' | 'import_wrong' | 'other',
+      issueType: issueType as 'wrong_file' | 'not_found' | 'other',
       comment,
       wrongSourceMeta,
       correctFilename,

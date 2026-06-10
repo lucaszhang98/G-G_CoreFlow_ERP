@@ -54,6 +54,16 @@ import { isMailAssistantAdmin } from "@/lib/mail-assistant/mail-assistant-permis
 
 const MAIL_FILTER_FIELDS: FilterFieldConfig[] = [
   {
+    field: "customerCode",
+    label: "客户",
+    type: "select",
+    relation: {
+      model: "customers",
+      displayField: "code",
+      valueField: "code",
+    },
+  },
+  {
     field: "orderDate",
     label: "订单日期",
     type: "dateRange",
@@ -288,11 +298,17 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
     if (importedFilter === "yes") list = list.filter((r) => r.imported)
     if (importedFilter === "no") list = list.filter((r) => !r.imported)
 
+    const customerFilter = filterValues.customerCode
+    if (customerFilter && customerFilter !== "__all__") {
+      list = list.filter((r) => r.customerCode === String(customerFilter))
+    }
+
     return [...list].sort((a, b) => a.orderDateKey.localeCompare(b.orderDateKey))
   }, [importCheck, containerSearch, filterValues])
 
   const tableFilterSignature = React.useMemo(
-    () => `${containerSearch}|${filterValues.orderDate_from ?? ""}|${filterValues.orderDate_to ?? ""}|${filterValues.imported}`,
+    () =>
+      `${containerSearch}|${filterValues.customerCode ?? ""}|${filterValues.orderDate_from ?? ""}|${filterValues.orderDate_to ?? ""}|${filterValues.imported}`,
     [containerSearch, filterValues]
   )
 

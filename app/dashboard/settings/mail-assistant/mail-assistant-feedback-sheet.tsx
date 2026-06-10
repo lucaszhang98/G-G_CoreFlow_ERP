@@ -32,8 +32,26 @@ type MailAssistantFeedbackSheetProps = {
   onSubmitted?: () => void
 }
 
+const FEEDBACK_ISSUE_TYPES = [
+  { value: "wrong_file", label: "源预报找错了" },
+  { value: "not_found", label: "明明有却显示暂无" },
+  { value: "other", label: "其他" },
+] as const
+
+type FeedbackIssueType = (typeof FEEDBACK_ISSUE_TYPES)[number]["value"]
+
+function normalizeIssueType(
+  value: string | undefined,
+  fallback: FeedbackIssueType
+): FeedbackIssueType {
+  if (value && FEEDBACK_ISSUE_TYPES.some((t) => t.value === value)) {
+    return value as FeedbackIssueType
+  }
+  return fallback
+}
+
 type RowDraft = {
-  issueType: string
+  issueType: FeedbackIssueType
   comment: string
   file: File | null
 }
@@ -52,10 +70,13 @@ export function MailAssistantFeedbackSheet({
     const next: Record<string, RowDraft> = {}
     for (const row of rows) {
       const key = `${row.containerNumber}|${row.orderDateKey}`
-      next[key] = drafts[key] ?? {
-        issueType: row.sourceForecast?.status === "not_found" ? "not_found" : "wrong_file",
-        comment: "",
-        file: null,
+      const defaultIssueType: FeedbackIssueType =
+        row.sourceForecast?.status === "not_found" ? "not_found" : "wrong_file"
+      const existing = drafts[key]
+      next[key] = {
+        issueType: normalizeIssueType(existing?.issueType, defaultIssueType),
+        comment: existing?.comment ?? "",
+        file: existing?.file ?? null,
       }
     }
     setDrafts(next)
@@ -161,10 +182,11 @@ export function MailAssistantFeedbackSheet({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="wrong_file">源预报找错了</SelectItem>
-                        <SelectItem value="not_found">明明有却显示暂无</SelectItem>
-                        <SelectItem value="import_wrong">导入预报填错了</SelectItem>
-                        <SelectItem value="other">其他</SelectItem>
+                        {FEEDBACK_ISSUE_TYPES.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

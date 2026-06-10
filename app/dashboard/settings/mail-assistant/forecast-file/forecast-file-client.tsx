@@ -61,6 +61,140 @@ type SheetView = {
   editable?: boolean
 }
 
+const DEFAULT_COL_WIDTH = 72
+const MIN_COL_WIDTH = 48
+
+function ResizableExcelSheetTable({
+  rows,
+  editable,
+  onCellChange,
+}: {
+  rows: string[][]
+  editable: boolean
+  onCellChange: (rowIndex: number, colIndex: number, value: string) => void
+}) {
+  const colCount = React.useMemo(
+    () => rows.reduce((max, row) => Math.max(max, row.length), 0),
+    [rows]
+  )
+
+  const [columnWidths, setColumnWidths] = React.useState<number[]>(() =>
+    Array.from({ length: colCount }, () => DEFAULT_COL_WIDTH)
+  )
+
+  React.useEffect(() => {
+    setColumnWidths((prev) => {
+      if (prev.length < colCount) {
+        const next = [...prev]
+        while (next.length < colCount) next.push(DEFAULT_COL_WIDTH)
+        return next
+      }
+      if (prev.length > colCount) return prev.slice(0, colCount)
+      return prev
+    })
+  }, [colCount])
+
+  const widths = React.useMemo(
+    () =>
+      Array.from({ length: colCount }, (_, i) => columnWidths[i] ?? DEFAULT_COL_WIDTH),
+    [colCount, columnWidths]
+  )
+
+  const tableWidth = widths.reduce((sum, w) => sum + w, 0)
+
+  const handleResizeStart = (colIndex: number, clientX: number) => {
+    const startWidth = widths[colIndex] ?? DEFAULT_COL_WIDTH
+
+    const onMove = (ev: MouseEvent) => {
+      const nextWidth = Math.max(MIN_COL_WIDTH, startWidth + (ev.clientX - clientX))
+      setColumnWidths((prev) => {
+        const next = [...prev]
+        while (next.length < colCount) next.push(DEFAULT_COL_WIDTH)
+        next[colIndex] = nextWidth
+        return next
+      })
+    }
+
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove)
+      document.removeEventListener("mouseup", onUp)
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+    }
+
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+    document.addEventListener("mousemove", onMove)
+    document.addEventListener("mouseup", onUp)
+  }
+
+  if (!rows.length) {
+    return <p className="text-muted-foreground">文件为空</p>
+  }
+
+  return (
+    <div className="overflow-x-auto rounded border bg-card shadow-sm">
+      <table
+        className="border-collapse text-xs font-mono"
+        style={{ tableLayout: "fixed", width: tableWidth, minWidth: "100%" }}
+      >
+        <colgroup>
+          {widths.map((w, i) => (
+            <col key={i} style={{ width: w }} />
+          ))}
+        </colgroup>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr
+              key={ri}
+              className={
+                ri === 0
+                  ? "bg-muted/70 font-semibold sticky top-0 z-10"
+                  : "odd:bg-muted/10"
+              }
+            >
+              {Array.from({ length: colCount }, (_, ci) => {
+                const cell = row[ci] ?? ""
+                const isHeader = ri === 0
+                return (
+                  <td
+                    key={ci}
+                    className="relative border border-border/60 px-0 py-0 align-top overflow-hidden"
+                  >
+                    {isHeader && (
+                      <div
+                        role="separator"
+                        aria-orientation="vertical"
+                        title="拖动调整列宽"
+                        className="absolute right-0 top-0 z-20 h-full w-2 cursor-col-resize touch-none hover:bg-primary/25 active:bg-primary/40"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleResizeStart(ci, e.clientX)
+                        }}
+                      />
+                    )}
+                    {editable && ri > 0 ? (
+                      <input
+                        type="text"
+                        value={cell}
+                        onChange={(e) => onCellChange(ri, ci, e.target.value)}
+                        className="block w-full bg-transparent px-2 py-1 outline-none focus:bg-background focus:ring-1 focus:ring-ring whitespace-nowrap"
+                      />
+                    ) : (
+                      <span className="block px-2 py-1 whitespace-nowrap">{cell}</span>
+                    )}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function matrixFromSheet(wb: XLSX.WorkBook, name: string): string[][] {
   const sheet = wb.Sheets[name]
   if (!sheet) return []
@@ -373,42 +507,12 @@ export function ForecastFileClient() {
           )}
           <div className="flex-1 overflow-auto p-4 bg-muted/20">
             {sheet ? (
-              <div className="overflow-x-auto rounded border bg-card shadow-sm">
-                <table className="min-w-full border-collapse text-xs font-mono">
-                  <tbody>
-                    {displayRows.map((row, ri) => (
-                      <tr
-                        key={ri}
-                        className={
-                          ri === 0
-                            ? "bg-muted/70 font-semibold sticky top-0 z-10"
-                            : "odd:bg-muted/10"
-                        }
-                      >
-                        {row.map((cell, ci) => (
-                          <td
-                            key={ci}
-                            className="border border-border/60 px-0 py-0 whitespace-pre align-top min-w-[72px] max-w-[360px]"
-                          >
-                            {canEdit && ri > 0 ? (
-                              <input
-                                type="text"
-                                value={cell}
-                                onChange={(e) =>
-                                  handleCellChange(sheet.name, ri, ci, e.target.value)
-                                }
-                                className="w-full min-w-[72px] bg-transparent px-2 py-1 outline-none focus:bg-background focus:ring-1 focus:ring-ring"
-                              />
-                            ) : (
-                              <span className="block px-2 py-1">{cell}</span>
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ResizableExcelSheetTable
+                key={sheet.name}
+                rows={displayRows}
+                editable={canEdit}
+                onCellChange={(ri, ci, value) => handleCellChange(sheet.name, ri, ci, value)}
+              />
             ) : (
               <p className="text-muted-foreground">文件为空</p>
             )}

@@ -1,12 +1,18 @@
 import { getSheetsClient } from '@/lib/google/workspace-oauth'
+import {
+  loadOrderImportMasterData,
+  matchCustomerCodeFromSheet,
+  type CodeMatchResult,
+} from '@/lib/mail-assistant/order-import-master-data'
 import { ordersWhereRootExcludeArchived } from '@/lib/orders/order-visibility'
 import prisma from '@/lib/prisma'
 
 export const OAK_SPREADSHEET_ID = '1JWeU4mT8nk86Pzfe-XNbhzMHdSoh1rPp6nubrbYxdBQ'
 export const OAK_YG2025_SHEET_NAME = 'YG2025'
 
-/** D 列柜号、J 列订单日期（1-based） */
+/** D 列柜号、F 列客户、J 列订单日期（0-based） */
 const COL_CONTAINER = 3
+const COL_CUSTOMER = 5
 const COL_ORDER_DATE = 9
 
 const EXCEL_EPOCH_UTC = Date.UTC(1899, 11, 30)
@@ -14,6 +20,11 @@ const ORDER_DATE_CUTOFF_UTC = Date.UTC(2026, 3, 1) // 2026-04-01
 
 export type Yg2025ImportRow = {
   containerNumber: string
+  /** 码头提柜表 F 列原文 */
+  customerRaw: string | null
+  /** 模糊匹配后的系统客户代码 */
+  customerCode: string | null
+  customerMatchKind: CodeMatchResult['matchKind'] | null
   orderDate: string
   orderDateKey: string
   imported: boolean
@@ -126,17 +137,27 @@ export async function fetchYg2025ImportCheck(): Promise<Yg2025ImportCheckResult>
   })
 
   const allRows = valuesRes.data.values ?? []
-  const [systemOrdersByContainer, parsedRows] = await Promise.all([
+  const [systemOrdersByContainer, master, parsedRows] = await Promise.all([
     loadSystemOrdersByContainer(),
+    loadOrderImportMasterData(),
     Promise.resolve(parseYg2025Rows(allRows)),
   ])
 
-  const rows: Yg2025ImportRow[] = parsedRows.map((row) => ({
-    containerNumber: row.containerNumber,
-    orderDate: row.orderDateDisplay,
-    orderDateKey: row.orderDateKey,
-    imported: isSheetRowImported(row.containerNumber, row.orderDateUtc, systemOrdersByContainer),
-  }))
+  const rows: Yg2025ImportRow[] = parsedRows.map((row) => {
+    const customerRaw = row.customerRaw
+    const customerMatch = customerRaw
+      ? matchCustomerCodeFromSheet(customerRaw, master.customers)
+      : { code: null, matchKind: 'none' as const }
+    return {
+      containerNumber: row.containerNumber,
+      customerRaw,
+      customerCode: customerMatch.code,
+      customerMatchKind: customerRaw ? customerMatch.matchKind : null,
+      orderDate: row.orderDateDisplay,
+      orderDateKey: row.orderDateKey,
+      imported: isSheetRowImported(row.containerNumber, row.orderDateUtc, systemOrdersByContainer),
+    }
+  })
 
   const importedCount = rows.filter((r) => r.imported).length
 
@@ -152,12 +173,14 @@ export async function fetchYg2025ImportCheck(): Promise<Yg2025ImportCheckResult>
 
 function parseYg2025Rows(allRows: string[][]): Array<{
   containerNumber: string
+  customerRaw: string | null
   orderDateKey: string
   orderDateDisplay: string
   orderDateUtc: Date
 }> {
   const result: Array<{
     containerNumber: string
+    customerRaw: string | null
     orderDateKey: string
     orderDateDisplay: string
     orderDateUtc: Date
@@ -182,8 +205,11 @@ function parseYg2025Rows(allRows: string[][]): Array<{
     if (!orderDateParsed) continue
     if (orderDateParsed.getTime() < ORDER_DATE_CUTOFF_UTC) continue
 
+    const customerRaw = String(row[COL_CUSTOMER] ?? '').trim() || null
+
     result.push({
       containerNumber: containerRaw,
+      customerRaw,
       orderDateKey: toOrderDateKey(orderDateParsed),
       orderDateDisplay: formatOrderDateUs(orderDateParsed),
       orderDateUtc: orderDateParsed,
