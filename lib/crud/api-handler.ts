@@ -207,6 +207,11 @@ export function createListHandler(config: EntityConfig) {
                 ) {
                   // 应收：按关联账单的账单类型（直送/拆柜/负数/仓储）
                   where.invoices = { invoice_type: filterValue }
+                } else if (
+                  fieldConfig?.type === 'boolean' ||
+                  fieldConfig?.type === 'checkbox'
+                ) {
+                  where[filterField.field] = filterValue === 'true'
                 } else {
                   // 普通 select 字段（包括状态）
                   where[filterField.field] = filterValue

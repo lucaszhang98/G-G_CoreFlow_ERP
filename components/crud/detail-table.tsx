@@ -3,7 +3,7 @@
 import React from 'react'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, ChevronDown, ChevronRight, Pencil, Trash2, Check, ChevronsUpDown, X, Search, ArrowRightLeft } from "lucide-react"
+import { Plus, ChevronDown, ChevronRight, Pencil, Trash2, Check, ChevronsUpDown, X, Search, ArrowRightLeft, CheckCircle, XCircle } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { LocationSelect } from "@/components/ui/location-select"
 import { FuzzySearchSelect } from "@/components/ui/fuzzy-search-select"
@@ -967,8 +967,8 @@ export function DetailTable({
     if (config.showExpandable) cols.push('expand')
     // 预约明细子表前几位：柜号、拆柜时间、实际板数、排车板数
     if (config.showColumns?.orderNumber) cols.push('orderNumber')
-    if (config.showColumns?.customerName) cols.push('customerName')
     if (config.showColumns?.fist) cols.push('fist')
+    if (config.showColumns?.customerName) cols.push('customerName')
     // 预约明细子表不展示提柜时间（产品需求已取消该列）
     if (!appointmentId && config.showColumns?.pickupTime) cols.push('pickupTime')
     if (appointmentId && config.showColumns?.unloadTime) cols.push('unloadTime')
@@ -1120,7 +1120,7 @@ export function DetailTable({
                   case 'customerName':
                     return <th key={col} className="text-left p-2 font-semibold text-sm">客户名称</th>
                   case 'fist':
-                    return <th key={col} className="text-left p-2 font-semibold text-sm w-16">FIST</th>
+                    return <th key={col} className="text-center p-2 font-semibold text-sm w-16">FIST</th>
                   case 'pickupTime':
                     return <th key={col} className="text-left p-2 font-semibold text-sm min-w-[110px]">提柜时间</th>
                   case 'location':
@@ -1283,12 +1283,20 @@ export function DetailTable({
                         }
                         case 'customerName':
                           return <td key={col} className="p-2 text-sm">{(detail as any).customer_name || '-'}</td>
-                        case 'fist':
+                        case 'fist': {
+                          const fistValue = detail.fist === true
                           return (
                             <td key={col} className="p-2 text-sm">
-                              {detail.fist === true ? '是' : '否'}
+                              <div className="flex items-center justify-center">
+                                {fistValue ? (
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                ) : (
+                                  <XCircle className="h-4 w-4 text-gray-400" />
+                                )}
+                              </div>
                             </td>
                           )
+                        }
                         case 'pickupTime': {
                           const formatted =
                             (detail as any).pickup_time && typeof (detail as any).pickup_time === 'string'

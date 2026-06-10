@@ -286,6 +286,7 @@ export function DeliveryAppointmentTable() {
     showExpandable: false,
     showColumns: {
       orderNumber: true,
+      fist: true,
       customerName: true,
       pickupTime: false, // 预约明细子表不展示提柜时间
       location: true,
