@@ -176,7 +176,11 @@ export function MailAssistantFeedbackSheet({
                     <Label>问题类型</Label>
                     <Select
                       value={draft.issueType}
-                      onValueChange={(v) => updateDraft(key, { issueType: v })}
+                      onValueChange={(v) =>
+                        updateDraft(key, {
+                          issueType: normalizeIssueType(v, draft.issueType),
+                        })
+                      }
                     >
                       <SelectTrigger className="h-9">
                         <SelectValue />
