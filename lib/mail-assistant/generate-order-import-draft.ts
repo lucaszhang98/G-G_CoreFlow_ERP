@@ -32,6 +32,7 @@ export async function generateOrderImportDraftFromSource(input: {
   messageId: string
   attachmentId: string
   filename: string
+  emailSubject?: string | null
 }): Promise<{ buffer: Buffer; row: OrderImportDraftRow; warnings: string[] }> {
   const container = normalizeContainerNumber(input.containerNumber)
   const sourceBuffer = await downloadGmailAttachment(input.messageId, input.attachmentId)
@@ -41,7 +42,9 @@ export async function generateOrderImportDraftFromSource(input: {
     Promise.resolve(parseSourceForecastExcel(sourceBuffer, container)),
   ])
 
-  const { rows, warnings } = transformSourceToImportRows(parsed, container, master)
+  const { rows, warnings } = transformSourceToImportRows(parsed, container, master, {
+    emailSubject: input.emailSubject,
+  })
 
   if (rows.length === 0) {
     throw new Error(

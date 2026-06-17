@@ -125,6 +125,18 @@ export function buildGmailAttachmentDownloadPath(
  * - threadId 优先：Gmail 网页地址栏通常用会话 ID，仅用 messageId 可能只打开收件箱首页
  * - #all/：比 #inbox/ 更稳（邮件不在收件箱标签时也能打开）
  */
+export async function getGmailMessageSubject(messageId: string): Promise<string> {
+  const gmail = await getGmailClient()
+  const res = await gmail.users.messages.get({
+    userId: 'me',
+    id: messageId,
+    format: 'metadata',
+    metadataHeaders: ['Subject'],
+  })
+  const headers = res.data.payload?.headers
+  return getHeader(headers, 'subject')
+}
+
 export async function resolveGmailThreadId(messageId: string): Promise<string | null> {
   const gmail = await getGmailClient()
   const res = await gmail.users.messages.get({

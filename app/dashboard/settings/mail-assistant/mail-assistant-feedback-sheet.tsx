@@ -53,6 +53,7 @@ function normalizeIssueType(
 type RowDraft = {
   issueType: FeedbackIssueType
   comment: string
+  correctEmailSubject: string
   file: File | null
 }
 
@@ -76,6 +77,7 @@ export function MailAssistantFeedbackSheet({
       next[key] = {
         issueType: normalizeIssueType(existing?.issueType, defaultIssueType),
         comment: existing?.comment ?? "",
+        correctEmailSubject: existing?.correctEmailSubject ?? "",
         file: existing?.file ?? null,
       }
     }
@@ -116,8 +118,12 @@ export function MailAssistantFeedbackSheet({
               filename: row.sourceForecast.label,
               downloadUrl: row.sourceForecast.downloadUrl,
               resolveReason: row.sourceForecast.resolveReason,
+              emailSubject: row.sourceForecast.emailSubject ?? null,
             })
           )
+        }
+        if (draft.correctEmailSubject.trim()) {
+          form.append("correctEmailSubject", draft.correctEmailSubject.trim())
         }
         if (draft.file) form.append("correctFile", draft.file)
 
@@ -170,6 +176,11 @@ export function MailAssistantFeedbackSheet({
                         当前源预报：{row.sourceForecast.label}
                       </p>
                     )}
+                    {row.sourceForecast?.emailSubject && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2" title={row.sourceForecast.emailSubject}>
+                        当前邮件标题：{row.sourceForecast.emailSubject}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -203,6 +214,18 @@ export function MailAssistantFeedbackSheet({
                       value={draft.comment}
                       onChange={(e) => updateDraft(key, { comment: e.target.value })}
                     />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>正确邮件标题（可选）</Label>
+                    <Input
+                      placeholder="例如：Re: EGSU1234567 某某客户 直送 ETA 6/15"
+                      value={draft.correctEmailSubject}
+                      onChange={(e) => updateDraft(key, { correctEmailSubject: e.target.value })}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      标题中常含客户、ETA、拆柜/直送；提交后会覆盖该柜号已保存的邮件标题，供后续转换参考。
+                    </p>
                   </div>
 
                   <div className="space-y-1.5">

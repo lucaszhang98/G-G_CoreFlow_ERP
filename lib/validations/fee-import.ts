@@ -49,6 +49,24 @@ export const feeImportRowSchema = z.object({
     message: '归属范围只能是：all（所有客户）或 customers（指定客户）',
   }),
 
+  customer_code: z
+    .string()
+    .max(50, '客户代码不能超过50个字符')
+    .optional()
+    .nullable()
+    .transform((val) => (val === null || val === undefined || val === '' ? undefined : val.trim())),
+
+  fee_id: z
+    .unknown()
+    .optional()
+    .nullable()
+    .transform((val) => {
+      if (val === null || val === undefined || val === '') return undefined
+      const s = String(val).trim()
+      if (!/^\d+$/.test(s)) return undefined
+      return s
+    }),
+
   container_type: z
     .string()
     .max(50, '柜型不能超过50个字符')

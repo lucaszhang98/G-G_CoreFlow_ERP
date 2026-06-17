@@ -15,6 +15,7 @@ import {
 } from '@/lib/mail-assistant/order-import-master-data'
 import type { ParsedSourceForecast, SourceForecastDetailRow } from '@/lib/mail-assistant/parse-source-forecast-excel'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
+import { mergeEmailSubjectIntoOrderFields } from '@/lib/mail-assistant/parse-email-subject'
 
 export type OrderImportDraftOutputRow = {
   order_number: string
@@ -80,10 +81,19 @@ function buildOrderHeaderFields(
   parsed: ParsedSourceForecast,
   containerNumber: string,
   master: OrderImportMasterData,
-  warnings: string[]
+  warnings: string[],
+  emailSubject?: string | null
 ): OrderHeaderFields | null {
   const cn = normalizeContainerNumber(containerNumber)
-  const order = parsed.order
+  const mergedOrder = mergeEmailSubjectIntoOrderFields({
+    customerRaw: parsed.order.customerRaw,
+    operationModeRaw: parsed.order.operationModeRaw,
+    etaRaw: parsed.order.etaRaw,
+    emailSubject,
+    master,
+    warnings,
+  })
+  const order = { ...parsed.order, ...mergedOrder }
 
   const customerMatch = matchMasterCode(order.customerRaw, master.customers)
   if (!customerMatch.code) {
@@ -270,10 +280,17 @@ function buildAggregatedRows(
 export function transformSourceToImportRows(
   parsed: ParsedSourceForecast,
   containerNumber: string,
-  master: OrderImportMasterData
+  master: OrderImportMasterData,
+  options?: { emailSubject?: string | null }
 ): { rows: OrderImportDraftOutputRow[]; warnings: string[] } {
   const warnings: string[] = []
-  const header = buildOrderHeaderFields(parsed, containerNumber, master, warnings)
+  const header = buildOrderHeaderFields(
+    parsed,
+    containerNumber,
+    master,
+    warnings,
+    options?.emailSubject
+  )
   if (!header) {
     return { rows: [], warnings: ['无法解析订单头'] }
   }

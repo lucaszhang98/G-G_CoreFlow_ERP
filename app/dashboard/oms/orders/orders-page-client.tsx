@@ -233,8 +233,10 @@ export function OrdersPageClient({ userRole }: { userRole?: string | null }) {
   }
 
   // 批量导入：与订单 create 权限一致（操作部门 oms_operator、仓库 wms_operator）
+  // 暂时隐藏入口（邮件助手「导入到订单」仍可用）；恢复时改 ORDER_BULK_IMPORT_ENABLED 为 true
+  const ORDER_BULK_IMPORT_ENABLED = false
   const importConfig = {
-    enabled: canImportOrders(userRole),
+    enabled: ORDER_BULK_IMPORT_ENABLED && canImportOrders(userRole),
     onImport: () => setImportDialogOpen(true),
   }
 

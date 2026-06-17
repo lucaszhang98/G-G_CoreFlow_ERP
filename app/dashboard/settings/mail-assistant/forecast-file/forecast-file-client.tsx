@@ -6,7 +6,7 @@ import Link from "next/link"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Download, ExternalLink, FileInput, FileSpreadsheet, Loader2, Save } from "lucide-react"
+import { ArrowLeft, Download, ExternalLink, FileInput, FileSpreadsheet, Loader2, Mail, Save } from "lucide-react"
 import { toast } from "sonner"
 import { IMPORT_EDITABLE_SHEET, trimImportEditableRows } from "@/lib/mail-assistant/import-draft-matrix"
 
@@ -16,6 +16,7 @@ type ViewMeta = {
   filename: string
   downloadUrl: string
   gmailUrl?: string
+  emailSubject?: string
   officeEmbedUrl: string | null
   useOfficeViewer: boolean
   editable?: boolean
@@ -448,6 +449,15 @@ export function ForecastFileClient() {
             )}
           </div>
           <span className="text-xs text-muted-foreground truncate max-w-[320px]">{meta.filename}</span>
+          {isSource && meta.emailSubject && (
+            <span
+              className="flex items-start gap-1 text-xs text-muted-foreground max-w-md line-clamp-2"
+              title={meta.emailSubject}
+            >
+              <Mail className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              {meta.emailSubject}
+            </span>
+          )}
         </div>
         <div className="flex gap-2">
           {canEdit && (

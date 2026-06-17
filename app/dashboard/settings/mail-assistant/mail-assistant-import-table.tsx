@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
   Loader2,
   FileInput,
+  Mail,
 } from "lucide-react"
 import { toast } from "sonner"
 import { buildForecastFilePageUrl } from "./forecast-file-url"
@@ -27,6 +28,7 @@ import { buildForecastFilePageUrl } from "./forecast-file-url"
 export type SourceForecastCell = {
   status: "idle" | "loading" | "found" | "not_found"
   label?: string
+  emailSubject?: string
   downloadUrl?: string
   gmailUrl?: string
   messageId?: string
@@ -186,8 +188,8 @@ function buildColumns(
       accessorKey: "sourceForecast",
       id: "sourceForecast",
       header: () => <ColumnHeader icon={FileSpreadsheet} label="源预报" className="justify-start" />,
-      size: 200,
-      minSize: 140,
+      size: 220,
+      minSize: 160,
       meta: { alignLeft: true },
       enableSorting: false,
       cell: ({ row }) => {
@@ -220,20 +222,33 @@ function buildColumns(
           .filter(Boolean)
           .join("\n")
         return (
-          <a
-            href={buildForecastFilePageUrl("source", row.original.containerNumber)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex max-w-full items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 truncate"
-            title={linkTitle || sf.label || "新标签页打开邮件 Excel"}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{sf.label || "源预报"}</span>
-            {sf.aiResolved && (
-              <Badge variant="secondary" className="h-5 px-1 text-[10px] shrink-0">AI</Badge>
+          <div className="flex flex-col gap-1 min-w-0 max-w-full">
+            <a
+              href={buildForecastFilePageUrl("source", row.original.containerNumber)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex max-w-full items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400"
+              title={linkTitle || sf.label || "新标签页打开邮件 Excel"}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{sf.label || "源预报"}</span>
+              {sf.aiResolved && (
+                <Badge variant="secondary" className="h-5 px-1 text-[10px] shrink-0">AI</Badge>
+              )}
+            </a>
+            {sf.emailSubject ? (
+              <p
+                className="flex items-start gap-1 text-[11px] leading-snug text-muted-foreground line-clamp-2"
+                title={sf.emailSubject}
+              >
+                <Mail className="h-3 w-3 shrink-0 mt-0.5 opacity-70" />
+                <span className="break-all">{sf.emailSubject}</span>
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground/50 italic">邮件标题未记录</p>
             )}
-          </a>
+          </div>
         )
       },
     },

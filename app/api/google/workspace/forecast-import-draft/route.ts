@@ -5,7 +5,10 @@ import {
   getImportDraftBuffer,
   saveImportDraftMatrix,
 } from '@/lib/mail-assistant/forecast-persistence'
-import { trimImportEditableRows } from '@/lib/mail-assistant/import-draft-matrix'
+import { IMPORT_EDITABLE_SHEET, trimImportEditableRows } from '@/lib/mail-assistant/import-draft-matrix'
+import { extractImportDraftMatrix } from '@/lib/mail-assistant/import-draft-matrix-io'
+import * as XLSX from 'xlsx'
+import { getGmailMessageSubject } from '@/lib/google/gmail-forecast'
 import { generateOrderImportDraftFromSource } from '@/lib/mail-assistant/generate-order-import-draft'
 import { buildImportDraftDownloadUrl } from '@/lib/mail-assistant/forecast-persistence'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
@@ -45,11 +48,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    let emailSubject: string | null = null
+    try {
+      emailSubject = await getGmailMessageSubject(messageId)
+    } catch {
+      emailSubject = null
+    }
+
     const { buffer, warnings } = await generateOrderImportDraftFromSource({
       containerNumber,
       messageId,
       attachmentId,
       filename: sourceFilename,
+      emailSubject,
     })
 
     const cn = normalizeContainerNumber(containerNumber)
@@ -61,6 +72,7 @@ export async function GET(request: NextRequest) {
         import_draft_baseline_data: draftBytes,
         import_draft_warnings: warnings.join('; ') || null,
         import_draft_download_url: buildImportDraftDownloadUrl(cn),
+        ...(emailSubject ? { source_email_subject: emailSubject } : {}),
         updated_at: new Date(),
       },
     })
@@ -70,6 +82,72 @@ export async function GET(request: NextRequest) {
     console.error('forecast-import-draft error:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : '生成导入预报失败' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const perm = await checkMailAssistantPermission()
+  if (perm.error) return perm.error
+
+  const status = await getGoogleWorkspaceConnectionStatus()
+  if (!status.connected) {
+    return NextResponse.json({ error: '尚未连接 Google 账号' }, { status: 400 })
+  }
+
+  let formData: FormData
+  try {
+    formData = await request.formData()
+  } catch {
+    return NextResponse.json({ error: '请求体无效' }, { status: 400 })
+  }
+
+  const file = formData.get('file')
+  const containerNumber = String(formData.get('containerNumber') ?? '').trim()
+  if (!containerNumber) {
+    return NextResponse.json({ error: '缺少 containerNumber' }, { status: 400 })
+  }
+  if (!(file instanceof Blob) || file.size === 0) {
+    return NextResponse.json({ error: '请上传 Excel 文件' }, { status: 400 })
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false })
+  if (!wb.SheetNames.includes(IMPORT_EDITABLE_SHEET)) {
+    return NextResponse.json(
+      { error: `请上传订单管理同款导入表（需包含「${IMPORT_EDITABLE_SHEET}」工作表）` },
+      { status: 400 }
+    )
+  }
+
+  let rows: string[][]
+  try {
+    rows = extractImportDraftMatrix(buffer)
+    if (rows.length === 0 || rows[0]?.length === 0) {
+      return NextResponse.json({ error: '导入表为空或格式无效' }, { status: 400 })
+    }
+  } catch {
+    return NextResponse.json({ error: '无法读取 Excel 文件' }, { status: 400 })
+  }
+
+  try {
+    const cn = normalizeContainerNumber(containerNumber)
+    const userId = perm.user?.id ? BigInt(perm.user.id) : null
+    const result = await saveImportDraftMatrix(cn, trimImportEditableRows(rows), {
+      createdBy: userId,
+    })
+    return NextResponse.json({
+      ok: true,
+      containerNumber: cn,
+      detailRowCount: result.detailRowCount,
+      fileVersion: result.updatedAt.getTime(),
+      trainingRecorded: result.trainingRecorded,
+    })
+  } catch (error) {
+    console.error('forecast-import-draft POST error:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : '上传失败' },
       { status: 500 }
     )
   }

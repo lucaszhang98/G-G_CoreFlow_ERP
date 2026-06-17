@@ -15,6 +15,7 @@ import {
 import {
   guardInboundPlannedUnloadAtInUpdate,
   isInboundPlannedUnloadAtAutoUpdateBlocked,
+  isInboundNormalPlannedUnloadRecalcBlocked,
   resolveEffectiveInboundUnloadedBy,
 } from '@/lib/wms/planned-unload-auto-update';
 
@@ -256,6 +257,11 @@ export async function PUT(
     const blockAutoPlannedUnloadAt = isInboundPlannedUnloadAtAutoUpdateBlocked(
       effectiveUnloadedBy
     );
+    const blockNormalPlannedUnloadRecalc =
+      isInboundNormalPlannedUnloadRecalcBlocked(
+        effectiveUnloadedBy,
+        existing.status
+      );
     const manualPlannedUnloadAtInRequest = data.planned_unload_at !== undefined;
 
     // 业务规则：仅现在位置/库内状态涉及「查验」「封闭区」时联动 status 与拆柜日期。
@@ -299,6 +305,7 @@ export async function PUT(
 
     const guardedUpdateData = guardInboundPlannedUnloadAtInUpdate(updateData, {
       unloadedBy: effectiveUnloadedBy,
+      inboundStatus: existing.status,
       manualPlannedUnloadAtInRequest,
     });
 

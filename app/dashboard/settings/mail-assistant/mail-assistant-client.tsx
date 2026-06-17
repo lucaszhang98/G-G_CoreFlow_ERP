@@ -18,6 +18,7 @@ import {
   type SourceForecastCell,
 } from "./mail-assistant-import-table"
 import { MailAssistantFeedbackSheet } from "./mail-assistant-feedback-sheet"
+import { MailAssistantImportDraftUploadDialog } from "./mail-assistant-import-draft-upload-dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,6 +49,8 @@ import {
   Sparkles,
   MessageSquareWarning,
   FolderInput,
+  Download,
+  Upload,
 } from "lucide-react"
 import { toast } from "sonner"
 import { isMailAssistantAdmin } from "@/lib/mail-assistant/mail-assistant-permissions"
@@ -166,6 +169,8 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
   const [testingAi, setTestingAi] = React.useState(false)
   const [feedbackOpen, setFeedbackOpen] = React.useState(false)
   const [importingToOrders, setImportingToOrders] = React.useState(false)
+  const [downloadingImportDraft, setDownloadingImportDraft] = React.useState(false)
+  const [importDraftUploadOpen, setImportDraftUploadOpen] = React.useState(false)
   const [importOrderErrors, setImportOrderErrors] = React.useState<
     Array<{ row: number; field?: string; message: string }> | null
   >(null)
@@ -236,6 +241,7 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
         containerNumber: string
         status: "found" | "not_found"
         label?: string
+        sourceEmailSubject?: string
         downloadUrl?: string
         gmailUrl?: string
         messageId?: string
@@ -253,6 +259,7 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
             next[cn] = {
               status: "found",
               label: f.label,
+              emailSubject: f.sourceEmailSubject,
               downloadUrl: f.downloadUrl,
               gmailUrl: f.gmailUrl,
               messageId: f.messageId,
@@ -414,6 +421,7 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
             gmailUrl: string
             messageId: string
             attachmentId: string
+            emailSubject: string
             aiResolved: boolean
             resolveReason: string
           } | null
@@ -439,6 +447,7 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
               next[cn] = {
                 status: "found",
                 label: item.sourceForecast.label,
+                emailSubject: item.sourceForecast.emailSubject,
                 downloadUrl: item.sourceForecast.downloadUrl,
                 gmailUrl: item.sourceForecast.gmailUrl,
                 messageId: item.sourceForecast.messageId,
@@ -621,6 +630,69 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
       setImportingToOrders(false)
     }
   }, [selectedRows, selectedWithImportDraft, loadImportCheck])
+
+  const handleDownloadImportDrafts = React.useCallback(async () => {
+    if (selectedWithImportDraft.length === 0) {
+      toast.error("请勾选已有导入预报的行")
+      return
+    }
+
+    setDownloadingImportDraft(true)
+    try {
+      for (const row of selectedWithImportDraft) {
+        const url = forecastByContainer[row.containerNumber]?.importDraftDownloadUrl
+        if (!url) continue
+
+        const res = await fetch(url)
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as { error?: string }
+          throw new Error(data.error || `下载 ${row.containerNumber} 失败`)
+        }
+
+        const blob = await res.blob()
+        const disposition = res.headers.get("Content-Disposition") ?? ""
+        const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+        const filename = utf8Match
+          ? decodeURIComponent(utf8Match[1])
+          : `导入预报_${row.containerNumber}.xlsx`
+
+        const a = document.createElement("a")
+        a.href = URL.createObjectURL(blob)
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(a.href)
+
+        if (selectedWithImportDraft.length > 1) {
+          await new Promise((resolve) => setTimeout(resolve, 300))
+        }
+      }
+      toast.success(`已下载 ${selectedWithImportDraft.length} 个导入表`)
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : "下载导入表失败")
+    } finally {
+      setDownloadingImportDraft(false)
+    }
+  }, [selectedWithImportDraft, forecastByContainer])
+
+  const handleUploadImportDraftClick = React.useCallback(() => {
+    if (selectedWithImportDraft.length === 0) {
+      toast.error("请勾选一条已有导入预报的记录")
+      return
+    }
+    if (selectedWithImportDraft.length > 1) {
+      toast.error("上传导入表请单选一条柜号")
+      return
+    }
+    setImportDraftUploadOpen(true)
+  }, [selectedWithImportDraft])
+
+  const importDraftUploadContainer = React.useMemo(
+    () => (selectedWithImportDraft.length === 1 ? selectedWithImportDraft[0].containerNumber : null),
+    [selectedWithImportDraft]
+  )
 
   const handleTestForecastAi = React.useCallback(async () => {
     setTestingAi(true)
@@ -886,6 +958,47 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button
+                variant="outline"
+                size="sm"
+                className="h-9 min-w-[100px]"
+                disabled={downloadingImportDraft || selectedWithImportDraft.length === 0}
+                onClick={() => void handleDownloadImportDrafts()}
+                title={
+                  selectedWithImportDraft.length === 0
+                    ? "请勾选已有导入预报的行"
+                    : "下载与订单管理相同的导入表（含下拉与校验）"
+                }
+              >
+                {downloadingImportDraft ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-1.5" />
+                )}
+                下载导入表
+                {selectedWithImportDraft.length > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
+                    {selectedWithImportDraft.length}
+                  </Badge>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 min-w-[100px]"
+                disabled={selectedWithImportDraft.length !== 1}
+                onClick={handleUploadImportDraftClick}
+                title={
+                  selectedWithImportDraft.length === 0
+                    ? "请单选一条已有导入预报的记录"
+                    : selectedWithImportDraft.length > 1
+                      ? "上传时请单选一条柜号"
+                      : "上传 Excel 覆盖当前导入预报"
+                }
+              >
+                <Upload className="h-4 w-4 mr-1.5" />
+                上传导入表
+              </Button>
+              <Button
                 variant="default"
                 size="sm"
                 className="h-9 min-w-[100px] bg-emerald-600 hover:bg-emerald-700"
@@ -1014,10 +1127,11 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
                   <li>使用搜索与筛选：按柜号模糊搜索、按订单日期范围筛选、按导入状态筛选。</li>
                   <li>对未导入记录：可悬停柜号行点击复制图标，再到订单管理模块补录。</li>
                   <li>补录完成后，返回本页再次刷新，确认状态已变为「已导入」。</li>
-                  <li><strong className="text-foreground">找预报</strong>：在 Gmail 中定位源 Excel，并保存「源预报」链接；<strong className="text-foreground">转换源预报</strong>：将已找到的源预报转为订单导入 Excel 并保存「导入预报」链接。两步结果均写入数据库，刷新页面不会丢失。</li>
-                  <li>勾选已有「导入预报」的行，点击 <strong className="text-foreground">导入到订单</strong>，系统会合并导入表并写入订单管理（与订单模块批量导入相同校验规则）。</li>
+                  <li><strong className="text-foreground">找预报</strong>：在 Gmail 中定位源 Excel，并保存「源预报」链接及<strong className="text-foreground">源邮件标题</strong>；<strong className="text-foreground">转换源预报</strong>：结合 Excel 与邮件标题（客户、ETA、拆柜/直送等）转为订单导入 Excel。</li>
+                  <li>勾选已有「导入预报」的行，可 <strong className="text-foreground">下载导入表</strong>（与订单管理批量导入模板一致，含下拉与校验）；在 Excel 中改完后 <strong className="text-foreground">上传导入表</strong>（单选一条柜号）会覆盖系统内保存的导入预报。</li>
+                  <li>确认无误后点击 <strong className="text-foreground">导入到订单</strong>，系统会合并导入表并写入订单管理（与订单模块批量导入相同校验规则）。</li>
                   <li>对仍显示「暂无」的柜号，系统每 <strong className="text-foreground">12 小时</strong> 自动在邮箱中重新查找一次（无需人工操作）。</li>
-                  <li><strong className="text-foreground">AI 越用越准</strong>：找预报错了可用「预报纠错」反馈；导入预报在预览页改完点保存后，系统会自动对比系统版与同事改后版并记入学习样例，无需额外填表。</li>
+                  <li><strong className="text-foreground">AI 越用越准</strong>：找预报错了可用「预报纠错」反馈（可填正确邮件标题、上传正确 Excel）；导入预报改完保存后系统会自动对比并记入学习样例。</li>
                 </ol>
               </section>
 
@@ -1089,10 +1203,20 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
         </Card>
       </Collapsible>
 
+      <MailAssistantImportDraftUploadDialog
+        open={importDraftUploadOpen}
+        onOpenChange={setImportDraftUploadOpen}
+        containerNumber={importDraftUploadContainer}
+      />
+
       <MailAssistantFeedbackSheet
         open={feedbackOpen}
         onOpenChange={setFeedbackOpen}
         rows={selectedRows}
+        onSubmitted={() => {
+          const cns = selectedRows.map((r) => r.containerNumber)
+          void loadForecastCache(cns)
+        }}
       />
 
     </div>

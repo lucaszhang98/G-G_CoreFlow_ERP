@@ -14,6 +14,7 @@ export type SaveForecastFeedbackInput = {
   comment?: string | null
   wrongSourceMeta?: Record<string, unknown> | null
   correctFilename?: string | null
+  correctEmailSubject?: string | null
   correctFileBuffer?: Buffer | null
   createdBy?: bigint | null
 }
@@ -38,6 +39,7 @@ export async function saveForecastFeedback(input: SaveForecastFeedbackInput) {
         ? (input.wrongSourceMeta as Prisma.InputJsonValue)
         : undefined,
       correct_filename: input.correctFilename?.trim() || null,
+      correct_email_subject: input.correctEmailSubject?.trim() || null,
       correct_file_data: input.correctFileBuffer
         ? (Uint8Array.from(input.correctFileBuffer) as Uint8Array<ArrayBuffer>)
         : undefined,
@@ -48,12 +50,31 @@ export async function saveForecastFeedback(input: SaveForecastFeedbackInput) {
   return row
 }
 
+/** 预报纠错提交后，用正确邮件标题覆盖柜号缓存（便于后续转换） */
+export async function applyCorrectEmailSubjectToContainer(
+  containerNumber: string,
+  emailSubject: string
+): Promise<void> {
+  const cn = normalizeContainerNumber(containerNumber)
+  const trimmed = emailSubject.trim()
+  if (!trimmed) return
+  await prisma.mail_container_forecast.updateMany({
+    where: { container_number: cn },
+    data: {
+      source_email_subject: trimmed,
+      updated_at: new Date(),
+    },
+  })
+}
+
 export type ForecastCorrectionExample = {
   containerNumber: string
   issueType: string
   comment: string | null
   wrongFilename: string | null
+  wrongEmailSubject: string | null
   correctFilename: string | null
+  correctEmailSubject: string | null
   correctPreview: string | null
   relevanceScore?: number
 }
@@ -152,7 +173,14 @@ export async function loadForecastCorrectionExamples(
       r.wrong_source_meta && typeof r.wrong_source_meta === 'object' && 'filename' in r.wrong_source_meta
         ? String((r.wrong_source_meta as { filename?: string }).filename ?? '')
         : null,
+    wrongEmailSubject:
+      r.wrong_source_meta &&
+      typeof r.wrong_source_meta === 'object' &&
+      'emailSubject' in r.wrong_source_meta
+        ? String((r.wrong_source_meta as { emailSubject?: string }).emailSubject ?? '')
+        : null,
     correctFilename: r.correct_filename,
+    correctEmailSubject: r.correct_email_subject,
     correctPreview: r.correct_file_data
       ? buildExcelPreviewForAi(Buffer.from(r.correct_file_data), 6)
       : null,

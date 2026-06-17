@@ -1223,6 +1223,7 @@ model mail_container_forecast {
   container_number          String    @id @db.VarChar(32)
   status                    String    @db.VarChar(32)
   source_filename           String?   @db.Text
+  source_email_subject      String?   @db.Text
   message_id                String?   @db.Text
   thread_id                 String?   @db.Text
   attachment_id             String?   @db.Text
@@ -1253,6 +1254,7 @@ model mail_forecast_feedback {
   comment           String?
   wrong_source_meta Json?
   correct_filename  String?   @db.Text
+  correct_email_subject String? @db.Text
   correct_file_data Bytes?
   use_in_training   Boolean   @default(true)
   created_by        BigInt?

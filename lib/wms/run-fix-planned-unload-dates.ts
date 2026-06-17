@@ -8,7 +8,7 @@ import {
   pickupCurrentLocationBlocksUnloadWhere,
   resolveInboundStatusFromCurrentLocation,
 } from '@/lib/wms/current-location-blocks-unload'
-import { isInboundPlannedUnloadAtAutoUpdateBlocked } from '@/lib/wms/planned-unload-auto-update'
+import { isInboundPlannedUnloadAtAutoUpdateBlocked, isInboundNormalPlannedUnloadRecalcBlocked } from '@/lib/wms/planned-unload-auto-update'
 
 export interface FixPlannedUnloadDatesErrorRow {
   inbound_receipt_id: string
@@ -111,6 +111,15 @@ export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDat
 
   for (const receipt of inboundReceipts) {
     try {
+      if (
+        isInboundNormalPlannedUnloadRecalcBlocked(
+          receipt.unloaded_by,
+          receipt.status
+        )
+      ) {
+        continue
+      }
+
       const loc = receipt.orders.pickup_management?.current_location
       if (currentLocationBlocksPlannedUnload(loc)) {
         continue

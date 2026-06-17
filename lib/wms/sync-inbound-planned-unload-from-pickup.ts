@@ -13,7 +13,10 @@ import {
   inboundStatusBlocksUnload,
   type InboundInspectionAreaSyncPatch,
 } from '@/lib/wms/current-location-blocks-unload'
-import { isInboundPlannedUnloadAtAutoUpdateBlocked } from '@/lib/wms/planned-unload-auto-update'
+import {
+  isInboundPlannedUnloadAtAutoUpdateBlocked,
+  isInboundNormalPlannedUnloadRecalcBlocked,
+} from '@/lib/wms/planned-unload-auto-update'
 
 export {
   includesInspectionKeyword,
@@ -112,9 +115,13 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
 
   if (!inbound) return
 
-  const blockAutoPlannedUnloadAt = isInboundPlannedUnloadAtAutoUpdateBlocked(
-    inbound.unloaded_by
-  )
+  const blockInspectionPlannedUnloadAt =
+    isInboundPlannedUnloadAtAutoUpdateBlocked(inbound.unloaded_by)
+  const blockNormalPlannedUnloadRecalc =
+    isInboundNormalPlannedUnloadRecalcBlocked(
+      inbound.unloaded_by,
+      inbound.status
+    )
   const recalc = calculateUnloadDate
 
   const inspectionPatch = buildInboundInspectionAreaSyncPatch({
@@ -124,7 +131,7 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
     storedPlannedUnloadAt: inbound.planned_unload_at,
     pickupDate: order.pickup_date,
     etaDate: order.eta_date,
-    blockAutoPlannedUnloadAt,
+    blockAutoPlannedUnloadAt: blockInspectionPlannedUnloadAt,
     recalculatePlannedUnloadAt: recalc,
   })
 
@@ -150,7 +157,7 @@ export async function syncInboundPlannedUnloadAtByPickupState(args: {
     storedPlannedUnloadAt: inbound.planned_unload_at,
     pickupDate: order.pickup_date,
     etaDate: order.eta_date,
-    blockAutoPlannedUnloadAt,
+    blockAutoPlannedUnloadAt: blockNormalPlannedUnloadRecalc,
     recalculatePlannedUnloadAt: recalc,
   })
   if (!datePatch) return

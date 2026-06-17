@@ -16,6 +16,7 @@ import {
 import {
   guardInboundPlannedUnloadAtInUpdate,
   isInboundPlannedUnloadAtAutoUpdateBlocked,
+  isInboundNormalPlannedUnloadRecalcBlocked,
   resolveEffectiveInboundUnloadedBy,
 } from '@/lib/wms/planned-unload-auto-update';
 
@@ -161,6 +162,7 @@ export async function POST(request: NextRequest) {
             perRowUpdateData,
             {
               unloadedBy: effectiveUnloadedBy,
+              inboundStatus: row.status,
               manualPlannedUnloadAtInRequest,
             }
           )
@@ -196,7 +198,7 @@ export async function POST(request: NextRequest) {
     } else if (batchClearUnloadDateOnBlockedStatus) {
       const targets = await prisma.inbound_receipt.findMany({
         where: { inbound_receipt_id: { in: inboundReceiptIds } },
-        select: { inbound_receipt_id: true, unloaded_by: true },
+        select: { inbound_receipt_id: true, unloaded_by: true, status: true },
       });
 
       await prisma.$transaction(async (tx) => {
@@ -213,6 +215,7 @@ export async function POST(request: NextRequest) {
             where: { inbound_receipt_id: row.inbound_receipt_id },
             data: guardInboundPlannedUnloadAtInUpdate(perRowUpdateData, {
               unloadedBy: effectiveUnloadedBy,
+              inboundStatus: row.status,
               manualPlannedUnloadAtInRequest,
             }),
           });
@@ -227,7 +230,7 @@ export async function POST(request: NextRequest) {
       // 含拆柜日期或拆柜人员变更：按行应用锁定规则
       const targets = await prisma.inbound_receipt.findMany({
         where: { inbound_receipt_id: { in: inboundReceiptIds } },
-        select: { inbound_receipt_id: true, unloaded_by: true },
+        select: { inbound_receipt_id: true, unloaded_by: true, status: true },
       });
 
       await prisma.$transaction(async (tx) => {
@@ -240,6 +243,7 @@ export async function POST(request: NextRequest) {
             where: { inbound_receipt_id: row.inbound_receipt_id },
             data: guardInboundPlannedUnloadAtInUpdate(updateData, {
               unloadedBy: effectiveUnloadedBy,
+              inboundStatus: row.status,
               manualPlannedUnloadAtInRequest,
             }),
           });

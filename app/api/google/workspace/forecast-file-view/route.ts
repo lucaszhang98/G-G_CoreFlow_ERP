@@ -98,6 +98,7 @@ export async function GET(request: NextRequest) {
     gmailUrl: row.message_id
       ? buildGmailMessageWebUrl(row.message_id, workspaceEmail, threadId)
       : undefined,
+    emailSubject: row.source_email_subject ?? undefined,
     officeEmbedUrl,
     publicFileUrl,
     useOfficeViewer: false,

@@ -9,7 +9,7 @@
  *   例外：私仓，或仓点为 PDX7/BFI3/GEG2 且预计板数<5 →「提拆一口价 / terminal pick up」类费用 × 分仓占比。
  * - 拦截费：性质为「扣货」的明细条数 × 拦截费单价，合并一条明细。
  * - 超箱费：全订单明细 quantity 之和 > 1400 时，超出箱数 × 超箱费单价，一条明细。
- * - 仓点费：明细条数 > 10 时，超出条数 × 仓点费单价，一条明细。
+ * - 超仓费：明细条数 > 10 时，超出条数 × 超仓费单价，一条明细。
  * - 车架费：每单固定 1 条，备注「拆柜包四天」；单价从费用表匹配（fee_code 含 chassis 或名称含「车架」等）。
  */
 
@@ -201,7 +201,12 @@ function pickOverBoxFee(
 }
 
 function isWarehousePointFee(f: { fee_code: string; fee_name: string }) {
-  return f.fee_code.includes('仓点') || f.fee_name.includes('仓点')
+  const code = normCode(f.fee_code)
+  const name = (f.fee_name || '').trim()
+  if (name.includes('超仓')) return true
+  if (code.includes('extendedlocationfee')) return true
+  // 迁移前历史数据
+  return f.fee_code.includes('仓点') || f.fee_name.includes('仓点') || code === 'examstop'
 }
 
 function pickWarehousePointFee(
@@ -451,8 +456,8 @@ export async function syncContainerUnloadInvoiceForOrder(
       lines.push({
         invoice_id: invId,
         fee_id: null,
-        fee_code: wf?.fee_code ?? '仓点费',
-        fee_name: wf?.fee_name ?? '仓点费',
+        fee_code: wf?.fee_code ?? 'extended location fee',
+        fee_name: wf?.fee_name ?? '超仓费',
         unit: wf?.unit ?? '条',
         line_notes: `订单明细 ${details.length} 条，超出 10 条部分 ${extraLines} 条`,
         order_detail_id: null,

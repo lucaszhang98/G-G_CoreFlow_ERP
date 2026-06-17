@@ -3,6 +3,7 @@ import { getGoogleWorkspaceConnectionStatus } from '@/lib/google/workspace-oauth
 import {
   buildGmailAttachmentDownloadPath,
   buildGmailMessageWebUrl,
+  getGmailMessageSubject,
 } from '@/lib/google/gmail-forecast'
 import { generateOrderImportDraftFromSource } from '@/lib/mail-assistant/generate-order-import-draft'
 import {
@@ -31,6 +32,7 @@ export type PersistedForecastDto = {
   containerNumber: string
   status: 'found' | 'not_found'
   label?: string
+  sourceEmailSubject?: string
   downloadUrl?: string
   gmailUrl?: string
   messageId?: string
@@ -83,6 +85,7 @@ function toDto(row: {
   container_number: string
   status: string
   source_filename: string | null
+  source_email_subject?: string | null
   message_id: string | null
   thread_id: string | null
   attachment_id: string | null
@@ -102,6 +105,7 @@ function toDto(row: {
     containerNumber: cn,
     status: found ? 'found' : 'not_found',
     label: row.source_filename ?? undefined,
+    sourceEmailSubject: row.source_email_subject ?? undefined,
     downloadUrl,
     gmailUrl,
     messageId: row.message_id ?? undefined,
@@ -137,6 +141,7 @@ export async function upsertSourceForecastLookupResult(
       container_number,
       status,
       source_filename,
+      source_email_subject,
       message_id,
       thread_id,
       attachment_id,
@@ -152,6 +157,7 @@ export async function upsertSourceForecastLookupResult(
       ${cn},
       ${result.status},
       ${sf?.filename ?? null},
+      ${sf?.emailSubject ?? null},
       ${sf?.messageId ?? null},
       ${sf?.threadId ?? null},
       ${sf?.attachmentId ?? null},
@@ -167,6 +173,7 @@ export async function upsertSourceForecastLookupResult(
     ON CONFLICT (container_number) DO UPDATE SET
       status = EXCLUDED.status,
       source_filename = EXCLUDED.source_filename,
+      source_email_subject = EXCLUDED.source_email_subject,
       message_id = EXCLUDED.message_id,
       thread_id = EXCLUDED.thread_id,
       attachment_id = EXCLUDED.attachment_id,
@@ -215,6 +222,7 @@ export async function convertImportDraftForContainer(
       messageId: row.message_id,
       attachmentId: row.attachment_id,
       filename: row.source_filename ?? 'source.xlsx',
+      emailSubject: row.source_email_subject,
     })
     const importDraftDownloadUrl = buildImportDraftDownloadUrl(cn)
     const draftBytes = toPrismaBytes(draft.buffer)
@@ -283,6 +291,7 @@ export async function loadPersistedForecasts(
       container_number: string
       status: string
       source_filename: string | null
+      source_email_subject: string | null
       message_id: string | null
       thread_id: string | null
       attachment_id: string | null
@@ -299,6 +308,7 @@ export async function loadPersistedForecasts(
       container_number,
       status,
       source_filename,
+      source_email_subject,
       message_id,
       thread_id,
       attachment_id,
@@ -312,7 +322,43 @@ export async function loadPersistedForecasts(
     FROM mail_container_forecast
     WHERE container_number = ANY(${unique}::text[])
   `
+
+  await backfillMissingEmailSubjects(rows)
+
   return rows.map((row) => toDto(row, workspaceEmail))
+}
+
+/** 历史记录在加字段前找过预报的，按 message_id 补抓邮件标题 */
+async function backfillMissingEmailSubjects(
+  rows: Array<{
+    container_number: string
+    status: string
+    message_id: string | null
+    source_email_subject: string | null
+  }>
+): Promise<void> {
+  const missing = rows.filter(
+    (r) => r.status === 'found' && r.message_id && !r.source_email_subject?.trim()
+  )
+  if (missing.length === 0) return
+
+  const batch = missing.slice(0, 40)
+  await Promise.all(
+    batch.map(async (row) => {
+      if (!row.message_id) return
+      try {
+        const subject = (await getGmailMessageSubject(row.message_id)).trim()
+        if (!subject) return
+        row.source_email_subject = subject
+        await prisma.mail_container_forecast.update({
+          where: { container_number: row.container_number },
+          data: { source_email_subject: subject, updated_at: new Date() },
+        })
+      } catch (error) {
+        console.warn(`backfill email subject failed for ${row.container_number}:`, error)
+      }
+    })
+  )
 }
 
 export function needsForecastRelookup(
@@ -413,6 +459,7 @@ export async function getImportDraftBuffer(
       messageId: row.message_id,
       attachmentId: row.attachment_id,
       filename: row.source_filename ?? 'source.xlsx',
+      emailSubject: row.source_email_subject,
     })
     await persistImportDraft(cn, draft)
     return {

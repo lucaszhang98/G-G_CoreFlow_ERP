@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkMailAssistantPermission } from '@/lib/mail-assistant/mail-assistant-permissions'
-import { saveForecastFeedback } from '@/lib/mail-assistant/forecast-feedback-store'
+import { saveForecastFeedback, applyCorrectEmailSubjectToContainer } from '@/lib/mail-assistant/forecast-feedback-store'
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024
 
@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
     const orderDateKey = String(form.get('orderDateKey') ?? '').trim() || null
     const issueType = String(form.get('issueType') ?? 'other').trim()
     const comment = String(form.get('comment') ?? '').trim() || null
+    const correctEmailSubject = String(form.get('correctEmailSubject') ?? '').trim() || null
     const wrongSourceMetaRaw = String(form.get('wrongSourceMeta') ?? '').trim()
     const file = form.get('correctFile')
 
@@ -54,9 +55,14 @@ export async function POST(request: NextRequest) {
       comment,
       wrongSourceMeta,
       correctFilename,
+      correctEmailSubject,
       correctFileBuffer,
       createdBy: userId,
     })
+
+    if (correctEmailSubject) {
+      await applyCorrectEmailSubjectToContainer(containerNumber, correctEmailSubject)
+    }
 
     return NextResponse.json({
       ok: true,

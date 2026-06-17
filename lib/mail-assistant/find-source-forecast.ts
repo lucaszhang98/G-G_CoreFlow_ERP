@@ -21,6 +21,7 @@ export type SourceForecastLink = {
   messageId: string
   threadId: string
   attachmentId: string
+  emailSubject: string
   score: number
   aiResolved: boolean
   resolveReason: string
@@ -238,6 +239,7 @@ function buildResult(
       messageId: att.messageId,
       threadId: att.threadId,
       attachmentId: att.attachmentId,
+      emailSubject: att.subject,
       score: picked.score.score,
       aiResolved,
       resolveReason,
