@@ -358,24 +358,42 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
     [filteredImportRows, forecastByContainer]
   )
 
-  const resolveContainerList = React.useCallback(
-    (mode: "selected" | "filtered" | "notImported", actionLabel: string) => {
-      let list: string[] = []
+  const resolveMailAssistantItems = React.useCallback(
+    (
+      mode: "selected" | "filtered" | "notImported",
+      actionLabel: string
+    ): Array<{ containerNumber: string; orderDateKey: string }> | null => {
+      let list: MailAssistantImportRow[] = []
       if (mode === "selected") {
         if (selectedRows.length === 0) {
           toast.error(`请先勾选要${actionLabel}的记录`)
           return null
         }
-        list = selectedRows.map((r) => r.containerNumber)
+        list = selectedRows
       } else if (mode === "filtered") {
-        list = filteredImportRows.map((r) => r.containerNumber)
+        list = filteredImportRows
       } else {
-        list = filteredImportRows.filter((r) => !r.imported).map((r) => r.containerNumber)
+        list = filteredImportRows.filter((r) => !r.imported)
       }
 
-      const unique = [...new Set(list.map((c) => c.trim().toUpperCase()).filter(Boolean))]
+      const items = list
+        .map((r) => ({
+          containerNumber: r.containerNumber.trim().toUpperCase(),
+          orderDateKey: r.orderDateKey,
+        }))
+        .filter((r) => r.containerNumber)
+
+      const unique: Array<{ containerNumber: string; orderDateKey: string }> = []
+      const seen = new Set<string>()
+      for (const item of items) {
+        const key = `${item.containerNumber}|${item.orderDateKey}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        unique.push(item)
+      }
+
       if (unique.length === 0) {
-        toast.error(`当前没有可${actionLabel}的柜号`)
+        toast.error(`当前没有可${actionLabel}的记录`)
         return null
       }
       if (unique.length > 100) {
@@ -385,6 +403,14 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
       return unique
     },
     [selectedRows, filteredImportRows]
+  )
+
+  const resolveContainerList = React.useCallback(
+    (mode: "selected" | "filtered" | "notImported", actionLabel: string) => {
+      const items = resolveMailAssistantItems(mode, actionLabel)
+      return items?.map((i) => i.containerNumber) ?? null
+    },
+    [resolveMailAssistantItems]
   )
 
   const handleFindForecast = React.useCallback(
@@ -490,10 +516,10 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
 
   const handleConvertImportDraft = React.useCallback(
     async (mode: "selected" | "filtered" | "notImported") => {
-      const unique = resolveContainerList(mode, "转换")
-      if (!unique) return
+      const items = resolveMailAssistantItems(mode, "转换")
+      if (!items) return
 
-      const withSource = unique.filter((cn) => forecastByContainer[cn]?.status === "found")
+      const withSource = items.filter((item) => forecastByContainer[item.containerNumber]?.status === "found")
       if (withSource.length === 0) {
         toast.error("所选柜号尚无源预报，请先执行「找预报」")
         return
@@ -502,14 +528,14 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
       setConvertingImport(true)
       setForecastByContainer((prev) => {
         const next = { ...prev }
-        for (const cn of withSource) {
-          next[cn] = { ...prev[cn], importDraftConverting: true }
+        for (const item of withSource) {
+          next[item.containerNumber] = { ...prev[item.containerNumber], importDraftConverting: true }
         }
         return next
       })
 
       try {
-        const chunks: string[][] = []
+        const chunks: Array<typeof withSource> = []
         for (let i = 0; i < withSource.length; i += 50) {
           chunks.push(withSource.slice(i, i + 50))
         }
@@ -527,7 +553,12 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
           const res = await fetch("/api/google/workspace/forecast-import-convert", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ containerNumbers: chunk }),
+            body: JSON.stringify({
+              items: chunk.map((item) => ({
+                containerNumber: item.containerNumber,
+                orderDateKey: item.orderDateKey,
+              })),
+            }),
           })
           const data = await res.json()
           if (!res.ok) throw new Error(data.error || "转换失败")
@@ -564,8 +595,10 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
         toast.error(error instanceof Error ? error.message : "转换源预报失败")
         setForecastByContainer((prev) => {
           const next = { ...prev }
-          for (const cn of withSource) {
-            if (next[cn]) next[cn] = { ...next[cn], importDraftConverting: false }
+          for (const item of withSource) {
+            if (next[item.containerNumber]) {
+              next[item.containerNumber] = { ...next[item.containerNumber], importDraftConverting: false }
+            }
           }
           return next
         })
@@ -573,7 +606,7 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
         setConvertingImport(false)
       }
     },
-    [resolveContainerList, forecastByContainer]
+    [resolveMailAssistantItems, forecastByContainer]
   )
 
   const handleImportSelectedToOrders = React.useCallback(async () => {

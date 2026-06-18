@@ -16,6 +16,15 @@ import { extractImportDraftMatrix } from '@/lib/mail-assistant/import-draft-matr
 import { recordAutoImportDraftCorrection } from '@/lib/mail-assistant/forecast-feedback-store'
 import type { SourceForecastLookupResult } from '@/lib/mail-assistant/find-source-forecast'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
+import {
+  loadYg2025DateIndex,
+  resolveYg2025OrderDateKey,
+} from '@/lib/mail-assistant/yg2025-order-date'
+
+export type ConvertImportDraftItem = {
+  containerNumber: string
+  orderDateKey?: string | null
+}
 
 export const FORECAST_RELOOKUP_INTERVAL_MS = 12 * 60 * 60 * 1000
 
@@ -201,7 +210,8 @@ export type ImportDraftConvertResult = {
 
 /** 转换源预报 → 导入预报，并更新 DB 中的导入 Excel 超链接与缓存文件 */
 export async function convertImportDraftForContainer(
-  containerNumber: string
+  containerNumber: string,
+  options?: { orderDateKey?: string | null; ygDateIndex?: Awaited<ReturnType<typeof loadYg2025DateIndex>> }
 ): Promise<ImportDraftConvertResult> {
   const cn = normalizeContainerNumber(containerNumber)
   const row = await prisma.mail_container_forecast.findUnique({
@@ -216,6 +226,13 @@ export async function convertImportDraftForContainer(
     }
   }
 
+  const ygIndex = options?.ygDateIndex ?? (await loadYg2025DateIndex())
+  const fixedOrderDateKey =
+    resolveYg2025OrderDateKey(ygIndex, cn, options?.orderDateKey ?? row.yg_order_date_key) ??
+    options?.orderDateKey ??
+    row.yg_order_date_key ??
+    null
+
   try {
     const draft = await generateOrderImportDraftFromSource({
       containerNumber: cn,
@@ -223,6 +240,7 @@ export async function convertImportDraftForContainer(
       attachmentId: row.attachment_id,
       filename: row.source_filename ?? 'source.xlsx',
       emailSubject: row.source_email_subject,
+      fixedOrderDateKey,
     })
     const importDraftDownloadUrl = buildImportDraftDownloadUrl(cn)
     const draftBytes = toPrismaBytes(draft.buffer)
@@ -233,6 +251,7 @@ export async function convertImportDraftForContainer(
         import_draft_baseline_data: draftBytes,
         import_draft_warnings: draft.warnings.join('; ') || null,
         import_draft_download_url: importDraftDownloadUrl,
+        ...(fixedOrderDateKey ? { yg_order_date_key: fixedOrderDateKey } : {}),
         updated_at: new Date(),
       },
     })
@@ -254,18 +273,40 @@ export async function convertImportDraftForContainer(
 }
 
 export async function convertImportDraftsBatch(
-  containerNumbers: string[],
+  items: ConvertImportDraftItem[] | string[],
   concurrency = 2
 ): Promise<ImportDraftConvertResult[]> {
-  const unique = [...new Set(containerNumbers.map(normalizeContainerNumber).filter(Boolean))]
+  const normalized: ConvertImportDraftItem[] = items.map((item) =>
+    typeof item === 'string'
+      ? { containerNumber: normalizeContainerNumber(item) }
+      : {
+          containerNumber: normalizeContainerNumber(item.containerNumber),
+          orderDateKey: item.orderDateKey?.trim() || undefined,
+        }
+  )
+  const unique: ConvertImportDraftItem[] = []
+  const seen = new Set<string>()
+  for (const item of normalized) {
+    const dedupeKey = `${item.containerNumber}|${item.orderDateKey ?? ''}`
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+    unique.push(item)
+  }
+
+  const ygDateIndex = await loadYg2025DateIndex()
   const results: ImportDraftConvertResult[] = []
   let index = 0
 
   async function worker() {
     while (index < unique.length) {
       const i = index++
-      const cn = unique[i]
-      results.push(await convertImportDraftForContainer(cn))
+      const item = unique[i]
+      results.push(
+        await convertImportDraftForContainer(item.containerNumber, {
+          orderDateKey: item.orderDateKey,
+          ygDateIndex,
+        })
+      )
     }
   }
 
@@ -274,7 +315,9 @@ export async function convertImportDraftsBatch(
   )
 
   return results.sort(
-    (a, b) => unique.indexOf(a.containerNumber) - unique.indexOf(b.containerNumber)
+    (a, b) =>
+      unique.findIndex((u) => u.containerNumber === a.containerNumber) -
+      unique.findIndex((u) => u.containerNumber === b.containerNumber)
   )
 }
 
@@ -454,12 +497,14 @@ export async function getImportDraftBuffer(
   }
 
   try {
+    const fixedOrderDateKey = row.yg_order_date_key ?? null
     const draft = await generateOrderImportDraftFromSource({
       containerNumber: cn,
       messageId: row.message_id,
       attachmentId: row.attachment_id,
       filename: row.source_filename ?? 'source.xlsx',
       emailSubject: row.source_email_subject,
+      fixedOrderDateKey,
     })
     await persistImportDraft(cn, draft)
     return {

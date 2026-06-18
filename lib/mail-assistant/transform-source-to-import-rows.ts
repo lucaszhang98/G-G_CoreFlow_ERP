@@ -82,7 +82,8 @@ function buildOrderHeaderFields(
   containerNumber: string,
   master: OrderImportMasterData,
   warnings: string[],
-  emailSubject?: string | null
+  emailSubject?: string | null,
+  fixedOrderDateKey?: string | null
 ): OrderHeaderFields | null {
   const cn = normalizeContainerNumber(containerNumber)
   const mergedOrder = mergeEmailSubjectIntoOrderFields({
@@ -106,7 +107,18 @@ function buildOrderHeaderFields(
   const mbl = order.mbl.trim() || '待补MBL'
   if (!order.mbl.trim()) warnings.push('源预报缺少 MBL，已填占位值，导入前请核对')
 
-  const orderDateSerial = resolveDateSerial(order.orderDateRaw, todaySerial())
+  let orderDateSerial: number
+  if (fixedOrderDateKey?.trim()) {
+    const fixed = parseFlexibleDate(fixedOrderDateKey.trim())
+    if (!fixed) {
+      warnings.push(`码头表订单日期「${fixedOrderDateKey}」无效，已用今日兜底`)
+      orderDateSerial = todaySerial()
+    } else {
+      orderDateSerial = dateToExcelSerial(fixed)
+    }
+  } else {
+    orderDateSerial = resolveDateSerial(order.orderDateRaw, todaySerial())
+  }
   const etaSerial = resolveDateSerial(order.etaRaw, orderDateSerial)
 
   const firstRawDetail = parsed.details.find((d) => d.deliveryLocationRaw.trim())
@@ -281,7 +293,7 @@ export function transformSourceToImportRows(
   parsed: ParsedSourceForecast,
   containerNumber: string,
   master: OrderImportMasterData,
-  options?: { emailSubject?: string | null }
+  options?: { emailSubject?: string | null; fixedOrderDateKey?: string | null }
 ): { rows: OrderImportDraftOutputRow[]; warnings: string[] } {
   const warnings: string[] = []
   const header = buildOrderHeaderFields(
@@ -289,7 +301,8 @@ export function transformSourceToImportRows(
     containerNumber,
     master,
     warnings,
-    options?.emailSubject
+    options?.emailSubject,
+    options?.fixedOrderDateKey
   )
   if (!header) {
     return { rows: [], warnings: ['无法解析订单头'] }

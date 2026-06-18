@@ -33,6 +33,8 @@ export async function generateOrderImportDraftFromSource(input: {
   attachmentId: string
   filename: string
   emailSubject?: string | null
+  /** 邮件助手 YG2025 明细行订单日期（yyyy-mm-dd），优先于源预报 Excel */
+  fixedOrderDateKey?: string | null
 }): Promise<{ buffer: Buffer; row: OrderImportDraftRow; warnings: string[] }> {
   const container = normalizeContainerNumber(input.containerNumber)
   const sourceBuffer = await downloadGmailAttachment(input.messageId, input.attachmentId)
@@ -44,7 +46,12 @@ export async function generateOrderImportDraftFromSource(input: {
 
   const { rows, warnings } = transformSourceToImportRows(parsed, container, master, {
     emailSubject: input.emailSubject,
+    fixedOrderDateKey: input.fixedOrderDateKey,
   })
+
+  if (input.fixedOrderDateKey?.trim()) {
+    warnings.push(`订单日期已采用码头调度表 YG2025：${input.fixedOrderDateKey.trim()}`)
+  }
 
   if (rows.length === 0) {
     throw new Error(
