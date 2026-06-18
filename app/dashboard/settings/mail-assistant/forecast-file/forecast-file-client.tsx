@@ -344,8 +344,18 @@ export function ForecastFileClient() {
         if (cancelled) return
         setMeta(metaJson)
 
-        const fileRes = await fetch(metaJson.downloadUrl, { cache: "no-store" })
-        if (!fileRes.ok) throw new Error("无法读取 Excel 原文件")
+        const fileUrl = String(metaJson.downloadUrl ?? "").startsWith("http")
+          ? metaJson.downloadUrl
+          : new URL(metaJson.downloadUrl, window.location.origin).href
+        const fileRes = await fetch(fileUrl, { cache: "no-store" })
+        if (!fileRes.ok) {
+          const errJson = (await fileRes.json().catch(() => ({}))) as { error?: string }
+          throw new Error(errJson.error || "无法读取 Excel 原文件")
+        }
+        const fileType = fileRes.headers.get("Content-Type") ?? ""
+        if (!fileType.includes("spreadsheet") && !fileType.includes("octet-stream")) {
+          throw new Error("服务器未返回 Excel 文件，请尝试在列表中下载空白导入模板")
+        }
         const buf = await fileRes.arrayBuffer()
         const wb = XLSX.read(buf, { type: "array", cellDates: true })
 
@@ -381,7 +391,14 @@ export function ForecastFileClient() {
           setDirty(false)
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "加载失败")
+        if (!cancelled) {
+          const raw = e instanceof Error ? e.message : "加载失败"
+          const message =
+            raw === "Failed to fetch"
+              ? "无法连接服务器下载 Excel，导入预报可能尚未生成或已转换失败"
+              : raw
+          setError(message)
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }

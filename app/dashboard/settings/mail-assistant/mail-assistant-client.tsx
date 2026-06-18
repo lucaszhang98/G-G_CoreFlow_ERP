@@ -113,6 +113,31 @@ type Yg2025ImportCheck = {
   spreadsheetTitle: string
 }
 
+const IMPORT_TEMPLATE_URL = "/api/google/workspace/forecast-import-template"
+
+async function downloadExcelFromApi(url: string, fallbackFilename: string) {
+  const res = await fetch(url, { cache: "no-store" })
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(data.error || "下载失败")
+  }
+  const contentType = res.headers.get("Content-Type") ?? ""
+  if (!contentType.includes("spreadsheet") && !contentType.includes("octet-stream")) {
+    throw new Error("服务器未返回 Excel 文件")
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get("Content-Disposition") ?? ""
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  const filename = utf8Match ? decodeURIComponent(utf8Match[1]) : fallbackFilename
+  const a = document.createElement("a")
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(a.href)
+}
+
 function StatCard({
   label,
   value,
@@ -224,7 +249,10 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
     }
   }, [status?.connected, importCheck, loadingImportCheck, loadImportCheck])
 
-  const loadForecastCache = React.useCallback(async (containerNumbers: string[]) => {
+  const loadForecastCache = React.useCallback(async (
+    containerNumbers: string[],
+    options?: { ignoreConverting?: boolean }
+  ) => {
     const unique = [...new Set(containerNumbers.map((c) => c.trim().toUpperCase()).filter(Boolean))]
     if (unique.length === 0) return
 
@@ -248,14 +276,47 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
         attachmentId?: string
         aiResolved?: boolean
         resolveReason?: string
+        hasImportDraft?: boolean
+        importDraftConvertFailed?: boolean
+        importDraftError?: string
         importDraftDownloadUrl?: string
+        importTemplateDownloadUrl?: string
       }>
 
       setForecastByContainer((prev) => {
         const next = { ...prev }
         for (const f of forecasts) {
           const cn = f.containerNumber
+          const kept = prev[cn]
+          if (kept?.importDraftConverting && !options?.ignoreConverting) {
+            next[cn] = kept
+            continue
+          }
           if (f.status === "found") {
+            const staleReadyAfterLocalFail =
+              Boolean(kept?.importDraftConvertFailed) &&
+              !f.importDraftConvertFailed &&
+              Boolean(f.hasImportDraft)
+            if (staleReadyAfterLocalFail) {
+              next[cn] = {
+                status: "found",
+                label: f.label ?? kept?.label,
+                emailSubject: f.sourceEmailSubject ?? kept?.emailSubject,
+                downloadUrl: f.downloadUrl ?? kept?.downloadUrl,
+                gmailUrl: f.gmailUrl ?? kept?.gmailUrl,
+                messageId: f.messageId ?? kept?.messageId,
+                attachmentId: f.attachmentId ?? kept?.attachmentId,
+                aiResolved: f.aiResolved ?? kept?.aiResolved,
+                resolveReason: f.resolveReason ?? kept?.resolveReason,
+                hasImportDraft: false,
+                importDraftConvertFailed: true,
+                importDraftError: kept?.importDraftError,
+                importDraftDownloadUrl: undefined,
+                importTemplateDownloadUrl:
+                  f.importTemplateDownloadUrl ?? kept?.importTemplateDownloadUrl ?? IMPORT_TEMPLATE_URL,
+              }
+              continue
+            }
             next[cn] = {
               status: "found",
               label: f.label,
@@ -266,7 +327,11 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
               attachmentId: f.attachmentId,
               aiResolved: f.aiResolved,
               resolveReason: f.resolveReason,
+              hasImportDraft: f.hasImportDraft,
+              importDraftConvertFailed: f.importDraftConvertFailed,
+              importDraftError: f.importDraftError,
               importDraftDownloadUrl: f.importDraftDownloadUrl,
+              importTemplateDownloadUrl: f.importTemplateDownloadUrl ?? IMPORT_TEMPLATE_URL,
             }
           } else {
             next[cn] = {
@@ -329,9 +394,32 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
         const sf = forecastByContainer[row.containerNumber]
         return (
           sf?.status === "found" &&
+          Boolean(sf.hasImportDraft) &&
           Boolean(sf.importDraftDownloadUrl) &&
           !sf.importDraftConverting
         )
+      }),
+    [selectedRows, forecastByContainer]
+  )
+
+  const selectedForImportDraftUpload = React.useMemo(
+    () =>
+      selectedRows.filter((row) => {
+        const sf = forecastByContainer[row.containerNumber]
+        return (
+          sf?.status === "found" &&
+          !sf.importDraftConverting &&
+          (Boolean(sf.hasImportDraft) || Boolean(sf.importDraftConvertFailed))
+        )
+      }),
+    [selectedRows, forecastByContainer]
+  )
+
+  const selectedForImportDraftFile = React.useMemo(
+    () =>
+      selectedRows.filter((row) => {
+        const sf = forecastByContainer[row.containerNumber]
+        return sf?.status === "found" && !sf.importDraftConverting
       }),
     [selectedRows, forecastByContainer]
   )
@@ -340,13 +428,18 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
     () =>
       filteredImportRows.map((row) => {
         const sf = forecastByContainer[row.containerNumber] ?? { status: "idle" as const }
-        const importDraftUrl = sf.importDraftDownloadUrl
         let importDraft: MailAssistantImportRow["importDraft"] = { status: "idle" }
         if (sf.status === "found") {
           if (sf.importDraftConverting) {
             importDraft = { status: "loading" }
-          } else if (importDraftUrl) {
-            importDraft = { status: "ready", downloadUrl: importDraftUrl }
+          } else if (sf.importDraftConvertFailed) {
+            importDraft = {
+              status: "failed",
+              templateDownloadUrl: sf.importTemplateDownloadUrl ?? IMPORT_TEMPLATE_URL,
+              error: sf.importDraftError,
+            }
+          } else if (sf.hasImportDraft && sf.importDraftDownloadUrl) {
+            importDraft = { status: "ready", downloadUrl: sf.importDraftDownloadUrl }
           }
         }
         return {
@@ -485,7 +578,11 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
                 attachmentId: item.sourceForecast.attachmentId,
                 aiResolved: item.sourceForecast.aiResolved,
                 resolveReason: item.sourceForecast.resolveReason,
+                hasImportDraft: kept?.hasImportDraft,
+                importDraftConvertFailed: kept?.importDraftConvertFailed,
+                importDraftError: kept?.importDraftError,
                 importDraftDownloadUrl: kept?.importDraftDownloadUrl,
+                importTemplateDownloadUrl: kept?.importTemplateDownloadUrl ?? IMPORT_TEMPLATE_URL,
               }
             } else {
               next[cn] = {
@@ -549,6 +646,7 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
           containerNumber: string
           status: "converted" | "skipped" | "failed"
           importDraftDownloadUrl?: string
+          templateDownloadUrl?: string
           detailRowCount?: number
           warnings?: string
           error?: string
@@ -571,28 +669,35 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
           allResults.push(...(data.results ?? []))
         }
 
-        setForecastByContainer((prev) => {
-          const next = { ...prev }
-          for (const item of allResults) {
-            const cn = item.containerNumber
-            const kept = prev[cn]
-            if (!kept) continue
-            next[cn] = {
-              ...kept,
-              importDraftConverting: false,
-              ...(item.status === "converted" && item.importDraftDownloadUrl
-                ? { importDraftDownloadUrl: item.importDraftDownloadUrl }
-                : {}),
-            }
-          }
-          return next
-        })
+        const resultContainerNumbers = [
+          ...new Set(allResults.map((item) => item.containerNumber)),
+        ]
+        await loadForecastCache(resultContainerNumbers, { ignoreConverting: true })
 
-        const converted = allResults.filter((r) => r.status === "converted").length
-        const failed = allResults.filter((r) => r.status === "failed").length
+        const failedItems = allResults.filter((r) => r.status === "failed")
+        for (const item of failedItems) {
+          try {
+            await downloadExcelFromApi(
+              item.templateDownloadUrl ?? IMPORT_TEMPLATE_URL,
+              `订单导入模板_${item.containerNumber}.xlsx`
+            )
+            if (failedItems.length > 1) {
+              await new Promise((resolve) => setTimeout(resolve, 300))
+            }
+          } catch (downloadError) {
+            console.error(`auto template download failed for ${item.containerNumber}:`, downloadError)
+          }
+        }
+
+        const converted = allResults.filter(
+          (r) => r.status === "converted" && (r.detailRowCount ?? 0) > 0
+        ).length
+        const failed = failedItems.length
         const skipped = allResults.filter((r) => r.status === "skipped").length
         if (failed > 0) {
-          toast.warning(`转换完成：成功 ${converted}，失败 ${failed}，跳过 ${skipped}`)
+          toast.warning(
+            `转换完成：成功 ${converted}，失败 ${failed}，跳过 ${skipped}；已为失败柜号下载空白导入模板`
+          )
         } else {
           toast.success(`转换源预报完成：${converted}/${withSource.length} 个已生成导入 Excel`)
         }
@@ -610,9 +715,21 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
         })
       } finally {
         setConvertingImport(false)
+        setForecastByContainer((prev) => {
+          const next = { ...prev }
+          for (const item of withSource) {
+            if (next[item.containerNumber]?.importDraftConverting) {
+              next[item.containerNumber] = {
+                ...next[item.containerNumber],
+                importDraftConverting: false,
+              }
+            }
+          }
+          return next
+        })
       }
     },
-    [resolveMailAssistantItems, forecastByContainer]
+    [resolveMailAssistantItems, forecastByContainer, loadForecastCache]
   )
 
   const handleImportSelectedToOrders = React.useCallback(async () => {
@@ -655,8 +772,14 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
       }
 
       const skipped = (data.skipped ?? []) as Array<{ containerNumber: string; reason: string }>
+      const archivedCount = (data.archivedOrders ?? []).length
       if (skipped.length > 0) {
         toast.warning(`已导入 ${data.successCount ?? data.imported ?? 0} 条明细；${skipped.length} 个柜号被跳过`)
+      } else if (archivedCount > 0) {
+        toast.success(
+          data.message ||
+            `已成功导入 ${data.successCount ?? data.imported ?? 0} 条订单明细（${archivedCount} 个同柜号旧订单已完成留档）`
+        )
       } else {
         toast.success(data.message || `已成功导入 ${data.successCount ?? data.imported ?? 0} 条订单明细`)
       }
@@ -671,66 +794,56 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
   }, [selectedRows, selectedWithImportDraft, loadImportCheck])
 
   const handleDownloadImportDrafts = React.useCallback(async () => {
-    if (selectedWithImportDraft.length === 0) {
-      toast.error("请勾选已有导入预报的行")
+    if (selectedForImportDraftFile.length === 0) {
+      toast.error("请勾选已找到源预报的行")
       return
     }
 
     setDownloadingImportDraft(true)
     try {
-      for (const row of selectedWithImportDraft) {
-        const url = forecastByContainer[row.containerNumber]?.importDraftDownloadUrl
-        if (!url) continue
-
-        const res = await fetch(url)
-        if (!res.ok) {
-          const data = (await res.json().catch(() => ({}))) as { error?: string }
-          throw new Error(data.error || `下载 ${row.containerNumber} 失败`)
+      for (const row of selectedForImportDraftFile) {
+        const cn = row.containerNumber
+        const sf = forecastByContainer[cn]
+        if (sf?.hasImportDraft && sf.importDraftDownloadUrl) {
+          await downloadExcelFromApi(sf.importDraftDownloadUrl, `导入预报_${cn}.xlsx`)
+        } else {
+          await downloadExcelFromApi(
+            sf?.importTemplateDownloadUrl ?? IMPORT_TEMPLATE_URL,
+            `订单导入模板_${cn}.xlsx`
+          )
         }
 
-        const blob = await res.blob()
-        const disposition = res.headers.get("Content-Disposition") ?? ""
-        const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
-        const filename = utf8Match
-          ? decodeURIComponent(utf8Match[1])
-          : `导入预报_${row.containerNumber}.xlsx`
-
-        const a = document.createElement("a")
-        a.href = URL.createObjectURL(blob)
-        a.download = filename
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-        URL.revokeObjectURL(a.href)
-
-        if (selectedWithImportDraft.length > 1) {
+        if (selectedForImportDraftFile.length > 1) {
           await new Promise((resolve) => setTimeout(resolve, 300))
         }
       }
-      toast.success(`已下载 ${selectedWithImportDraft.length} 个导入表`)
+      toast.success(`已下载 ${selectedForImportDraftFile.length} 个文件`)
     } catch (error) {
       console.error(error)
       toast.error(error instanceof Error ? error.message : "下载导入表失败")
     } finally {
       setDownloadingImportDraft(false)
     }
-  }, [selectedWithImportDraft, forecastByContainer])
+  }, [selectedForImportDraftFile, forecastByContainer])
 
   const handleUploadImportDraftClick = React.useCallback(() => {
-    if (selectedWithImportDraft.length === 0) {
-      toast.error("请勾选一条已有导入预报的记录")
+    if (selectedForImportDraftUpload.length === 0) {
+      toast.error("请勾选已转换或转换失败的记录后再上传")
       return
     }
-    if (selectedWithImportDraft.length > 1) {
+    if (selectedForImportDraftUpload.length > 1) {
       toast.error("上传导入表请单选一条柜号")
       return
     }
     setImportDraftUploadOpen(true)
-  }, [selectedWithImportDraft])
+  }, [selectedForImportDraftUpload])
 
   const importDraftUploadContainer = React.useMemo(
-    () => (selectedWithImportDraft.length === 1 ? selectedWithImportDraft[0].containerNumber : null),
-    [selectedWithImportDraft]
+    () =>
+      selectedForImportDraftUpload.length === 1
+        ? selectedForImportDraftUpload[0].containerNumber
+        : null,
+    [selectedForImportDraftUpload]
   )
 
   const handleTestForecastAi = React.useCallback(async () => {
@@ -1000,12 +1113,12 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
                 variant="outline"
                 size="sm"
                 className="h-9 min-w-[100px]"
-                disabled={downloadingImportDraft || selectedWithImportDraft.length === 0}
+                disabled={downloadingImportDraft || selectedForImportDraftFile.length === 0}
                 onClick={() => void handleDownloadImportDrafts()}
                 title={
-                  selectedWithImportDraft.length === 0
-                    ? "请勾选已有导入预报的行"
-                    : "下载与订单管理相同的导入表（含下拉与校验）"
+                  selectedForImportDraftFile.length === 0
+                    ? "请勾选已找到源预报的行"
+                    : "成功转换下载导入表；失败或未转换则下载空白订单导入模板"
                 }
               >
                 {downloadingImportDraft ? (
@@ -1014,9 +1127,9 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
                   <Download className="h-4 w-4 mr-1.5" />
                 )}
                 下载导入表
-                {selectedWithImportDraft.length > 0 && (
+                {selectedForImportDraftFile.length > 0 && (
                   <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
-                    {selectedWithImportDraft.length}
+                    {selectedForImportDraftFile.length}
                   </Badge>
                 )}
               </Button>
@@ -1024,12 +1137,12 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
                 variant="outline"
                 size="sm"
                 className="h-9 min-w-[100px]"
-                disabled={selectedWithImportDraft.length !== 1}
+                disabled={selectedForImportDraftUpload.length !== 1}
                 onClick={handleUploadImportDraftClick}
                 title={
-                  selectedWithImportDraft.length === 0
-                    ? "请单选一条已有导入预报的记录"
-                    : selectedWithImportDraft.length > 1
+                  selectedForImportDraftUpload.length === 0
+                    ? "请单选一条已转换或转换失败的记录"
+                    : selectedForImportDraftUpload.length > 1
                       ? "上传时请单选一条柜号"
                       : "上传 Excel 覆盖当前导入预报"
                 }
@@ -1168,7 +1281,7 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
                   <li>补录完成后，返回本页再次刷新，确认状态已变为「已导入」。</li>
                   <li><strong className="text-foreground">找预报</strong>：在 Gmail 中定位源 Excel，并保存「源预报」链接及<strong className="text-foreground">源邮件标题</strong>；<strong className="text-foreground">转换源预报</strong>：结合 Excel 与邮件标题（客户、ETA、拆柜/直送等）转为订单导入 Excel。</li>
                   <li>勾选已有「导入预报」的行，可 <strong className="text-foreground">下载导入表</strong>（与订单管理批量导入模板一致，含下拉与校验）；在 Excel 中改完后 <strong className="text-foreground">上传导入表</strong>（单选一条柜号）会覆盖系统内保存的导入预报。</li>
-                  <li>确认无误后点击 <strong className="text-foreground">导入到订单</strong>，系统会合并导入表并写入订单管理（与订单模块批量导入相同校验规则）。</li>
+                  <li>确认无误后点击 <strong className="text-foreground">导入到订单</strong>：若订单管理中已有同柜号在营订单，会先将其标为<strong className="text-foreground">完成留档</strong>，再合并导入表写入新订单（与订单模块批量导入相同校验规则）。</li>
                   <li>对仍显示「暂无」的柜号，系统每 <strong className="text-foreground">12 小时</strong> 自动在邮箱中重新查找一次（无需人工操作）。</li>
                   <li><strong className="text-foreground">AI 越用越准</strong>：找预报错了可用「预报纠错」反馈（可填正确邮件标题、上传正确 Excel）；导入预报改完保存后系统会自动对比并记入学习样例。</li>
                 </ol>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkMailAssistantPermission } from '@/lib/mail-assistant/mail-assistant-permissions'
 import { getGoogleWorkspaceConnectionStatus } from '@/lib/google/workspace-oauth'
 import {
+  buildImportDraftDownloadUrl,
   getImportDraftBuffer,
   saveImportDraftMatrix,
 } from '@/lib/mail-assistant/forecast-persistence'
@@ -14,7 +15,7 @@ import {
   generateEmptyOrderImportDraftBuffer,
   generateOrderImportDraftFromSource,
 } from '@/lib/mail-assistant/generate-order-import-draft'
-import { buildImportDraftDownloadUrl } from '@/lib/mail-assistant/forecast-persistence'
+import { joinImportDraftWarnings, encodeImportDraftWarningsHeader } from '@/lib/mail-assistant/import-draft-warnings'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
 import prisma from '@/lib/prisma'
 
@@ -22,34 +23,41 @@ export async function GET(request: NextRequest) {
   const perm = await checkMailAssistantPermission()
   if (perm.error) return perm.error
 
-  const status = await getGoogleWorkspaceConnectionStatus()
-  if (!status.connected) {
-    return NextResponse.json({ error: '尚未连接 Google 账号' }, { status: 400 })
-  }
-
   const containerNumber = request.nextUrl.searchParams.get('containerNumber')?.trim()
   const messageId = request.nextUrl.searchParams.get('messageId')?.trim()
   const attachmentId = request.nextUrl.searchParams.get('attachmentId')?.trim()
   const sourceFilename =
     request.nextUrl.searchParams.get('sourceFilename')?.trim() || 'source.xlsx'
 
-  // 优先：按柜号读持久化缓存（陈旧 1 行缓存会自动重生）
+  // 按柜号下载：有缓存返缓存，否则空白模板（不触发 Gmail 转换，避免下载失败）
   if (containerNumber && !messageId) {
-    const cn = normalizeContainerNumber(containerNumber)
-    const forceRefresh = request.nextUrl.searchParams.get('refresh') === '1'
-    const cached = await getImportDraftBuffer(cn, { forceRefresh })
-    if (cached) {
-      return fileResponse(cached.buffer, cn, cached.warnings)
+    try {
+      const cn = normalizeContainerNumber(containerNumber)
+      const forceRefresh = request.nextUrl.searchParams.get('refresh') === '1'
+      const cached = await getImportDraftBuffer(cn, { forceRefresh })
+      if (cached) {
+        return fileResponse(cached.buffer, cn, cached.warnings)
+      }
+      return NextResponse.json({ error: '暂无已缓存的导入预报，请先完成源预报查找' }, { status: 404 })
+    } catch (error) {
+      console.error('forecast-import-draft download error:', error)
+      try {
+        const cn = normalizeContainerNumber(containerNumber)
+        const buffer = await generateEmptyOrderImportDraftBuffer()
+        return fileResponse(buffer, cn, EMPTY_IMPORT_DRAFT_WARNING)
+      } catch (fallbackError) {
+        console.error('forecast-import-draft empty template fallback error:', fallbackError)
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : '下载导入表失败' },
+          { status: 500 }
+        )
+      }
     }
-    const row = await prisma.mail_container_forecast.findUnique({
-      where: { container_number: cn },
-      select: { status: true },
-    })
-    if (row?.status === 'found') {
-      const buffer = await generateEmptyOrderImportDraftBuffer()
-      return fileResponse(buffer, cn, EMPTY_IMPORT_DRAFT_WARNING)
-    }
-    return NextResponse.json({ error: '暂无已缓存的导入预报，请先完成源预报查找' }, { status: 404 })
+  }
+
+  const status = await getGoogleWorkspaceConnectionStatus()
+  if (!status.connected) {
+    return NextResponse.json({ error: '尚未连接 Google 账号' }, { status: 400 })
   }
 
   if (!messageId || !attachmentId || !containerNumber) {
@@ -82,7 +90,7 @@ export async function GET(request: NextRequest) {
       data: {
         import_draft_data: draftBytes,
         import_draft_baseline_data: draftBytes,
-        import_draft_warnings: warnings.join('; ') || null,
+        import_draft_warnings: joinImportDraftWarnings(warnings),
         import_draft_download_url: buildImportDraftDownloadUrl(cn),
         ...(emailSubject ? { source_email_subject: emailSubject } : {}),
         updated_at: new Date(),
@@ -236,12 +244,14 @@ export async function PUT(request: NextRequest) {
 
 function fileResponse(buffer: Buffer, containerNumber: string, warnings: string) {
   const safeName = `导入预报_${containerNumber}.xlsx`.replace(/[^\w.\-\u4e00-\u9fff]+/g, '_')
-  return new NextResponse(new Uint8Array(buffer), {
-    headers: {
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}`,
-      'X-Forecast-Warnings': encodeURIComponent(warnings),
-      'Cache-Control': 'no-store, no-cache, must-revalidate',
-    },
-  })
+  const warningHeader = encodeImportDraftWarningsHeader(warnings)
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}`,
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+  }
+  if (warningHeader) {
+    headers['X-Forecast-Warnings'] = warningHeader
+  }
+  return new NextResponse(new Uint8Array(buffer), { headers })
 }

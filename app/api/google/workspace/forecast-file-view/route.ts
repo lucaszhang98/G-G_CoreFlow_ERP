@@ -6,6 +6,7 @@ import { signForecastFileToken } from '@/lib/mail-assistant/forecast-file-token'
 import {
   buildImportDraftDownloadUrl,
   getImportDraftBuffer,
+  resolveImportDraftDisplayState,
 } from '@/lib/mail-assistant/forecast-persistence'
 import { countImportDraftDetailRows } from '@/lib/mail-assistant/import-draft-buffer'
 import { buildGmailAttachmentDownloadPath } from '@/lib/google/gmail-forecast'
@@ -30,6 +31,21 @@ export async function GET(request: NextRequest) {
   const { email: workspaceEmail } = await getGoogleWorkspaceConnectionStatus()
   const row = await prisma.mail_container_forecast.findUnique({
     where: { container_number: cn },
+    select: {
+      container_number: true,
+      status: true,
+      source_filename: true,
+      source_email_subject: true,
+      message_id: true,
+      thread_id: true,
+      attachment_id: true,
+      source_download_url: true,
+      import_draft_download_url: true,
+      import_draft_data: true,
+      import_draft_baseline_data: true,
+      import_draft_warnings: true,
+      updated_at: true,
+    },
   })
 
   if (!row || row.status !== 'found') {
@@ -52,10 +68,26 @@ export async function GET(request: NextRequest) {
           : null)
 
   if (kind === 'import') {
-    const draft = await getImportDraftBuffer(cn)
-    if (draft) {
-      detailRowCount = countImportDraftDetailRows(draft.buffer)
-      fileUpdatedAt = draft.updatedAt.getTime()
+    const draftState = resolveImportDraftDisplayState(row)
+    if (draftState.importDraftConvertFailed || !draftState.hasImportDraft) {
+      return NextResponse.json(
+        {
+          error:
+            draftState.importDraftError ??
+            '导入预报尚未生成或转换失败，请下载空白导入模板手动填写',
+        },
+        { status: 404 }
+      )
+    }
+
+    try {
+      const draft = await getImportDraftBuffer(cn)
+      if (draft) {
+        detailRowCount = countImportDraftDetailRows(draft.buffer)
+        fileUpdatedAt = draft.updatedAt.getTime()
+      }
+    } catch (error) {
+      console.warn(`forecast-file-view getImportDraftBuffer failed for ${cn}:`, error)
     }
   }
 

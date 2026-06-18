@@ -21,6 +21,7 @@ import {
   Loader2,
   FileInput,
   Mail,
+  Download,
 } from "lucide-react"
 import { toast } from "sonner"
 import { buildForecastFilePageUrl } from "./forecast-file-url"
@@ -35,15 +36,22 @@ export type SourceForecastCell = {
   attachmentId?: string
   aiResolved?: boolean
   resolveReason?: string
-  /** 持久化缓存的导入预报下载地址 */
+  /** 已成功转换、含明细的导入预报预览地址 */
   importDraftDownloadUrl?: string
+  /** 与订单管理相同的空白导入模板 */
+  importTemplateDownloadUrl?: string
+  hasImportDraft?: boolean
+  importDraftConvertFailed?: boolean
+  importDraftError?: string
   /** 正在执行「转换源预报」 */
   importDraftConverting?: boolean
 }
 
 export type ImportDraftCell = {
-  status: "idle" | "loading" | "ready"
+  status: "idle" | "loading" | "ready" | "failed"
   downloadUrl?: string
+  templateDownloadUrl?: string
+  error?: string
 }
 
 export type MailAssistantImportRow = {
@@ -274,22 +282,46 @@ function buildColumns(
             </span>
           )
         }
-        if (!draft?.downloadUrl) {
-          return <span className="text-muted-foreground text-xs">待转换</span>
+        if (draft?.status === "failed") {
+          return (
+            <div className="flex flex-col gap-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+              <span
+                className="inline-flex items-center gap-1 text-xs font-medium text-destructive"
+                title={draft.error}
+              >
+                <XCircle className="h-3.5 w-3.5 shrink-0" />
+                导入失败
+              </span>
+              {draft.templateDownloadUrl ? (
+                <a
+                  href={draft.templateDownloadUrl}
+                  download
+                  className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                  title="下载与订单管理相同的空白导入模板"
+                >
+                  <Download className="h-3 w-3 shrink-0" />
+                  下载导入模板
+                </a>
+              ) : null}
+            </div>
+          )
         }
-        return (
-          <a
-            href={buildForecastFilePageUrl("import", row.original.containerNumber)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400 truncate"
-            title="新标签页打开导入预报 Excel"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <FileInput className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">导入表</span>
-          </a>
-        )
+        if (draft?.status === "ready" && draft.downloadUrl) {
+          return (
+            <a
+              href={buildForecastFilePageUrl("import", row.original.containerNumber)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400 truncate"
+              title="新标签页打开导入预报 Excel"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <FileInput className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">导入表</span>
+            </a>
+          )
+        }
+        return <span className="text-muted-foreground text-xs">待转换</span>
       },
     },
   ]

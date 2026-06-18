@@ -11,9 +11,10 @@ import {
   generateOrderImportDraftFromSource,
 } from '@/lib/mail-assistant/generate-order-import-draft'
 import {
-  countImportDraftDetailRows,
-  isImportDraftCacheStale,
-} from '@/lib/mail-assistant/import-draft-buffer'
+  capImportDraftWarningsText,
+  joinImportDraftWarnings,
+} from '@/lib/mail-assistant/import-draft-warnings'
+import { countImportDraftDetailRows } from '@/lib/mail-assistant/import-draft-buffer'
 import { applyImportDraftMatrix } from '@/lib/mail-assistant/import-draft-editor'
 import { diffImportDraftMatrices } from '@/lib/mail-assistant/import-draft-diff'
 import { extractImportDraftMatrix } from '@/lib/mail-assistant/import-draft-matrix-io'
@@ -43,6 +44,146 @@ export function buildImportDraftDownloadUrl(containerNumber: string): string {
   return `/api/google/workspace/forecast-import-draft?containerNumber=${encodeURIComponent(cn)}`
 }
 
+export function buildImportTemplateDownloadUrl(): string {
+  return '/api/google/workspace/forecast-import-template'
+}
+
+export const IMPORT_DRAFT_CONVERT_FAILED_PREFIX = '转换失败：'
+
+function countStoredImportDraftDetailRows(
+  data: Uint8Array | Buffer | null | undefined
+): number {
+  if (!data?.length) return 0
+  try {
+    return countImportDraftDetailRows(Buffer.from(data))
+  } catch {
+    return 0
+  }
+}
+
+function hasValidImportDraftData(data: Uint8Array | Buffer | null | undefined): boolean {
+  return countStoredImportDraftDetailRows(data) > 0
+}
+
+function parseImportDraftConvertError(warnings: string | null | undefined): string | undefined {
+  const text = warnings?.trim()
+  if (!text?.startsWith(IMPORT_DRAFT_CONVERT_FAILED_PREFIX)) return undefined
+  return text.slice(IMPORT_DRAFT_CONVERT_FAILED_PREFIX.length).trim() || '转换失败'
+}
+
+function isLegacyImportDraftFailureWarning(warnings: string): boolean {
+  if (!warnings.trim()) return false
+  return (
+    warnings.includes(EMPTY_IMPORT_DRAFT_WARNING) ||
+    warnings.includes('源预报未能自动转换') ||
+    warnings.includes('无法生成导入预报') ||
+    warnings.includes('无法从源预报解析')
+  )
+}
+
+function extractLegacyImportDraftFailureError(warnings: string): string {
+  const afterAutoConvert = warnings.match(/源预报未能自动转换：([^）]+)/)?.[1]
+  if (afterAutoConvert?.trim()) return afterAutoConvert.trim()
+  const cannotGenerate = warnings.match(/无法生成导入预报：([^；]+)/)?.[1]
+  if (cannotGenerate?.trim()) return cannotGenerate.trim()
+  if (warnings.includes('无法从源预报解析')) return '无法从源预报解析明细行'
+  if (warnings.includes(EMPTY_IMPORT_DRAFT_WARNING)) return '未能自动生成导入预报'
+  return warnings.slice(0, 200) || '转换失败'
+}
+
+/** 导入预报在列表/缓存 API 中的展示状态（兼容旧数据失败标记） */
+export function resolveImportDraftDisplayState(row: {
+  import_draft_data: Uint8Array | Buffer | null
+  import_draft_warnings: string | null
+  import_draft_baseline_data?: Uint8Array | Buffer | null
+}): {
+  hasImportDraft: boolean
+  importDraftConvertFailed: boolean
+  importDraftError?: string
+} {
+  const warnings = row.import_draft_warnings?.trim() ?? ''
+  const detailRows = countStoredImportDraftDetailRows(row.import_draft_data)
+
+  const explicitError = parseImportDraftConvertError(warnings)
+  if (explicitError) {
+    return {
+      hasImportDraft: false,
+      importDraftConvertFailed: true,
+      importDraftError: explicitError,
+    }
+  }
+
+  if (isLegacyImportDraftFailureWarning(warnings)) {
+    return {
+      hasImportDraft: false,
+      importDraftConvertFailed: true,
+      importDraftError: extractLegacyImportDraftFailureError(warnings),
+    }
+  }
+
+  // 转换失败时写入空白模板且 baseline 为空
+  if (
+    row.import_draft_data?.length &&
+    !row.import_draft_baseline_data?.length &&
+    detailRows === 0
+  ) {
+    return {
+      hasImportDraft: false,
+      importDraftConvertFailed: true,
+      importDraftError: warnings || '转换失败',
+    }
+  }
+
+  return {
+    hasImportDraft: detailRows > 0,
+    importDraftConvertFailed: false,
+  }
+}
+
+async function buildConvertResultAfterPersist(
+  containerNumber: string
+): Promise<ImportDraftConvertResult> {
+  const cn = normalizeContainerNumber(containerNumber)
+  const templateDownloadUrl = buildImportTemplateDownloadUrl()
+  const row = await prisma.mail_container_forecast.findUnique({
+    where: { container_number: cn },
+    select: {
+      import_draft_data: true,
+      import_draft_baseline_data: true,
+      import_draft_warnings: true,
+      import_draft_download_url: true,
+    },
+  })
+
+  if (!row) {
+    return {
+      containerNumber: cn,
+      status: 'failed',
+      error: '未找到预报记录',
+      templateDownloadUrl,
+    }
+  }
+
+  const state = resolveImportDraftDisplayState(row)
+  if (state.importDraftConvertFailed || !state.hasImportDraft) {
+    return {
+      containerNumber: cn,
+      status: 'failed',
+      error: state.importDraftError ?? '转换失败',
+      templateDownloadUrl,
+    }
+  }
+
+  return {
+    containerNumber: cn,
+    status: 'converted',
+    importDraftDownloadUrl:
+      row.import_draft_download_url ?? buildImportDraftDownloadUrl(cn),
+    detailRowCount: countStoredImportDraftDetailRows(row.import_draft_data),
+    warnings: row.import_draft_warnings ?? undefined,
+  }
+}
+
 export type PersistedForecastDto = {
   containerNumber: string
   status: 'found' | 'not_found'
@@ -55,7 +196,10 @@ export type PersistedForecastDto = {
   aiResolved?: boolean
   resolveReason?: string
   hasImportDraft: boolean
+  importDraftConvertFailed?: boolean
+  importDraftError?: string
   importDraftDownloadUrl?: string
+  importTemplateDownloadUrl?: string
   lookedUpAt: string
 }
 
@@ -71,7 +215,8 @@ function resolveStoredUrls(
     gmail_url: string | null
     import_draft_download_url: string | null
   },
-  workspaceEmail: string | null | undefined
+  workspaceEmail: string | null | undefined,
+  hasImportDraft: boolean
 ) {
   const cn = row.container_number
   const found = row.status === 'found'
@@ -90,10 +235,12 @@ function resolveStoredUrls(
     ? buildGmailMessageWebUrl(row.message_id, workspaceEmail, row.thread_id)
     : undefined
 
-  const importDraftDownloadUrl =
-    row.import_draft_download_url ?? (found ? buildImportDraftDownloadUrl(cn) : undefined)
+  const importTemplateDownloadUrl = found ? buildImportTemplateDownloadUrl() : undefined
+  const importDraftDownloadUrl = hasImportDraft
+    ? row.import_draft_download_url ?? buildImportDraftDownloadUrl(cn)
+    : undefined
 
-  return { downloadUrl, gmailUrl, importDraftDownloadUrl }
+  return { downloadUrl, gmailUrl, importDraftDownloadUrl, importTemplateDownloadUrl }
 }
 
 function toDto(row: {
@@ -110,11 +257,16 @@ function toDto(row: {
   resolve_reason: string | null
   ai_resolved: boolean | null
   import_draft_data: Uint8Array | Buffer | null
+  import_draft_baseline_data?: Uint8Array | Buffer | null
+  import_draft_warnings: string | null
   looked_up_at: Date
 }, workspaceEmail: string | null | undefined): PersistedForecastDto {
   const cn = row.container_number
   const found = row.status === 'found'
-  const { downloadUrl, gmailUrl, importDraftDownloadUrl } = resolveStoredUrls(row, workspaceEmail)
+  const draftState = resolveImportDraftDisplayState(row)
+  const { hasImportDraft, importDraftConvertFailed, importDraftError } = draftState
+  const { downloadUrl, gmailUrl, importDraftDownloadUrl, importTemplateDownloadUrl } =
+    resolveStoredUrls(row, workspaceEmail, hasImportDraft)
 
   return {
     containerNumber: cn,
@@ -127,8 +279,11 @@ function toDto(row: {
     attachmentId: row.attachment_id ?? undefined,
     aiResolved: row.ai_resolved ?? undefined,
     resolveReason: row.resolve_reason ?? undefined,
-    hasImportDraft: Boolean(row.import_draft_data && row.import_draft_data.length > 0),
+    hasImportDraft,
+    importDraftConvertFailed,
+    importDraftError,
     importDraftDownloadUrl,
+    importTemplateDownloadUrl,
     lookedUpAt: row.looked_up_at.toISOString(),
   }
 }
@@ -209,6 +364,7 @@ export type ImportDraftConvertResult = {
   containerNumber: string
   status: 'converted' | 'skipped' | 'failed'
   importDraftDownloadUrl?: string
+  templateDownloadUrl?: string
   detailRowCount?: number
   warnings?: string
   error?: string
@@ -253,6 +409,10 @@ export async function convertImportDraftForContainer(
       fixedOrderDateKey,
       fixedCustomerCode,
     })
+    const detailRowCount = countImportDraftDetailRows(draft.buffer)
+    if (detailRowCount <= 0) {
+      throw new Error('未能生成有效导入明细')
+    }
     const importDraftDownloadUrl = buildImportDraftDownloadUrl(cn)
     const draftBytes = toPrismaBytes(draft.buffer)
     await prisma.mail_container_forecast.update({
@@ -260,25 +420,43 @@ export async function convertImportDraftForContainer(
       data: {
         import_draft_data: draftBytes,
         import_draft_baseline_data: draftBytes,
-        import_draft_warnings: draft.warnings.join('; ') || null,
+        import_draft_warnings: joinImportDraftWarnings(draft.warnings),
         import_draft_download_url: importDraftDownloadUrl,
         ...(fixedOrderDateKey ? { yg_order_date_key: fixedOrderDateKey } : {}),
         updated_at: new Date(),
       },
     })
 
-    return {
-      containerNumber: cn,
-      status: 'converted',
-      importDraftDownloadUrl,
-      detailRowCount: countImportDraftDetailRows(draft.buffer),
-      warnings: draft.warnings.join('; ') || undefined,
-    }
+    return buildConvertResultAfterPersist(cn)
   } catch (error) {
+    const errMsg = error instanceof Error ? error.message : '转换失败'
+    const templateDownloadUrl = buildImportTemplateDownloadUrl()
+    let failurePersisted = false
+    try {
+      const templateBuffer = await generateEmptyOrderImportDraftBuffer()
+      await prisma.mail_container_forecast.update({
+        where: { container_number: cn },
+        data: {
+          import_draft_data: toPrismaBytes(templateBuffer),
+          import_draft_baseline_data: null,
+          import_draft_warnings: `${IMPORT_DRAFT_CONVERT_FAILED_PREFIX}${errMsg}`,
+          import_draft_download_url: null,
+          ...(fixedOrderDateKey ? { yg_order_date_key: fixedOrderDateKey } : {}),
+          updated_at: new Date(),
+        },
+      })
+      failurePersisted = true
+    } catch (persistError) {
+      console.error(`persist empty template after convert fail (${cn}):`, persistError)
+    }
+    if (failurePersisted) {
+      return buildConvertResultAfterPersist(cn)
+    }
     return {
       containerNumber: cn,
       status: 'failed',
-      error: error instanceof Error ? error.message : '转换失败',
+      error: errMsg,
+      templateDownloadUrl,
     }
   }
 }
@@ -357,6 +535,8 @@ export async function loadPersistedForecasts(
       resolve_reason: string | null
       ai_resolved: boolean | null
       import_draft_data: Buffer | null
+      import_draft_baseline_data: Buffer | null
+      import_draft_warnings: string | null
       looked_up_at: Date
     }>
   >`
@@ -374,14 +554,44 @@ export async function loadPersistedForecasts(
       resolve_reason,
       ai_resolved,
       import_draft_data,
+      import_draft_baseline_data,
+      import_draft_warnings,
       looked_up_at
     FROM mail_container_forecast
     WHERE container_number = ANY(${unique}::text[])
   `
 
   await backfillMissingEmailSubjects(rows)
+  await reconcileStaleImportDraftUrls(rows)
 
   return rows.map((row) => toDto(row, workspaceEmail))
+}
+
+/** 迁移脚本曾为所有 found 行写入导入链接；此处清理无有效导入预报的脏 URL */
+async function reconcileStaleImportDraftUrls(
+  rows: Array<{
+    container_number: string
+    import_draft_download_url: string | null
+    import_draft_data: Buffer | null
+    import_draft_baseline_data: Buffer | null
+    import_draft_warnings: string | null
+  }>
+): Promise<void> {
+  const toClear = rows.filter((row) => {
+    if (!row.import_draft_download_url) return false
+    const state = resolveImportDraftDisplayState(row)
+    return !state.hasImportDraft
+  })
+  if (toClear.length === 0) return
+
+  await Promise.all(
+    toClear.map((row) =>
+      prisma.mail_container_forecast.update({
+        where: { container_number: row.container_number },
+        data: { import_draft_download_url: null, updated_at: new Date() },
+      })
+    )
+  )
 }
 
 /** 历史记录在加字段前找过预报的，按 message_id 补抓邮件标题 */
@@ -457,7 +667,7 @@ export async function getCachedImportDraft(
   if (!row?.import_draft_data || row.status !== 'found') return null
   return {
     buffer: Buffer.from(row.import_draft_data),
-    warnings: row.import_draft_warnings ?? '',
+    warnings: capImportDraftWarningsText(row.import_draft_warnings ?? ''),
   }
 }
 
@@ -471,14 +681,14 @@ async function persistImportDraft(
     data: {
       import_draft_data: draftBytes,
       import_draft_baseline_data: draftBytes,
-      import_draft_warnings: draft.warnings.join('; ') || null,
+      import_draft_warnings: joinImportDraftWarnings(draft.warnings),
       import_draft_download_url: buildImportDraftDownloadUrl(cn),
       updated_at: new Date(),
     },
   })
 }
 
-/** 读取导入预报；若缓存只有 1 行等陈旧数据则自动重新生成；无数据时返回空白订单导入模板 */
+/** 读取导入预报：默认仅返回已缓存文件或空白模板；仅 refresh=1 时才会重新拉 Gmail 转换 */
 export async function getImportDraftBuffer(
   containerNumber: string,
   options?: { forceRefresh?: boolean }
@@ -491,39 +701,75 @@ export async function getImportDraftBuffer(
     return null
   }
 
-  if (!row.message_id || !row.attachment_id) {
-    return {
-      buffer: await generateEmptyOrderImportDraftBuffer(),
-      warnings: EMPTY_IMPORT_DRAFT_WARNING,
-      updatedAt: new Date(),
+  try {
+    if (!row.message_id || !row.attachment_id) {
+      return await buildEmptyImportDraftPayload()
     }
-  }
 
-  const cached =
-    row.import_draft_data && row.import_draft_data.length > 0
-      ? Buffer.from(row.import_draft_data)
-      : null
+    const messageId = row.message_id
+    const attachmentId = row.attachment_id
 
-  const needsRegen =
-    options?.forceRefresh ||
-    !cached ||
-    isImportDraftCacheStale(cached)
+    const cached =
+      row.import_draft_data && row.import_draft_data.length > 0
+        ? Buffer.from(row.import_draft_data)
+        : null
+    const detailRows = cached ? countImportDraftDetailRows(cached) : 0
+    const hasValidCache = Boolean(cached && detailRows > 0)
 
-  if (!needsRegen && cached) {
-    if (countImportDraftDetailRows(cached) === 0) {
+    if (options?.forceRefresh) {
+      return await regenerateImportDraftFromSource(
+        cn,
+        {
+          message_id: messageId,
+          attachment_id: attachmentId,
+          source_filename: row.source_filename,
+          source_email_subject: row.source_email_subject,
+          yg_order_date_key: row.yg_order_date_key,
+          import_draft_warnings: row.import_draft_warnings,
+          updated_at: row.updated_at,
+        },
+        cached
+      )
+    }
+
+    if (hasValidCache && cached) {
       return {
-        buffer: await generateEmptyOrderImportDraftBuffer(),
-        warnings: EMPTY_IMPORT_DRAFT_WARNING,
+        buffer: cached,
+        warnings: capImportDraftWarningsText(row.import_draft_warnings ?? ''),
         updatedAt: row.updated_at,
       }
     }
-    return {
-      buffer: cached,
-      warnings: row.import_draft_warnings ?? '',
-      updatedAt: row.updated_at,
-    }
-  }
 
+    return await buildEmptyImportDraftPayload()
+  } catch (error) {
+    console.error(`getImportDraftBuffer(${cn}) error:`, error)
+    return await buildEmptyImportDraftPayload()
+  }
+}
+
+async function buildEmptyImportDraftPayload(
+  warnings: string = EMPTY_IMPORT_DRAFT_WARNING
+): Promise<{ buffer: Buffer; warnings: string; updatedAt: Date }> {
+  return {
+    buffer: await generateEmptyOrderImportDraftBuffer(),
+    warnings,
+    updatedAt: new Date(),
+  }
+}
+
+async function regenerateImportDraftFromSource(
+  cn: string,
+  row: {
+    message_id: string
+    attachment_id: string
+    source_filename: string | null
+    source_email_subject: string | null
+    yg_order_date_key: string | null
+    import_draft_warnings: string | null
+    updated_at: Date
+  },
+  cached: Buffer | null
+): Promise<{ buffer: Buffer; warnings: string; updatedAt: Date }> {
   try {
     const ygIndex = await loadYg2025DateIndex()
     const orderDateHint = row.yg_order_date_key ?? null
@@ -541,23 +787,21 @@ export async function getImportDraftBuffer(
     await persistImportDraft(cn, draft)
     return {
       buffer: draft.buffer,
-      warnings: draft.warnings.join('; '),
+      warnings: capImportDraftWarningsText(draft.warnings.join('; ')),
       updatedAt: new Date(),
     }
   } catch (error) {
-    if (cached && countImportDraftDetailRows(cached) > 1) {
+    if (cached && countImportDraftDetailRows(cached) > 0) {
       return {
         buffer: cached,
-        warnings: row.import_draft_warnings ?? '',
+        warnings: capImportDraftWarningsText(row.import_draft_warnings ?? ''),
         updatedAt: row.updated_at,
       }
     }
     const detail = error instanceof Error ? error.message : '转换失败'
-    return {
-      buffer: await generateEmptyOrderImportDraftBuffer(),
-      warnings: `${EMPTY_IMPORT_DRAFT_WARNING}（源预报未能自动转换：${detail}）`,
-      updatedAt: new Date(),
-    }
+    return buildEmptyImportDraftPayload(
+      `${EMPTY_IMPORT_DRAFT_WARNING}（源预报未能自动转换：${detail}）`
+    )
   }
 }
 

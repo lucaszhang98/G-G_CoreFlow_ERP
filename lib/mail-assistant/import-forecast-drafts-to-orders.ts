@@ -1,6 +1,10 @@
 import { getCachedImportDraft } from '@/lib/mail-assistant/forecast-persistence'
 import { mergeImportDraftExcelBuffers } from '@/lib/mail-assistant/merge-import-draft-buffers'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
+import {
+  archiveActiveOrdersByContainerNumbers,
+  type ArchivedOrderByContainer,
+} from '@/lib/orders/archive-orders-by-container-numbers'
 import { orderImportService } from '@/lib/services/order-import.service'
 import type { ImportError } from '@/lib/services/import/types'
 
@@ -11,6 +15,7 @@ export type ForecastDraftOrderImportResult = {
   errors?: ImportError[]
   containerNumbers: string[]
   skipped: Array<{ containerNumber: string; reason: string }>
+  archivedOrders?: ArchivedOrderByContainer[]
   message?: string
 }
 
@@ -44,17 +49,24 @@ export async function importForecastDraftsToOrders(
     }
   }
 
+  const { archived: archivedOrders } = await archiveActiveOrdersByContainerNumbers(used, userId)
+
   const merged = mergeImportDraftExcelBuffers(buffers)
   const result = await orderImportService.importFromBuffer(merged, userId)
 
   if (result.success) {
+    const archiveNote =
+      archivedOrders.length > 0
+        ? `；已将 ${archivedOrders.length} 个同柜号旧订单完成留档`
+        : ''
     return {
       success: true,
       imported: result.imported,
       total: result.total,
       containerNumbers: used,
       skipped,
-      message: `成功导入 ${result.imported ?? 0} 条订单明细（${used.length} 个柜号）`,
+      archivedOrders,
+      message: `成功导入 ${result.imported ?? 0} 条订单明细（${used.length} 个柜号）${archiveNote}`,
     }
   }
 
@@ -64,6 +76,10 @@ export async function importForecastDraftsToOrders(
     errors: result.errors,
     containerNumbers: used,
     skipped,
-    message: result.errors?.[0]?.message ?? '导入失败，请检查数据',
+    archivedOrders,
+    message:
+      archivedOrders.length > 0
+        ? `${result.errors?.[0]?.message ?? '导入失败，请检查数据'}（同柜号旧订单 ${archivedOrders.length} 个已标为完成留档）`
+        : result.errors?.[0]?.message ?? '导入失败，请检查数据',
   }
 }

@@ -15,6 +15,7 @@ import {
   type OrderImportMasterData,
 } from '@/lib/mail-assistant/order-import-master-data'
 import type { ParsedSourceForecast, SourceForecastDetailRow } from '@/lib/mail-assistant/parse-source-forecast-excel'
+import { appendSummarizedWarnings } from '@/lib/mail-assistant/import-draft-warnings'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
 import { mergeEmailSubjectIntoOrderFields } from '@/lib/mail-assistant/parse-email-subject'
 
@@ -197,7 +198,7 @@ function bucketKey(deliveryLocationCode: string, deliveryNature: string): string
 function aggregateStandardDetails(
   details: SourceForecastDetailRow[],
   master: OrderImportMasterData,
-  warnings: string[]
+  skippedLocationWarnings: string[]
 ): Map<string, AggregatedBucket> {
   const buckets = new Map<string, AggregatedBucket>()
 
@@ -207,7 +208,9 @@ function aggregateStandardDetails(
       master.locations.map((l) => ({ code: l.location_code, name: l.name }))
     )
     if (!locMatch.code) {
-      warnings.push(`送仓地点「${detail.deliveryLocationRaw}」未能匹配系统位置代码，已跳过`)
+      skippedLocationWarnings.push(
+        `送仓地点「${detail.deliveryLocationRaw}」未能匹配系统位置代码，已跳过`
+      )
       continue
     }
     const nature = matchDeliveryNature(detail.deliveryNatureRaw)
@@ -251,7 +254,7 @@ function buildDedicatedDetailRows(
   details: SourceForecastDetailRow[],
   header: OrderHeaderFields,
   master: OrderImportMasterData,
-  warnings: string[]
+  skippedDedicatedWarnings: string[]
 ): OrderImportDraftOutputRow[] {
   const pools = buildNumberedLocationPools(master)
   const counters: Record<DedicatedLocationSeries, number> = {
@@ -269,7 +272,7 @@ function buildDedicatedDetailRows(
       counters
     )
     if (!code) {
-      warnings.push(
+      skippedDedicatedWarnings.push(
         `${series} 序列位置已用尽（可用 ${pools[series].length} 个），已跳过唛头 ${detail.shippingMarkRaw || detail.fba || '(空)'}`
       )
       continue
@@ -351,6 +354,8 @@ export function transformSourceToImportRows(
 
   const dedicatedDetails: SourceForecastDetailRow[] = []
   const standardDetails: SourceForecastDetailRow[] = []
+  const skippedLocationWarnings: string[] = []
+  const skippedDedicatedWarnings: string[] = []
 
   for (const detail of parsed.details) {
     if (isDedicatedDetail(detail)) {
@@ -360,9 +365,21 @@ export function transformSourceToImportRows(
     }
   }
 
-  const buckets = aggregateStandardDetails(standardDetails, master, warnings)
+  const buckets = aggregateStandardDetails(standardDetails, master, skippedLocationWarnings)
   const amzRows = buildAggregatedRows(buckets, header)
-  const dedicatedRows = buildDedicatedDetailRows(dedicatedDetails, header, master, warnings)
+  const dedicatedRows = buildDedicatedDetailRows(
+    dedicatedDetails,
+    header,
+    master,
+    skippedDedicatedWarnings
+  )
+
+  appendSummarizedWarnings(
+    warnings,
+    skippedLocationWarnings,
+    '送仓地点未能匹配系统位置代码，'
+  )
+  appendSummarizedWarnings(warnings, skippedDedicatedWarnings, '专用仓序列位置不足，')
 
   const rows = [...amzRows, ...dedicatedRows]
 

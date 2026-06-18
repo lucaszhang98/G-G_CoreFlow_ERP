@@ -9,6 +9,7 @@ import {
   buildGmailMessageWebUrl,
 } from '../lib/google/gmail-forecast'
 import { buildImportDraftDownloadUrl } from '../lib/mail-assistant/forecast-persistence'
+import { countImportDraftDetailRows } from '../lib/mail-assistant/import-draft-buffer'
 import { getGoogleWorkspaceConnectionStatus } from '../lib/google/workspace-oauth'
 import prisma from '../lib/prisma'
 
@@ -49,6 +50,9 @@ async function main() {
   for (const row of rows) {
     if (!row.message_id || !row.attachment_id) continue
     const threadId = (row as { thread_id?: string | null }).thread_id ?? null
+    const detailRows = row.import_draft_data
+      ? countImportDraftDetailRows(Buffer.from(row.import_draft_data))
+      : 0
     await prisma.mail_container_forecast.update({
       where: { container_number: row.container_number },
       data: {
@@ -61,7 +65,9 @@ async function main() {
           ),
         gmail_url: buildGmailMessageWebUrl(row.message_id, workspaceEmail, threadId),
         import_draft_download_url:
-          row.import_draft_download_url ?? buildImportDraftDownloadUrl(row.container_number),
+          detailRows > 0
+            ? row.import_draft_download_url ?? buildImportDraftDownloadUrl(row.container_number)
+            : null,
       },
     })
   }
