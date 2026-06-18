@@ -9,6 +9,7 @@ import {
   OAK_MAIN_WAREHOUSE_CODE,
   parseOperationModeLabel,
   PRIVATE_WAREHOUSE_NATURE,
+  isDeferredCustomerPlaceholder,
   resolveDedicatedDetailLocationCode,
   type DedicatedLocationSeries,
   type OrderImportMasterData,
@@ -77,13 +78,51 @@ function resolveDateSerial(raw: unknown, fallback: number): number {
   return d ? dateToExcelSerial(d) : fallback
 }
 
+function resolveImportCustomerCode(
+  customerRaw: string,
+  master: OrderImportMasterData,
+  warnings: string[],
+  fixedCustomerCode?: string | null
+): string {
+  const fixed = fixedCustomerCode?.trim()
+  const raw = customerRaw.trim()
+  const deferred = isDeferredCustomerPlaceholder(raw)
+
+  if (fixed && master.customerByCode.has(fixed)) {
+    if (deferred) {
+      warnings.push(`源预报客户「${raw}」已采用码头调度表客户 ${fixed}`)
+    } else if (!raw) {
+      warnings.push(`客户代码已采用码头调度表 YG2025：${fixed}`)
+    } else {
+      const excelMatch = matchMasterCode(raw, master.customers)
+      if (excelMatch.code && excelMatch.code !== fixed) {
+        warnings.push(
+          `源预报客户「${raw}」与码头调度表客户 ${fixed} 不一致，已采用码头调度表客户`
+        )
+      }
+    }
+    return fixed
+  }
+
+  const customerMatch = matchMasterCode(raw, master.customers)
+  if (customerMatch.code) return customerMatch.code
+
+  if (deferred) {
+    warnings.push(`源预报客户「${raw}」需在码头调度表有对应客户，当前未能解析`)
+  } else {
+    warnings.push(`未能匹配客户「${raw || '(空)'}」，已用首个客户代码兜底`)
+  }
+  return master.customers[0]?.code ?? ''
+}
+
 function buildOrderHeaderFields(
   parsed: ParsedSourceForecast,
   containerNumber: string,
   master: OrderImportMasterData,
   warnings: string[],
   emailSubject?: string | null,
-  fixedOrderDateKey?: string | null
+  fixedOrderDateKey?: string | null,
+  fixedCustomerCode?: string | null
 ): OrderHeaderFields | null {
   const cn = normalizeContainerNumber(containerNumber)
   const mergedOrder = mergeEmailSubjectIntoOrderFields({
@@ -96,11 +135,12 @@ function buildOrderHeaderFields(
   })
   const order = { ...parsed.order, ...mergedOrder }
 
-  const customerMatch = matchMasterCode(order.customerRaw, master.customers)
-  if (!customerMatch.code) {
-    warnings.push(`未能匹配客户「${order.customerRaw || '(空)'}」，已用首个客户代码兜底`)
-  }
-  const customerCode = customerMatch.code ?? master.customers[0]?.code ?? ''
+  const customerCode = resolveImportCustomerCode(
+    order.customerRaw,
+    master,
+    warnings,
+    fixedCustomerCode
+  )
 
   const operationMode = parseOperationModeLabel(order.operationModeRaw)
   const containerType = matchContainerType(order.containerTypeRaw)
@@ -293,7 +333,7 @@ export function transformSourceToImportRows(
   parsed: ParsedSourceForecast,
   containerNumber: string,
   master: OrderImportMasterData,
-  options?: { emailSubject?: string | null; fixedOrderDateKey?: string | null }
+  options?: { emailSubject?: string | null; fixedOrderDateKey?: string | null; fixedCustomerCode?: string | null }
 ): { rows: OrderImportDraftOutputRow[]; warnings: string[] } {
   const warnings: string[] = []
   const header = buildOrderHeaderFields(
@@ -302,7 +342,8 @@ export function transformSourceToImportRows(
     master,
     warnings,
     options?.emailSubject,
-    options?.fixedOrderDateKey
+    options?.fixedOrderDateKey,
+    options?.fixedCustomerCode
   )
   if (!header) {
     return { rows: [], warnings: ['无法解析订单头'] }

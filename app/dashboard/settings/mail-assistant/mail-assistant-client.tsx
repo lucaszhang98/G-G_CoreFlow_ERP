@@ -362,7 +362,7 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
     (
       mode: "selected" | "filtered" | "notImported",
       actionLabel: string
-    ): Array<{ containerNumber: string; orderDateKey: string }> | null => {
+    ): Array<{ containerNumber: string; orderDateKey: string; customerCode?: string | null }> | null => {
       let list: MailAssistantImportRow[] = []
       if (mode === "selected") {
         if (selectedRows.length === 0) {
@@ -380,10 +380,15 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
         .map((r) => ({
           containerNumber: r.containerNumber.trim().toUpperCase(),
           orderDateKey: r.orderDateKey,
+          customerCode: r.customerCode,
         }))
         .filter((r) => r.containerNumber)
 
-      const unique: Array<{ containerNumber: string; orderDateKey: string }> = []
+      const unique: Array<{
+        containerNumber: string
+        orderDateKey: string
+        customerCode?: string | null
+      }> = []
       const seen = new Set<string>()
       for (const item of items) {
         const key = `${item.containerNumber}|${item.orderDateKey}`
@@ -557,6 +562,7 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
               items: chunk.map((item) => ({
                 containerNumber: item.containerNumber,
                 orderDateKey: item.orderDateKey,
+                customerCode: item.customerCode ?? undefined,
               })),
             }),
           })

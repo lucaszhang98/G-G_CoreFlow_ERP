@@ -46,6 +46,23 @@ function normalizeKey(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, '')
 }
 
+/** 源预报模板中表示「客户以码头调度表/系统为准」的占位文案 */
+const DEFERRED_CUSTOMER_PLACEHOLDERS = [
+  '与系统一致',
+  '同系统一致',
+  '系统一致',
+  '以系统为准',
+  '同码头表',
+  '与码头表一致',
+  '码头表一致',
+]
+
+export function isDeferredCustomerPlaceholder(raw: string): boolean {
+  const norm = normalizeKey(raw)
+  if (!norm) return false
+  return DEFERRED_CUSTOMER_PLACEHOLDERS.some((p) => norm.includes(normalizeKey(p)))
+}
+
 export const PRIVATE_WAREHOUSE_NATURE = '私仓' as const
 
 /** 需逐行输出、不汇总的明细所使用的编号位置序列 */

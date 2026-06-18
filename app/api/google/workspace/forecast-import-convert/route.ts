@@ -7,6 +7,7 @@ import { convertImportDraftsBatch } from '@/lib/mail-assistant/forecast-persiste
 const itemSchema = z.object({
   containerNumber: z.string().min(1),
   orderDateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  customerCode: z.string().min(1).max(50).optional(),
 })
 
 const bodySchema = z.union([

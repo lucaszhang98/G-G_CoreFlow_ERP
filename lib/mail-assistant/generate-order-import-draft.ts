@@ -27,6 +27,16 @@ export const ORDER_IMPORT_HEADERS = [
 
 export type OrderImportDraftRow = Record<(typeof ORDER_IMPORT_HEADERS)[number], string>
 
+export const EMPTY_IMPORT_DRAFT_WARNING =
+  '暂无导入预报数据，已返回与订单管理一致的空白导入模板（含下拉与校验），请填写后上传'
+
+/** 空白订单导入模板（与订单管理批量导入同款：下拉、校验、200 行预填） */
+export async function generateEmptyOrderImportDraftBuffer(): Promise<Buffer> {
+  const master = await loadOrderImportMasterData()
+  const workbook = await writeOrderImportWorkbook([], master)
+  return workbookToBuffer(workbook)
+}
+
 export async function generateOrderImportDraftFromSource(input: {
   containerNumber: string
   messageId: string
@@ -35,6 +45,8 @@ export async function generateOrderImportDraftFromSource(input: {
   emailSubject?: string | null
   /** 邮件助手 YG2025 明细行订单日期（yyyy-mm-dd），优先于源预报 Excel */
   fixedOrderDateKey?: string | null
+  /** 邮件助手 YG2025 明细行客户代码，优先于源预报 Excel */
+  fixedCustomerCode?: string | null
 }): Promise<{ buffer: Buffer; row: OrderImportDraftRow; warnings: string[] }> {
   const container = normalizeContainerNumber(input.containerNumber)
   const sourceBuffer = await downloadGmailAttachment(input.messageId, input.attachmentId)
@@ -47,6 +59,7 @@ export async function generateOrderImportDraftFromSource(input: {
   const { rows, warnings } = transformSourceToImportRows(parsed, container, master, {
     emailSubject: input.emailSubject,
     fixedOrderDateKey: input.fixedOrderDateKey,
+    fixedCustomerCode: input.fixedCustomerCode,
   })
 
   if (input.fixedOrderDateKey?.trim()) {

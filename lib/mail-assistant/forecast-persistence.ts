@@ -5,7 +5,11 @@ import {
   buildGmailMessageWebUrl,
   getGmailMessageSubject,
 } from '@/lib/google/gmail-forecast'
-import { generateOrderImportDraftFromSource } from '@/lib/mail-assistant/generate-order-import-draft'
+import {
+  EMPTY_IMPORT_DRAFT_WARNING,
+  generateEmptyOrderImportDraftBuffer,
+  generateOrderImportDraftFromSource,
+} from '@/lib/mail-assistant/generate-order-import-draft'
 import {
   countImportDraftDetailRows,
   isImportDraftCacheStale,
@@ -18,12 +22,14 @@ import type { SourceForecastLookupResult } from '@/lib/mail-assistant/find-sourc
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
 import {
   loadYg2025DateIndex,
+  resolveYg2025CustomerCode,
   resolveYg2025OrderDateKey,
 } from '@/lib/mail-assistant/yg2025-order-date'
 
 export type ConvertImportDraftItem = {
   containerNumber: string
   orderDateKey?: string | null
+  customerCode?: string | null
 }
 
 export const FORECAST_RELOOKUP_INTERVAL_MS = 12 * 60 * 60 * 1000
@@ -211,7 +217,11 @@ export type ImportDraftConvertResult = {
 /** 转换源预报 → 导入预报，并更新 DB 中的导入 Excel 超链接与缓存文件 */
 export async function convertImportDraftForContainer(
   containerNumber: string,
-  options?: { orderDateKey?: string | null; ygDateIndex?: Awaited<ReturnType<typeof loadYg2025DateIndex>> }
+  options?: {
+    orderDateKey?: string | null
+    customerCode?: string | null
+    ygDateIndex?: Awaited<ReturnType<typeof loadYg2025DateIndex>>
+  }
 ): Promise<ImportDraftConvertResult> {
   const cn = normalizeContainerNumber(containerNumber)
   const row = await prisma.mail_container_forecast.findUnique({
@@ -227,11 +237,11 @@ export async function convertImportDraftForContainer(
   }
 
   const ygIndex = options?.ygDateIndex ?? (await loadYg2025DateIndex())
+  const orderDateHint = options?.orderDateKey ?? row.yg_order_date_key
   const fixedOrderDateKey =
-    resolveYg2025OrderDateKey(ygIndex, cn, options?.orderDateKey ?? row.yg_order_date_key) ??
-    options?.orderDateKey ??
-    row.yg_order_date_key ??
-    null
+    resolveYg2025OrderDateKey(ygIndex, cn, orderDateHint) ?? orderDateHint ?? null
+  const fixedCustomerCode =
+    resolveYg2025CustomerCode(ygIndex, cn, orderDateHint, options?.customerCode) ?? null
 
   try {
     const draft = await generateOrderImportDraftFromSource({
@@ -241,6 +251,7 @@ export async function convertImportDraftForContainer(
       filename: row.source_filename ?? 'source.xlsx',
       emailSubject: row.source_email_subject,
       fixedOrderDateKey,
+      fixedCustomerCode,
     })
     const importDraftDownloadUrl = buildImportDraftDownloadUrl(cn)
     const draftBytes = toPrismaBytes(draft.buffer)
@@ -282,6 +293,7 @@ export async function convertImportDraftsBatch(
       : {
           containerNumber: normalizeContainerNumber(item.containerNumber),
           orderDateKey: item.orderDateKey?.trim() || undefined,
+          customerCode: item.customerCode?.trim() || undefined,
         }
   )
   const unique: ConvertImportDraftItem[] = []
@@ -304,6 +316,7 @@ export async function convertImportDraftsBatch(
       results.push(
         await convertImportDraftForContainer(item.containerNumber, {
           orderDateKey: item.orderDateKey,
+          customerCode: item.customerCode,
           ygDateIndex,
         })
       )
@@ -465,7 +478,7 @@ async function persistImportDraft(
   })
 }
 
-/** 读取导入预报；若缓存只有 1 行等陈旧数据则自动重新生成 */
+/** 读取导入预报；若缓存只有 1 行等陈旧数据则自动重新生成；无数据时返回空白订单导入模板 */
 export async function getImportDraftBuffer(
   containerNumber: string,
   options?: { forceRefresh?: boolean }
@@ -474,8 +487,16 @@ export async function getImportDraftBuffer(
   const row = await prisma.mail_container_forecast.findUnique({
     where: { container_number: cn },
   })
-  if (!row || row.status !== 'found' || !row.message_id || !row.attachment_id) {
+  if (!row || row.status !== 'found') {
     return null
+  }
+
+  if (!row.message_id || !row.attachment_id) {
+    return {
+      buffer: await generateEmptyOrderImportDraftBuffer(),
+      warnings: EMPTY_IMPORT_DRAFT_WARNING,
+      updatedAt: new Date(),
+    }
   }
 
   const cached =
@@ -489,6 +510,13 @@ export async function getImportDraftBuffer(
     isImportDraftCacheStale(cached)
 
   if (!needsRegen && cached) {
+    if (countImportDraftDetailRows(cached) === 0) {
+      return {
+        buffer: await generateEmptyOrderImportDraftBuffer(),
+        warnings: EMPTY_IMPORT_DRAFT_WARNING,
+        updatedAt: row.updated_at,
+      }
+    }
     return {
       buffer: cached,
       warnings: row.import_draft_warnings ?? '',
@@ -497,7 +525,10 @@ export async function getImportDraftBuffer(
   }
 
   try {
-    const fixedOrderDateKey = row.yg_order_date_key ?? null
+    const ygIndex = await loadYg2025DateIndex()
+    const orderDateHint = row.yg_order_date_key ?? null
+    const fixedOrderDateKey = resolveYg2025OrderDateKey(ygIndex, cn, orderDateHint) ?? orderDateHint
+    const fixedCustomerCode = resolveYg2025CustomerCode(ygIndex, cn, orderDateHint) ?? null
     const draft = await generateOrderImportDraftFromSource({
       containerNumber: cn,
       messageId: row.message_id,
@@ -505,6 +536,7 @@ export async function getImportDraftBuffer(
       filename: row.source_filename ?? 'source.xlsx',
       emailSubject: row.source_email_subject,
       fixedOrderDateKey,
+      fixedCustomerCode,
     })
     await persistImportDraft(cn, draft)
     return {
@@ -512,15 +544,20 @@ export async function getImportDraftBuffer(
       warnings: draft.warnings.join('; '),
       updatedAt: new Date(),
     }
-  } catch {
-    if (cached) {
+  } catch (error) {
+    if (cached && countImportDraftDetailRows(cached) > 1) {
       return {
         buffer: cached,
         warnings: row.import_draft_warnings ?? '',
         updatedAt: row.updated_at,
       }
     }
-    return null
+    const detail = error instanceof Error ? error.message : '转换失败'
+    return {
+      buffer: await generateEmptyOrderImportDraftBuffer(),
+      warnings: `${EMPTY_IMPORT_DRAFT_WARNING}（源预报未能自动转换：${detail}）`,
+      updatedAt: new Date(),
+    }
   }
 }
 

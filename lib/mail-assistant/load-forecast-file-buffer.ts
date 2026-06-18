@@ -1,4 +1,5 @@
 import { downloadGmailAttachment } from '@/lib/google/gmail-forecast'
+import { generateEmptyOrderImportDraftBuffer } from '@/lib/mail-assistant/generate-order-import-draft'
 import { getImportDraftBuffer } from '@/lib/mail-assistant/forecast-persistence'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
 import prisma from '@/lib/prisma'
@@ -13,6 +14,16 @@ export async function loadForecastFileBuffer(
     const cached = await getImportDraftBuffer(cn)
     if (cached) {
       return { buffer: cached.buffer, filename: `导入预报_${cn}.xlsx` }
+    }
+    const row = await prisma.mail_container_forecast.findUnique({
+      where: { container_number: cn },
+      select: { status: true },
+    })
+    if (row?.status === 'found') {
+      return {
+        buffer: await generateEmptyOrderImportDraftBuffer(),
+        filename: `导入预报_${cn}.xlsx`,
+      }
     }
     throw new Error('暂无导入预报文件')
   }

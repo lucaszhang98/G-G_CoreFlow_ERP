@@ -9,7 +9,11 @@ import { IMPORT_EDITABLE_SHEET, trimImportEditableRows } from '@/lib/mail-assist
 import { extractImportDraftMatrix } from '@/lib/mail-assistant/import-draft-matrix-io'
 import * as XLSX from 'xlsx'
 import { getGmailMessageSubject } from '@/lib/google/gmail-forecast'
-import { generateOrderImportDraftFromSource } from '@/lib/mail-assistant/generate-order-import-draft'
+import {
+  EMPTY_IMPORT_DRAFT_WARNING,
+  generateEmptyOrderImportDraftBuffer,
+  generateOrderImportDraftFromSource,
+} from '@/lib/mail-assistant/generate-order-import-draft'
 import { buildImportDraftDownloadUrl } from '@/lib/mail-assistant/forecast-persistence'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
 import prisma from '@/lib/prisma'
@@ -36,6 +40,14 @@ export async function GET(request: NextRequest) {
     const cached = await getImportDraftBuffer(cn, { forceRefresh })
     if (cached) {
       return fileResponse(cached.buffer, cn, cached.warnings)
+    }
+    const row = await prisma.mail_container_forecast.findUnique({
+      where: { container_number: cn },
+      select: { status: true },
+    })
+    if (row?.status === 'found') {
+      const buffer = await generateEmptyOrderImportDraftBuffer()
+      return fileResponse(buffer, cn, EMPTY_IMPORT_DRAFT_WARNING)
     }
     return NextResponse.json({ error: '暂无已缓存的导入预报，请先完成源预报查找' }, { status: 404 })
   }
@@ -80,10 +92,22 @@ export async function GET(request: NextRequest) {
     return fileResponse(buffer, cn, warnings.join('; '))
   } catch (error) {
     console.error('forecast-import-draft error:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : '生成导入预报失败' },
-      { status: 500 }
-    )
+    const cn = normalizeContainerNumber(containerNumber)
+    try {
+      const buffer = await generateEmptyOrderImportDraftBuffer()
+      const detail = error instanceof Error ? error.message : '生成导入预报失败'
+      return fileResponse(
+        buffer,
+        cn,
+        `${EMPTY_IMPORT_DRAFT_WARNING}（源预报未能自动转换：${detail}）`
+      )
+    } catch (fallbackError) {
+      console.error('forecast-import-draft empty template fallback error:', fallbackError)
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : '生成导入预报失败' },
+        { status: 500 }
+      )
+    }
   }
 }
 
