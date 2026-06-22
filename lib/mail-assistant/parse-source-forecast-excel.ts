@@ -173,19 +173,23 @@ function readDetailRows(
     const row = rows[i] ?? []
     const deliveryLocationRaw =
       colMap.deliveryLocationRaw !== undefined ? cellStr(row[colMap.deliveryLocationRaw]) : ''
-    if (!deliveryLocationRaw) continue
+    const shippingMarkRaw =
+      colMap.shippingMarkRaw !== undefined ? cellStr(row[colMap.shippingMarkRaw]) : ''
+    const deliveryNatureRaw =
+      colMap.deliveryNatureRaw !== undefined ? cellStr(row[colMap.deliveryNatureRaw]) : ''
+
+    // 自提/私仓行常见：仓库代码为空、唛头列有值（模版列顺序为 唛头→FBA→…→仓库代码）
+    if (!deliveryLocationRaw && !shippingMarkRaw) continue
 
     details.push({
-      deliveryLocationRaw,
-      shippingMarkRaw:
-        colMap.shippingMarkRaw !== undefined ? cellStr(row[colMap.shippingMarkRaw]) : '',
+      deliveryLocationRaw: deliveryLocationRaw || shippingMarkRaw,
+      shippingMarkRaw: shippingMarkRaw || deliveryLocationRaw,
       quantity: colMap.quantity !== undefined ? parseNum(row[colMap.quantity]) : 0,
       weight: colMap.weight !== undefined ? parseNum(row[colMap.weight]) : 0,
       volume: colMap.volume !== undefined ? parseNum(row[colMap.volume]) : 0,
       fba: colMap.fba !== undefined ? cellStr(row[colMap.fba]) : '',
       po: colMap.po !== undefined ? cellStr(row[colMap.po]) : '',
-      deliveryNatureRaw:
-        colMap.deliveryNatureRaw !== undefined ? cellStr(row[colMap.deliveryNatureRaw]) : '',
+      deliveryNatureRaw,
       windowPeriod: colMap.windowPeriod !== undefined ? cellStr(row[colMap.windowPeriod]) : '',
     })
   }
@@ -288,4 +292,12 @@ export function parseSourceForecastExcel(
   }
 
   return best
+}
+
+/**
+ * 是否为历史转换脚本（excel-transfer）同款客户填写模板输入格式：
+ * 固定表头区 + 第 10 行明细表头含「仓库代码/送仓地点」且至少一行明细。
+ */
+export function isSourceForecastTemplateInputFormat(parsed: ParsedSourceForecast): boolean {
+  return parsed.format === 'fixed_customer_template' && parsed.details.length > 0
 }

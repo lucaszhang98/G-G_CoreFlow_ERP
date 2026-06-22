@@ -1279,11 +1279,11 @@ export function MailAssistantClient({ userRole }: MailAssistantClientProps) {
                   <li>使用搜索与筛选：按柜号模糊搜索、按订单日期范围筛选、按导入状态筛选。</li>
                   <li>对未导入记录：可悬停柜号行点击复制图标，再到订单管理模块补录。</li>
                   <li>补录完成后，返回本页再次刷新，确认状态已变为「已导入」。</li>
-                  <li><strong className="text-foreground">找预报</strong>：在 Gmail 中定位源 Excel，并保存「源预报」链接及<strong className="text-foreground">源邮件标题</strong>；<strong className="text-foreground">转换源预报</strong>：结合 Excel 与邮件标题（客户、ETA、拆柜/直送等）转为订单导入 Excel。</li>
+                  <li><strong className="text-foreground">找预报</strong>：在 Gmail 中定位源 Excel，并保存「源预报」链接及<strong className="text-foreground">源邮件标题</strong>；<strong className="text-foreground">转换源预报</strong>：标准客户填写模版则完整走模版硬转换，再将客户代码与订单日期对齐当前邮件助手明细行；非标准格式或模版转换失败时 AI 兜底。</li>
                   <li>勾选已有「导入预报」的行，可 <strong className="text-foreground">下载导入表</strong>（与订单管理批量导入模板一致，含下拉与校验）；在 Excel 中改完后 <strong className="text-foreground">上传导入表</strong>（单选一条柜号）会覆盖系统内保存的导入预报。</li>
                   <li>确认无误后点击 <strong className="text-foreground">导入到订单</strong>：若订单管理中已有同柜号在营订单，会先将其标为<strong className="text-foreground">完成留档</strong>，再合并导入表写入新订单（与订单模块批量导入相同校验规则）。</li>
                   <li>对仍显示「暂无」的柜号，系统每 <strong className="text-foreground">12 小时</strong> 自动在邮箱中重新查找一次（无需人工操作）。</li>
-                  <li><strong className="text-foreground">AI 越用越准</strong>：找预报错了可用「预报纠错」反馈（可填正确邮件标题、上传正确 Excel）；导入预报改完保存后系统会自动对比并记入学习样例。</li>
+                  <li><strong className="text-foreground">AI 越用越准</strong>：找预报错了可用「预报纠错」反馈；<strong className="text-foreground">转换源预报</strong>时规则搞不定会自动用 AI 兜底（参考同事改过的导入样例）；导入预报改完保存后系统会自动对比并记入学习样例。</li>
                 </ol>
               </section>
 

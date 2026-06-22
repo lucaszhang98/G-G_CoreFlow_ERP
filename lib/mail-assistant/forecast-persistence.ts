@@ -71,6 +71,41 @@ function parseImportDraftConvertError(warnings: string | null | undefined): stri
   return text.slice(IMPORT_DRAFT_CONVERT_FAILED_PREFIX.length).trim() || '转换失败'
 }
 
+function isImportDraftFailureWarningPart(part: string): boolean {
+  const trimmed = part.trim()
+  if (!trimmed) return false
+  if (trimmed.startsWith(IMPORT_DRAFT_CONVERT_FAILED_PREFIX)) return true
+  return (
+    trimmed.includes(EMPTY_IMPORT_DRAFT_WARNING) ||
+    trimmed.includes('源预报未能自动转换') ||
+    trimmed.includes('无法生成导入预报') ||
+    trimmed.includes('无法从源预报解析')
+  )
+}
+
+/** 手工保存有效导入表后，去掉陈旧的自动转换失败标记 */
+export function sanitizeImportDraftWarningsAfterManualSave(
+  existing: string | null | undefined,
+  detailRowCount: number,
+  manualCorrected: boolean
+): string | null {
+  if (detailRowCount <= 0) {
+    return existing?.trim() || null
+  }
+
+  const kept = (existing ?? '')
+    .split('; ')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((w) => !isImportDraftFailureWarningPart(w))
+
+  if (manualCorrected) {
+    kept.push('导入预报已由同事手工纠正')
+  }
+
+  return kept.length ? kept.join('; ') : null
+}
+
 function isLegacyImportDraftFailureWarning(warnings: string): boolean {
   if (!warnings.trim()) return false
   return (
@@ -103,6 +138,14 @@ export function resolveImportDraftDisplayState(row: {
 } {
   const warnings = row.import_draft_warnings?.trim() ?? ''
   const detailRows = countStoredImportDraftDetailRows(row.import_draft_data)
+
+  // 有效明细行优先：同事已手工保存时不应被陈旧「转换失败：」覆盖
+  if (detailRows > 0) {
+    return {
+      hasImportDraft: true,
+      importDraftConvertFailed: false,
+    }
+  }
 
   const explicitError = parseImportDraftConvertError(warnings)
   if (explicitError) {
@@ -840,13 +883,18 @@ export async function saveImportDraftMatrix(
 
   const diff = diffImportDraftMatrices(extractImportDraftMatrix(baselineBuffer), rows)
   const updated = await applyImportDraftMatrix(current, rows)
-  const warnings = row.import_draft_warnings?.split('; ').filter(Boolean) ?? []
+  const detailRowCount = countImportDraftDetailRows(updated)
+  const warnings = sanitizeImportDraftWarningsAfterManualSave(
+    row.import_draft_warnings,
+    detailRowCount,
+    diff.hasChanges
+  )
 
   await prisma.mail_container_forecast.update({
     where: { container_number: cn },
     data: {
       import_draft_data: toPrismaBytes(updated),
-      import_draft_warnings: warnings.join('; ') || null,
+      import_draft_warnings: warnings,
       import_draft_download_url: buildImportDraftDownloadUrl(cn),
       updated_at: new Date(),
     },
@@ -868,7 +916,7 @@ export async function saveImportDraftMatrix(
   }
 
   return {
-    detailRowCount: countImportDraftDetailRows(updated),
+    detailRowCount,
     updatedAt: new Date(),
     trainingRecorded,
   }

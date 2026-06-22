@@ -1,7 +1,7 @@
 import { downloadGmailAttachment } from '@/lib/google/gmail-forecast'
 import { loadOrderImportMasterData } from '@/lib/mail-assistant/order-import-master-data'
+import { transformSourceToImportRowsWithAiFallback } from '@/lib/mail-assistant/import-draft-ai-convert'
 import { parseSourceForecastExcel } from '@/lib/mail-assistant/parse-source-forecast-excel'
-import { transformSourceToImportRows } from '@/lib/mail-assistant/transform-source-to-import-rows'
 import {
   workbookToBuffer,
   writeOrderImportWorkbook,
@@ -56,14 +56,21 @@ export async function generateOrderImportDraftFromSource(input: {
     Promise.resolve(parseSourceForecastExcel(sourceBuffer, container)),
   ])
 
-  const { rows, warnings } = transformSourceToImportRows(parsed, container, master, {
-    emailSubject: input.emailSubject,
-    fixedOrderDateKey: input.fixedOrderDateKey,
-    fixedCustomerCode: input.fixedCustomerCode,
-  })
+  const { rows, warnings, usedAi } = await transformSourceToImportRowsWithAiFallback(
+    parsed,
+    container,
+    master,
+    sourceBuffer,
+    {
+      emailSubject: input.emailSubject,
+      fixedOrderDateKey: input.fixedOrderDateKey,
+      fixedCustomerCode: input.fixedCustomerCode,
+      filename: input.filename,
+    }
+  )
 
-  if (input.fixedOrderDateKey?.trim()) {
-    warnings.push(`订单日期已采用码头调度表 YG2025：${input.fixedOrderDateKey.trim()}`)
+  if (usedAi) {
+    warnings.push('本次导入表由 AI 兜底转换生成，请核对后保存')
   }
 
   if (rows.length === 0) {
