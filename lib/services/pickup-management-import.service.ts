@@ -23,6 +23,7 @@ import {
   formatOperationalOrderNotFoundMessage,
   ordersWhereOperational,
 } from '@/lib/orders/operational-order-lookup'
+import { normalizeCarrierCodeInput } from '@/lib/utils/carrier-code-display'
 
 const SHEET1_NAME = '提柜数据1'
 const SHEET2_NAME = '提柜数据2'
@@ -312,7 +313,8 @@ async function loadMasterData(): Promise<PickupMasterData> {
   carriers.forEach((c) => {
     if (c.name) carrierByName.set(c.name.trim(), c.carrier_id)
     if (c.carrier_code) carrierByName.set(c.carrier_code.trim(), c.carrier_id)
-    // 兼容旧模板：Excel 中填 "G&G" 时映射到已改名为 "GG" 的承运商
+    const canonical = normalizeCarrierCodeInput(c.carrier_code) ?? normalizeCarrierCodeInput(c.name)
+    if (canonical) carrierByName.set(canonical, c.carrier_id)
     if ((c.name?.trim() === 'GG' || c.carrier_code?.trim() === 'GG') && !carrierByName.has('G&G')) {
       carrierByName.set('G&G', c.carrier_id)
     }
@@ -397,7 +399,9 @@ async function executeImport(
       }
     }
     if (row.carrier_name !== undefined) {
-      orderUpdate.carrier_id = masterData.carrierByName.get(row.carrier_name) ?? null
+      const trimmed = row.carrier_name?.trim() ?? ''
+      const lookupKey = normalizeCarrierCodeInput(trimmed) ?? trimmed
+      orderUpdate.carrier_id = masterData.carrierByName.get(lookupKey) ?? null
     }
 
     const existingPickup = await prisma.pickup_management.findUnique({

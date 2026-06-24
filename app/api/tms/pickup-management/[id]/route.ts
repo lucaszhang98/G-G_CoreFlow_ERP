@@ -4,6 +4,10 @@ import prisma from '@/lib/prisma'
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { applyPickupDateEnteredAtToOrderUpdate } from '@/lib/oms/pickup-date-entered'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
+import {
+  pickupCarrierCodeField,
+  resolveCarrierIdFromInput,
+} from '@/lib/tms/resolve-carrier-code'
 
 // GET - 获取单个提柜管理记录
 export async function GET(
@@ -144,8 +148,9 @@ export async function GET(
       warehouse_account: order?.warehouse_account || null,
       port_location: order?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）
       port_location_id: order?.port_location_id ? String(order.port_location_id) : null,
-      carrier: order?.carriers || null, // 返回完整的 carrier 对象，用于 relation 类型字段
+      carrier: order?.carriers || null,
       carrier_id: order?.carrier_id ? String(order.carrier_id) : null,
+      carrier_code: pickupCarrierCodeField(order?.carriers),
       // 提柜管理自有字段
       port_text: serialized.port_text || null,
       shipping_line: serialized.shipping_line || null,
@@ -243,7 +248,13 @@ async function updatePickupManagement(
       // 不需要手动转换 BigInt，Prisma 会自动处理
       orderUpdateData.port_location_id = body.port_location_id || null
     }
-    if (body.carrier_id !== undefined) {
+    if (body.carrier_code !== undefined) {
+      const resolved = await resolveCarrierIdFromInput(body.carrier_code)
+      if (resolved.error) {
+        return NextResponse.json({ error: resolved.error }, { status: 400 })
+      }
+      orderUpdateData.carrier_id = resolved.carrierId
+    } else if (body.carrier_id !== undefined) {
       // 不需要手动转换 BigInt，Prisma 会自动处理
       orderUpdateData.carrier_id = body.carrier_id || null
     }
@@ -422,6 +433,7 @@ async function updatePickupManagement(
         carrier_code: updatedOrder.carriers.carrier_code || null,
       } : null,
       carrier_id: updatedOrder?.carrier_id ? String(updatedOrder.carrier_id) : null,
+      carrier_code: pickupCarrierCodeField(updatedOrder?.carriers),
       eta_date: updatedOrder?.eta_date || null,
       lfd_date: updatedOrder?.lfd_date || null,
       pickup_date: updatedOrder?.pickup_date || null,

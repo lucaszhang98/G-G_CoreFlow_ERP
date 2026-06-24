@@ -6,6 +6,12 @@ import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator'
 import { mergeOrdersRelationExcludeArchived, parseIncludeArchived } from '@/lib/orders/order-visibility'
 import { getPickupQuickFilterEtaDateRange } from '@/lib/utils/pickup-management-quick-filter'
+import { pickupCarrierCodeField } from '@/lib/tms/resolve-carrier-code'
+import { buildPickupUnifiedDateFilterCondition } from '@/lib/tms/pickup-management-unified-date-filter'
+import {
+  buildPickupManagementOrderBy,
+} from '@/lib/tms/pickup-management-order-by'
+import { findPickupManagementMany } from '@/lib/tms/pickup-management-list-query'
 
 // GET - 获取提柜管理列表
 export async function GET(request: NextRequest) {
@@ -47,6 +53,17 @@ export async function GET(request: NextRequest) {
         }
       })
     })
+
+    const unifiedDateCondition = buildPickupUnifiedDateFilterCondition(searchParams)
+    if (unifiedDateCondition) {
+      const dateFieldName = Object.keys(unifiedDateCondition)[0]
+      const mainTableFields = ['pickup_id', 'order_id', 'pickup_out', 'report_empty', 'return_empty', 'notes', 'earliest_appointment_time', 'current_location', 'port_text', 'shipping_line', 'driver_id', 'driver_name']
+      if (mainTableFields.includes(dateFieldName)) {
+        mainTableConditions.push(unifiedDateCondition)
+      } else {
+        Object.assign(ordersConditions, unifiedDateCondition)
+      }
+    }
     
     // 合并主表筛选条件
     if (mainTableConditions.length > 0) {
@@ -149,145 +166,101 @@ export async function GET(request: NextRequest) {
     // 查询总数
     const total = await prisma.pickup_management.count({ where })
 
-    // 构建排序条件
-    let orderBy: any
+    const orderBy = buildPickupManagementOrderBy(searchParams, sort, order)
 
-    if (searchParams.get('pending_lfd_inquiry') === '1') {
-      orderBy = [
-        { orders: { eta_date: 'asc' } },
-        { earliest_appointment_time: 'asc' },
-      ]
-    } else if (searchParams.get('lfd_no_pickup') === '1') {
-      // LFD 升序；同日 LFD 按最早预约时间（pickup_management.earliest_appointment_time）升序
-      orderBy = [
-        { orders: { lfd_date: 'asc' } },
-        { earliest_appointment_time: 'asc' },
-      ]
-    } else {
-      // 判断排序字段是来自主表还是 orders 表
-      const mainTableFields = [
-        'pickup_id',
-        'pickup_out',
-        'report_empty',
-        'return_empty',
-        'notes',
-        'current_location',
-        'port_text',
-        'shipping_line',
-        'driver_id',
-        'driver_name',
-        'created_at',
-        'updated_at',
-      ]
-
-      // earliest_appointment_time 特殊处理：优先使用 orders.appointment_time 排序
-      if (sort === 'earliest_appointment_time') {
-        orderBy = {
-          orders: {
-            appointment_time: order,
+    const pickupInclude = {
+      orders: {
+        select: {
+          order_id: true,
+          order_number: true,
+          order_date: true,
+          mbl_number: true,
+          do_issued: true,
+          container_type: true,
+          eta_date: true,
+          lfd_date: true,
+          pickup_date: true,
+          ready_date: true,
+          return_deadline: true,
+          warehouse_account: true,
+          appointment_time: true,
+          operation_mode: true,
+          port_location: true,
+          port_location_id: true,
+          delivery_location: true,
+          delivery_location_id: true,
+          carrier_id: true,
+          locations_orders_port_location_idTolocations: {
+            select: {
+              location_id: true,
+              name: true,
+              location_code: true,
+              location_type: true,
+            },
           },
-        }
-      } else if (mainTableFields.includes(sort)) {
-        orderBy = { [sort]: order }
-      } else {
-        orderBy = {
-          orders: {
-            [sort]: order,
+          locations_orders_delivery_location_idTolocations: {
+            select: {
+              location_id: true,
+              name: true,
+              location_code: true,
+              location_type: true,
+            },
           },
-        }
-      }
-    }
-
-    // 查询数据
-    const pickups = await prisma.pickup_management.findMany({
-      where,
-      include: {
-        orders: {
-          select: {
-            order_id: true,
-            order_number: true,
-            order_date: true,
-            mbl_number: true,
-            do_issued: true,
-            container_type: true,
-            eta_date: true,
-            lfd_date: true,
-            pickup_date: true,
-            ready_date: true,
-            return_deadline: true,
-            warehouse_account: true,
-            appointment_time: true,
-            operation_mode: true,
-            port_location: true,
-            port_location_id: true,
-            delivery_location: true,
-            delivery_location_id: true,
-            carrier_id: true,
-            locations_orders_port_location_idTolocations: {
-              select: {
-                location_id: true,
-                name: true,
-                location_code: true,
-                location_type: true,
-              },
+          delivery_appointments: {
+            select: {
+              appointment_id: true,
+              confirmed_start: true,
+              requested_start: true,
+              appointment_account: true,
+              rejected: true,
+              reference_number: true,
+              locations: { select: { location_id: true, location_code: true, name: true } },
             },
-            locations_orders_delivery_location_idTolocations: {
-              select: {
-                location_id: true,
-                name: true,
-                location_code: true,
-                location_type: true,
-              },
-            },
-            delivery_appointments: {
-              select: {
-                appointment_id: true,
-                confirmed_start: true,
-                requested_start: true,
-                appointment_account: true,
-                rejected: true,
-                reference_number: true,
-                locations: { select: { location_id: true, location_code: true, name: true } },
-              },
-            },
-            order_detail: {
-              take: 1,
-              orderBy: { id: 'asc' },
-              include: {
-                locations_order_detail_delivery_location_idTolocations: {
-                  select: { location_id: true, location_code: true, name: true },
-                },
-              },
-            },
-            customers: {
-              select: {
-                id: true,
-                name: true,
-                code: true,
-              },
-            },
-            carriers: {
-              select: {
-                carrier_id: true,
-                name: true,
-                carrier_code: true,
+          },
+          order_detail: {
+            take: 1,
+            orderBy: { id: 'asc' as const },
+            include: {
+              locations_order_detail_delivery_location_idTolocations: {
+                select: { location_id: true, location_code: true, name: true },
               },
             },
           },
-        },
-        drivers: {
-          select: {
-            driver_id: true,
-            driver_code: true,
-            license_number: true,
-            license_plate: true,
+          customers: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
+          carriers: {
+            select: {
+              carrier_id: true,
+              name: true,
+              carrier_code: true,
+            },
           },
         },
       },
+      drivers: {
+        select: {
+          driver_id: true,
+          driver_code: true,
+          license_number: true,
+          license_plate: true,
+        },
+      },
+    }
+
+    const listQuery = {
+      where,
+      include: pickupInclude,
       orderBy,
       skip: (page - 1) * limit,
       take: limit,
-    })
+    }
+
+    const pickups = await findPickupManagementMany(listQuery)
 
     // 序列化数据并格式化
     const serializedPickups = pickups.map((pickup: any) => {
@@ -350,8 +323,9 @@ export async function GET(request: NextRequest) {
         appointment_time: earliestAppointment?.confirmed_start || earliestAppointment?.requested_start || order?.appointment_time || null, // 优先使用最早预约的时间
         port_location: order?.locations_orders_port_location_idTolocations?.location_code || null, // 返回location_code（数字代码）- 来自orders表关联
         port_location_id: order?.port_location_id ? String(order.port_location_id) : null,
-        carrier: order?.carriers || null, // 返回完整的 carrier 对象，用于 relation 类型字段
+        carrier: order?.carriers || null,
         carrier_id: order?.carrier_id ? String(order.carrier_id) : null,
+        carrier_code: pickupCarrierCodeField(order?.carriers),
         // ========== 提柜管理自有字段（TMS 独有）==========
         port_text: serialized.port_text || null, // 码头位置（文本字段，来自 pickup_management）
         shipping_line: serialized.shipping_line || null, // 船司（文本字段，来自 pickup_management）

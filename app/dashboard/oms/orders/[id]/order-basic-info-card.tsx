@@ -4,6 +4,10 @@ import * as React from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import {
+  formatOperationModeLabel,
+  getOperationModeTextClass,
+} from "@/lib/utils/operation-mode-display"
 
 interface OrderBasicInfoCardProps {
   order: any
@@ -146,7 +150,9 @@ export function OrderBasicInfoCard({
             <div className="space-y-1">
               <p className="text-sm">
                 <span className="text-muted-foreground">操作方式:</span>{" "}
-                {order.operation_mode === 'unload' ? '拆柜' : order.operation_mode === 'direct_delivery' ? '直送' : (order.operation_mode || "-")}
+                <span className={getOperationModeTextClass(order.operation_mode)}>
+                  {formatOperationModeLabel(order.operation_mode)}
+                </span>
               </p>
               <p className="text-sm">
                 <span className="text-muted-foreground">仓库账户:</span>{" "}

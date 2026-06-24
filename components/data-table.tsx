@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { TableViewManager } from "@/components/table/table-view-manager"
+import type { TableViewManagerBridgeValue } from "@/components/table/table-view-manager-bridge"
 import { getDefaultView, applyViewToVisibility } from "@/lib/table/view-manager"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,6 +56,32 @@ function getColumnDisplayWidthPx<TData>(column: Column<TData, unknown>): number 
 
 /** 订单 MBL 与提柜列表 MBL 列 id（右键复制仅取末尾 4 位） */
 const MBL_CLIPBOARD_COLUMN_IDS = new Set<string>(["mbl", "mbl_number"])
+
+/** 不参与列视图/拖拽排序的内部列 */
+const INTERNAL_TABLE_COLUMN_IDS = new Set<string>(["select", "_rowDrag"])
+
+/** 固定最左列顺序：行拖拽 → 复选框 → 其余列（避免 saved columnOrder 把拖拽列挤到后面） */
+function normalizeLeadingColumnOrder(
+  order: ColumnOrderState,
+  allLeafColumnIds: string[],
+  options: { enableRowDrag?: boolean; enableRowSelect?: boolean }
+): ColumnOrderState {
+  const pinned: string[] = []
+  if (options.enableRowDrag) pinned.push("_rowDrag")
+  if (options.enableRowSelect) pinned.push("select")
+  if (pinned.length === 0) {
+    return order.length > 0 ? order : allLeafColumnIds
+  }
+  const pinnedSet = new Set(pinned)
+  const baseOrder = order.length > 0 ? order : allLeafColumnIds
+  const rest = baseOrder.filter((id): id is string => !!id && !pinnedSet.has(id))
+  for (const id of allLeafColumnIds) {
+    if (id && !pinnedSet.has(id) && !rest.includes(id)) {
+      rest.push(id)
+    }
+  }
+  return [...pinned, ...rest]
+}
 
 /** 右键复制到剪贴板时的文本（MBL 列只复制 trim 后最后 4 个字符） */
 function textForContextMenuCopy(columnId: string | undefined, plainText: string): string {
@@ -133,6 +160,9 @@ interface DataTableProps<TData, TValue> {
   // 视图管理
   enableViewManager?: boolean // 是否启用视图管理
   viewManagerTableName?: string // 视图管理的表名（用于区分不同表格）
+  /** header=表头列菜单内；toolbar=由 EntityTable 工具栏槽位渲染 */
+  viewManagerPlacement?: 'header' | 'toolbar'
+  onViewManagerBridgeChange?: (value: TableViewManagerBridgeValue) => void
   // 可排序列配置（如果未指定，则所有列都可排序）
   sortableColumns?: string[]
   // 行选择相关
@@ -145,6 +175,10 @@ interface DataTableProps<TData, TValue> {
   onCancelEdit?: () => void // 取消编辑回调（当点击其他行时调用）
   /** 为 false 时，勾选复选框不会触发 onCancelEdit（多行草稿批量保存场景） */
   cancelEditOnSelectionChange?: boolean
+  /** 行左侧拖拽把手，调整当前页行顺序 */
+  enableRowReorder?: boolean
+  getRowReorderId?: (row: TData) => string
+  onRowReorder?: (fromIndex: number, toIndex: number, orderedRowIds: string[]) => void
   // 可展开行相关
   expandableRows?: {
     enabled: boolean
@@ -174,6 +208,8 @@ export function DataTable<TData, TValue>({
   columnLabels = {},
   enableViewManager = false,
   viewManagerTableName,
+  viewManagerPlacement = 'header',
+  onViewManagerBridgeChange,
   sortableColumns = [],
   enableRowSelection = false,
   onRowSelectionChange,
@@ -182,6 +218,9 @@ export function DataTable<TData, TValue>({
   isRowEditing,
   onCancelEdit,
   cancelEditOnSelectionChange = true,
+  enableRowReorder = false,
+  getRowReorderId,
+  onRowReorder,
   expandableRows,
   getRowClassName,
 }: DataTableProps<TData, TValue>) {
@@ -194,6 +233,8 @@ export function DataTable<TData, TValue>({
   // 拖拽状态
   const [draggedColumn, setDraggedColumn] = React.useState<string | null>(null)
   const [dragOverColumn, setDragOverColumn] = React.useState<string | null>(null)
+  const [draggedRowId, setDraggedRowId] = React.useState<string | null>(null)
+  const [dragOverRowId, setDragOverRowId] = React.useState<string | null>(null)
   // Resize 状态（用于禁用拖拽）
   const [isResizing, setIsResizing] = React.useState(false)
   
@@ -203,6 +244,8 @@ export function DataTable<TData, TValue>({
   const [isDraggingScroll, setIsDraggingScroll] = React.useState(false)
   const isDraggingScrollRef = React.useRef(false)
   const scrollStartRef = React.useRef({ x: 0, scrollLeft: 0, hasMoved: false })
+  /** 横向拖拽超过阈值后才视为滚动，避免与单元格点击编辑冲突 */
+  const SCROLL_DRAG_THRESHOLD_PX = 6
   /** 横向滚动容器宽度：列总宽小于容器时把多余像素平均分到各列，铺满 100% */
   const [tableContainerWidthPx, setTableContainerWidthPx] = React.useState(0)
 
@@ -239,108 +282,99 @@ export function DataTable<TData, TValue>({
     }
   }, [isResizing])
 
-  // 拖拽滚动处理函数
+  // 拖拽滚动：mousedown 记录起点，移动超过阈值才滚动；拖拽结束后拦截紧随其后的 click，避免误进编辑
   const handleScrollMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    // 只响应左键，右键留给右键菜单
     if (e.button !== 0) return
-    
-    // 检查是否点击在交互元素上（按钮、输入框、链接、复选框等）
+
     const target = e.target as HTMLElement
-    const isInteractiveElement = 
+    const isInteractiveElement =
       target.closest('button') ||
       target.closest('input') ||
       target.closest('a') ||
       target.closest('select') ||
       target.closest('textarea') ||
-      target.closest('[role="button"]') ||
       target.closest('[role="checkbox"]') ||
-      target.closest('.resize-handle') || // 排除调整列宽的手柄
+      target.closest('[data-row-drag-handle]') ||
+      target.closest('.inline-edit-cell') ||
+      target.closest('[data-slot="popover-trigger"]') ||
+      target.closest('[data-slot="popover-content"]') ||
+      target.closest('.resize-handle') ||
       target.classList.contains('resize-handle')
-    
+
     if (isInteractiveElement) return
-    
-    // 从点击的元素开始向上查找，找到第一个可滚动的容器
+
     let scrollableContainer: HTMLElement | null = target as HTMLElement
     let depth = 0
     const maxDepth = 10
-    
+
     while (scrollableContainer && depth < maxDepth) {
-      // 检查是否有横向滚动条
       if (scrollableContainer.scrollWidth > scrollableContainer.clientWidth) {
-        console.log('✅ Found scrollable container at depth', depth, ':', {
-          element: scrollableContainer.tagName,
-          className: scrollableContainer.className,
-          scrollWidth: scrollableContainer.scrollWidth,
-          clientWidth: scrollableContainer.clientWidth,
-          maxScroll: scrollableContainer.scrollWidth - scrollableContainer.clientWidth
-        })
         break
       }
       scrollableContainer = scrollableContainer.parentElement
       depth++
     }
-    
+
     if (!scrollableContainer || scrollableContainer.scrollWidth <= scrollableContainer.clientWidth) {
-      console.log('⚠️ No scrollable container found')
       return
     }
-    
-    // 保存找到的可滚动容器
+
     actualScrollContainerRef.current = scrollableContainer
-    
-    // 记录初始位置
     scrollStartRef.current = {
       x: e.clientX,
       scrollLeft: scrollableContainer.scrollLeft,
-      hasMoved: false
+      hasMoved: false,
     }
-    
     isDraggingScrollRef.current = true
   }
 
-  // 使用全局监听器处理鼠标移动和释放
   React.useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (!isDraggingScrollRef.current) return
-      
+
       const container = actualScrollContainerRef.current
       if (!container) return
-      
+
       const dx = e.clientX - scrollStartRef.current.x
       const distance = Math.abs(dx)
-      
-      // 移动超过3px才算拖拽
-      if (distance > 3) {
+
+      if (distance > SCROLL_DRAG_THRESHOLD_PX) {
         if (!scrollStartRef.current.hasMoved) {
           scrollStartRef.current.hasMoved = true
           setIsDraggingScroll(true)
         }
-        
-        // 计算新的滚动位置
+
         const newScrollLeft = scrollStartRef.current.scrollLeft - dx
         const maxScrollLeft = container.scrollWidth - container.clientWidth
-        
-        // 钳制在 [0, maxScrollLeft] 范围内
-        const clampedScrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft))
-        
-        container.scrollLeft = clampedScrollLeft
-        
+        container.scrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft))
+
         e.preventDefault()
       }
     }
-    
+
     const handleGlobalMouseUp = () => {
-      if (isDraggingScrollRef.current) {
-        isDraggingScrollRef.current = false
-        setIsDraggingScroll(false)
-        scrollStartRef.current = { x: 0, scrollLeft: 0, hasMoved: false }
-        actualScrollContainerRef.current = null
+      if (!isDraggingScrollRef.current) return
+
+      const hadMoved = scrollStartRef.current.hasMoved
+      isDraggingScrollRef.current = false
+      setIsDraggingScroll(false)
+      scrollStartRef.current = { x: 0, scrollLeft: 0, hasMoved: false }
+      actualScrollContainerRef.current = null
+
+      // 拖拽滚动后浏览器会合成 click，拦截一次以免误触单元格编辑
+      if (hadMoved) {
+        const blockClickAfterDrag = (ev: MouseEvent) => {
+          ev.preventDefault()
+          ev.stopPropagation()
+          ev.stopImmediatePropagation()
+        }
+        window.addEventListener('click', blockClickAfterDrag, { capture: true, once: true })
       }
     }
-    
+
     window.addEventListener('mousemove', handleGlobalMouseMove, { passive: false })
     window.addEventListener('mouseup', handleGlobalMouseUp)
-    
+
     return () => {
       window.removeEventListener('mousemove', handleGlobalMouseMove)
       window.removeEventListener('mouseup', handleGlobalMouseUp)
@@ -419,10 +453,60 @@ export function DataTable<TData, TValue>({
     ? Math.ceil(total / currentPageSize)
     : undefined
 
-  // 如果启用行选择，在列前面添加复选框列
+  const ROW_DRAG_COLUMN_ID = '_rowDrag'
+  const ROW_DRAG_WIDTH_PX = 32
+
+  // 如果启用行选择或行拖拽，在最左侧追加辅助列（顺序：拖拽 → 复选框 → 数据列）
   const finalColumns = React.useMemo(() => {
+    const prefixColumns: ColumnDef<TData, TValue>[] = []
+
+    if (enableRowReorder) {
+      const dragColumn: ColumnDef<TData, TValue> = {
+        id: ROW_DRAG_COLUMN_ID,
+        header: () => null,
+        cell: ({ row }) => {
+          const rowReorderId = getRowReorderId?.(row.original) ?? row.id
+          const isDragging = draggedRowId === rowReorderId
+          return (
+            <div
+              className={cn(
+                'flex h-full items-center justify-center',
+                isDragging && 'opacity-40'
+              )}
+              draggable
+              onDragStart={(e) => {
+                e.stopPropagation()
+                setDraggedRowId(rowReorderId)
+                if (e.dataTransfer) {
+                  e.dataTransfer.effectAllowed = 'move'
+                  e.dataTransfer.setData('text/plain', rowReorderId)
+                }
+              }}
+              onDragEnd={(e) => {
+                e.stopPropagation()
+                setDraggedRowId(null)
+                setDragOverRowId(null)
+              }}
+              onClick={(e) => e.stopPropagation()}
+              title="拖动调整行顺序"
+              data-row-drag-handle
+            >
+              <GripVertical className="h-4 w-4 cursor-grab text-muted-foreground active:cursor-grabbing" />
+            </div>
+          )
+        },
+        size: ROW_DRAG_WIDTH_PX,
+        minSize: ROW_DRAG_WIDTH_PX,
+        maxSize: ROW_DRAG_WIDTH_PX,
+        enableSorting: false,
+        enableHiding: false,
+        enableResizing: false,
+      }
+      prefixColumns.push(dragColumn)
+    }
+
     if (!enableRowSelection) {
-      return columns
+      return [...prefixColumns, ...columns]
     }
 
     const selectColumn: ColumnDef<TData, TValue> = {
@@ -549,8 +633,56 @@ export function DataTable<TData, TValue>({
       },
     }
 
-    return [selectColumn, ...columns]
-  }, [enableRowSelection, columns, isRowEditing, getIdValue, onCancelEdit, cancelEditOnSelectionChange])
+    prefixColumns.push(selectColumn)
+    return [...prefixColumns, ...columns]
+  }, [
+    columns,
+    enableRowSelection,
+    enableRowReorder,
+    getRowReorderId,
+    draggedRowId,
+    cancelEditOnSelectionChange,
+    isRowEditing,
+    onCancelEdit,
+  ])
+
+  const allFinalColumnIds = React.useMemo(
+    () =>
+      finalColumns
+        .map((col) => col.id ?? (col as { accessorKey?: string }).accessorKey)
+        .filter((id): id is string => !!id),
+    [finalColumns]
+  )
+
+  const columnOrderPinOptions = React.useMemo(
+    () => ({
+      enableRowDrag: enableRowReorder,
+      enableRowSelect: enableRowSelection,
+    }),
+    [enableRowReorder, enableRowSelection]
+  )
+
+  const setColumnOrderNormalized = React.useCallback(
+    (updater: ColumnOrderState | ((old: ColumnOrderState) => ColumnOrderState)) => {
+      setColumnOrder((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater
+        const normalized = normalizeLeadingColumnOrder(
+          next,
+          allFinalColumnIds,
+          columnOrderPinOptions
+        )
+        return JSON.stringify(prev) === JSON.stringify(normalized) ? prev : normalized
+      })
+    },
+    [allFinalColumnIds, columnOrderPinOptions]
+  )
+
+  // 确保 TanStack columnOrder 始终将拖拽列固定在复选框前（saved view 可能只有数据列）
+  React.useLayoutEffect(() => {
+    if (!columnOrderPinOptions.enableRowDrag && !columnOrderPinOptions.enableRowSelect) return
+    if (allFinalColumnIds.length === 0) return
+    setColumnOrderNormalized((prev) => prev)
+  }, [allFinalColumnIds, columnOrderPinOptions, setColumnOrderNormalized])
 
   // 行选择变化处理：仅在用户操作时通知父组件，勿用 useEffect 监听 rowSelection（受控 selectedRows 会死循环）
   const handleRowSelectionChange = React.useCallback(
@@ -590,7 +722,7 @@ export function DataTable<TData, TValue>({
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
     onColumnSizingChange: setColumnSizing,
-    onColumnOrderChange: setColumnOrder,
+    onColumnOrderChange: setColumnOrderNormalized,
     // 列宽：size 为逻辑像素；maxSize 仅约束拖拽上限，默认列宽仍用 DEFAULT_COLUMN_SIZE_PX。
     defaultColumn: {
       size: DEFAULT_COLUMN_SIZE_PX,
@@ -649,58 +781,71 @@ export function DataTable<TData, TValue>({
     expandColumnDisplayPx,
   ])
 
-  // 当 table 初始化后，应用默认视图（确保列ID都正确）
-  // 这个 useEffect 必须在 table 创建之后
+  // 当 table 初始化后，应用默认视图（仅一次，避免 table 引用变化导致无限 setState）
+  const defaultViewAppliedRef = React.useRef(false)
   React.useEffect(() => {
-    if (enableViewManager && viewManagerTableName && table) {
-      // 使用 table.getAllColumns() 获取所有列（包括隐藏的列）
-      const allColumns = table.getAllColumns()
-      const allColumnIds = allColumns
-        .map(col => col.id)
-        .filter((id): id is string => !!id && id !== 'select') // 排除 select 列
-      
-      if (allColumnIds.length > 0) {
-        // 异步加载默认视图
-        const loadDefaultView = async () => {
-          try {
-            const defaultView = await getDefaultView(viewManagerTableName)
-            if (defaultView) {
-              const initialVisibility = applyViewToVisibility(defaultView, allColumnIds)
-              setColumnVisibility(initialVisibility)
-              // 应用保存的列宽和列顺序
-              if (defaultView.columnSizing) {
-                setColumnSizing(defaultView.columnSizing)
-              }
-              if (defaultView.columnOrder && defaultView.columnOrder.length > 0) {
-                // 合并保存的列顺序与当前表格默认顺序，使新增列（不在保存视图中的列）出现在配置位置而非最右侧
-                const defaultOrder = allColumnIds
-                const savedSet = new Set(defaultView.columnOrder)
-                const missingInSaved = defaultOrder.filter((id) => !savedSet.has(id))
-                if (missingInSaved.length > 0) {
-                  let savedIdx = 0
-                  const merged: string[] = []
-                  for (const id of defaultOrder) {
-                    if (missingInSaved.includes(id)) {
-                      merged.push(id)
-                    } else {
-                      if (savedIdx < defaultView.columnOrder!.length) {
-                        merged.push(defaultView.columnOrder![savedIdx++])
-                      }
-                    }
-                  }
-                  setColumnOrder(merged)
-                } else {
-                  setColumnOrder(defaultView.columnOrder)
-                }
+    if (defaultViewAppliedRef.current) return
+    if (!enableViewManager || !viewManagerTableName || !table) return
+
+    const allColumns = table.getAllColumns()
+    const allColumnIds = allColumns
+      .map((col) => col.id)
+      .filter((id): id is string => !!id && !INTERNAL_TABLE_COLUMN_IDS.has(id))
+
+    if (allColumnIds.length === 0) return
+
+    defaultViewAppliedRef.current = true
+
+    const loadDefaultView = async () => {
+      try {
+        const defaultView = await getDefaultView(viewManagerTableName)
+        if (!defaultView) return
+
+        const initialVisibility = applyViewToVisibility(defaultView, allColumnIds)
+        setColumnVisibility((prev) => {
+          const prevKey = JSON.stringify(prev)
+          const nextKey = JSON.stringify(initialVisibility)
+          return prevKey === nextKey ? prev : initialVisibility
+        })
+        if (defaultView.columnSizing) {
+          setColumnSizing((prev) => {
+            const prevKey = JSON.stringify(prev)
+            const nextKey = JSON.stringify(defaultView.columnSizing)
+            return prevKey === nextKey ? prev : defaultView.columnSizing!
+          })
+        }
+        if (defaultView.columnOrder && defaultView.columnOrder.length > 0) {
+          const defaultOrder = allColumnIds
+          const savedSet = new Set(defaultView.columnOrder)
+          const missingInSaved = defaultOrder.filter((id) => !savedSet.has(id))
+          let nextOrder: string[]
+          if (missingInSaved.length > 0) {
+            let savedIdx = 0
+            const merged: string[] = []
+            for (const id of defaultOrder) {
+              if (missingInSaved.includes(id)) {
+                merged.push(id)
+              } else if (savedIdx < defaultView.columnOrder!.length) {
+                merged.push(defaultView.columnOrder![savedIdx++])
               }
             }
-          } catch (error) {
-            console.error('加载默认视图失败:', error)
+            nextOrder = merged
+          } else {
+            nextOrder = defaultView.columnOrder
           }
+          setColumnOrderNormalized((prev) => {
+            const prevKey = JSON.stringify(prev)
+            const nextKey = JSON.stringify(nextOrder)
+            return prevKey === nextKey ? prev : nextOrder
+          })
         }
-        loadDefaultView()
+      } catch (error) {
+        console.error('加载默认视图失败:', error)
+        defaultViewAppliedRef.current = false
       }
     }
+
+    void loadDefaultView()
   }, [enableViewManager, viewManagerTableName, table])
 
   // 处理分页变化
@@ -714,40 +859,81 @@ export function DataTable<TData, TValue>({
     setPageInputValue(String(currentPage + 1))
   }, [currentPage])
 
-  // 计算当前列可见性状态（用于保存视图）
+  // 计算当前列可见性（仅用 columnVisibility 状态，避免依赖 table 引用导致每轮渲染重算）
   const currentColumnVisibility = React.useMemo(() => {
     if (!enableViewManager || !viewManagerTableName) {
       return {}
     }
-    
-    // 从表格中获取当前实际的列可见性状态（用于保存视图）
-    // 使用 table.getAllColumns() 获取所有列（包括隐藏的列），而不是 finalColumns
+
     const actualVisibility: Record<string, boolean> = {}
-    
-    // 获取所有列（包括隐藏的列）
-    const allColumns = table.getAllColumns()
-    const allColumnIds = allColumns
-      .map(col => col.id)
-      .filter((id): id is string => !!id && id !== 'select') // 排除 select 列，因为它不应该被保存到视图中
-    
-    allColumnIds.forEach(colId => {
-      try {
-        const column = table.getColumn(colId)
-        if (column) {
-          actualVisibility[colId] = column.getIsVisible()
-        } else {
-          // 如果列还不存在，使用 columnVisibility 状态
-          // react-table: false 表示隐藏，true 或不设置表示显示
-          actualVisibility[colId] = columnVisibility[colId] !== false
-        }
-      } catch (error) {
-        // 如果获取列失败，使用 columnVisibility 状态
-        actualVisibility[colId] = columnVisibility[colId] !== false
-      }
+    columns.forEach((col) => {
+      const colId = col.id ?? (col as { accessorKey?: string }).accessorKey
+      if (!colId || INTERNAL_TABLE_COLUMN_IDS.has(String(colId))) return
+      actualVisibility[String(colId)] = columnVisibility[String(colId)] !== false
     })
-    
+
     return actualVisibility
-  }, [enableViewManager, viewManagerTableName, table, columnVisibility])
+  }, [enableViewManager, viewManagerTableName, columns, columnVisibility])
+
+  const viewManagerInHeader =
+    enableViewManager && viewManagerTableName && viewManagerPlacement !== 'toolbar'
+
+  const handleViewManagerViewChange = React.useCallback(
+    (visibility: Record<string, boolean>, sizing?: Record<string, number>, order?: string[]) => {
+      setColumnVisibility(visibility)
+      if (sizing) setColumnSizing(sizing)
+      if (order) setColumnOrderNormalized(order)
+    },
+    [setColumnOrderNormalized]
+  )
+
+  const viewManagerBridgeKeyRef = React.useRef('')
+  const userColumnIds = React.useMemo(
+    () =>
+      columns
+        .map((col) => col.id ?? (col as { accessorKey?: string }).accessorKey)
+        .filter((id): id is string => !!id && !INTERNAL_TABLE_COLUMN_IDS.has(String(id))),
+    [columns]
+  )
+
+  React.useEffect(() => {
+    if (!onViewManagerBridgeChange) return
+    if (!enableViewManager || !viewManagerTableName) {
+      if (viewManagerBridgeKeyRef.current !== '') {
+        viewManagerBridgeKeyRef.current = ''
+        onViewManagerBridgeChange(null)
+      }
+      return
+    }
+    const bridgeKey = JSON.stringify({
+      tableName: viewManagerTableName,
+      visibility: currentColumnVisibility,
+      sizing: columnSizing,
+      order: columnOrder,
+      columns: userColumnIds,
+    })
+    if (viewManagerBridgeKeyRef.current === bridgeKey) return
+    viewManagerBridgeKeyRef.current = bridgeKey
+    onViewManagerBridgeChange({
+      tableName: viewManagerTableName,
+      currentVisibility: currentColumnVisibility,
+      currentSizing: columnSizing,
+      currentOrder: columnOrder,
+      allColumns: userColumnIds,
+      columnLabels,
+      onViewChange: handleViewManagerViewChange,
+    })
+  }, [
+    onViewManagerBridgeChange,
+    enableViewManager,
+    viewManagerTableName,
+    currentColumnVisibility,
+    columnSizing,
+    columnOrder,
+    columnLabels,
+    handleViewManagerViewChange,
+    userColumnIds,
+  ])
 
   const handlePageChange = (newPage: number) => {
     onPageChange?.(newPage + 1) // 转换为 1-based
@@ -842,8 +1028,8 @@ export function DataTable<TData, TValue>({
     newOrder.splice(draggedIndex, 1)
     newOrder.splice(targetIndex, 0, draggedColumn)
     
-    // 更新列顺序
-    setColumnOrder(newOrder)
+    // 更新列顺序（内部辅助列始终固定在最左）
+    setColumnOrderNormalized(newOrder)
     setDraggedColumn(null)
     setDragOverColumn(null)
     
@@ -854,6 +1040,56 @@ export function DataTable<TData, TValue>({
     setDraggedColumn(null)
     setDragOverColumn(null)
   }, [])
+
+  const handleRowDragOver = React.useCallback(
+    (e: React.DragEvent, rowReorderId: string) => {
+      if (!enableRowReorder || !draggedRowId) return
+      e.preventDefault()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+      setDragOverRowId(rowReorderId)
+    },
+    [enableRowReorder, draggedRowId]
+  )
+
+  const handleRowDrop = React.useCallback(
+    (e: React.DragEvent, targetRowReorderId: string) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!enableRowReorder || !draggedRowId || !onRowReorder || !getRowReorderId) {
+        setDraggedRowId(null)
+        setDragOverRowId(null)
+        return
+      }
+      if (draggedRowId === targetRowReorderId) {
+        setDraggedRowId(null)
+        setDragOverRowId(null)
+        return
+      }
+      const rows = table.getRowModel().rows
+      const fromIndex = rows.findIndex(
+        (r) => (getRowReorderId(r.original) ?? r.id) === draggedRowId
+      )
+      const toIndex = rows.findIndex(
+        (r) => (getRowReorderId(r.original) ?? r.id) === targetRowReorderId
+      )
+      if (fromIndex < 0 || toIndex < 0) {
+        setDraggedRowId(null)
+        setDragOverRowId(null)
+        return
+      }
+      const reordered = [...rows]
+      const [moved] = reordered.splice(fromIndex, 1)
+      reordered.splice(toIndex, 0, moved)
+      onRowReorder(
+        fromIndex,
+        toIndex,
+        reordered.map((r) => getRowReorderId(r.original) ?? String(r.id))
+      )
+      setDraggedRowId(null)
+      setDragOverRowId(null)
+    },
+    [enableRowReorder, draggedRowId, getRowReorderId, onRowReorder, table]
+  )
 
   return (
     <div className="w-full space-y-2">
@@ -958,15 +1194,22 @@ export function DataTable<TData, TValue>({
                   const columnId = header.column.id
                   const isActionsColumn = columnId === 'actions'
                   const isSelectColumn = columnId === 'select'
+                  const isRowDragColumn = columnId === ROW_DRAG_COLUMN_ID
                   const isLastHeader = headerIndex === headerGroup.headers.length - 1
                   
-                  // 确定哪些列需要固定（只固定复选框列和操作列）
-                  const shouldSticky = isSelectColumn || isActionsColumn
-                  const stickyPosition = isSelectColumn 
-                    ? 'left' 
-                    : isActionsColumn 
-                    ? 'right' 
+                  const shouldSticky = isRowDragColumn || isSelectColumn || isActionsColumn
+                  const stickyPosition = isRowDragColumn || isSelectColumn
+                    ? 'left'
+                    : isActionsColumn
+                    ? 'right'
                     : null
+                  const stickyLeftPx = isRowDragColumn
+                    ? 0
+                    : isSelectColumn && enableRowReorder
+                    ? ROW_DRAG_WIDTH_PX
+                    : isSelectColumn
+                    ? 0
+                    : undefined
                   
                   // 检查该列是否可以排序（根据 sortableColumns 配置）
                   const canSortColumn = sortableColumns.length === 0 || sortableColumns.includes(columnId)
@@ -1048,7 +1291,7 @@ export function DataTable<TData, TValue>({
                               >
                                 <DropdownMenuLabel className="sticky top-0 bg-popover z-10 py-2 border-b">切换列显示</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                {enableViewManager && viewManagerTableName && (
+                                {viewManagerInHeader && (
                                   <>
                                     <div className="px-2 py-1.5 border-b">
                                       <TableViewManager
@@ -1060,13 +1303,13 @@ export function DataTable<TData, TValue>({
                                           const allCols = table.getAllColumns()
                                           return allCols
                                             .map(col => col.id)
-                                            .filter((id): id is string => !!id && id !== 'select')
+                                            .filter((id): id is string => !!id && !INTERNAL_TABLE_COLUMN_IDS.has(id))
                                         })()}
                                         columnLabels={columnLabels}
                                         onViewChange={(visibility, sizing, order) => {
                                           setColumnVisibility(visibility)
                                           if (sizing) setColumnSizing(sizing)
-                                          if (order) setColumnOrder(order)
+                                          if (order) setColumnOrderNormalized(order)
                                         }}
                                       />
                                     </div>
@@ -1125,7 +1368,7 @@ export function DataTable<TData, TValue>({
                   const alignLeft = (header.column.columnDef.meta as any)?.alignLeft || false
                   
                   // 判断是否可以拖拽（复选框列和操作列不可拖拽，正在resize时也不可拖拽）
-                  const isDraggable = !isSelectColumn && !isActionsColumn && !isResizing
+                  const isDraggable = !isSelectColumn && !isRowDragColumn && !isActionsColumn && !isResizing
                   const isDragging = draggedColumn === columnId
                   const isDragOver = dragOverColumn === columnId
                   
@@ -1134,11 +1377,12 @@ export function DataTable<TData, TValue>({
                       key={header.id} 
                       className={cn(
                         "font-semibold text-xs text-foreground py-1 relative group bg-muted/80 overflow-hidden",
-                        isSelectColumn ? "px-2.5" : "px-1",
+                        isSelectColumn ? "px-2.5" : isRowDragColumn ? "px-0" : "px-1",
                         widthClass,
                         "whitespace-nowrap",
                         shouldSticky && stickyPosition === 'left' && "sticky z-20",
-                        isSelectColumn && "left-0 bg-muted/80",
+                        isRowDragColumn && "left-0 bg-muted/80",
+                        isSelectColumn && "bg-muted/80",
                         isDragging && "opacity-50",
                         isDragOver && "bg-blue-100 dark:bg-blue-900/30"
                       )}
@@ -1146,10 +1390,15 @@ export function DataTable<TData, TValue>({
                         width: stretchLayout.getStretchedWidthPx(header.column),
                         minWidth: stretchLayout.getStretchedWidthPx(header.column),
                         maxWidth: stretchLayout.getStretchedWidthPx(header.column),
-                        ...(shouldSticky && stickyPosition === 'left' ? { 
-                          left: 0,
-                          boxShadow: '2px 0 4px -2px rgba(0, 0, 0, 0.1)'
-                        } : {}),
+                        ...(shouldSticky && stickyPosition === 'left' && stickyLeftPx !== undefined
+                          ? {
+                              left: stickyLeftPx,
+                              boxShadow:
+                                stickyLeftPx > 0
+                                  ? '2px 0 4px -2px rgba(0, 0, 0, 0.1)'
+                                  : undefined,
+                            }
+                          : {}),
                       }}
                       draggable={isDraggable}
                       onDragStart={isDraggable ? (e) => handleDragStart(e, columnId) : undefined}
@@ -1288,6 +1537,9 @@ export function DataTable<TData, TValue>({
                 
                 // 如果已展开，获取展开内容（用于渲染）
                 const currentExpandedContent = isExpanded && expandedContent ? expandedContent : null
+                const rowReorderId = getRowReorderId?.(row.original) ?? row.id
+                const isRowDragOver =
+                  enableRowReorder && dragOverRowId === rowReorderId && draggedRowId !== rowReorderId
                 
                 return (
                   <React.Fragment key={row.id}>
@@ -1296,6 +1548,7 @@ export function DataTable<TData, TValue>({
                       suppressHydrationWarning={isEditing} // 编辑状态可能在服务器端和客户端不一致
                       className={cn(
                         "transition-colors duration-100 border-0 group cursor-pointer [&>td]:h-8",
+                        isRowDragOver && "ring-2 ring-inset ring-blue-400/70 dark:ring-blue-500/60",
                         // 主行：紧凑 + Excel 式网格（单元格边框由 TableCell 承担）
                         isEditing
                           ? "bg-amber-50/90 dark:bg-amber-950/35 border-l-2 border-l-amber-500 dark:border-l-amber-500"
@@ -1309,6 +1562,23 @@ export function DataTable<TData, TValue>({
                         // 这样可以避免在编辑单元格时误触发展开
                         e.stopPropagation()
                       }}
+                      onDragOver={
+                        enableRowReorder && draggedRowId
+                          ? (e) => handleRowDragOver(e, rowReorderId)
+                          : undefined
+                      }
+                      onDragLeave={
+                        enableRowReorder
+                          ? () => {
+                              if (dragOverRowId === rowReorderId) setDragOverRowId(null)
+                            }
+                          : undefined
+                      }
+                      onDrop={
+                        enableRowReorder && draggedRowId
+                          ? (e) => handleRowDrop(e, rowReorderId)
+                          : undefined
+                      }
                     >
                       {/* 展开图标列（如果启用展开行功能，始终显示以保持对齐） */}
                       {expandableRows?.enabled && (
@@ -1349,20 +1619,27 @@ export function DataTable<TData, TValue>({
                       {row.getVisibleCells().map((cell, cellIndex) => {
                         const isActionsCell = cell.column.id === 'actions'
                         const isSelectCell = cell.column.id === 'select'
+                        const isRowDragCell = cell.column.id === ROW_DRAG_COLUMN_ID
                         const widthClass = (cell.column.columnDef.meta as any)?.widthClass || ''
                         
-                        // 确定哪些单元格需要固定（只固定复选框列和操作列）
-                        const shouldSticky = isSelectCell || isActionsCell
-                        const stickyPosition = isSelectCell 
-                          ? 'left' 
-                          : isActionsCell 
-                          ? 'right' 
+                        const shouldSticky = isRowDragCell || isSelectCell || isActionsCell
+                        const stickyPosition = isRowDragCell || isSelectCell
+                          ? 'left'
+                          : isActionsCell
+                          ? 'right'
                           : null
+                        const stickyLeftPx = isRowDragCell
+                          ? 0
+                          : isSelectCell && enableRowReorder
+                          ? ROW_DRAG_WIDTH_PX
+                          : isSelectCell
+                          ? 0
+                          : undefined
                         
                         // 提取单元格文本内容用于复制
                         const extractCellText = (): string => {
                           // 如果是操作列或复选框列，不复制
-                          if (isActionsCell || isSelectCell) {
+                          if (isActionsCell || isSelectCell || isRowDragCell) {
                             return ''
                           }
 
@@ -1423,7 +1700,7 @@ export function DataTable<TData, TValue>({
                         // 处理右键复制
                         const handleContextMenu = async (e: React.MouseEvent<HTMLTableCellElement>) => {
                           // 如果是操作列或复选框列，不显示复制菜单
-                          if (isActionsCell || isSelectCell) {
+                          if (isActionsCell || isSelectCell || isRowDragCell) {
                             return
                           }
                           
@@ -1478,7 +1755,7 @@ export function DataTable<TData, TValue>({
                         const isCopied = copiedCellId === cell.id
                         
                         // 确定是否可以右键复制：非编辑状态、非操作列、非复选框列
-                        const canContextMenu = !isActionsCell && !isSelectCell && !isEditing
+                        const canContextMenu = !isActionsCell && !isSelectCell && !isRowDragCell && !isEditing
                         const mblCopyHint =
                           cell.column.id != null &&
                           MBL_CLIPBOARD_COLUMN_IDS.has(cell.column.id)
@@ -1503,9 +1780,11 @@ export function DataTable<TData, TValue>({
                                 ? "px-2"
                                 : isSelectCell
                                   ? "px-2"
+                                  : isRowDragCell
+                                    ? "px-0"
                                   : "px-1.5",
                               widthClass,
-                              shouldSticky && stickyPosition === 'left' && "sticky z-10 left-0",
+                              shouldSticky && stickyPosition === 'left' && "sticky z-10",
                               shouldSticky && stickyPosition === 'right' && "sticky right-0 z-10",
                               isCopied && "bg-green-50 dark:bg-green-950/20"
                             )}
@@ -1514,12 +1793,14 @@ export function DataTable<TData, TValue>({
                               minWidth: stretchLayout.getStretchedWidthPx(cell.column),
                               maxWidth: stretchLayout.getStretchedWidthPx(cell.column),
                               ...(shouldSticky ? { 
-                                left: stickyPosition === 'left' ? 0 : undefined,
+                                left: stickyPosition === 'left' ? (stickyLeftPx ?? 0) : undefined,
                                 right: stickyPosition === 'right' ? 0 : undefined,
                                 backgroundColor: shouldSticky ? 'var(--background)' : undefined,
                                 boxShadow: shouldSticky 
                                   ? (stickyPosition === 'left' 
-                                    ? '2px 0 4px -2px rgba(0, 0, 0, 0.1)' 
+                                    ? (stickyLeftPx != null && stickyLeftPx > 0
+                                      ? '2px 0 4px -2px rgba(0, 0, 0, 0.1)'
+                                      : undefined)
                                     : '-2px 0 4px -2px rgba(0, 0, 0, 0.1)')
                                   : undefined
                               } : {})
@@ -1561,8 +1842,10 @@ export function DataTable<TData, TValue>({
                               className={cn(
                                 "relative h-full w-full",
                                 isActionsCell ? "flex min-w-max shrink-0 items-center justify-center" : "min-w-0",
-                                isSelectCell ? "flex min-w-0 items-center justify-center" : null,
-                                !isActionsCell && !isSelectCell
+                                isSelectCell || isRowDragCell
+                                  ? "flex min-w-0 items-center justify-center"
+                                  : null,
+                                !isActionsCell && !isSelectCell && !isRowDragCell
                                   ? cn(
                                       // flex：垂直居中 + 水平按列对齐；行内编辑根节点须 min-w-0 才能在 table-fixed 下不撑开列宽
                                       "relative flex h-full w-full min-w-0 items-center overflow-hidden",
@@ -1577,7 +1860,7 @@ export function DataTable<TData, TValue>({
                                   : null
                               )}
                               title={
-                                !isActionsCell && !isSelectCell && plainForTitle
+                                !isActionsCell && !isSelectCell && !isRowDragCell && plainForTitle
                                   ? plainForTitle
                                   : undefined
                               }

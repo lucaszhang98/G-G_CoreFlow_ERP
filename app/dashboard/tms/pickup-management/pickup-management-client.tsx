@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { PickupSummaryDialog } from "@/components/pickup-management/pickup-summary-dialog"
 import { PickupImportDialog } from "./pickup-import-dialog"
+import { PickupDateFilter } from "@/components/pickup-management/pickup-date-filter"
 import { IncludeArchivedOrdersToggle } from "@/components/order-visibility/include-archived-toggle"
 import {
   generatePickupExportByTemplate,
@@ -157,8 +158,8 @@ export function PickupManagementClient() {
   }, [refreshKey])
 
   const handleTotalChange = React.useCallback((newTotal: number) => {
-    if (totalCount === 0) setTotalCount(newTotal)
-  }, [totalCount])
+    setTotalCount((prev) => (prev === 0 && newTotal > 0 ? newTotal : prev))
+  }, [])
 
   const handleFilteredTotalChange = React.useCallback((newFilteredTotal: number) => {
     setFilteredCount(newFilteredTotal)
@@ -435,36 +436,6 @@ export function PickupManagementClient() {
     }
   }, [])
 
-  // 加载承运公司选项（用于承运公司字段的模糊搜索）
-  const loadCarrierOptions = React.useCallback(async (search: string = ''): Promise<FuzzySearchOption[]> => {
-    try {
-      const params = new URLSearchParams({
-        limit: '100',
-        sort: 'name',
-        order: 'asc',
-      })
-      if (search && search.trim()) {
-        params.append('search', search.trim())
-        params.append('unlimited', 'true')
-      }
-      
-      const response = await fetch(`/api/carriers?${params.toString()}`)
-      if (!response.ok) {
-        throw new Error('获取承运公司列表失败')
-      }
-      const result = await response.json()
-      const carriers = result.data || []
-      
-      return carriers.map((carrier: any) => ({
-        label: carrier.name || carrier.carrier_code || '',
-        value: String(carrier.carrier_id || ''),
-      }))
-    } catch (error) {
-      console.error('加载承运公司选项失败:', error)
-      return []
-    }
-  }, [])
-
   // 批量发送邮件功能
   const handleSendEmails = React.useCallback(async () => {
     if (orderedSelectedRows.length === 0) {
@@ -589,10 +560,22 @@ export function PickupManagementClient() {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [handleCopyContainerNumbers, orderedSelectedRows])
 
-  /** 放在「快速筛选」一行：查验柜 / 待查询（无 LFD、无提柜） / 待提柜（有 LFD、无提柜） */
+  /** 放在「快速筛选」一行：日期筛选 / 查验柜 / 待查询 / 待提柜 */
   const customFilterContent = React.useCallback(
-    () => (
+    (
+      _applyFilterValues: (v: Record<string, unknown>) => void,
+      helpers?: {
+        filterValues: Record<string, unknown>
+        onFilterChange: (field: string, value: unknown) => void
+      }
+    ) => (
       <>
+        {helpers && (
+          <PickupDateFilter
+            filterValues={helpers.filterValues}
+            onFilterChange={helpers.onFilterChange}
+          />
+        )}
         <Button
           type="button"
           variant={pickupInspectionActive ? "default" : "outline"}
@@ -855,8 +838,6 @@ export function PickupManagementClient() {
           config={pickupManagementConfig}
           extraListParams={extraListParams}
           fieldFuzzyLoadOptions={{
-            carrier: loadCarrierOptions,
-            carrier_id: loadCarrierOptions,
             driver_name: loadDriverOptions,
           }}
           customActions={{

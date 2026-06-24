@@ -73,38 +73,44 @@ export function TableViewManager({
   const [loading, setLoading] = React.useState(false)
   const [dropdownOpen, setDropdownOpen] = React.useState(false)
 
-  // 加载视图列表（异步）
+  // 加载视图列表：挂载/切换表名时拉一次；打开下拉时再刷新（避免 visibility 变化导致循环请求）
+  const currentVisibilityRef = React.useRef(currentVisibility)
+  currentVisibilityRef.current = currentVisibility
+  const allColumnsKey = React.useMemo(() => allColumns.join('\0'), [allColumns])
+
   const loadViews = React.useCallback(async () => {
+    const visibility = currentVisibilityRef.current
     try {
       const loadedViews = await getTableViews(tableName)
       setViews(loadedViews)
-      
-      // 检查当前可见性是否匹配某个视图
-      const matchingView = loadedViews.find(view => {
-        return allColumns.every(col => {
-          const viewValue = view.columnVisibility[col] !== undefined 
-            ? view.columnVisibility[col] 
-            : true
-          return viewValue === currentVisibility[col]
+
+      const matchingView = loadedViews.find((view) =>
+        allColumns.every((col) => {
+          const viewValue =
+            view.columnVisibility[col] !== undefined ? view.columnVisibility[col] : true
+          return viewValue === visibility[col]
         })
-      })
-      
-      if (matchingView) {
-        setCurrentViewId(matchingView.id)
-      } else {
-        setCurrentViewId(null)
-      }
+      )
+
+      setCurrentViewId(matchingView?.id ?? null)
     } catch (error) {
       console.error('加载视图列表失败:', error)
-      // 失败时从缓存读取
       const cachedViews = getTableViewsSync(tableName)
       setViews(cachedViews)
     }
-  }, [tableName, allColumns, currentVisibility])
+  }, [tableName, allColumnsKey, allColumns])
 
   React.useEffect(() => {
-    loadViews()
+    void loadViews()
   }, [loadViews])
+
+  const handleDropdownOpenChange = React.useCallback(
+    (open: boolean) => {
+      setDropdownOpen(open)
+      if (open) void loadViews()
+    },
+    [loadViews]
+  )
 
   /** 代码内置：不读数据库；可配置列全部显示，列顺序与列宽回到表格定义默认值 */
   const applyOriginalView = React.useCallback(() => {
@@ -278,7 +284,7 @@ export function TableViewManager({
 
   return (
     <>
-      <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+      <DropdownMenu open={dropdownOpen} onOpenChange={handleDropdownOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"

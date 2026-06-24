@@ -30,9 +30,21 @@ import { autoFormatDateField, formatDateDisplay, formatDateTimeDisplay } from "@
 import { formatCurrency, formatNumber } from "@/lib/utils/format"
 import { SearchModule } from "./search-module"
 import { InlineEditCell } from "./inline-edit-cell"
+import {
+  TableViewManagerBridgeProvider,
+  TableViewManagerToolbarSlot,
+  type TableViewManagerBridgeValue,
+} from "@/components/table/table-view-manager-bridge"
 import { LocationSelect } from "@/components/ui/location-select"
 import { enhanceConfigWithSearchFields } from "@/lib/crud/search-config-generator"
 import { DEFAULT_LIST_PAGE_SIZE } from "@/lib/crud/default-list-pagination"
+import { getOperationModeTextClass } from "@/lib/utils/operation-mode-display"
+import { getPortLocationTextClass } from "@/lib/utils/port-location-display"
+import {
+  formatCarrierCodeDisplay,
+  getCarrierCodeCellClass,
+  CARRIER_CODE_CELL_SURFACE_LAYOUT,
+} from "@/lib/utils/carrier-code-display"
 import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
 import {
   Select,
@@ -314,14 +326,20 @@ function LocationInlineDisplayCell({
       </div>
     )
 
+  const renderCommitted = (text: string | null | undefined, fallbackId?: string | null) => {
+    const display = text || fallbackId || '-'
+    const colorClass = fieldKey === 'port_location' ? getPortLocationTextClass(text ?? fallbackId) : ''
+    return wrapIfEditable(<div className={colorClass}>{display}</div>)
+  }
+
   if (dPref === undefined) {
-    return wrapIfEditable(<div>{committedText || committedId || '-'}</div>)
+    return renderCommitted(committedText, committedId)
   }
 
   const draftId = normalizeLocationIdForDisplay(dPref)
 
   if ((draftId ?? '') === (committedId ?? '')) {
-    return wrapIfEditable(<div>{committedText || draftId || '-'}</div>)
+    return renderCommitted(committedText, draftId)
   }
 
   if (draftId === null) {
@@ -391,8 +409,14 @@ interface EntityTableProps<T = any> {
   refreshKey?: number | string // 刷新触发器（变化时重新获取数据，但不卸载组件）
   /** 默认筛选条件：当 URL 中没有任何 filter_ 参数时应用（例如入库管理默认本周拆柜） */
   initialFilterValues?: Record<string, string>
-  /** 在快速筛选区域渲染的额外内容，传入 applyFilterValues 可一次性设置多个筛选并刷新 */
-  customFilterContent?: (applyFilterValues: (v: Record<string, any>) => void) => React.ReactNode
+  /** 在快速筛选区域渲染的额外内容 */
+  customFilterContent?: (
+    applyFilterValues: (v: Record<string, any>) => void,
+    helpers?: {
+      filterValues: Record<string, any>
+      onFilterChange: (field: string, value: any) => void
+    }
+  ) => React.ReactNode
   /** 附加到列表 API 与地址栏的固定查询参数（如提柜管理 lfd_no_pickup），由父组件控制 */
   extraListParams?: Record<string, string>
   /** 按列 id / accessorKey 覆盖单元格渲染（完全接管该列展示与交互，例如订单明细内联编辑） */
@@ -439,9 +463,15 @@ export function EntityTable<T = any>({
   paginationChangeGuard,
 }: EntityTableProps<T>) {
   // 自动增强配置，生成 filterFields 和 advancedSearchFields（如果未配置）
+  const searchEnhanceKey = JSON.stringify({
+    advancedSearchEnabled: config.list.advancedSearchEnabled,
+    filterFieldsManualOnly: config.list.filterFieldsManualOnly,
+    filterFieldKeysExclude: config.list.filterFieldKeysExclude,
+    filterFieldKeys: config.list.filterFields?.map((f) => f.field),
+  })
   const enhancedConfig = React.useMemo(() => {
     return enhanceConfigWithSearchFields(config)
-  }, [config])
+  }, [config, searchEnhanceKey])
   
   const router = useRouter()
   const pathname = usePathname()
@@ -584,6 +614,22 @@ export function EntityTable<T = any>({
   
   // 批量操作状态
   const [selectedRows, setSelectedRows] = React.useState<T[]>([])
+  const [viewManagerBridge, setViewManagerBridge] = React.useState<TableViewManagerBridgeValue>(null)
+  const handleViewManagerBridgeChange = React.useCallback((value: TableViewManagerBridgeValue) => {
+    setViewManagerBridge((prev) => {
+      if (prev === value) return prev
+      if (!prev || !value) return value
+      const same =
+        prev.tableName === value.tableName &&
+        prev.onViewChange === value.onViewChange &&
+        JSON.stringify(prev.currentVisibility) === JSON.stringify(value.currentVisibility) &&
+        JSON.stringify(prev.currentSizing ?? {}) === JSON.stringify(value.currentSizing ?? {}) &&
+        JSON.stringify(prev.currentOrder ?? []) === JSON.stringify(value.currentOrder ?? []) &&
+        prev.allColumns.join('\0') === value.allColumns.join('\0') &&
+        JSON.stringify(prev.columnLabels) === JSON.stringify(value.columnLabels)
+      return same ? prev : value
+    })
+  }, [])
   const [batchEditDialogOpen, setBatchEditDialogOpen] = React.useState(false)
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = React.useState(false)
   const [batchEditValues, setBatchEditValues] = React.useState<Record<string, any>>({})
@@ -689,6 +735,10 @@ export function EntityTable<T = any>({
   const [rowInlineEditScopeByRow, setRowInlineEditScopeByRow] = React.useState<
     Record<string, { kind: 'all' } | { kind: 'single'; field: string }>
   >({})
+  const rowInlineEditScopeByRowRef = React.useRef(rowInlineEditScopeByRow)
+  React.useEffect(() => {
+    rowInlineEditScopeByRowRef.current = rowInlineEditScopeByRow
+  }, [rowInlineEditScopeByRow])
   const [savingAllDrafts, setSavingAllDrafts] = React.useState(false)
   const [isMounted, setIsMounted] = React.useState(false)
   
@@ -725,6 +775,16 @@ export function EntityTable<T = any>({
   ])
 
   const fetchAbortRef = React.useRef<AbortController | null>(null)
+  const fetchGenRef = React.useRef(0)
+  const onTotalChangeRef = React.useRef(onTotalChange)
+  const onFilteredTotalChangeRef = React.useRef(onFilteredTotalChange)
+  const onSearchParamsChangeRef = React.useRef(onSearchParamsChange)
+  React.useEffect(() => {
+    onTotalChangeRef.current = onTotalChange
+    onFilteredTotalChangeRef.current = onFilteredTotalChange
+    onSearchParamsChangeRef.current = onSearchParamsChange
+  }, [onTotalChange, onFilteredTotalChange, onSearchParamsChange])
+
   // 获取列表数据（新请求会取消上一次未完成的请求，避免刷新后 page=1 的响应覆盖 page=7）
   const fetchData = React.useCallback(async (
     currentPage: number,
@@ -741,6 +801,7 @@ export function EntityTable<T = any>({
     }
     const controller = new AbortController()
     fetchAbortRef.current = controller
+    const myGen = ++fetchGenRef.current
     try {
       setLoading(true)
       const params = new URLSearchParams({
@@ -832,19 +893,11 @@ export function EntityTable<T = any>({
         result.summary && typeof result.summary === 'object' ? result.summary : {}
       )
       
-      // 触发回调
-      if (onSearchParamsChange) {
-        onSearchParamsChange(params)
+      if (onSearchParamsChangeRef.current) {
+        onSearchParamsChangeRef.current(params)
       }
-      if (onTotalChange) {
-        // 注意：这里的total是所有数据的总数，不是筛选后的总数
-        // 如果有筛选条件，应该传递筛选后的总数
-        onTotalChange(newTotal)
-      }
-      if (onFilteredTotalChange) {
-        // 如果有筛选或搜索条件，传递当前total，否则传递总数
-        onFilteredTotalChange(newTotal)
-      }
+      onTotalChangeRef.current?.(newTotal)
+      onFilteredTotalChangeRef.current?.(newTotal)
     } catch (error: any) {
       if (error?.name === 'AbortError') return
       console.error(`[EntityTable] 获取${config.displayName}列表失败:`, error)
@@ -853,18 +906,15 @@ export function EntityTable<T = any>({
       setData([])
       setTotal(0)
       setListSummary({})
-      if (onTotalChange) onTotalChange(0)
-      if (onFilteredTotalChange) onFilteredTotalChange(0)
+      onTotalChangeRef.current?.(0)
+      onFilteredTotalChangeRef.current?.(0)
     } finally {
-      if (fetchAbortRef.current === controller) setLoading(false)
+      if (myGen === fetchGenRef.current) setLoading(false)
     }
   }, [
     config.apiPath,
     config.displayName,
     extraListParams,
-    onSearchParamsChange,
-    onTotalChange,
-    onFilteredTotalChange,
   ])
 
   React.useEffect(() => {
@@ -910,6 +960,53 @@ export function EntityTable<T = any>({
       setSorting([{ id: config.list.defaultSort, desc: config.list.defaultOrder === 'desc' }])
     }
   }
+
+  /** 快捷筛选视图使用固定排序，与 manual_sort_order 冲突，禁用拖拽 */
+  const rowReorderEnabled =
+    config.list.enableRowReorder === true &&
+    !extraListParams.pending_lfd_inquiry &&
+    !extraListParams.lfd_no_pickup
+
+  const handleRowReorder = React.useCallback(
+    (_fromIndex: number, _toIndex: number, orderedRowIds: string[]) => {
+      if (!rowReorderEnabled) return
+
+      let prevSnapshot: T[] = []
+      const idField = getIdField()
+      setData((prev) => {
+        prevSnapshot = prev
+        const reordered = orderedRowIds
+          .map((id) => prev.find((row) => String((row as Record<string, unknown>)[idField]) === id))
+          .filter((row): row is T => row != null)
+        return reordered.length === prev.length ? reordered : prev
+      })
+
+      const baseOrder = (page - 1) * pageSize * 10
+      const updates = orderedRowIds.map((pickup_id, i) => ({
+        pickup_id,
+        manual_sort_order: baseOrder + (i + 1) * 10,
+      }))
+
+      void fetch(`${config.apiPath}/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const body = (await res.json().catch(() => ({}))) as { error?: string }
+            throw new Error(body.error || '更新行顺序失败')
+          }
+          toast.success('行顺序已更新')
+        })
+        .catch((err: unknown) => {
+          setData(prevSnapshot)
+          const message = err instanceof Error ? err.message : '更新行顺序失败'
+          toast.error(message)
+        })
+    },
+    [config.apiPath, page, pageSize, rowReorderEnabled]
+  )
 
   // 处理创建
   const handleCreate = () => {
@@ -1161,10 +1258,48 @@ export function EntityTable<T = any>({
     })
   }, [])
 
+  /** 单字段失焦保存后退出该字段编辑；整行铅笔模式仅移除已保存字段的草稿 */
+  const exitEditAfterFieldSave = React.useCallback((rowId: string, fieldKey: string) => {
+    const scope = rowInlineEditScopeByRowRef.current[rowId]
+    if (scope?.kind === 'single') {
+      clearDraftForRowId(rowId)
+      return
+    }
+    const draft = draftValuesByRowRef.current[rowId]
+    if (draft && fieldKey) {
+      delete draft[fieldKey]
+    }
+    if (!draft || Object.keys(draft).length === 0) {
+      clearDraftForRowId(rowId)
+    }
+  }, [clearDraftForRowId])
+
+  const applyOptimisticRowPatch = React.useCallback(
+    (rowId: string, fieldKey: string, draftValue: unknown, updates: Record<string, unknown>) => {
+      const idField = getIdField()
+      setData((prevData) =>
+        prevData.map((item) => {
+          if (String((item as Record<string, unknown>)[idField]) !== rowId) return item
+          const updated = { ...(item as Record<string, unknown>), ...updates }
+          updated[fieldKey] = draftValue
+          return updated as T
+        })
+      )
+    },
+    [getIdField]
+  )
+
   // 保存单行草稿（铅笔或批量保存中调用）
   const handleSaveEdit = React.useCallback(async (
     row: T,
-    opts?: { skipFetch?: boolean; suppressToast?: boolean }
+    opts?: {
+      skipFetch?: boolean
+      suppressToast?: boolean
+      /** 仅保存指定字段（失焦自动保存） */
+      fieldKeys?: string[]
+      /** 乐观更新 + 后台写库，不阻塞 UI */
+      background?: boolean
+    }
   ) => {
     const idField = getIdField()
     const id = (row as any)[idField]
@@ -1177,6 +1312,7 @@ export function EntityTable<T = any>({
       // 过滤掉未改变的字段，并处理日期字段和关系字段
       const updates: Record<string, any> = {}
       Object.entries(currentEditingValues).forEach(([key, value]) => {
+        if (opts?.fieldKeys && !opts.fieldKeys.includes(key)) return
         // 处理字段名映射：parent_id -> parent, manager_id -> manager, department_id -> department
         // 对于 unloaded_by 和 received_by，直接使用原字段名
         let fieldConfig = config.fields[key]
@@ -1462,10 +1598,131 @@ export function EntityTable<T = any>({
       })
       
       if (Object.keys(updates).length === 0) {
-        clearDraftForRowId(rowId)
+        if (opts?.fieldKeys?.length === 1) {
+          exitEditAfterFieldSave(rowId, opts.fieldKeys[0])
+        } else {
+          clearDraftForRowId(rowId)
+        }
         if (!opts?.suppressToast) {
           toast.info('没有需要保存的更改')
         }
+        return
+      }
+
+      const blurFieldKey = opts?.fieldKeys?.length === 1 ? opts.fieldKeys[0] : undefined
+      const blurDraftValue =
+        blurFieldKey != null ? currentEditingValues[blurFieldKey] : undefined
+
+      const runPersist = async () => {
+        if (customSaveHandler) {
+          await customSaveHandler(row, updates)
+          if (!opts?.background) {
+            clearDraftForRowId(rowId)
+            if (!opts?.suppressToast) {
+              toast.success(`更新${config.displayName}成功`)
+            }
+            if (!opts?.skipFetch) {
+              await fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
+            }
+          }
+          return
+        }
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[EntityTable] 更新 ${config.displayName} (${id}):`, updates)
+          console.log(`[EntityTable] 发送的 JSON:`, JSON.stringify(updates))
+        }
+
+        let response: Response
+        let responseText: string = ''
+
+        try {
+          response = await fetch(`${config.apiPath}/${id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(updates),
+          })
+          responseText = await response.text()
+        } catch (fetchError: any) {
+          console.error(`[EntityTable] 网络请求失败:`, fetchError)
+          throw new Error(`网络请求失败: ${fetchError.message || '未知错误'}`)
+        }
+
+        if (!response.ok) {
+          let errorData: any = {}
+          try {
+            errorData = responseText ? JSON.parse(responseText) : {}
+          } catch {
+            errorData = { error: `HTTP ${response.status}: ${response.statusText}`, rawText: responseText }
+          }
+
+          let errorMessage = errorData.error || `更新${config.displayName}失败`
+          if (errorData.details && Array.isArray(errorData.details) && errorData.details.length > 0) {
+            const detailMessages = errorData.details.map((d: any) => {
+              const fieldLabel = config.fields[d.field]?.label || d.field
+              return `${fieldLabel}: ${d.message}`
+            }).join('; ')
+            errorMessage = `${errorMessage}: ${detailMessages}`
+          }
+          throw new Error(errorMessage)
+        }
+
+        if (responseText) {
+          try {
+            const responseData = JSON.parse(responseText)
+            if (responseData.data) {
+              const idFieldMerge = config.idField || 'id'
+              const mergeRowId = String((row as any)[idFieldMerge])
+              if (mergeRowId === rowId) {
+                setData((prevData) => {
+                  const newData = prevData.map((item: any) => {
+                    const itemId = String(item[idFieldMerge])
+                    if (itemId !== rowId) return item
+                    const updatedItem = { ...item }
+                    Object.keys(responseData.data).forEach((key) => {
+                      if (responseData.data[key] !== undefined) {
+                        updatedItem[key] = responseData.data[key]
+                      }
+                    })
+                    return updatedItem
+                  })
+                  return newData
+                })
+              }
+            }
+          } catch {
+            // 响应非 JSON 时忽略
+          }
+        }
+
+        if (!opts?.background) {
+          clearDraftForRowId(rowId)
+          if (!opts?.suppressToast) {
+            toast.success(`更新${config.displayName}成功`)
+          }
+          if (!opts?.skipFetch) {
+            await fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
+          }
+        }
+      }
+
+      if (opts?.background) {
+        if (blurFieldKey != null) {
+          applyOptimisticRowPatch(rowId, blurFieldKey, blurDraftValue, updates)
+        }
+        exitEditAfterFieldSave(rowId, blurFieldKey ?? '')
+        void runPersist().catch(async (error: unknown) => {
+          const message = error instanceof Error ? error.message : `更新${config.displayName}失败`
+          console.error(`[EntityTable] 后台更新${config.displayName}失败:`, error)
+          toast.error(message)
+          try {
+            await fetchData(page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic)
+          } catch (refreshError) {
+            console.error(`[EntityTable] 失败后刷新数据失败:`, refreshError)
+          }
+        })
         return
       }
       
@@ -1666,7 +1923,23 @@ export function EntityTable<T = any>({
       console.error(`[EntityTable] 错误堆栈:`, error.stack)
       toast.error(error.message || `更新${config.displayName}失败`)
     }
-  }, [clearDraftForRowId, config.apiPath, config.displayName, config.fields, config.idField, customSaveHandler, fetchData, page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic])
+  }, [applyOptimisticRowPatch, clearDraftForRowId, config.apiPath, config.displayName, config.fields, config.idField, customSaveHandler, exitEditAfterFieldSave, fetchData, page, pageSize, sort, order, search, filterValues, advancedSearchValues, advancedSearchLogic])
+  
+  const handleFieldBlurSave = React.useCallback((row: T, fieldKey: string) => {
+    void handleSaveEdit(row, {
+      fieldKeys: [fieldKey],
+      suppressToast: true,
+      skipFetch: true,
+      background: true,
+    })
+  }, [handleSaveEdit])
+
+  const getFieldOnBlurSave = React.useCallback(
+    (row: T, fieldKey: string) => () => {
+      handleFieldBlurSave(row, fieldKey)
+    },
+    [handleFieldBlurSave]
+  )
   
   const handleSaveAllDrafts = React.useCallback(async () => {
     if (draftRowIds.length === 0) return
@@ -2257,6 +2530,7 @@ export function EntityTable<T = any>({
                 fieldConfig={fieldConfig}
                 value={currentValue}
                 onChange={getFieldOnChange(rowId, actualFieldKeyForEdit)}
+                onBlurSave={getFieldOnBlurSave(row.original, actualFieldKeyForEdit)}
                 loadOptions={loadOptionsForEdit}
                 loadFuzzyOptions={loadFuzzyOptionsForEdit}
                 autoOpenDropdown={shouldAutoOpenDropdown}
@@ -2272,6 +2546,7 @@ export function EntityTable<T = any>({
             <div
               role="button"
               tabIndex={0}
+              data-inline-edit-hit
               className={inlineEditDisplayHitAreaClass(fieldConfig)}
               onClick={openDraft}
               onKeyDown={(e) => {
@@ -2441,6 +2716,7 @@ export function EntityTable<T = any>({
             <div
               role="button"
               tabIndex={0}
+              data-inline-edit-hit
               className={inlineEditDisplayHitAreaClass(fieldConfig)}
               onClick={(e) => {
                 e.stopPropagation()
@@ -2610,6 +2886,7 @@ export function EntityTable<T = any>({
               fieldConfig={{ ...fieldConfig, type: effectiveType as any }}
               value={initialValue}
               onChange={getFieldOnChange(rowId, actualFieldKeyForEdit)}
+              onBlurSave={getFieldOnBlurSave(row.original, actualFieldKeyForEdit)}
               loadOptions={loadOptions}
               loadFuzzyOptions={loadFuzzyOptions}
               autoOpenDropdown={shouldAutoOpenDropdown}
@@ -2650,11 +2927,14 @@ export function EntityTable<T = any>({
           }
           const option = fieldConfig.options?.find(opt => opt.value === value)
           const displayText = option?.label || value || '-'
-          const isRedText = fieldKey === 'delivery_nature' && value === '扣货'
+          const selectDisplayClass =
+            fieldKey === 'delivery_nature' && value === '扣货'
+              ? 'text-red-600 dark:text-red-400 font-medium'
+              : fieldKey === 'operation_mode'
+                ? getOperationModeTextClass(value)
+                : ''
           return wrapIfEditable(
-            <div className={isRedText ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
-              {displayText}
-            </div>
+            <div className={selectDisplayClass}>{displayText}</div>
           )
         }
         if (fieldConfig.type === 'currency') {
@@ -2964,6 +3244,54 @@ export function EntityTable<T = any>({
           return wrapIfEditable(<div>{numValue.toLocaleString()}</div>)
         }
         
+        if (fieldKey === 'operation_mode_display') {
+          const opValue = dPref !== undefined ? dPref : row.getValue(fieldKey)
+          const text = opValue?.toString() || '-'
+          return wrapIfEditable(
+            <div className={getOperationModeTextClass(text)}>{text}</div>
+          )
+        }
+
+        if (fieldKey === 'carrier_code') {
+          const raw = dPref !== undefined ? dPref : row.getValue(fieldKey)
+          const display =
+            formatCarrierCodeDisplay(raw != null ? String(raw) : null) ??
+            (raw != null && String(raw).trim() !== '' ? String(raw).trim().toUpperCase() : '-')
+          const surfaceClass = cn(
+            CARRIER_CODE_CELL_SURFACE_LAYOUT,
+            getCarrierCodeCellClass(display === '-' ? null : display)
+          )
+
+          if (fieldConfig.readonly || !inlineEditCellClickEnabled) {
+            return (
+              <div className={surfaceClass} aria-hidden={false}>
+                {display}
+              </div>
+            )
+          }
+
+          return (
+            <div
+              role="button"
+              tabIndex={0}
+              data-inline-edit-hit
+              className={cn(surfaceClass, 'cursor-pointer hover:brightness-[0.97] dark:hover:brightness-110')}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleStartEdit(row.original, draftFieldKey)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  handleStartEdit(row.original, draftFieldKey)
+                }
+              }}
+            >
+              {display}
+            </div>
+          )
+        }
+
         const value = dPref !== undefined ? dPref : row.getValue(fieldKey)
         return wrapIfEditable(<div>{value?.toString() || '-'}</div>)
       }
@@ -2988,6 +3316,7 @@ export function EntityTable<T = any>({
     rowInlineEditScopeByRow,
     handleEditValueChange,
     getFieldOnChange,
+    getFieldOnBlurSave,
     handleStartEdit,
     fieldLoadOptions,
     fieldFuzzyLoadOptions,
@@ -3046,7 +3375,7 @@ export function EntityTable<T = any>({
         columns: baseColumns,
         sortableColumns,
         columnLabels,
-        showActions: true,
+        showActions: config.list.showActionsColumn !== false,
         actionsConfig,
         clickableColumns: customClickableColumns,
       })
@@ -3152,9 +3481,13 @@ export function EntityTable<T = any>({
         onAdvancedSearch={handleAdvancedSearch}
         onResetAdvancedSearch={handleResetAdvancedSearch}
         fieldFuzzyLoadOptions={fieldFuzzyLoadOptions}
-        extraFilterContent={customFilterContent?.(applyFilterValues)}
+        extraFilterContent={customFilterContent?.(applyFilterValues, {
+          filterValues,
+          onFilterChange: handleFilterChange,
+        })}
       />
       
+      <TableViewManagerBridgeProvider value={viewManagerBridge}>
       {/* 统计信息和批量操作工具栏（批量按钮过多时自动换行） */}
       <div className="flex flex-col gap-2 w-full px-0.5">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -3195,9 +3528,15 @@ export function EntityTable<T = any>({
             </span>
           )}
         </div>
-        {/* 批量操作工具栏 */}
-        {batchOpsEnabled && selectedRows.length > 0 && (
+        {/* 批量操作工具栏：提柜管理等可在此行固定「切换视图」 */}
+        {(config.list.viewManagerInToolbar ||
+          (batchOpsEnabled && selectedRows.length > 0)) && (
           <div className="flex flex-wrap items-center gap-2 w-full">
+            {config.list.viewManagerInToolbar ? (
+              <TableViewManagerToolbarSlot />
+            ) : null}
+            {batchOpsEnabled && selectedRows.length > 0 ? (
+              <>
             {batchEditEnabled && (
               <Button
                 variant="default"
@@ -3234,6 +3573,8 @@ export function EntityTable<T = any>({
             >
               取消选择
             </Button>
+              </>
+            ) : null}
           </div>
         )}
       </div>
@@ -3288,9 +3629,16 @@ export function EntityTable<T = any>({
         isRowEditing={inlineEditEnabled ? isRowEditing : undefined}
         onCancelEdit={inlineEditEnabled && draftRowIds.length > 0 ? handleCancelEdit : undefined}
         cancelEditOnSelectionChange={inlineEditEnabled ? false : true}
+        enableRowReorder={rowReorderEnabled}
+        getRowReorderId={(row) => String(getIdValue(row))}
+        onRowReorder={handleRowReorder}
         expandableRows={expandableRows}
         enableViewManager={true}
         viewManagerTableName={config.name}
+        viewManagerPlacement={config.list.viewManagerInToolbar ? 'toolbar' : 'header'}
+        onViewManagerBridgeChange={
+          config.list.viewManagerInToolbar ? handleViewManagerBridgeChange : undefined
+        }
         getRowClassName={
           config.name === 'pickup_management'
             ? (row: any) => {
@@ -3343,6 +3691,7 @@ export function EntityTable<T = any>({
       />
         </CardContent>
       </Card>
+      </TableViewManagerBridgeProvider>
 
       {/* 创建/编辑对话框 */}
       <Dialog open={openDialog} onOpenChange={setOpenDialog}>

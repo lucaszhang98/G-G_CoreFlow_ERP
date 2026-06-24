@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { IncludeArchivedOrdersToggle } from "@/components/order-visibility/include-archived-toggle"
+import { getPortLocationTextClass } from "@/lib/utils/port-location-display"
 
 interface OperationsTrackingItem {
   order_id: string
@@ -435,7 +436,12 @@ export function OperationsTrackingClient({ operationMode, title }: OperationsTra
     {
       accessorKey: "port_code",
       header: "码头",
-      cell: ({ row }) => <div>{row.original.port_code || "-"}</div>,
+      cell: ({ row }) => {
+        const code = row.original.port_code
+        return (
+          <div className={getPortLocationTextClass(code)}>{code || "-"}</div>
+        )
+      },
     },
     {
       accessorKey: "carrier_name",

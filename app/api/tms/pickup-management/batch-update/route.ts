@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-appointment-estimated-window-period'
 import { applyPickupDateEnteredAtToOrderUpdate } from '@/lib/oms/pickup-date-entered'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
+import { resolveCarrierIdFromInput } from '@/lib/tms/resolve-carrier-code'
 
 // POST - 批量更新提柜管理记录
 export async function POST(request: NextRequest) {
@@ -72,7 +73,13 @@ export async function POST(request: NextRequest) {
       // 不需要手动转换 BigInt，Prisma 会自动处理
       orderUpdateData.port_location_id = updates.port_location_id || null
     }
-    if (updates.carrier_id !== undefined) {
+    if (updates.carrier_code !== undefined) {
+      const resolved = await resolveCarrierIdFromInput(updates.carrier_code)
+      if (resolved.error) {
+        return NextResponse.json({ error: resolved.error }, { status: 400 })
+      }
+      orderUpdateData.carrier_id = resolved.carrierId
+    } else if (updates.carrier_id !== undefined) {
       // 不需要手动转换 BigInt，Prisma 会自动处理
       orderUpdateData.carrier_id = updates.carrier_id || null
     }

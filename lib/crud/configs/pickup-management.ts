@@ -89,16 +89,23 @@ export const pickupManagementConfig: EntityConfig = {
         { label: '其他', value: '其他' },
       ],
     },
+    carrier_code: {
+      key: 'carrier_code',
+      label: '承运公司',
+      type: 'text',
+      placeholder: 'CVT / NST / GG',
+    },
     carrier: {
       key: 'carrier',
       label: '承运公司',
       type: 'relation',
+      hidden: true,
       relation: {
         model: 'carriers',
         displayField: 'name',
         valueField: 'carrier_id',
       },
-      relationField: 'carrier_id', // 指定数据库字段名
+      relationField: 'carrier_id',
     },
     carrier_id: {
       key: 'carrier_id',
@@ -213,6 +220,12 @@ export const pickupManagementConfig: EntityConfig = {
   list: {
     defaultSort: 'created_at',
     defaultOrder: 'desc',
+    /** 失焦自动保存，无需行末铅笔/保存/取消 */
+    showActionsColumn: false,
+    /** 切换视图放批量操作工具栏 */
+    viewManagerInToolbar: true,
+    /** 左侧拖拽调整行顺序 */
+    enableRowReorder: true,
     columns: [
       'container_number',
       'mbl',
@@ -221,7 +234,7 @@ export const pickupManagementConfig: EntityConfig = {
       'shipping_line',
       'customer',
       'container_type',
-      'carrier',
+      'carrier_code',
       'driver_name',
       'do_issued',
       'order_date',
@@ -250,7 +263,7 @@ export const pickupManagementConfig: EntityConfig = {
         'port_text',
         'shipping_line',
         'container_type',
-        'carrier',
+        'carrier_code',
         'driver_name',
         'eta_date',
         'lfd_date',
@@ -274,7 +287,7 @@ export const pickupManagementConfig: EntityConfig = {
           'port_text',
           'shipping_line',
           'container_type',
-          'carrier',
+          'carrier_code',
           'driver_name',
           'eta_date',
           'lfd_date',
@@ -292,7 +305,11 @@ export const pickupManagementConfig: EntityConfig = {
         enabled: false, // 禁用批量删除
       },
     },
-    // 筛选配置：承运公司、司机（司机选项由 API /driver-options 去重后动态加载）
+    /** 关闭高级搜索 */
+    advancedSearchEnabled: false,
+    /** 快速筛选仅用手写字段，不合并 DO/日期/客户等自动生成项 */
+    filterFieldsManualOnly: true,
+    // 筛选配置：承运公司、司机（日期统一由页面「日期筛选」控件处理）
     filterFields: [
       {
         field: 'carrier_id',
@@ -311,8 +328,6 @@ export const pickupManagementConfig: EntityConfig = {
         // 选项由前端 fieldFuzzyLoadOptions.driver_name 从 /api/tms/pickup-management/driver-options 加载
       },
     ],
-    // 高级搜索配置（多条件组合）- 已自动生成
-    // advancedSearchFields 已由 search-config-generator 自动生成
   },
   
   formFields: [],

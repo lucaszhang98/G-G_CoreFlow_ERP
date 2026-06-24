@@ -340,8 +340,8 @@ export function SearchModule({
             </div>
           </div>
 
-          {/* 快速筛选区域 */}
-          {filterFields.length > 0 && (
+          {/* 快速筛选区域（含自定义 extraFilterContent，如提柜管理「日期筛选」） */}
+          {(filterFields.length > 0 || extraFilterContent) && (
             <div className="mt-2 pt-2 border-t border-border">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">

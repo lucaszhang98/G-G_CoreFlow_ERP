@@ -10,6 +10,9 @@ import {
 } from '@/lib/utils/pickup-management-export-excel'
 import { mergeOrdersRelationExcludeArchived, parseIncludeArchived } from '@/lib/orders/order-visibility'
 import { getPickupQuickFilterEtaDateRange } from '@/lib/utils/pickup-management-quick-filter'
+import { buildPickupUnifiedDateFilterCondition } from '@/lib/tms/pickup-management-unified-date-filter'
+import { buildPickupManagementOrderBy } from '@/lib/tms/pickup-management-order-by'
+import { findPickupManagementMany } from '@/lib/tms/pickup-management-list-query'
 
 /**
  * GET /api/tms/pickup-management/export
@@ -58,6 +61,16 @@ export async function GET(request: NextRequest) {
         })
       })
 
+      const unifiedDateCondition = buildPickupUnifiedDateFilterCondition(searchParams)
+      if (unifiedDateCondition) {
+        const dateFieldName = Object.keys(unifiedDateCondition)[0]
+        if (mainTableFields.includes(dateFieldName)) {
+          mainTableConditions.push(unifiedDateCondition)
+        } else {
+          Object.assign(ordersConditions, unifiedDateCondition)
+        }
+      }
+
       if (mainTableConditions.length > 0) {
         mergeFilterConditions(where, mainTableConditions)
       }
@@ -101,35 +114,9 @@ export async function GET(request: NextRequest) {
 
     const sort = searchParams.get('sort') || 'created_at'
     const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
-    const mainTableFields = [
-      'pickup_id',
-      'pickup_out',
-      'report_empty',
-      'return_empty',
-      'notes',
-      'current_location',
-      'port_text',
-      'shipping_line',
-      'driver_id',
-      'created_at',
-      'updated_at',
-    ]
-    const orderBy: any =
-      !exportAll && searchParams.get('pending_lfd_inquiry') === '1'
-        ? [
-            { orders: { eta_date: 'asc' } },
-            { earliest_appointment_time: 'asc' },
-          ]
-        : !exportAll && searchParams.get('lfd_no_pickup') === '1'
-          ? [
-              { orders: { lfd_date: 'asc' } },
-              { earliest_appointment_time: 'asc' },
-            ]
-          : sort === 'earliest_appointment_time'
-          ? { orders: { appointment_time: order } }
-          : mainTableFields.includes(sort)
-            ? { [sort]: order }
-            : { orders: { [sort]: order } }
+    const orderBy = exportAll
+      ? buildPickupManagementOrderBy(new URLSearchParams(), sort, order)
+      : buildPickupManagementOrderBy(searchParams, sort, order)
 
     if (!parseIncludeArchived(searchParams)) {
       if (where.orders) {
@@ -139,7 +126,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const pickups = await prisma.pickup_management.findMany({
+    const pickups = await findPickupManagementMany({
       where,
       orderBy,
       take: 10000,

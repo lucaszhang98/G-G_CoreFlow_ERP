@@ -129,10 +129,14 @@ export interface EntityConfig {
     searchPlaceholder?: string
     /** 合并快速筛选后，按 field 名排除（如直送账单不需要账单类型、柜号筛选） */
     filterFieldKeysExclude?: string[]
+    /** 为 true 时不合并自动生成的 filterFields，仅保留 list.filterFields 手写字段 */
+    filterFieldsManualOnly?: boolean
     pageSize?: number
     customColumns?: any // 自定义列定义（ColumnDef[]），如果提供则使用自定义列而不是自动生成
     // 筛选配置（快速筛选，在搜索框旁边显示）
     filterFields?: FilterFieldConfig[]
+    /** 为 false 时不显示高级搜索（默认 true） */
+    advancedSearchEnabled?: boolean
     // 高级搜索配置（弹窗，多条件组合）
     advancedSearchFields?: AdvancedSearchFieldConfig[]
     // 批量操作配置
@@ -153,6 +157,12 @@ export interface EntityConfig {
       cellClickToEdit?: boolean
       fields?: string[] // 可编辑的字段列表（如果为空，则所有可更新字段都可编辑）
     }
+    /** 为 false 时隐藏最右侧操作列（默认显示） */
+    showActionsColumn?: boolean
+    /** 为 true 时「切换视图」按钮放在列表批量操作工具栏（而非表头列菜单内） */
+    viewManagerInToolbar?: boolean
+    /** 为 true 时在每行最左侧显示拖拽手柄，可调整行顺序（提柜管理） */
+    enableRowReorder?: boolean
     // 批量导入配置
     import?: {
       enabled: boolean // 是否启用批量导入

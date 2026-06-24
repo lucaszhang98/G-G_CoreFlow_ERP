@@ -18,20 +18,87 @@ import {
 import { FieldConfig } from "@/lib/crud/types"
 import { formatDateDisplay, formatDateTimeDisplay } from "@/lib/utils/date-format"
 import { cn } from "@/lib/utils"
+import {
+  getCarrierCodeCellClass,
+  CARRIER_CODE_CELL_SURFACE_LAYOUT,
+  formatCarrierCodeDisplay,
+} from "@/lib/utils/carrier-code-display"
 import { LocationSelect } from "@/components/ui/location-select"
 import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
 import { ChevronDown, Check, X } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 
-/** 根容器：在 table-fixed 列宽下不撑开 td，内容过宽时横向滚动 */
-const CELL_ROOT = "inline-edit-cell min-w-0 w-full max-w-full overflow-x-auto"
+/** 根容器：在 table-fixed 列宽下不撑开 td，内容过宽时截断 */
+const CELL_ROOT = "inline-edit-cell min-w-0 w-full max-w-full overflow-hidden"
+
+/** 弹出编辑触发器：外观与只读展示一致，固定 h-8 不撑开行高 */
+const CELL_TRIGGER =
+  "flex h-8 min-h-8 w-full min-w-0 max-w-full items-center rounded-sm px-1 text-sm outline-none hover:bg-muted/40 focus-visible:ring-1 focus-visible:ring-ring"
+
+/** 弹出层内紧凑控件 */
+const POPOVER_INPUT = "h-8 text-sm bg-background"
+
+interface InlinePopoverEditProps {
+  displayText: string
+  emptyPlaceholder?: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  children: React.ReactNode
+  className?: string
+  contentClassName?: string
+}
+
+function InlinePopoverEdit({
+  displayText,
+  emptyPlaceholder = '-',
+  open,
+  onOpenChange,
+  children,
+  className,
+  contentClassName,
+}: InlinePopoverEditProps) {
+  const hasValue = displayText && displayText !== '-'
+  return (
+    <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={cn(CELL_TRIGGER, className)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span
+              className={cn(
+                'block min-w-0 w-full truncate text-center',
+                !hasValue && 'text-muted-foreground'
+              )}
+            >
+              {hasValue ? displayText : emptyPlaceholder}
+            </span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          className={cn('w-auto p-2', contentClassName)}
+          align="start"
+          side="bottom"
+          sideOffset={4}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
 
 interface InlineEditCellProps {
   fieldKey: string
   fieldConfig: FieldConfig
   value: any
   onChange: (value: any) => void
+  /** 失焦或选完下拉后触发，由 EntityTable 做乐观保存 */
+  onBlurSave?: () => void
   className?: string
   loadOptions?: () => Promise<Array<{ label: string; value: string }>>
   loadFuzzyOptions?: (search: string) => Promise<FuzzySearchOption[]>
@@ -49,6 +116,7 @@ function InlineSelectWithAutoOpen({
   selectOptions,
   onInternalChange,
   onCommit,
+  onBlurSave,
 }: {
   autoOpenDropdown: boolean
   loadingOptions: boolean
@@ -58,6 +126,7 @@ function InlineSelectWithAutoOpen({
   selectOptions: Array<{ label: string; value: string }>
   onInternalChange: (v: any) => void
   onCommit: (v: any) => void
+  onBlurSave?: () => void
 }) {
   const [open, setOpen] = React.useState(false)
   const didAutoOpenRef = React.useRef(false)
@@ -76,14 +145,16 @@ function InlineSelectWithAutoOpen({
           if (val === "__clear__") {
             onInternalChange(null)
             onCommit(null)
+            onBlurSave?.()
           } else {
             onInternalChange(val || null)
             onCommit(val || null)
+            onBlurSave?.()
           }
         }}
         disabled={loadingOptions}
       >
-        <SelectTrigger className={cn("h-10 text-sm min-w-0 w-full", className)}>
+        <SelectTrigger className={cn("h-8 text-sm min-w-0 w-full", className)}>
           <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
         </SelectTrigger>
         <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
@@ -113,6 +184,7 @@ function InlineRelationSelectWithAutoOpen({
   selectOptions,
   onInternalChange,
   onCommit,
+  onBlurSave,
 }: {
   autoOpenDropdown: boolean
   loadingOptions: boolean
@@ -122,6 +194,7 @@ function InlineRelationSelectWithAutoOpen({
   selectOptions: Array<{ label: string; value: string }>
   onInternalChange: (v: any) => void
   onCommit: (v: any) => void
+  onBlurSave?: () => void
 }) {
   const [open, setOpen] = React.useState(false)
   const didAutoOpenRef = React.useRef(false)
@@ -140,14 +213,16 @@ function InlineRelationSelectWithAutoOpen({
           if (val === "__clear__") {
             onInternalChange(null)
             onCommit(null)
+            onBlurSave?.()
           } else {
             onInternalChange(val || null)
             onCommit(val || null)
+            onBlurSave?.()
           }
         }}
         disabled={loadingOptions}
       >
-        <SelectTrigger className={cn("h-10 text-sm min-w-0 w-full", className)}>
+        <SelectTrigger className={cn("h-8 text-sm min-w-0 w-full", className)}>
           <SelectValue placeholder={loadingOptions ? "加载中..." : `请选择${fieldConfig.label}`} />
         </SelectTrigger>
         <SelectContent>
@@ -175,30 +250,240 @@ function InlineRelationSelectWithAutoOpen({
   )
 }
 
-/** 提柜日期行内：小时下拉，支持进入编辑时自动展开 */
+/** 进入行内编辑时自动聚焦并打开原生日期选择器 */
+function DatePopoverInlineEdit({
+  internalValue,
+  autoOpen,
+  className,
+  onInternalChange,
+  onChange,
+  onBlur,
+}: {
+  internalValue: unknown
+  autoOpen: boolean
+  className?: string
+  onInternalChange: (value: string | null) => void
+  onChange: (value: string | null) => void
+  onBlur: () => void
+}) {
+  const dateValue = internalValue
+    ? internalValue instanceof Date
+      ? internalValue.toISOString().split('T')[0]
+      : typeof internalValue === 'string'
+        ? internalValue.split('T')[0]
+        : String(internalValue)
+    : ''
+  const dateDisplay = formatDateDisplay(
+    internalValue as string | Date | null | undefined
+  )
+  const [open, setOpen] = React.useState(false)
+  const dateInputRef = React.useRef<HTMLInputElement>(null)
+  const didAutoOpenRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (!autoOpen || didAutoOpenRef.current) return
+    didAutoOpenRef.current = true
+    setOpen(true)
+  }, [autoOpen])
+
+  React.useEffect(() => {
+    if (!open) return
+    const t = window.setTimeout(() => {
+      const el = dateInputRef.current
+      if (!el) return
+      el.focus({ preventScroll: true })
+      if (typeof el.showPicker === 'function') {
+        try {
+          el.showPicker()
+        } catch {
+          // ignore
+        }
+      }
+    }, 0)
+    return () => window.clearTimeout(t)
+  }, [open])
+
+  return (
+    <InlinePopoverEdit
+      displayText={dateDisplay}
+      emptyPlaceholder="选择日期"
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) onBlur()
+      }}
+      className={className}
+    >
+      <div className="flex items-center gap-1">
+        <Input
+          ref={dateInputRef}
+          type="date"
+          value={dateValue}
+          onChange={(e) => onInternalChange(e.target.value || null)}
+          className={cn(POPOVER_INPUT, 'w-[9.5rem] shrink-0', className)}
+        />
+        {internalValue ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-muted-foreground/60 hover:text-muted-foreground"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onInternalChange(null)
+              onChange(null)
+            }}
+            title="清空"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        ) : null}
+      </div>
+    </InlinePopoverEdit>
+  )
+}
+
+/** 通用 datetime-local：Popover 内编辑 */
+function DatetimePopoverInlineEdit({
+  internalValue,
+  autoOpen,
+  className,
+  onInternalChange,
+  onBlur,
+}: {
+  internalValue: unknown
+  autoOpen: boolean
+  className?: string
+  onInternalChange: (value: string | null) => void
+  onBlur: () => void
+}) {
+  let datetimeValue = ''
+  if (internalValue) {
+    if (internalValue instanceof Date) {
+      const year = internalValue.getUTCFullYear()
+      const month = String(internalValue.getUTCMonth() + 1).padStart(2, '0')
+      const day = String(internalValue.getUTCDate()).padStart(2, '0')
+      const hours = String(internalValue.getUTCHours()).padStart(2, '0')
+      const minutes = String(internalValue.getUTCMinutes()).padStart(2, '0')
+      datetimeValue = `${year}-${month}-${day}T${hours}:${minutes}`
+    } else if (typeof internalValue === 'string') {
+      datetimeValue = internalValue.slice(0, 16)
+    } else {
+      datetimeValue = String(internalValue)
+    }
+  }
+  const datetimeDisplay = formatDateTimeDisplay(
+    internalValue as string | Date | null | undefined
+  )
+  const [open, setOpen] = React.useState(false)
+  const datetimeInputRef = React.useRef<HTMLInputElement>(null)
+  const didAutoOpenRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (!autoOpen || didAutoOpenRef.current) return
+    didAutoOpenRef.current = true
+    setOpen(true)
+  }, [autoOpen])
+
+  React.useEffect(() => {
+    if (!open) return
+    const t = window.setTimeout(() => {
+      datetimeInputRef.current?.focus({ preventScroll: true })
+    }, 0)
+    return () => window.clearTimeout(t)
+  }, [open])
+
+  return (
+    <InlinePopoverEdit
+      displayText={datetimeDisplay}
+      emptyPlaceholder="选择日期时间"
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) onBlur()
+      }}
+      className={className}
+    >
+      <Input
+        ref={datetimeInputRef}
+        type="datetime-local"
+        value={datetimeValue}
+        onChange={(e) => onInternalChange(e.target.value || null)}
+        className={cn(POPOVER_INPUT, 'w-[11.5rem] shrink-0', className)}
+      />
+    </InlinePopoverEdit>
+  )
+}
+
+/** 备注：Popover 内 textarea */
+function NotesPopoverInlineEdit({
+  internalValue,
+  autoOpen,
+  className,
+  fieldConfig,
+  onInternalChange,
+  onBlur,
+}: {
+  internalValue: unknown
+  autoOpen: boolean
+  className?: string
+  fieldConfig: FieldConfig
+  onInternalChange: (value: string) => void
+  onBlur: () => void
+}) {
+  const notesDisplay =
+    internalValue && String(internalValue).trim()
+      ? String(internalValue).trim()
+      : '-'
+  const [open, setOpen] = React.useState(false)
+  const didAutoOpenRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (!autoOpen || didAutoOpenRef.current) return
+    didAutoOpenRef.current = true
+    setOpen(true)
+  }, [autoOpen])
+
+  return (
+    <InlinePopoverEdit
+      displayText={notesDisplay}
+      emptyPlaceholder="输入备注"
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) onBlur()
+      }}
+      className={className}
+      contentClassName="w-64"
+    >
+      <Textarea
+        value={internalValue != null && internalValue !== '' ? String(internalValue) : ''}
+        onChange={(e) => onInternalChange(e.target.value)}
+        placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
+        className="min-h-[72px] text-sm resize-none"
+        rows={3}
+        autoFocus
+      />
+    </InlinePopoverEdit>
+  )
+}
+
+/** 提柜日期：小时下拉 */
 function PickupDateHourSelect({
   hourPart,
   hourOptions,
   onHourChange,
   className,
-  autoOpenDropdown,
 }: {
   hourPart: string
   hourOptions: { label: string; value: string }[]
   onHourChange: (hour: string) => void
   className?: string
-  autoOpenDropdown: boolean
 }) {
-  const [open, setOpen] = React.useState(false)
-  const didAutoOpenRef = React.useRef(false)
-  React.useEffect(() => {
-    if (!autoOpenDropdown || didAutoOpenRef.current) return
-    didAutoOpenRef.current = true
-    setOpen(true)
-  }, [autoOpenDropdown])
   return (
-    <Select open={open} onOpenChange={setOpen} value={hourPart} onValueChange={onHourChange}>
-      <SelectTrigger className={cn("w-24 h-9 text-sm bg-white", className)}>
+    <Select value={hourPart} onValueChange={onHourChange}>
+      <SelectTrigger className={cn("w-20 h-8 text-sm bg-background", className)}>
         <SelectValue placeholder="小时" />
       </SelectTrigger>
       <SelectContent>
@@ -212,11 +497,155 @@ function PickupDateHourSelect({
   )
 }
 
+const PICKUP_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const hour = String(i).padStart(2, '0')
+  return { label: `${hour}:00`, value: hour }
+})
+
+function parsePickupDateParts(internalValue: unknown): { datePart: string; hourPart: string } {
+  let datePart = ''
+  let hourPart = '00'
+  if (!internalValue) return { datePart, hourPart }
+
+  let datetimeStr = ''
+  if (internalValue instanceof Date) {
+    const year = internalValue.getUTCFullYear()
+    const month = String(internalValue.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(internalValue.getUTCDate()).padStart(2, '0')
+    const hours = String(internalValue.getUTCHours()).padStart(2, '0')
+    datetimeStr = `${year}-${month}-${day}T${hours}:00`
+  } else if (typeof internalValue === 'string') {
+    datetimeStr = internalValue.slice(0, 16)
+  } else {
+    datetimeStr = String(internalValue)
+  }
+  const parts = datetimeStr.split('T')
+  datePart = parts[0] || ''
+  if (parts[1]) {
+    hourPart = parts[1].split(':')[0] || '00'
+  }
+  return { datePart, hourPart }
+}
+
+/** 提柜日期：Popover 内编辑，单元格仅展示格式化文本 */
+function PickupDateInlineEdit({
+  internalValue,
+  className,
+  autoOpenDate,
+  onInternalChange,
+  onChange,
+  onBlur,
+  onBlurSave,
+}: {
+  internalValue: unknown
+  className?: string
+  autoOpenDate: boolean
+  onInternalChange: (value: string | null) => void
+  onChange: (value: string | null) => void
+  onBlur: () => void
+  onBlurSave?: () => void
+}) {
+  const { datePart, hourPart } = parsePickupDateParts(internalValue)
+  const [open, setOpen] = React.useState(false)
+  const dateInputRef = React.useRef<HTMLInputElement>(null)
+  const didAutoOpenRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (!autoOpenDate || didAutoOpenRef.current) return
+    didAutoOpenRef.current = true
+    setOpen(true)
+  }, [autoOpenDate])
+
+  React.useEffect(() => {
+    if (!open) return
+    const t = window.setTimeout(() => {
+      const el = dateInputRef.current
+      if (!el) return
+      el.focus({ preventScroll: true })
+      if (typeof el.showPicker === 'function') {
+        try {
+          el.showPicker()
+        } catch {
+          // 部分浏览器可能拒绝 showPicker
+        }
+      }
+    }, 0)
+    return () => window.clearTimeout(t)
+  }, [open])
+
+  const handleOpenChange = React.useCallback(
+    (next: boolean) => {
+      setOpen(next)
+      if (!next) {
+        onBlur()
+        onBlurSave?.()
+      }
+    },
+    [onBlur, onBlurSave]
+  )
+
+  const displayText = formatDateTimeDisplay(
+    internalValue as string | Date | null | undefined
+  )
+
+  return (
+    <InlinePopoverEdit
+      displayText={displayText}
+      emptyPlaceholder="选择日期时间"
+      open={open}
+      onOpenChange={handleOpenChange}
+      className={className}
+    >
+      <div className="flex items-center gap-2">
+        <Input
+          ref={dateInputRef}
+          type="date"
+          value={datePart}
+          onChange={(e) => {
+            const newDate = e.target.value
+            const newValue = newDate ? `${newDate}T${hourPart}:00` : null
+            onInternalChange(newValue)
+            onChange(newValue)
+          }}
+          className={cn(POPOVER_INPUT, 'w-[9.5rem] shrink-0', className)}
+        />
+        <PickupDateHourSelect
+          hourPart={hourPart}
+          hourOptions={PICKUP_HOUR_OPTIONS}
+          onHourChange={(newHour) => {
+            const newValue = datePart ? `${datePart}T${newHour}:00` : null
+            onInternalChange(newValue)
+            onChange(newValue)
+          }}
+        />
+        {internalValue ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-muted-foreground/60 hover:text-muted-foreground"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onInternalChange(null)
+              onChange(null)
+            }}
+            title="清空"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        ) : null}
+      </div>
+    </InlinePopoverEdit>
+  )
+}
+
 export function InlineEditCell({
   fieldKey,
   fieldConfig,
   value,
   onChange,
+  onBlurSave,
   className,
   loadOptions,
   loadFuzzyOptions,
@@ -256,12 +685,13 @@ export function InlineEditCell({
     setInternalValue(newValue)
   }, [])
   
-  // 失去焦点时同步到外部状态
+  // 失去焦点时同步草稿并触发保存
   const handleBlur = React.useCallback(() => {
     if (internalValue !== value) {
       onChange(internalValue)
     }
-  }, [internalValue, value, onChange])
+    onBlurSave?.()
+  }, [internalValue, value, onChange, onBlurSave])
 
   // 异步加载选项（支持 select 和 relation 类型）
   // 对于 current_location 字段，始终加载选项（从 fieldConfig.options）
@@ -289,17 +719,38 @@ export function InlineEditCell({
     case 'text':
     case 'email':
     case 'phone':
-      // 对于备注字段，使用 textarea
+      // 备注字段：Popover 内编辑，单元格不撑高
       if (fieldKey === 'notes') {
         return (
-          <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
-            <Textarea
+          <NotesPopoverInlineEdit
+            internalValue={internalValue}
+            autoOpen={autoOpenDropdown}
+            className={className}
+            fieldConfig={fieldConfig}
+            onInternalChange={handleInternalChange}
+            onBlur={handleBlur}
+          />
+        )
+      }
+      if (fieldKey === 'carrier_code') {
+        const displayForBg =
+          formatCarrierCodeDisplay(
+            internalValue != null && internalValue !== '' ? String(internalValue) : null
+          ) ?? (internalValue ? String(internalValue).trim().toUpperCase() : null)
+        return (
+          <div onClick={(e) => e.stopPropagation()} className="relative h-full min-h-8 w-full">
+            <Input
+              type="text"
               value={internalValue || ''}
-              onChange={(e) => handleInternalChange(e.target.value)}
+              onChange={(e) => handleInternalChange(e.target.value.toUpperCase())}
               onBlur={handleBlur}
               placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-              className={cn("min-h-[80px] text-sm min-w-0 w-full max-w-full resize-none", className)}
-              rows={3}
+              className={cn(
+                CARRIER_CODE_CELL_SURFACE_LAYOUT,
+                getCarrierCodeCellClass(displayForBg),
+                'border-0 shadow-none rounded-none text-center focus-visible:ring-0 focus-visible:ring-offset-0',
+                className
+              )}
             />
           </div>
         )
@@ -312,7 +763,7 @@ export function InlineEditCell({
             onChange={(e) => handleInternalChange(e.target.value)}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-            className={cn("h-9 text-sm min-w-0 w-full max-w-full", className)}
+            className={cn("h-8 text-sm min-w-0 w-full max-w-full px-1", className)}
           />
         </div>
       )
@@ -330,169 +781,50 @@ export function InlineEditCell({
             onChange={(e) => handleInternalChange(e.target.value === '' ? '' : Number(e.target.value))}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-            className={cn("h-10 text-sm min-w-0 w-full max-w-full", className)}
+            className={cn("h-8 text-sm min-w-0 w-full max-w-full px-1", className)}
           />
         </div>
       )
 
     case 'date':
-      // 处理日期：显示和编辑都使用 YYYY-MM-DD 格式
-      const dateValue = internalValue 
-        ? (internalValue instanceof Date 
-          ? internalValue.toISOString().split("T")[0] 
-          : typeof internalValue === 'string' 
-          ? internalValue.split("T")[0] 
-          : internalValue)
-        : ''
       return (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className={cn(
-            CELL_ROOT,
-            "mr-auto inline-flex w-full max-w-full min-w-0 flex-wrap items-center gap-1"
-          )}
-        >
-          {/* 列宽由表格固定；控件 max-w-full 避免撑开 td */}
-          <Input
-            type="date"
-            value={dateValue}
-            onChange={(e) => handleInternalChange(e.target.value || null)}
-            onBlur={handleBlur}
-            className={cn(
-              "h-9 min-w-0 max-w-full w-[10.5rem] shrink-0 text-sm bg-white",
-              className
-            )}
-          />
-          {internalValue && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0 text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                handleInternalChange(null)
-                onChange(null)
-              }}
-              title="清空日期"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+        <DatePopoverInlineEdit
+          internalValue={internalValue}
+          autoOpen={autoOpenDropdown}
+          className={className}
+          onInternalChange={handleInternalChange}
+          onChange={onChange}
+          onBlur={handleBlur}
+        />
       )
 
     case 'datetime': {
-      // 对于 pickup_date 字段，使用日期+小时选择器（分钟固定为00）
       if (fieldKey === 'pickup_date') {
-        // 解析日期和小时
-        let datePart = ''
-        let hourPart = '00'
-        if (internalValue) {
-          let datetimeStr = ''
-          if (internalValue instanceof Date) {
-            // 使用 UTC 时间，避免时区问题
-            const year = internalValue.getUTCFullYear()
-            const month = String(internalValue.getUTCMonth() + 1).padStart(2, '0')
-            const day = String(internalValue.getUTCDate()).padStart(2, '0')
-            const hours = String(internalValue.getUTCHours()).padStart(2, '0')
-            datetimeStr = `${year}-${month}-${day}T${hours}:00`
-          } else if (typeof internalValue === 'string') {
-            datetimeStr = internalValue.slice(0, 16)
-          } else {
-            datetimeStr = String(internalValue)
-          }
-          const parts = datetimeStr.split('T')
-          datePart = parts[0] || ''
-          if (parts[1]) {
-            hourPart = parts[1].split(':')[0] || '00'
-          }
-        }
-        
-        // 生成0-23小时选项
-        const hourOptions = Array.from({ length: 24 }, (_, i) => {
-          const hour = String(i).padStart(2, '0')
-          return { label: `${hour}:00`, value: hour }
-        })
-        
         return (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className={cn(CELL_ROOT, "flex min-w-0 max-w-full flex-wrap items-center gap-2")}
-          >
-            <Input
-              type="date"
-              value={datePart}
-              onChange={(e) => {
-                const newDate = e.target.value
-                const newValue = newDate ? `${newDate}T${hourPart}:00` : null
-                handleInternalChange(newValue)
-                // 与小时下拉一致：立即同步草稿，避免清空后未失焦就保存时仍提交旧值
-                onChange(newValue)
-              }}
-              onBlur={handleBlur}
-              className={cn("h-9 min-w-0 max-w-full flex-1 text-sm bg-white", className)}
-            />
-            <PickupDateHourSelect
-              hourPart={hourPart}
-              hourOptions={hourOptions}
-              autoOpenDropdown={autoOpenDropdown}
-              onHourChange={(newHour) => {
-                const newValue = datePart ? `${datePart}T${newHour}:00` : null
-                handleInternalChange(newValue)
-                onChange(newValue)
-              }}
-            />
-            {internalValue ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 shrink-0 text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  handleInternalChange(null)
-                  onChange(null)
-                }}
-                title="清空提柜日期"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            ) : null}
-          </div>
+          <PickupDateInlineEdit
+            internalValue={internalValue}
+            className={className}
+            autoOpenDate={autoOpenDropdown}
+            onInternalChange={handleInternalChange}
+            onChange={onChange}
+            onBlur={() => {
+              if (internalValue !== value) {
+                onChange(internalValue)
+              }
+            }}
+            onBlurSave={onBlurSave}
+          />
         )
       }
       
-      // 其他日期时间字段：显示和编辑都使用 YYYY-MM-DDTHH:mm 格式
-      // 避免使用 getTimezoneOffset() 以防止 hydration 错误
-      let datetimeValue = ''
-      if (internalValue) {
-        if (internalValue instanceof Date) {
-          // 使用 UTC 时间，避免时区问题
-          const year = internalValue.getUTCFullYear()
-          const month = String(internalValue.getUTCMonth() + 1).padStart(2, '0')
-          const day = String(internalValue.getUTCDate()).padStart(2, '0')
-          const hours = String(internalValue.getUTCHours()).padStart(2, '0')
-          const minutes = String(internalValue.getUTCMinutes()).padStart(2, '0')
-          datetimeValue = `${year}-${month}-${day}T${hours}:${minutes}`
-        } else if (typeof internalValue === 'string') {
-          datetimeValue = internalValue.slice(0, 16)
-        } else {
-          datetimeValue = String(internalValue)
-        }
-      }
       return (
-        <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
-          <Input
-            type="datetime-local"
-            value={datetimeValue}
-            onChange={(e) => handleInternalChange(e.target.value || null)}
-            onBlur={handleBlur}
-            className={cn("h-9 min-w-0 w-full max-w-full text-sm bg-white", className)}
-          />
-        </div>
+        <DatetimePopoverInlineEdit
+          internalValue={internalValue}
+          autoOpen={autoOpenDropdown}
+          className={className}
+          onInternalChange={handleInternalChange}
+          onBlur={handleBlur}
+        />
       )
     }
 
@@ -541,7 +873,7 @@ export function InlineEditCell({
                   role="combobox"
                   aria-expanded={open}
                   className={cn(
-                    "flex h-9 w-full items-center justify-between rounded-md border border-input bg-white px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none",
+                    "flex h-8 w-full items-center justify-between rounded-md border border-input bg-background px-2 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none",
                     "hover:bg-accent hover:text-accent-foreground",
                     "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
                     "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
@@ -634,24 +966,20 @@ export function InlineEditCell({
           selectOptions={selectOptions}
           onInternalChange={handleInternalChange}
           onCommit={onChange}
+          onBlurSave={onBlurSave}
         />
       )
 
     case 'textarea':
       return (
-        <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
-          <textarea
-            value={internalValue || ''}
-            onChange={(e) => handleInternalChange(e.target.value)}
-            onBlur={handleBlur}
-            placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-            className={cn(
-              "flex min-h-[60px] min-w-0 w-full max-w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-              className
-            )}
-            rows={2}
-          />
-        </div>
+        <NotesPopoverInlineEdit
+          internalValue={internalValue}
+          autoOpen={autoOpenDropdown}
+          className={className}
+          fieldConfig={fieldConfig}
+          onInternalChange={handleInternalChange}
+          onBlur={handleBlur}
+        />
       )
 
     case 'boolean':
@@ -667,8 +995,8 @@ export function InlineEditCell({
             onChange={(e) => {
               const newValue = e.target.checked
               handleInternalChange(newValue)
-              // Checkbox 立即同步到外部
               onChange(newValue)
+              onBlurSave?.()
             }}
             className={cn("h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary", className)}
           />
@@ -689,7 +1017,7 @@ export function InlineEditCell({
             }}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
-            className={cn("min-w-0", className)}
+            className={cn("h-8 min-w-0 max-w-full", className)}
             locationType={fieldConfig.locationType} // 支持直接指定位置类型
             autoOpenOnMount={autoOpenDropdown}
           />
@@ -710,7 +1038,7 @@ export function InlineEditCell({
               }}
               onBlur={handleBlur}
               placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
-              className={cn("min-w-0", className)}
+              className={cn("h-8 min-w-0 max-w-full", className)}
               locationType={fieldConfig.locationType} // 支持直接指定位置类型
               autoOpenOnMount={autoOpenDropdown}
             />
@@ -729,7 +1057,7 @@ export function InlineEditCell({
               }}
               onBlur={handleBlur}
               placeholder={fieldConfig.placeholder || `请选择${fieldConfig.label}`}
-              className={cn("min-w-0", className)}
+              className={cn("h-8 min-w-0 max-w-full", className)}
               loadOptions={loadFuzzyOptions}
               autoOpenOnMount={Boolean(autoOpenDropdown)}
             />
@@ -766,6 +1094,7 @@ export function InlineEditCell({
             selectOptions={selectOptions}
             onInternalChange={handleInternalChange}
             onCommit={onChange}
+            onBlurSave={onBlurSave}
           />
         )
       }
@@ -782,7 +1111,7 @@ export function InlineEditCell({
             onChange={(e) => handleInternalChange(e.target.value)}
             onBlur={handleBlur}
             placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-            className={cn("h-8 min-w-0 w-full max-w-full text-sm", className)}
+            className={cn("h-8 min-w-0 w-full max-w-full px-1 text-sm", className)}
           />
         </div>
       )
