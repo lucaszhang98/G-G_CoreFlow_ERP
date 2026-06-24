@@ -286,7 +286,7 @@ export function SearchModule({
               </div>
               {/* 搜索结果提示 */}
               {mounted && searchValue && (
-                <div className="absolute left-2.5 top-full mt-1 text-xs text-muted-foreground animate-in fade-in slide-in-from-top-1">
+                <div className="absolute left-2.5 top-full mt-1 text-base text-muted-foreground animate-in fade-in slide-in-from-top-1">
                   找到 <span className="font-semibold text-blue-600 dark:text-blue-400">{total}</span> 条结果
                 </div>
               )}
@@ -344,7 +344,7 @@ export function SearchModule({
           {(filterFields.length > 0 || extraFilterContent) && (
             <div className="mt-2 pt-2 border-t border-border">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+                <div className="flex items-center gap-1.5 text-base text-muted-foreground shrink-0">
                   <Filter className="h-4 w-4" />
                   <span className="font-medium">快速筛选</span>
                 </div>
@@ -640,7 +640,7 @@ export function SearchModule({
                         <PopoverContent className="w-auto p-4" align="start">
                           <div className="space-y-3">
                             <div className="flex items-center gap-2">
-                              <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
+                              <Label className="text-base font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
                                 开始日期
                               </Label>
                               <Input
@@ -651,7 +651,7 @@ export function SearchModule({
                               />
                             </div>
                             <div className="flex items-center gap-2">
-                              <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
+                              <Label className="text-base font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
                                 结束日期
                               </Label>
                               <Input
@@ -669,7 +669,7 @@ export function SearchModule({
                                   onFilterChange(`${filter.field}_from`, null)
                                   onFilterChange(`${filter.field}_to`, null)
                                 }}
-                                className="h-7 text-xs"
+                                className="h-9 text-base"
                               >
                                 清除
                               </Button>
@@ -734,7 +734,7 @@ export function SearchModule({
                         <PopoverContent className="w-auto p-4" align="start">
                           <div className="space-y-3">
                             <div className="flex items-center gap-2">
-                              <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
+                              <Label className="text-base font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
                                 最小值
                               </Label>
                               <Input
@@ -745,7 +745,7 @@ export function SearchModule({
                               />
                             </div>
                             <div className="flex items-center gap-2">
-                              <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
+                              <Label className="text-base font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
                                 最大值
                               </Label>
                               <Input
@@ -763,7 +763,7 @@ export function SearchModule({
                                   onFilterChange(`${filter.field}_min`, null)
                                   onFilterChange(`${filter.field}_max`, null)
                                 }}
-                                className="h-7 text-xs"
+                                className="h-9 text-base"
                               >
                                 清除
                               </Button>

@@ -233,7 +233,8 @@ export function DataTable<TData, TValue>({
   // 拖拽状态
   const [draggedColumn, setDraggedColumn] = React.useState<string | null>(null)
   const [dragOverColumn, setDragOverColumn] = React.useState<string | null>(null)
-  const [draggedRowId, setDraggedRowId] = React.useState<string | null>(null)
+  /** 行拖拽源 ID：用 ref 避免 dragStart 时 setState 导致列/行重渲染、中断 HTML5 拖拽 */
+  const draggedRowIdRef = React.useRef<string | null>(null)
   const [dragOverRowId, setDragOverRowId] = React.useState<string | null>(null)
   // Resize 状态（用于禁用拖拽）
   const [isResizing, setIsResizing] = React.useState(false)
@@ -466,17 +467,13 @@ export function DataTable<TData, TValue>({
         header: () => null,
         cell: ({ row }) => {
           const rowReorderId = getRowReorderId?.(row.original) ?? row.id
-          const isDragging = draggedRowId === rowReorderId
           return (
             <div
-              className={cn(
-                'flex h-full items-center justify-center',
-                isDragging && 'opacity-40'
-              )}
+              className="flex h-full items-center justify-center touch-none"
               draggable
               onDragStart={(e) => {
                 e.stopPropagation()
-                setDraggedRowId(rowReorderId)
+                draggedRowIdRef.current = rowReorderId
                 if (e.dataTransfer) {
                   e.dataTransfer.effectAllowed = 'move'
                   e.dataTransfer.setData('text/plain', rowReorderId)
@@ -484,14 +481,14 @@ export function DataTable<TData, TValue>({
               }}
               onDragEnd={(e) => {
                 e.stopPropagation()
-                setDraggedRowId(null)
+                draggedRowIdRef.current = null
                 setDragOverRowId(null)
               }}
               onClick={(e) => e.stopPropagation()}
               title="拖动调整行顺序"
               data-row-drag-handle
             >
-              <GripVertical className="h-4 w-4 cursor-grab text-muted-foreground active:cursor-grabbing" />
+              <GripVertical className="h-4 w-4 text-muted-foreground pointer-events-none" />
             </div>
           )
         },
@@ -640,7 +637,6 @@ export function DataTable<TData, TValue>({
     enableRowSelection,
     enableRowReorder,
     getRowReorderId,
-    draggedRowId,
     cancelEditOnSelectionChange,
     isRowEditing,
     onCancelEdit,
@@ -1043,25 +1039,26 @@ export function DataTable<TData, TValue>({
 
   const handleRowDragOver = React.useCallback(
     (e: React.DragEvent, rowReorderId: string) => {
-      if (!enableRowReorder || !draggedRowId) return
+      if (!enableRowReorder || !draggedRowIdRef.current) return
       e.preventDefault()
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-      setDragOverRowId(rowReorderId)
+      setDragOverRowId((prev) => (prev === rowReorderId ? prev : rowReorderId))
     },
-    [enableRowReorder, draggedRowId]
+    [enableRowReorder]
   )
 
   const handleRowDrop = React.useCallback(
     (e: React.DragEvent, targetRowReorderId: string) => {
       e.preventDefault()
       e.stopPropagation()
+      const draggedRowId = draggedRowIdRef.current
       if (!enableRowReorder || !draggedRowId || !onRowReorder || !getRowReorderId) {
-        setDraggedRowId(null)
+        draggedRowIdRef.current = null
         setDragOverRowId(null)
         return
       }
       if (draggedRowId === targetRowReorderId) {
-        setDraggedRowId(null)
+        draggedRowIdRef.current = null
         setDragOverRowId(null)
         return
       }
@@ -1072,9 +1069,9 @@ export function DataTable<TData, TValue>({
       const toIndex = rows.findIndex(
         (r) => (getRowReorderId(r.original) ?? r.id) === targetRowReorderId
       )
+      draggedRowIdRef.current = null
+      setDragOverRowId(null)
       if (fromIndex < 0 || toIndex < 0) {
-        setDraggedRowId(null)
-        setDragOverRowId(null)
         return
       }
       const reordered = [...rows]
@@ -1085,10 +1082,8 @@ export function DataTable<TData, TValue>({
         toIndex,
         reordered.map((r) => getRowReorderId(r.original) ?? String(r.id))
       )
-      setDraggedRowId(null)
-      setDragOverRowId(null)
     },
-    [enableRowReorder, draggedRowId, getRowReorderId, onRowReorder, table]
+    [enableRowReorder, getRowReorderId, onRowReorder, table]
   )
 
   return (
@@ -1264,7 +1259,7 @@ export function DataTable<TData, TValue>({
                       <TableHead 
                         key={header.id} 
                         className={cn(
-                          "font-semibold text-xs text-foreground px-2.5 py-1 whitespace-nowrap relative bg-muted/80 overflow-visible",
+                          "font-semibold text-base text-foreground px-2.5 py-1 whitespace-nowrap relative bg-muted/80 overflow-visible",
                           shouldSticky && stickyPosition === 'right' && "sticky right-0 z-20 bg-muted/80"
                         )}
                         style={{
@@ -1376,7 +1371,7 @@ export function DataTable<TData, TValue>({
                     <TableHead 
                       key={header.id} 
                       className={cn(
-                        "font-semibold text-xs text-foreground py-1 relative group bg-muted/80 overflow-hidden",
+                        "font-semibold text-base text-foreground py-1 relative group bg-muted/80 overflow-hidden",
                         isSelectColumn ? "px-2.5" : isRowDragColumn ? "px-0" : "px-1",
                         widthClass,
                         "whitespace-nowrap",
@@ -1514,7 +1509,7 @@ export function DataTable<TData, TValue>({
                     table.getVisibleLeafColumns().length +
                     (expandableRows?.enabled ? 1 : 0)
                   }
-                  className="h-16 text-center py-4 text-xs"
+                  className="h-16 text-center py-4 text-base"
                 >
                   <div className="flex items-center justify-center gap-2">
                     <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
@@ -1539,7 +1534,7 @@ export function DataTable<TData, TValue>({
                 const currentExpandedContent = isExpanded && expandedContent ? expandedContent : null
                 const rowReorderId = getRowReorderId?.(row.original) ?? row.id
                 const isRowDragOver =
-                  enableRowReorder && dragOverRowId === rowReorderId && draggedRowId !== rowReorderId
+                  enableRowReorder && dragOverRowId === rowReorderId
                 
                 return (
                   <React.Fragment key={row.id}>
@@ -1547,7 +1542,7 @@ export function DataTable<TData, TValue>({
                       data-state={(isSelected && "selected") || (isEditing && "editing")}
                       suppressHydrationWarning={isEditing} // 编辑状态可能在服务器端和客户端不一致
                       className={cn(
-                        "transition-colors duration-100 border-0 group cursor-pointer [&>td]:h-8",
+                        "transition-colors duration-100 border-0 group cursor-pointer [&>td]:h-9",
                         isRowDragOver && "ring-2 ring-inset ring-blue-400/70 dark:ring-blue-500/60",
                         // 主行：紧凑 + Excel 式网格（单元格边框由 TableCell 承担）
                         isEditing
@@ -1563,7 +1558,12 @@ export function DataTable<TData, TValue>({
                         e.stopPropagation()
                       }}
                       onDragOver={
-                        enableRowReorder && draggedRowId
+                        enableRowReorder
+                          ? (e) => handleRowDragOver(e, rowReorderId)
+                          : undefined
+                      }
+                      onDragEnter={
+                        enableRowReorder
                           ? (e) => handleRowDragOver(e, rowReorderId)
                           : undefined
                       }
@@ -1575,7 +1575,7 @@ export function DataTable<TData, TValue>({
                           : undefined
                       }
                       onDrop={
-                        enableRowReorder && draggedRowId
+                        enableRowReorder
                           ? (e) => handleRowDrop(e, rowReorderId)
                           : undefined
                       }
@@ -1773,7 +1773,7 @@ export function DataTable<TData, TValue>({
                           <TableCell 
                             key={cell.id} 
                             className={cn(
-                              "py-0.5 group-hover:text-foreground transition-colors relative text-xs leading-snug",
+                              "py-0.5 group-hover:text-foreground transition-colors relative text-base leading-snug",
                               isActionsCell ? "overflow-visible" : "overflow-hidden",
                               !isActionsCell && !isSelectCell && "font-normal text-foreground",
                               isActionsCell
@@ -1881,7 +1881,7 @@ export function DataTable<TData, TValue>({
                     </TableRow>
                     {isExpanded && currentExpandedContent && (
                       <TableRow className="border-0">
-                        <TableCell colSpan={row.getVisibleCells().length + (expandableRows?.enabled ? 1 : 0)} className="p-1.5 bg-muted/30 text-xs border-l-4 border-l-muted-foreground/25">
+                        <TableCell colSpan={row.getVisibleCells().length + (expandableRows?.enabled ? 1 : 0)} className="p-1.5 bg-muted/30 text-base border-l-4 border-l-muted-foreground/25">
                           {currentExpandedContent}
                         </TableCell>
                       </TableRow>
@@ -1897,7 +1897,7 @@ export function DataTable<TData, TValue>({
                     table.getVisibleLeafColumns().length +
                     (expandableRows?.enabled ? 1 : 0)
                   }
-                  className="h-16 text-center py-6 text-xs text-muted-foreground"
+                  className="h-16 text-center py-6 text-base text-muted-foreground"
                 >
                   暂无数据
                 </TableCell>
@@ -1909,7 +1909,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       {/* 分页 */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 py-2 border-t border-border bg-muted/30 text-xs !mt-0">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 py-2 border-t border-border bg-muted/30 text-base !mt-0">
         <div className="flex-1 text-muted-foreground">
           {serverSidePagination && total !== undefined ? (
             <span className="flex items-center gap-1">
@@ -1927,7 +1927,7 @@ export function DataTable<TData, TValue>({
             <select
               value={currentPageSize}
               onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-              className="h-7 w-[72px] rounded border border-input bg-background px-2 text-xs font-medium text-foreground shadow-sm transition-colors hover:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/40 cursor-pointer appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iNiIgdmlld0JveD0iMCAwIDEwIDYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNSA1TDkgMSIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:10px_6px] bg-[right_8px_center] bg-no-repeat"
+              className="h-8 w-[72px] rounded border border-input bg-background px-2 text-base font-medium text-foreground shadow-sm transition-colors hover:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/40 cursor-pointer appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iNiIgdmlld0JveD0iMCAwIDEwIDYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNSA1TDkgMSIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:10px_6px] bg-[right_8px_center] bg-no-repeat"
             >
               {[10, 20, 30, 40, 50, 100].map((size) => (
                 <option key={size} value={size}>
@@ -1962,7 +1962,7 @@ export function DataTable<TData, TValue>({
                 onChange={(e) => handlePageInputChange(e.target.value)}
                 onKeyDown={handlePageInputKeyDown}
                 onBlur={handlePageInputBlur}
-                className="h-7 w-[34px] rounded border border-input bg-background px-1 text-center text-xs text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                className="h-8 w-[34px] rounded border border-input bg-background px-1 text-center text-base text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
               <span className="text-muted-foreground whitespace-nowrap">/ {pageCount}</span>
             </div>

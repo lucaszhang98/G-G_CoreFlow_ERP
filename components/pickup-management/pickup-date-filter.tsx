@@ -92,14 +92,14 @@ export function PickupDateFilter({
       <PopoverContent className="w-auto min-w-[320px] p-4" align="start">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
+            <Label className="text-base font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
               日期字段
             </Label>
             <Select
               value={selectedField || undefined}
               onValueChange={handleFieldChange}
             >
-              <SelectTrigger className="h-8 text-sm flex-1">
+              <SelectTrigger className="h-9 text-base flex-1">
                 <SelectValue placeholder="选择要筛选的日期" />
               </SelectTrigger>
               <SelectContent>
@@ -112,7 +112,7 @@ export function PickupDateFilter({
             </Select>
           </div>
           <div className="flex items-center gap-2">
-            <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
+            <Label className="text-base font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
               开始时间
             </Label>
             <Input
@@ -122,11 +122,11 @@ export function PickupDateFilter({
               onChange={(e) =>
                 onFilterChange(PICKUP_DATE_FILTER_PARAM_FROM, e.target.value || null)
               }
-              className="h-8 text-sm flex-1"
+              className="h-9 text-base flex-1"
             />
           </div>
           <div className="flex items-center gap-2">
-            <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
+            <Label className="text-base font-medium text-gray-600 dark:text-gray-400 w-16 shrink-0">
               结束时间
             </Label>
             <Input
@@ -136,14 +136,14 @@ export function PickupDateFilter({
               onChange={(e) =>
                 onFilterChange(PICKUP_DATE_FILTER_PARAM_TO, e.target.value || null)
               }
-              className="h-8 text-sm flex-1"
+              className="h-9 text-base flex-1"
             />
           </div>
           {isActive && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-full text-xs"
+              className="h-8 w-full text-base"
               onClick={handleClear}
             >
               清除日期筛选

@@ -3490,7 +3490,7 @@ export function EntityTable<T = any>({
       <TableViewManagerBridgeProvider value={viewManagerBridge}>
       {/* 统计信息和批量操作工具栏（批量按钮过多时自动换行） */}
       <div className="flex flex-col gap-2 w-full px-0.5">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-base text-muted-foreground">
           <span>共 <span className="font-semibold text-foreground">{total}</span> 条记录</span>
           {enhancedConfig.list.listSummaryDisplay?.map((item) => {
             const raw = listSummary[item.key]

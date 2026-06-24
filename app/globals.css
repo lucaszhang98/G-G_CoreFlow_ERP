@@ -364,6 +364,14 @@
     cursor: pointer !important;
   }
 
+  .scroll-container [data-row-drag-handle] {
+    cursor: grab !important;
+  }
+
+  .scroll-container [data-row-drag-handle]:active {
+    cursor: grabbing !important;
+  }
+
   /* 可交互元素使用各自的光标 */
   .scroll-container button:not(:disabled) {
     cursor: pointer !important;
