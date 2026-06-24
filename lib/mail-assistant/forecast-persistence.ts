@@ -336,6 +336,26 @@ export async function upsertSourceForecastLookupResult(
   result: SourceForecastLookupResult
 ): Promise<void> {
   const cn = normalizeContainerNumber(result.containerNumber)
+
+  // 已成功定位的源预报不被失败的重新查找覆盖（如 Gemini 429、规则误判）
+  if (result.status === 'not_found') {
+    const existing = await prisma.mail_container_forecast.findUnique({
+      where: { container_number: cn },
+      select: { status: true, message_id: true, attachment_id: true },
+    })
+    if (existing?.status === 'found' && existing.message_id && existing.attachment_id) {
+      await prisma.mail_container_forecast.update({
+        where: { container_number: cn },
+        data: {
+          looked_up_at: new Date(),
+          resolve_reason: result.resolveReason ?? '重新查找未命中，保留上次成功的源预报',
+          updated_at: new Date(),
+        },
+      })
+      return
+    }
+  }
+
   const sf = result.sourceForecast
   const found = result.status === 'found' && sf
   const resolveReason = sf?.resolveReason ?? result.resolveReason ?? null

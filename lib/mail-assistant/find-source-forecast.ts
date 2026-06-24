@@ -146,6 +146,25 @@ async function pickFromAiResult(
   const ai = await resolveForecastWithAi(containerNumber, aiCandidates, bufferMap)
 
   if (ai.choiceIndex === -1) {
+    const rulesFallback = resolveWithRulesOnly(
+      containerNumber,
+      scored,
+      excelAttachmentCount,
+      aiMode,
+      workspaceEmail
+    )
+    if (rulesFallback.status === 'found') {
+      return {
+        ...rulesFallback,
+        sourceForecast: rulesFallback.sourceForecast
+          ? {
+              ...rulesFallback.sourceForecast,
+              resolveReason: `${ai.reason}；已回退规则：${rulesFallback.sourceForecast.resolveReason}`,
+            }
+          : null,
+      }
+    }
+
     return {
       containerNumber,
       status: 'not_found',

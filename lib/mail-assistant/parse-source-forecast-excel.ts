@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx'
 import { normalizeHeaderCell } from '@/lib/mail-assistant/forecast-template-profile'
 import { parseFlexibleDate } from '@/lib/mail-assistant/excel-date-serial'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
+import { sheetToRowMatrixExpanded } from '@/lib/mail-assistant/sheet-to-matrix-expanded'
 
 export type SourceForecastOrderHeader = {
   customerRaw: string
@@ -257,10 +258,8 @@ export function parseSourceForecastExcel(
   let best: ParsedSourceForecast | null = null
 
   for (const sheetName of workbook.SheetNames) {
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
-      header: 1,
-      defval: '',
-    }) as unknown[][]
+    const sheet = workbook.Sheets[sheetName]
+    const rows = sheetToRowMatrixExpanded(sheet)
 
     if (!rows.length) continue
 

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Download, ExternalLink, FileInput, FileSpreadsheet, Loader2, Mail, Save } from "lucide-react"
 import { toast } from "sonner"
 import { IMPORT_EDITABLE_SHEET, trimImportEditableRows } from "@/lib/mail-assistant/import-draft-matrix"
+import { sheetToRowMatrixExpanded } from "@/lib/mail-assistant/sheet-to-matrix-expanded"
 
 type ViewMeta = {
   kind: "source" | "import"
@@ -200,11 +201,7 @@ function ResizableExcelSheetTable({
 function matrixFromSheet(wb: XLSX.WorkBook, name: string): string[][] {
   const sheet = wb.Sheets[name]
   if (!sheet) return []
-  const matrix = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,
-    defval: "",
-    raw: false,
-  }) as unknown[][]
+  const matrix = sheetToRowMatrixExpanded(sheet)
   return matrix.map((row) =>
     (row as unknown[]).map((c) => {
       if (c instanceof Date) return c.toISOString().slice(0, 10)

@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { sheetToRowMatrixExpanded } from '@/lib/mail-assistant/sheet-to-matrix-expanded'
 import {
   FORECAST_SCORE_THRESHOLD,
   ORDER_FORECAST_CANONICAL_HEADERS,
@@ -45,7 +46,7 @@ export function scoreForecastExcel(input: ForecastExcelScoreInput): ForecastExce
     const workbook = XLSX.read(input.buffer, { type: 'buffer', cellDates: true })
     for (const sheetName of workbook.SheetNames) {
       const sheet = workbook.Sheets[sheetName]
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as unknown[][]
+      const rows = sheetToRowMatrixExpanded(sheet)
       if (!rows.length) continue
 
       const scored = scoreSheet(rows, sheetName, container, input.filename, input.emailSubject)
@@ -107,9 +108,15 @@ function scoreSheet(
   )
 
   const rowCountWithContainer = countContainerRows(rows, headerRowIndex, containerColIdx, container)
+  const orderHeaderHasContainer = containerInOrderHeaderBlock(rows, container)
+  const effectiveContainerFound = rowCountWithContainer > 0 || orderHeaderHasContainer
+
   if (rowCountWithContainer > 0) {
     score += 35
     reasons.push(`表内命中柜号 ${rowCountWithContainer} 行`)
+  } else if (orderHeaderHasContainer) {
+    score += 35
+    reasons.push('订单头区命中柜号（固定客户模版）')
   }
 
   const fn = filename.toLowerCase()
@@ -133,11 +140,11 @@ function scoreSheet(
 
   return {
     score: Math.max(0, Math.min(100, score)),
-    containerFound: rowCountWithContainer > 0,
+    containerFound: effectiveContainerFound,
     sheetName,
     matchedHeaders: matchedOrder,
     templateKind,
-    rowCountWithContainer,
+    rowCountWithContainer: rowCountWithContainer || (orderHeaderHasContainer ? 1 : 0),
     reasons,
   }
 }
@@ -162,6 +169,22 @@ function findHeaderRow(rows: unknown[][]): { headerRowIndex: number; headers: un
 
   if (!best) return null
   return { headerRowIndex: best.headerRowIndex, headers: best.headers }
+}
+
+/** 固定客户模版：柜号在明细表头之上的「订单号」行，不在明细列里 */
+function containerInOrderHeaderBlock(rows: unknown[][], container: string): boolean {
+  const limit = Math.min(rows.length, 12)
+  for (let r = 0; r < limit; r++) {
+    const row = rows[r] ?? []
+    for (let c = 0; c < Math.min(row.length, 8); c++) {
+      const label = normalizeHeaderCell(row[c])
+      if (label === '订单号' || label === '柜号' || label === '集装箱号' || label === '箱号') {
+        const val = normalizeContainerNumber(String(row[c + 1] ?? ''))
+        if (val === container) return true
+      }
+    }
+  }
+  return false
 }
 
 function countContainerRows(
@@ -204,7 +227,8 @@ export function buildExcelPreviewForAi(buffer: Buffer, maxRows = 6): string {
   try {
     const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true })
     const sheetName = workbook.SheetNames[0]
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' }) as unknown[][]
+    const sheet = workbook.Sheets[sheetName]
+    const rows = sheetToRowMatrixExpanded(sheet)
     return rows
       .slice(0, maxRows)
       .map((r) => (r as unknown[]).map((c) => String(c ?? '')).join('\t'))
