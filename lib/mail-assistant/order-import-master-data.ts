@@ -308,6 +308,7 @@ export function buildNumberedLocationPools(master: OrderImportMasterData): Recor
 }
 
 function containsKeyword(norm: string, keywords: string[]): boolean {
+  if (!norm) return false
   return keywords.some((k) => norm.includes(normalizeKey(k)) || normalizeKey(k).includes(norm))
 }
 
