@@ -35,6 +35,7 @@ const IMPORT_PREVIEW_COLUMNS: Array<{ index: number; label: string }> = [
   { index: 22, label: "数量" },
   { index: 23, label: "体积" },
   { index: 24, label: "FBA" },
+  { index: 25, label: "PO" },
   { index: 26, label: "明细备注" },
 ]
 

@@ -75,6 +75,14 @@ function headerMatches(cell: unknown, aliases: string[], options?: { exactOnly?:
   })
 }
 
+function isPoColumnHeader(cell: unknown): boolean {
+  const norm = normalizeHeaderCell(cell)
+  if (!norm) return false
+  // 与 excel-transfer.ts 一致：精确识别 PO 列，且绝不把「PO窗口期」当 PO
+  if (norm === 'po窗口期' || norm === '窗口期' || norm === '送仓窗口') return false
+  return norm === 'po' || norm === '采购订单' || norm === '订单号po'
+}
+
 function mapDetailColumns(row: unknown[]): Record<string, number> {
   const colMap: Record<string, number> = {}
   row.forEach((cell, idx) => {
@@ -88,13 +96,7 @@ function mapDetailColumns(row: unknown[]): Record<string, number> {
     if (headerMatches(cell, VOLUME_ALIASES)) colMap.volume = idx
     if (headerMatches(cell, WEIGHT_ALIASES)) colMap.weight = idx
     if (headerMatches(cell, DETAIL_COLUMN_ALIASES.fba)) colMap.fba = idx
-    // 「PO窗口期」不能当成 PO 列
-    if (
-      headerMatches(cell, DETAIL_COLUMN_ALIASES.po, { exactOnly: true }) &&
-      !headerMatches(cell, DETAIL_COLUMN_ALIASES.windowPeriod)
-    ) {
-      colMap.po = idx
-    }
+    if (isPoColumnHeader(cell)) colMap.po = idx
     if (headerMatches(cell, DETAIL_COLUMN_ALIASES.deliveryNatureRaw)) {
       colMap.deliveryNatureRaw = idx
     }
