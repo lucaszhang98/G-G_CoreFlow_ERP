@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { sheetToRowMatrixExpanded } from '@/lib/mail-assistant/sheet-to-matrix-expanded'
+import { sheetToForecastRowMatrix } from '@/lib/mail-assistant/sheet-to-matrix-expanded'
 import {
   FORECAST_SCORE_THRESHOLD,
   ORDER_FORECAST_CANONICAL_HEADERS,
@@ -46,7 +46,7 @@ export function scoreForecastExcel(input: ForecastExcelScoreInput): ForecastExce
     const workbook = XLSX.read(input.buffer, { type: 'buffer', cellDates: true })
     for (const sheetName of workbook.SheetNames) {
       const sheet = workbook.Sheets[sheetName]
-      const rows = sheetToRowMatrixExpanded(sheet)
+      const rows = sheetToForecastRowMatrix(sheet)
       if (!rows.length) continue
 
       const scored = scoreSheet(rows, sheetName, container, input.filename, input.emailSubject)
@@ -228,7 +228,7 @@ export function buildExcelPreviewForAi(buffer: Buffer, maxRows = 6): string {
     const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true })
     const sheetName = workbook.SheetNames[0]
     const sheet = workbook.Sheets[sheetName]
-    const rows = sheetToRowMatrixExpanded(sheet)
+    const rows = sheetToForecastRowMatrix(sheet)
     return rows
       .slice(0, maxRows)
       .map((r) => (r as unknown[]).map((c) => String(c ?? '')).join('\t'))

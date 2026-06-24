@@ -2,7 +2,12 @@ import * as XLSX from 'xlsx'
 import { normalizeHeaderCell } from '@/lib/mail-assistant/forecast-template-profile'
 import { parseFlexibleDate } from '@/lib/mail-assistant/excel-date-serial'
 import { normalizeContainerNumber } from '@/lib/mail-assistant/forecast-template-profile'
-import { sheetToRowMatrixExpanded } from '@/lib/mail-assistant/sheet-to-matrix-expanded'
+import {
+  findForecastDetailHeader,
+  mapForecastDetailColumns,
+  type ForecastDetailColMap,
+} from '@/lib/mail-assistant/forecast-detail-header'
+import { sheetToForecastRowMatrix } from '@/lib/mail-assistant/sheet-to-matrix-expanded'
 
 export type SourceForecastOrderHeader = {
   customerRaw: string
@@ -32,19 +37,6 @@ export type ParsedSourceForecast = {
   order: SourceForecastOrderHeader
   details: SourceForecastDetailRow[]
 }
-
-const DETAIL_COLUMN_ALIASES: Record<keyof Omit<SourceForecastDetailRow, 'quantity' | 'weight' | 'volume'>, string[]> = {
-  deliveryLocationRaw: ['仓库代码', '送仓地点', '送仓', 'fc', 'fba仓', '目的地仓', 'location', '仓点'],
-  shippingMarkRaw: ['唛头', '麦头', 'mark', 'shippingmark', '箱唛'],
-  fba: ['fba'],
-  po: ['po', '采购订单', '订单号po'],
-  deliveryNatureRaw: ['派送方式', '性质', '类型', '送仓性质', 'detailtype'],
-  windowPeriod: ['窗口期', 'po窗口期', 'window', '送仓窗口'],
-}
-
-const QUANTITY_ALIASES = ['箱数', '数量', '件数', 'qty', '板数']
-const VOLUME_ALIASES = ['体积', '方数', 'cbm', 'volume']
-const WEIGHT_ALIASES = ['重量', 'weight', 'kg']
 
 const ORDER_LABEL_ALIASES: Record<keyof SourceForecastOrderHeader, string[]> = {
   customerRaw: ['客户名称', '客户', 'customer', '客户代码'],
@@ -76,61 +68,8 @@ function headerMatches(cell: unknown, aliases: string[], options?: { exactOnly?:
   })
 }
 
-function isPoColumnHeader(cell: unknown): boolean {
-  const norm = normalizeHeaderCell(cell)
-  if (!norm) return false
-  // 与 excel-transfer.ts 一致：精确识别 PO 列，且绝不把「PO窗口期」当 PO
-  if (norm === 'po窗口期' || norm === '窗口期' || norm === '送仓窗口') return false
-  return norm === 'po' || norm === '采购订单' || norm === '订单号po'
-}
-
-function mapDetailColumns(row: unknown[]): Record<string, number> {
-  const colMap: Record<string, number> = {}
-  row.forEach((cell, idx) => {
-    if (headerMatches(cell, DETAIL_COLUMN_ALIASES.deliveryLocationRaw)) {
-      colMap.deliveryLocationRaw = idx
-    }
-    if (headerMatches(cell, DETAIL_COLUMN_ALIASES.shippingMarkRaw)) {
-      colMap.shippingMarkRaw = idx
-    }
-    if (headerMatches(cell, QUANTITY_ALIASES)) colMap.quantity = idx
-    if (headerMatches(cell, VOLUME_ALIASES)) colMap.volume = idx
-    if (headerMatches(cell, WEIGHT_ALIASES)) colMap.weight = idx
-    if (headerMatches(cell, DETAIL_COLUMN_ALIASES.fba)) colMap.fba = idx
-    if (isPoColumnHeader(cell)) colMap.po = idx
-    if (headerMatches(cell, DETAIL_COLUMN_ALIASES.deliveryNatureRaw)) {
-      colMap.deliveryNatureRaw = idx
-    }
-    if (headerMatches(cell, DETAIL_COLUMN_ALIASES.windowPeriod)) colMap.windowPeriod = idx
-  })
-  return colMap
-}
-
-function findDetailHeaderRow(rows: unknown[][]): { rowIndex: number; colMap: Record<string, number> } | null {
-  let best: { rowIndex: number; colMap: Record<string, number>; score: number } | null = null
-
-  for (let i = 0; i < Math.min(rows.length, 40); i++) {
-    const row = rows[i] ?? []
-    const colMap = mapDetailColumns(row)
-
-    const score =
-      (colMap.deliveryLocationRaw !== undefined ? 3 : 0) +
-      (colMap.quantity !== undefined ? 2 : 0) +
-      (colMap.volume !== undefined ? 2 : 0) +
-      (colMap.deliveryNatureRaw !== undefined ? 1 : 0)
-
-    if (score >= 5 && (!best || score > best.score)) {
-      best = { rowIndex: i, colMap, score }
-    }
-  }
-
-  return best ? { rowIndex: best.rowIndex, colMap: best.colMap } : null
-}
-
 function isFixedCustomerTemplate(rows: unknown[][]): boolean {
-  const headerRow = rows[9] as unknown[] | undefined
-  if (!headerRow) return false
-  return headerRow.some((cell) => headerMatches(cell, DETAIL_COLUMN_ALIASES.deliveryLocationRaw))
+  return findForecastDetailHeader(rows)?.rowIndex === 9
 }
 
 function parseFixedCustomerTemplate(rows: unknown[][], containerNumber: string): ParsedSourceForecast {
@@ -151,8 +90,7 @@ function parseFixedCustomerTemplate(rows: unknown[][], containerNumber: string):
   }
 
   const headerRowIndex = 9
-  const headerRow = rows[headerRowIndex] as unknown[]
-  const colMap = mapDetailColumns(headerRow)
+  const colMap = mapForecastDetailColumns(rows[headerRowIndex] ?? [])
 
   const labelPairs = extractLabelValuePairs(rows, headerRowIndex)
   if (labelPairs.orderDateRaw) order.orderDateRaw = labelPairs.orderDateRaw
@@ -169,7 +107,7 @@ function parseFixedCustomerTemplate(rows: unknown[][], containerNumber: string):
 function readDetailRows(
   rows: unknown[][],
   headerRowIndex: number,
-  colMap: Record<string, number>
+  colMap: ForecastDetailColMap
 ): SourceForecastDetailRow[] {
   const details: SourceForecastDetailRow[] = []
   for (let i = headerRowIndex + 1; i < rows.length; i++) {
@@ -226,7 +164,7 @@ function extractLabelValuePairs(rows: unknown[][], maxRows: number): Partial<Sou
 }
 
 function parseFlexibleTable(rows: unknown[][], containerNumber: string): ParsedSourceForecast | null {
-  const header = findDetailHeaderRow(rows)
+  const header = findForecastDetailHeader(rows)
   if (!header) return null
 
   const pairs = extractLabelValuePairs(rows, header.rowIndex + 1)
@@ -259,7 +197,7 @@ export function parseSourceForecastExcel(
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName]
-    const rows = sheetToRowMatrixExpanded(sheet)
+    const rows = sheetToForecastRowMatrix(sheet)
 
     if (!rows.length) continue
 

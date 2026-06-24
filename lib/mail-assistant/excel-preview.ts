@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { sheetToRowMatrixExpanded } from '@/lib/mail-assistant/sheet-to-matrix-expanded'
+import { sheetToForecastRowMatrix } from '@/lib/mail-assistant/sheet-to-matrix-expanded'
 
 export type ExcelSheetPreview = {
   name: string
@@ -36,7 +36,7 @@ export function buildExcelPreviewPayload(
 
   for (const name of workbook.SheetNames.slice(0, maxSheets)) {
     const sheet = workbook.Sheets[name]
-    const matrix = sheetToRowMatrixExpanded(sheet)
+    const matrix = sheetToForecastRowMatrix(sheet)
 
     const normalized = matrix.map((row) =>
       (row as unknown[]).slice(0, maxCols).map(cellToString)
