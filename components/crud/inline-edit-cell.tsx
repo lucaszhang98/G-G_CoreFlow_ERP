@@ -26,7 +26,7 @@ import {
 import { LocationSelect } from "@/components/ui/location-select"
 import { FuzzySearchSelect, FuzzySearchOption } from "@/components/ui/fuzzy-search-select"
 import { ChevronDown, Check, X } from "lucide-react"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 
 /** 根容器：在 table-fixed 列宽下不撑开 td，内容过宽时截断 */
@@ -696,6 +696,174 @@ function CarrierCodeInlineInput({
   )
 }
 
+type PortStationOption = {
+  location_id: string
+  location_code: string
+  name: string
+}
+
+// 码头/查验站：文本输入框 + 三个查验站模糊匹配（去掉原下拉选择）
+function PortStationInlineInput({
+  value,
+  autoFocus,
+  className,
+  placeholder,
+  onChange,
+  onBlurSave,
+}: {
+  value: unknown
+  autoFocus: boolean
+  className?: string
+  placeholder?: string
+  onChange: (value: string | null) => void
+  onBlurSave?: () => void
+}) {
+  const [stations, setStations] = React.useState<PortStationOption[]>([])
+  const [text, setText] = React.useState('')
+  const [open, setOpen] = React.useState(false)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const didFocusRef = React.useRef(false)
+
+  React.useEffect(() => {
+    let active = true
+    fetch('/api/locations/by-type?type=port')
+      .then((r) => r.json())
+      .then((d) => {
+        if (!active) return
+        const list: PortStationOption[] = (d?.data || []).map((l: any) => ({
+          location_id: String(l.location_id),
+          location_code: l.location_code || '',
+          name: l.name || '',
+        }))
+        setStations(list)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // 当前值（location_id）→ 显示对应代码
+  React.useEffect(() => {
+    if (value == null || value === '') {
+      setText('')
+      return
+    }
+    const cur = stations.find((s) => s.location_id === String(value))
+    setText(cur ? cur.location_code : String(value))
+  }, [value, stations])
+
+  React.useEffect(() => {
+    if (!autoFocus || didFocusRef.current) return
+    didFocusRef.current = true
+    const t = window.setTimeout(() => {
+      const el = inputRef.current
+      if (!el) return
+      el.focus({ preventScroll: true })
+      el.select()
+    }, 0)
+    return () => window.clearTimeout(t)
+  }, [autoFocus])
+
+  const filtered = React.useMemo(() => {
+    const q = text.trim().toLowerCase()
+    if (!q) return stations
+    return stations.filter(
+      (s) =>
+        s.location_code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
+    )
+  }, [stations, text])
+
+  const commit = React.useCallback(
+    (station: PortStationOption | null) => {
+      onChange(station ? station.location_id : null)
+      onBlurSave?.()
+    },
+    [onChange, onBlurSave]
+  )
+
+  const resolveOnBlur = React.useCallback(() => {
+    const q = text.trim().toLowerCase()
+    if (!q) {
+      commit(null)
+      return
+    }
+    // 优先精确代码匹配，否则取唯一/首个模糊匹配
+    const exact = stations.find((s) => s.location_code.toLowerCase() === q)
+    if (exact) {
+      setText(exact.location_code)
+      commit(exact)
+      return
+    }
+    if (filtered.length >= 1) {
+      setText(filtered[0].location_code)
+      commit(filtered[0])
+      return
+    }
+    // 无匹配：恢复显示原值
+    const cur = stations.find((s) => s.location_id === String(value))
+    setText(cur ? cur.location_code : '')
+  }, [text, stations, filtered, value, commit])
+
+  return (
+    <Popover open={open && filtered.length > 0} onOpenChange={setOpen}>
+      <PopoverAnchor asChild>
+        <div onClick={(e) => e.stopPropagation()} className={cn(CELL_ROOT, 'relative')}>
+          <Input
+            ref={inputRef}
+            type="text"
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value)
+              setOpen(true)
+            }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => {
+              setOpen(false)
+              resolveOnBlur()
+            }}
+            placeholder={placeholder || '输入码头/查验站'}
+            className={cn('h-8 text-sm min-w-0 w-full max-w-full', className)}
+          />
+        </div>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        className="w-[var(--radix-popover-trigger-width)] min-w-[180px] p-1"
+      >
+        {filtered.map((s) => (
+          <div
+            key={s.location_id}
+            role="option"
+            aria-selected={String(value) === s.location_id}
+            className={cn(
+              'flex cursor-pointer items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm',
+              'hover:bg-accent hover:text-accent-foreground',
+              String(value) === s.location_id && 'bg-accent text-accent-foreground'
+            )}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setText(s.location_code)
+              commit(s)
+              setOpen(false)
+            }}
+          >
+            <span className="font-medium truncate">{s.location_code}</span>
+            {s.name && s.name !== s.location_code && (
+              <span className="text-xs text-muted-foreground truncate">{s.name}</span>
+            )}
+          </div>
+        ))}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export function InlineEditCell({
   fieldKey,
   fieldConfig,
@@ -1056,6 +1224,22 @@ export function InlineEditCell({
       )
 
     case 'location':
+      // 码头/查验站：改为文本输入框，输入时对三个查验站做模糊匹配（去掉下拉选择）
+      if (fieldKey === 'port_location') {
+        return (
+          <PortStationInlineInput
+            value={internalValue}
+            autoFocus={autoOpenDropdown}
+            className={className}
+            placeholder={fieldConfig.placeholder}
+            onChange={(val) => {
+              handleInternalChange(val)
+              onChange(val)
+            }}
+            onBlurSave={onBlurSave}
+          />
+        )
+      }
       // 位置选择字段（使用 LocationSelect 组件 - 框架级复用组件）
       // 注意：不传递className来改变核心样式，保持统一的白色样式
       // 如果字段配置中指定了 locationType，则只显示该类型的位置
