@@ -868,14 +868,7 @@ export function InlineEditCell({
           <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
             <Popover
               open={open}
-              onOpenChange={(next) => {
-                setOpen(next)
-                // 关闭弹层时保存：草稿值已在输入/选择时实时写入，
-                // 这里只需触发一次保存，避免像其他字段那样依赖触发器失焦（会过早退出编辑）。
-                if (!next) {
-                  onBlurSave?.()
-                }
-              }}
+              onOpenChange={setOpen}
             >
               <PopoverTrigger asChild>
                 <button
@@ -920,6 +913,10 @@ export function InlineEditCell({
                       // 立即同步到外部，确保自定义输入的值能被保存
                       onChange(value || null)
                     }}
+                    onBlur={() => {
+                      // 光标离开（点到弹层外）即保存；点选项有 onMouseDown preventDefault，不会触发此 blur
+                      onBlurSave?.()
+                    }}
                     className="flex h-9 w-full rounded-md bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     autoFocus
                   />
@@ -945,7 +942,8 @@ export function InlineEditCell({
                           handleInternalChange(selectedValue)
                           setSearchValue(selectedValue)
                           onChange(selectedValue)
-                          // 关闭弹层会触发 onOpenChange → onBlurSave 保存
+                          // 选中即保存（草稿已同步），再关闭弹层
+                          onBlurSave?.()
                           setOpen(false)
                         }}
                       >
