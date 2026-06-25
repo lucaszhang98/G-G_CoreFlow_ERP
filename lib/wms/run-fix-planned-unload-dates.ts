@@ -27,6 +27,128 @@ export interface RunFixPlannedUnloadDatesResult {
   errors: FixPlannedUnloadDatesErrorRow[]
 }
 
+export interface RunRecalcPlannedUnloadWithPickupResult {
+  success: boolean
+  message: string
+  total_candidates: number
+  updated: number
+  unchanged: number
+  skipped_inspection: number
+  skipped_no_date: number
+  failed: number
+  changes: Array<{
+    order_number: string
+    inbound_receipt_id: string
+    from: string | null
+    to: string
+  }>
+  errors: FixPlannedUnloadDatesErrorRow[]
+}
+
+function plannedUnloadDateKey(d: Date | null | undefined): string | null {
+  return d ? d.toISOString().slice(0, 10) : null
+}
+
+/**
+ * 对有提柜日、未填拆柜人员的入库记录，按提柜/ETA 公式重算并写回（含已打印等作业态）。
+ * 查验/封闭区现在位置仍跳过；与库内日期相同则不改。
+ */
+export async function runRecalcPlannedUnloadForOrdersWithPickup(): Promise<RunRecalcPlannedUnloadWithPickupResult> {
+  const inboundReceipts = await prisma.inbound_receipt.findMany({
+    where: {
+      unloaded_by: null,
+      orders: {
+        pickup_date: { not: null },
+        status: { not: 'archived' },
+      },
+    },
+    select: {
+      inbound_receipt_id: true,
+      planned_unload_at: true,
+      orders: {
+        select: {
+          order_number: true,
+          pickup_date: true,
+          eta_date: true,
+          pickup_management: {
+            select: { current_location: true },
+          },
+        },
+      },
+    },
+  })
+
+  const result: RunRecalcPlannedUnloadWithPickupResult = {
+    success: true,
+    message: '',
+    total_candidates: inboundReceipts.length,
+    updated: 0,
+    unchanged: 0,
+    skipped_inspection: 0,
+    skipped_no_date: 0,
+    failed: 0,
+    changes: [],
+    errors: [],
+  }
+
+  for (const receipt of inboundReceipts) {
+    try {
+      const loc = receipt.orders.pickup_management?.current_location
+      if (currentLocationBlocksPlannedUnload(loc)) {
+        result.skipped_inspection++
+        continue
+      }
+
+      const calculatedUnloadDate = calculateUnloadDate(
+        receipt.orders.pickup_date,
+        receipt.orders.eta_date
+      )
+
+      if (!calculatedUnloadDate) {
+        result.skipped_no_date++
+        continue
+      }
+
+      const prevKey = plannedUnloadDateKey(receipt.planned_unload_at)
+      const nextKey = plannedUnloadDateKey(calculatedUnloadDate)
+
+      if (prevKey === nextKey) {
+        result.unchanged++
+        continue
+      }
+
+      await prisma.inbound_receipt.update({
+        where: { inbound_receipt_id: receipt.inbound_receipt_id },
+        data: {
+          planned_unload_at: calculatedUnloadDate,
+          updated_at: new Date(),
+        },
+      })
+
+      result.updated++
+      if (result.changes.length < 100) {
+        result.changes.push({
+          order_number: receipt.orders.order_number || '未知',
+          inbound_receipt_id: String(receipt.inbound_receipt_id),
+          from: prevKey,
+          to: nextKey!,
+        })
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '更新失败'
+      result.failed++
+      result.errors.push({
+        inbound_receipt_id: String(receipt.inbound_receipt_id),
+        order_number: receipt.orders.order_number || '未知',
+        error: message,
+      })
+    }
+  }
+
+  result.message = `共 ${result.total_candidates} 条候选：更新 ${result.updated}，未变 ${result.unchanged}，查验/封闭区跳过 ${result.skipped_inspection}，无法计算 ${result.skipped_no_date}，失败 ${result.failed}`
+  return result
+}
+
 export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDatesResult> {
   const cleared = await prisma.inbound_receipt.updateMany({
     where: {
@@ -112,10 +234,7 @@ export async function runFixPlannedUnloadDates(): Promise<RunFixPlannedUnloadDat
   for (const receipt of inboundReceipts) {
     try {
       if (
-        isInboundNormalPlannedUnloadRecalcBlocked(
-          receipt.unloaded_by,
-          receipt.status
-        )
+        isInboundNormalPlannedUnloadRecalcBlocked(receipt.unloaded_by)
       ) {
         continue
       }

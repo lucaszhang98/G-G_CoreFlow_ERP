@@ -16,7 +16,6 @@ import {
 import {
   guardInboundPlannedUnloadAtInUpdate,
   isInboundPlannedUnloadAtAutoUpdateBlocked,
-  isInboundNormalPlannedUnloadRecalcBlocked,
   resolveEffectiveInboundUnloadedBy,
 } from '@/lib/wms/planned-unload-auto-update';
 
@@ -162,7 +161,6 @@ export async function POST(request: NextRequest) {
             perRowUpdateData,
             {
               unloadedBy: effectiveUnloadedBy,
-              inboundStatus: row.status,
               manualPlannedUnloadAtInRequest,
             }
           )
@@ -215,7 +213,6 @@ export async function POST(request: NextRequest) {
             where: { inbound_receipt_id: row.inbound_receipt_id },
             data: guardInboundPlannedUnloadAtInUpdate(perRowUpdateData, {
               unloadedBy: effectiveUnloadedBy,
-              inboundStatus: row.status,
               manualPlannedUnloadAtInRequest,
             }),
           });
@@ -243,7 +240,6 @@ export async function POST(request: NextRequest) {
             where: { inbound_receipt_id: row.inbound_receipt_id },
             data: guardInboundPlannedUnloadAtInUpdate(updateData, {
               unloadedBy: effectiveUnloadedBy,
-              inboundStatus: row.status,
               manualPlannedUnloadAtInRequest,
             }),
           });

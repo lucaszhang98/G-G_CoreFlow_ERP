@@ -1,11 +1,9 @@
 /**
  * 拆柜日期自动更新锁定规则：
  * - 已指定拆柜人员（unloaded_by）：禁止一切自动改写 planned_unload_at
- * - 已打印 / 已入库 / 已到仓：禁止按提柜/ETA 重算（订单、提柜导入等联动）
- * 查验/封闭区进出仍仅受 unloaded_by 限制；手动传 planned_unload_at 始终允许。
+ * - 其他状态（含已打印/已入库/已到仓）仍随提柜/ETA、查验/封闭区联动更新
+ * - 手动传 planned_unload_at 始终允许
  */
-
-import { isInboundWorkflowStatus } from '@/lib/wms/current-location-blocks-unload'
 
 export function inboundPlannedUnloadAtLockedByUnloadedBy(
   unloadedBy: bigint | null | undefined
@@ -13,20 +11,18 @@ export function inboundPlannedUnloadAtLockedByUnloadedBy(
   return unloadedBy != null
 }
 
-/** 查验/封闭区联动是否禁止自动改拆柜日（仅看拆柜人员） */
+/** 是否禁止自动改拆柜日（仅看拆柜人员） */
 export function isInboundPlannedUnloadAtAutoUpdateBlocked(
   unloadedBy: bigint | null | undefined
 ): boolean {
   return inboundPlannedUnloadAtLockedByUnloadedBy(unloadedBy)
 }
 
-/** 提柜/ETA 触发的常规重算是否应跳过（拆柜人员 + 已打印/已入库/已到仓） */
+/** 提柜/ETA 触发的常规重算是否应跳过（与查验联动相同，仅看拆柜人员） */
 export function isInboundNormalPlannedUnloadRecalcBlocked(
-  unloadedBy: bigint | null | undefined,
-  inboundStatus?: string | null | undefined
+  unloadedBy: bigint | null | undefined
 ): boolean {
-  if (inboundPlannedUnloadAtLockedByUnloadedBy(unloadedBy)) return true
-  return isInboundWorkflowStatus(inboundStatus)
+  return inboundPlannedUnloadAtLockedByUnloadedBy(unloadedBy)
 }
 
 /** 本次保存是否携带拆柜人员字段（用于与库内值合并判断锁定） */
@@ -45,23 +41,17 @@ export function resolveEffectiveInboundUnloadedBy(args: {
 
 export type InboundPlannedUnloadAtUpdatePolicy = {
   unloadedBy: bigint | null | undefined
-  inboundStatus?: string | null | undefined
   /** 请求中是否显式包含 planned_unload_at（手动改拆柜日期） */
   manualPlannedUnloadAtInRequest: boolean
 }
 
 /**
- * 从入库 update 对象中移除非手动的 planned_unload_at（已填拆柜人员或已进入作业态时）。
+ * 从入库 update 对象中移除非手动的 planned_unload_at（已填拆柜人员时）。
  */
 export function guardInboundPlannedUnloadAtInUpdate<
   T extends { planned_unload_at?: unknown },
 >(updateData: T, policy: InboundPlannedUnloadAtUpdatePolicy): T {
-  if (
-    !isInboundNormalPlannedUnloadRecalcBlocked(
-      policy.unloadedBy,
-      policy.inboundStatus
-    )
-  ) {
+  if (!isInboundNormalPlannedUnloadRecalcBlocked(policy.unloadedBy)) {
     return updateData
   }
   if (policy.manualPlannedUnloadAtInRequest) {
