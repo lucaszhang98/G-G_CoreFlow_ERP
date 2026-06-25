@@ -744,6 +744,7 @@ export function InlineEditCell({
               value={internalValue || ''}
               onChange={(e) => handleInternalChange(e.target.value.toUpperCase())}
               onBlur={handleBlur}
+              autoFocus={autoOpenDropdown}
               placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
               className={cn(
                 CARRIER_CODE_CELL_SURFACE_LAYOUT,
