@@ -1930,7 +1930,7 @@ export function DataTable<TData, TValue>({
               onChange={(e) => handlePageSizeChange(Number(e.target.value))}
               className="h-8 w-[72px] rounded border border-input bg-background px-2 text-base font-medium text-foreground shadow-sm transition-colors hover:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/40 cursor-pointer appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iNiIgdmlld0JveD0iMCAwIDEwIDYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNSA1TDkgMSIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:10px_6px] bg-[right_8px_center] bg-no-repeat"
             >
-              {[10, 20, 30, 40, 50, 100].map((size) => (
+              {[10, 20, 30, 40, 50, 100, 200].map((size) => (
                 <option key={size} value={size}>
                   {size}
                 </option>

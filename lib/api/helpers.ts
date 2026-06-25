@@ -132,7 +132,7 @@ export async function checkPermission(
 /**
  * 解析分页参数
  */
-export function parsePaginationParams(searchParams: URLSearchParams, defaultSort: string = 'code', defaultOrder: 'asc' | 'desc' = 'asc', maxLimit: number = 100) {
+export function parsePaginationParams(searchParams: URLSearchParams, defaultSort: string = 'code', defaultOrder: 'asc' | 'desc' = 'asc', maxLimit: number = 200) {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
   // 支持 unlimited=true 或 limit=0 表示无限制（用于主数据搜索）
   const unlimited = searchParams.get('unlimited') === 'true' || searchParams.get('limit') === '0';

@@ -106,12 +106,12 @@ export function createListHandler(config: EntityConfig) {
 
       const searchParams = request.nextUrl.searchParams
       // 对于主数据搜索，如果有搜索条件，允许更大的limit（通过unlimited参数）
-      // 默认maxLimit为100，但可以通过unlimited=true来支持更大的limit
+      // 默认maxLimit为200，但可以通过unlimited=true来支持更大的limit
       let { page, limit, sort, order } = parsePaginationParams(
         searchParams,
         enhancedConfig.list.defaultSort,
         enhancedConfig.list.defaultOrder,
-        100 // 默认最大limit为100
+        200 // 默认最大limit为200
       )
       const search = searchParams.get('search') || ''
 

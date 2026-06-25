@@ -44,7 +44,7 @@ export async function runInboundReceiptListQuery(
 ): Promise<InboundReceiptListQueryResult> {
   const isExport = mode.type === 'export'
   const page = isExport ? 1 : Math.max(1, mode.page)
-  const limit = isExport ? 1 : Math.min(100, Math.max(1, mode.limit))
+  const limit = isExport ? 1 : Math.min(200, Math.max(1, mode.limit))
   const sort = isExport ? 'planned_unload_at' : mode.sort || 'created_at'
   const order: 'asc' | 'desc' = isExport ? 'asc' : mode.order
   const search = searchParams.get('search') || ''

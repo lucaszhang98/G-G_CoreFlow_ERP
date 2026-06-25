@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     if (authResult.error) return authResult.error;
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '100', 10)));
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '100', 10)));
     const sort = searchParams.get('sort') || 'created_at';
     const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc';
     const search = searchParams.get('search') || '';

@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '100', 10)))
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '100', 10)))
     const sort = searchParams.get('sort') || deliveryManagementConfig.list.defaultSort
     const orderParam = searchParams.get('order')
     const order: 'asc' | 'desc' =
