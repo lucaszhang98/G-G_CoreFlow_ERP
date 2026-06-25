@@ -640,6 +640,62 @@ function PickupDateInlineEdit({
   )
 }
 
+/** 承运公司文本输入：进入编辑时主动聚焦（autoFocus 只在挂载瞬间生效，时机不可靠） */
+function CarrierCodeInlineInput({
+  internalValue,
+  autoFocus,
+  className,
+  fieldConfig,
+  onInternalChange,
+  onBlur,
+}: {
+  internalValue: unknown
+  autoFocus: boolean
+  className?: string
+  fieldConfig: FieldConfig
+  onInternalChange: (value: string) => void
+  onBlur: () => void
+}) {
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const didFocusRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (!autoFocus || didFocusRef.current) return
+    didFocusRef.current = true
+    const t = window.setTimeout(() => {
+      const el = inputRef.current
+      if (!el) return
+      el.focus({ preventScroll: true })
+      el.select()
+    }, 0)
+    return () => window.clearTimeout(t)
+  }, [autoFocus])
+
+  const displayForBg =
+    formatCarrierCodeDisplay(
+      internalValue != null && internalValue !== '' ? String(internalValue) : null
+    ) ?? (internalValue ? String(internalValue).trim().toUpperCase() : null)
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} className="relative h-full min-h-8 w-full">
+      <Input
+        ref={inputRef}
+        type="text"
+        value={(internalValue as string) || ''}
+        onChange={(e) => onInternalChange(e.target.value.toUpperCase())}
+        onBlur={onBlur}
+        placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
+        className={cn(
+          CARRIER_CODE_CELL_SURFACE_LAYOUT,
+          getCarrierCodeCellClass(displayForBg),
+          'border-0 shadow-none rounded-none text-center focus-visible:ring-0 focus-visible:ring-offset-0',
+          className
+        )}
+      />
+    </div>
+  )
+}
+
 export function InlineEditCell({
   fieldKey,
   fieldConfig,
@@ -733,27 +789,15 @@ export function InlineEditCell({
         )
       }
       if (fieldKey === 'carrier_code') {
-        const displayForBg =
-          formatCarrierCodeDisplay(
-            internalValue != null && internalValue !== '' ? String(internalValue) : null
-          ) ?? (internalValue ? String(internalValue).trim().toUpperCase() : null)
         return (
-          <div onClick={(e) => e.stopPropagation()} className="relative h-full min-h-8 w-full">
-            <Input
-              type="text"
-              value={internalValue || ''}
-              onChange={(e) => handleInternalChange(e.target.value.toUpperCase())}
-              onBlur={handleBlur}
-              autoFocus={autoOpenDropdown}
-              placeholder={fieldConfig.placeholder || `请输入${fieldConfig.label}`}
-              className={cn(
-                CARRIER_CODE_CELL_SURFACE_LAYOUT,
-                getCarrierCodeCellClass(displayForBg),
-                'border-0 shadow-none rounded-none text-center focus-visible:ring-0 focus-visible:ring-offset-0',
-                className
-              )}
-            />
-          </div>
+          <CarrierCodeInlineInput
+            internalValue={internalValue}
+            autoFocus={autoOpenDropdown}
+            className={className}
+            fieldConfig={fieldConfig}
+            onInternalChange={handleInternalChange}
+            onBlur={handleBlur}
+          />
         )
       }
       return (
