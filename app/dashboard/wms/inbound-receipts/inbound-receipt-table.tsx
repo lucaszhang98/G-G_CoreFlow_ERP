@@ -8,6 +8,7 @@ import type { ClickableColumnConfig } from "@/lib/table/config"
 import { Button } from "@/components/ui/button"
 import { Printer, FileText, Copy, Download } from "lucide-react"
 import { toast } from "sonner"
+import { copyTextToClipboard } from "@/lib/utils/copy-to-clipboard"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -171,7 +172,7 @@ export function InboundReceiptTable() {
         textToCopy = containerNumbers.join(' ')
         break
     }
-    navigator.clipboard.writeText(textToCopy)
+    copyTextToClipboard(textToCopy)
       .then(() => toast.success(`已复制 ${containerNumbers.length} 个柜号到剪贴板`))
       .catch(() => toast.error('复制失败，请重试'))
   }, [selectedInboundRows])

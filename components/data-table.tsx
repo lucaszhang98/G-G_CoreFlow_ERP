@@ -44,6 +44,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { copyTextToClipboard } from "@/lib/utils/copy-to-clipboard"
 import { DEFAULT_LIST_PAGE_SIZE } from "@/lib/crud/default-list-pagination"
 import { TABLE_COLUMN_RESIZE_MAX_PX } from "@/lib/table/column-sizing"
 
@@ -1731,8 +1732,8 @@ export function DataTable<TData, TValue>({
                           }
                           
                           try {
-                            // 使用 Clipboard API（与测试页面相同的方法）
-                            await navigator.clipboard.writeText(textToCopy)
+                            // 优先 Clipboard API，失败时回退 execCommand（右键时文档可能未聚焦，writeText 会偶发 NotAllowedError）
+                            await copyTextToClipboard(textToCopy)
                             
                             setCopiedCellId(cell.id)
                             const isMblCol =

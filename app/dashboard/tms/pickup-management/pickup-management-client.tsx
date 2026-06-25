@@ -9,6 +9,7 @@ import * as React from "react"
 import { EntityTable } from "@/components/crud/entity-table"
 import { pickupManagementConfig } from "@/lib/crud/configs/pickup-management"
 import { toast } from "sonner"
+import { copyTextToClipboard } from "@/lib/utils/copy-to-clipboard"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, Copy, FileText, Mail, Download, FileSpreadsheet, Database, Upload, CalendarClock, Search } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
@@ -528,7 +529,7 @@ export function PickupManagementClient() {
     }
 
     // 复制到剪贴板
-    navigator.clipboard.writeText(textToCopy)
+    copyTextToClipboard(textToCopy)
       .then(() => {
         toast.success(`已复制 ${containerNumbers.length} 个柜号到剪贴板`)
       })

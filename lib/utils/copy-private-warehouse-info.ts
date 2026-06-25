@@ -2,6 +2,8 @@
  * 从列表行批量复制私仓信息（private_warehouse_info），供订单明细、库存管理等复用。
  */
 
+import { copyTextToClipboard } from './copy-to-clipboard'
+
 export type PrivateWarehouseInfoCopyFormat = 'line' | 'comma' | 'space'
 
 export function getPrivateWarehouseInfoFromRow(
@@ -56,6 +58,6 @@ export async function copyPrivateWarehouseInfoFromRows(
     return { copiedCount: 0, skippedCount: rows.length }
   }
 
-  await navigator.clipboard.writeText(text)
+  await copyTextToClipboard(text)
   return { copiedCount, skippedCount }
 }

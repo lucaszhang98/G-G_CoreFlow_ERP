@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Copy, CalendarPlus, CalendarCheck, CheckCircle, XCircle } from "lucide-react"
 import { toast } from "sonner"
+import { copyTextToClipboard } from "@/lib/utils/copy-to-clipboard"
 import { copyPrivateWarehouseInfoFromRows } from "@/lib/utils/copy-private-warehouse-info"
 import { NewAppointmentDialog } from "./new-appointment-dialog"
 import { AddToExistingAppointmentDialog } from "./add-to-existing-appointment-dialog"
@@ -324,7 +325,7 @@ export function OrderDetailTable() {
     }
 
     // 复制到剪贴板
-    navigator.clipboard.writeText(textToCopy)
+    copyTextToClipboard(textToCopy)
       .then(() => {
         toast.success(`已复制 ${containerNumbers.length} 个柜号到剪贴板`)
       })
@@ -370,7 +371,7 @@ export function OrderDetailTable() {
     }
 
     // 复制到剪贴板
-    navigator.clipboard.writeText(textToCopy)
+    copyTextToClipboard(textToCopy)
       .then(() => {
         toast.success(`已复制 ${unbookedPallets.length} 个未约板数到剪贴板`)
       })
@@ -419,7 +420,7 @@ export function OrderDetailTable() {
     }
 
     // 复制到剪贴板
-    navigator.clipboard.writeText(textToCopy)
+    copyTextToClipboard(textToCopy)
       .then(() => {
         toast.success(`已复制 ${appointmentNumbers.length} 个预约号码到剪贴板`)
       })
@@ -456,7 +457,7 @@ export function OrderDetailTable() {
     const textToCopy = poValues.join('\n')
 
     // 复制到剪贴板
-    navigator.clipboard.writeText(textToCopy)
+    copyTextToClipboard(textToCopy)
       .then(() => {
         toast.success(`已复制 ${poValues.length} 个PO到剪贴板`)
       })
@@ -504,7 +505,7 @@ export function OrderDetailTable() {
     const textToCopy = fbaValues.join('\n')
 
     // 复制到剪贴板
-    navigator.clipboard.writeText(textToCopy)
+    copyTextToClipboard(textToCopy)
       .then(() => {
         toast.success(`已复制 ${fbaValues.length} 个FBA到剪贴板`)
       })
@@ -552,7 +553,7 @@ export function OrderDetailTable() {
     const textToCopy = quantityValues.join('\n')
 
     // 复制到剪贴板
-    navigator.clipboard.writeText(textToCopy)
+    copyTextToClipboard(textToCopy)
       .then(() => {
         toast.success(`已复制 ${quantityValues.length} 个箱数到剪贴板`)
       })
@@ -642,7 +643,7 @@ export function OrderDetailTable() {
     }
 
     // 复制到剪贴板
-    navigator.clipboard.writeText(textToCopy)
+    copyTextToClipboard(textToCopy)
       .then(() => {
         toast.success(`已复制 ${appointmentTimes.length} 个预约时间到剪贴板`)
       })

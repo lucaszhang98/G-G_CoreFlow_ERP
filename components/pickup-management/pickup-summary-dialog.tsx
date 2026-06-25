@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Copy, Check } from "lucide-react"
 import { toast } from "sonner"
+import { copyTextToClipboard } from "@/lib/utils/copy-to-clipboard"
 
 interface PickupSummaryDialogProps {
   open: boolean
@@ -129,7 +130,7 @@ export function PickupSummaryDialog({
   // 复制到剪贴板
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(summaryText)
+      await copyTextToClipboard(summaryText)
       setCopied(true)
       toast.success('已复制到剪贴板')
       
