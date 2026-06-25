@@ -866,7 +866,17 @@ export function InlineEditCell({
         
         return (
           <div onClick={(e) => e.stopPropagation()} className={CELL_ROOT}>
-            <Popover open={open} onOpenChange={setOpen}>
+            <Popover
+              open={open}
+              onOpenChange={(next) => {
+                setOpen(next)
+                // 关闭弹层时保存：草稿值已在输入/选择时实时写入，
+                // 这里只需触发一次保存，避免像其他字段那样依赖触发器失焦（会过早退出编辑）。
+                if (!next) {
+                  onBlurSave?.()
+                }
+              }}
+            >
               <PopoverTrigger asChild>
                 <button
                   type="button"
@@ -879,7 +889,6 @@ export function InlineEditCell({
                     "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
                     className
                   )}
-                  onBlur={handleBlur}
                 >
                   <span className={cn("truncate", !internalValue && "text-muted-foreground")}>
                     {internalValue || "选择或输入位置"}
@@ -936,8 +945,8 @@ export function InlineEditCell({
                           handleInternalChange(selectedValue)
                           setSearchValue(selectedValue)
                           onChange(selectedValue)
+                          // 关闭弹层会触发 onOpenChange → onBlurSave 保存
                           setOpen(false)
-                          setTimeout(() => handleBlur(), 100)
                         }}
                       >
                         <Check
