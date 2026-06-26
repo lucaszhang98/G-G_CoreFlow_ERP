@@ -222,7 +222,7 @@ export const pickupManagementConfig: EntityConfig = {
     defaultOrder: 'desc',
     /** 失焦自动保存，无需行末铅笔/保存/取消 */
     showActionsColumn: false,
-    /** 切换视图放批量操作工具栏 */
+    /** 隐藏了操作列，故把「视图 + 列显示」放到批量操作工具栏，常驻显示 */
     viewManagerInToolbar: true,
     /** 左侧拖拽调整行顺序 */
     enableRowReorder: true,
