@@ -6,23 +6,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
+import { resolveCurrentWarehouseId, warehouseWhere } from '@/lib/warehouse/current-warehouse'
 
 export async function GET(request: NextRequest) {
   try {
     const authResult = await checkAuth()
     if (authResult.error) return authResult.error
+    const warehouseId = await resolveCurrentWarehouseId()
+    const warehouseFilter = warehouseWhere(warehouseId)
 
     const [locations, carriers, drivers] = await Promise.all([
       prisma.locations.findMany({
-        where: { location_type: 'port' },
+        where: { location_type: 'port', ...warehouseFilter },
         select: { location_id: true, location_code: true, name: true },
         orderBy: { location_code: 'asc' },
       }),
       prisma.carriers.findMany({
+        where: warehouseFilter,
         select: { carrier_id: true, name: true, carrier_code: true },
         orderBy: { name: 'asc' },
       }),
       prisma.drivers.findMany({
+        where: warehouseFilter,
         select: { driver_id: true, driver_code: true },
         orderBy: { driver_code: 'asc' },
       }),

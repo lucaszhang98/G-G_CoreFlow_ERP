@@ -5,6 +5,7 @@ import { syncAppointmentEstimatedWindowPeriodForOrder } from '@/lib/oms/sync-app
 import { applyPickupDateEnteredAtToOrderUpdate } from '@/lib/oms/pickup-date-entered'
 import { syncInboundPlannedUnloadAtByPickupState } from '@/lib/wms/sync-inbound-planned-unload-from-pickup'
 import { resolveCarrierIdFromInput } from '@/lib/tms/resolve-carrier-code'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 
 // POST - 批量更新提柜管理记录
 export async function POST(request: NextRequest) {
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     const user = authResult.user || null
+    const currentWarehouseId = await resolveCurrentWarehouseId()
 
     // 分离提柜管理自有字段和订单字段
     const pickupUpdateData: any = {}
@@ -72,16 +74,6 @@ export async function POST(request: NextRequest) {
     if (updates.port_location_id !== undefined) {
       // 不需要手动转换 BigInt，Prisma 会自动处理
       orderUpdateData.port_location_id = updates.port_location_id || null
-    }
-    if (updates.carrier_code !== undefined) {
-      const resolved = await resolveCarrierIdFromInput(updates.carrier_code)
-      if (resolved.error) {
-        return NextResponse.json({ error: resolved.error }, { status: 400 })
-      }
-      orderUpdateData.carrier_id = resolved.carrierId
-    } else if (updates.carrier_id !== undefined) {
-      // 不需要手动转换 BigInt，Prisma 会自动处理
-      orderUpdateData.carrier_id = updates.carrier_id || null
     }
     if (updates.container_type !== undefined) {
       orderUpdateData.container_type = updates.container_type || null
@@ -162,8 +154,16 @@ export async function POST(request: NextRequest) {
 
     // 获取所有 pickup_management 记录，以获取关联的 order_id
     const pickups = await prisma.pickup_management.findMany({
-      where: { pickup_id: { in: bigIntIds } },
-      select: { pickup_id: true, order_id: true, current_location: true },
+      where: {
+        pickup_id: { in: bigIntIds },
+        ...(currentWarehouseId == null ? {} : { orders: { warehouse_id: currentWarehouseId } }),
+      },
+      select: {
+        pickup_id: true,
+        order_id: true,
+        current_location: true,
+        orders: { select: { warehouse_id: true } },
+      },
     })
     const previousLocationByOrderId = new Map(
       pickups.map((p) => [p.order_id.toString(), p.current_location])
@@ -176,13 +176,58 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const warehouseIds = [
+      ...new Set(
+        pickups
+          .map((p) => p.orders?.warehouse_id)
+          .filter((warehouseId): warehouseId is bigint => warehouseId != null)
+          .map((warehouseId) => warehouseId.toString())
+      ),
+    ]
+    const orderWarehouseId =
+      currentWarehouseId ??
+      (warehouseIds.length === 1 ? BigInt(warehouseIds[0]) : null)
+
+    if (
+      (updates.carrier_code !== undefined || updates.carrier_id !== undefined) &&
+      orderWarehouseId == null
+    ) {
+      return NextResponse.json(
+        { error: '请先切换到具体仓库后再批量修改承运公司' },
+        { status: 400 }
+      )
+    }
+    if (updates.carrier_code !== undefined) {
+      const resolved = await resolveCarrierIdFromInput(updates.carrier_code, orderWarehouseId)
+      if (resolved.error) {
+        return NextResponse.json({ error: resolved.error }, { status: 400 })
+      }
+      orderUpdateData.carrier_id = resolved.carrierId
+    } else if (updates.carrier_id !== undefined) {
+      if (updates.carrier_id && orderWarehouseId != null) {
+        const carrier = await prisma.carriers.findFirst({
+          where: { carrier_id: BigInt(updates.carrier_id), warehouse_id: orderWarehouseId },
+          select: { carrier_id: true },
+        })
+        if (!carrier) {
+          return NextResponse.json(
+            { error: '承运公司不属于当前仓库' },
+            { status: 400 }
+          )
+        }
+      }
+      // 不需要手动转换 BigInt，Prisma 会自动处理
+      orderUpdateData.carrier_id = updates.carrier_id || null
+    }
+
+    const scopedPickupIds = pickups.map((p) => p.pickup_id)
     const orderIds = pickups.map((p: any) => p.order_id)
 
     // 应用系统字段
     if (Object.keys(pickupUpdateData).length > 0) {
       await addSystemFields(pickupUpdateData, user, false)
       await prisma.pickup_management.updateMany({
-        where: { pickup_id: { in: bigIntIds } },
+        where: { pickup_id: { in: scopedPickupIds } },
         data: pickupUpdateData,
       })
     }
@@ -264,4 +309,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

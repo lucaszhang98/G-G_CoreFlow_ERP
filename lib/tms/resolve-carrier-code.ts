@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 import {
   carrierCodeFromRelation,
   normalizeCarrierCodeInput,
@@ -13,7 +14,8 @@ export type ResolveCarrierCodeResult = {
 
 /** 根据用户输入解析承运公司 ID（空输入清空） */
 export async function resolveCarrierIdFromInput(
-  input: string | null | undefined
+  input: string | null | undefined,
+  warehouseId?: bigint | null
 ): Promise<ResolveCarrierCodeResult> {
   if (input == null || String(input).trim() === '') {
     return { carrierId: null, code: null }
@@ -28,8 +30,12 @@ export async function resolveCarrierIdFromInput(
     }
   }
 
+  const scopedWarehouseId =
+    warehouseId === undefined ? await resolveCurrentWarehouseId() : warehouseId
+
   const carriers = await prisma.carriers.findMany({
     where: {
+      ...(scopedWarehouseId == null ? {} : { warehouse_id: scopedWarehouseId }),
       OR: [
         { carrier_code: { equals: code, mode: 'insensitive' } },
         { name: { equals: code, mode: 'insensitive' } },

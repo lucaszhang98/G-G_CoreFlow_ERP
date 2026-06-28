@@ -8,6 +8,7 @@ import {
   pickupCarrierCodeField,
   resolveCarrierIdFromInput,
 } from '@/lib/tms/resolve-carrier-code'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 
 // GET - 获取单个提柜管理记录
 export async function GET(
@@ -20,6 +21,7 @@ export async function GET(
 
     const resolvedParams = await params
     const pickupId = resolvedParams.id
+    const currentWarehouseId = await resolveCurrentWarehouseId()
 
     const pickup = await prisma.pickup_management.findUnique({
       where: { pickup_id: BigInt(pickupId) },
@@ -27,6 +29,7 @@ export async function GET(
         orders: {
           select: {
             order_id: true,
+            warehouse_id: true,
             order_number: true,
             order_date: true,
             mbl_number: true,
@@ -104,6 +107,12 @@ export async function GET(
     })
 
     if (!pickup) {
+      return NextResponse.json({ error: '提柜管理记录不存在' }, { status: 404 })
+    }
+    if (
+      currentWarehouseId != null &&
+      pickup.orders?.warehouse_id !== currentWarehouseId
+    ) {
       return NextResponse.json({ error: '提柜管理记录不存在' }, { status: 404 })
     }
 
@@ -188,6 +197,7 @@ async function updatePickupManagement(
     const resolvedParams = await params
     const pickupId = resolvedParams.id
     const body = await request.json()
+    const currentWarehouseId = await resolveCurrentWarehouseId()
 
     // 调试：查看前端发送的数据
     console.log('[提柜管理更新] 收到的数据:', JSON.stringify(body, null, 2))
@@ -199,15 +209,22 @@ async function updatePickupManagement(
         order_id: true,
         current_location: true,
         orders: {
-          select: { pickup_date: true, pickup_date_entered_at: true },
+          select: { warehouse_id: true, pickup_date: true, pickup_date_entered_at: true },
         },
       },
     })
     if (!pickup) {
       return NextResponse.json({ error: '提柜管理记录不存在' }, { status: 404 })
     }
+    if (
+      currentWarehouseId != null &&
+      pickup.orders?.warehouse_id !== currentWarehouseId
+    ) {
+      return NextResponse.json({ error: '提柜管理记录不存在' }, { status: 404 })
+    }
 
     const previousPickupLocation = pickup.current_location
+    const orderWarehouseId = pickup.orders?.warehouse_id ?? currentWarehouseId
 
     // 构建更新数据
     const pickupUpdateData: any = {}
@@ -249,12 +266,24 @@ async function updatePickupManagement(
       orderUpdateData.port_location_id = body.port_location_id || null
     }
     if (body.carrier_code !== undefined) {
-      const resolved = await resolveCarrierIdFromInput(body.carrier_code)
+      const resolved = await resolveCarrierIdFromInput(body.carrier_code, orderWarehouseId)
       if (resolved.error) {
         return NextResponse.json({ error: resolved.error }, { status: 400 })
       }
       orderUpdateData.carrier_id = resolved.carrierId
     } else if (body.carrier_id !== undefined) {
+      if (body.carrier_id && orderWarehouseId != null) {
+        const carrier = await prisma.carriers.findFirst({
+          where: { carrier_id: BigInt(body.carrier_id), warehouse_id: orderWarehouseId },
+          select: { carrier_id: true },
+        })
+        if (!carrier) {
+          return NextResponse.json(
+            { error: '承运公司不属于当前仓库' },
+            { status: 400 }
+          )
+        }
+      }
       // 不需要手动转换 BigInt，Prisma 会自动处理
       orderUpdateData.carrier_id = body.carrier_id || null
     }
@@ -481,4 +510,3 @@ export async function PUT(
 ) {
   return updatePickupManagement(request, params)
 }
-
