@@ -11,6 +11,10 @@
 
 import prisma from '@/lib/prisma'
 import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled'
+import {
+  resolveCurrentWarehouseId,
+  DEFAULT_WAREHOUSE_ID,
+} from '@/lib/warehouse/current-warehouse'
 import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
 import { BaseImportService } from './import/base-import.service'
 import { ImportConfig, ImportError } from './import/types'
@@ -473,6 +477,9 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
 
     let totalSuccessCount = 0 // 记录成功创建的预约总数
 
+    // 多仓：导入归属「当前仓库」（全部仓库视图下兜底默认仓）
+    const importWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
+
     // 使用外层事务包裹所有批次：任何一个批次失败，全部回滚
     await prisma.$transaction(async (outerTx) => {
       // 批次导入：每个批次在同一个外层事务中处理
@@ -614,7 +621,7 @@ const appointmentImportConfig: ImportConfig<AppointmentImportRow> = {
             // 如果是非直送，创建 outbound_shipments
             if (firstRow.delivery_method !== '直送') {
               try {
-                const defaultWarehouseId = BigInt(1000)
+                const defaultWarehouseId = importWarehouseId
                 await outerTx.$executeRaw`
                   INSERT INTO wms.outbound_shipments (warehouse_id, appointment_id, status, created_at, updated_at, created_by, updated_by)
                   VALUES (${defaultWarehouseId}, ${appointment.appointment_id}, 'planned', NOW(), NOW(), ${userId}, ${userId})

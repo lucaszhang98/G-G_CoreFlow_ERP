@@ -26,9 +26,9 @@ model delivery_appointments {
   rejected                                                      Boolean?                   @default(false)
   enabled                                                       Boolean?                   @default(true) // 启用（预约是否生效）
   verify_po                                                     Boolean?                   @default(false) // 校验PO
-  verify_loading_sheet                                           Boolean?                   @default(false) // 校验装车单（出库管理中可编辑，预约管理和订单明细中只读）
-  can_create_sheet                                               Boolean?                   @default(false) // 可做单（预约管理中可编辑，出库管理中只读）
-  has_created_sheet                                              Boolean?                   @default(false) // 已做单（出库管理中可编辑，预约管理中只读）
+  verify_loading_sheet                                          Boolean?                   @default(false) // 校验装车单（出库管理中可编辑，预约管理和订单明细中只读）
+  can_create_sheet                                              Boolean?                   @default(false) // 可做单（预约管理中可编辑，出库管理中只读）
+  has_created_sheet                                             Boolean?                   @default(false) // 已做单（出库管理中可编辑，预约管理中只读）
   total_pallets                                                 Int                        @default(0) // 预约总板数（累加所有预约明细的estimated_pallets）
   po                                                            String?                    @db.VarChar(2000)
   notes                                                         String?
@@ -57,11 +57,11 @@ model appointment_detail_lines {
   estimated_pallets                                Int // 这个预约送了多少板
   rejected_pallets                                 Int?                  @default(0) // 拒收板数，有效占用 = estimated_pallets - rejected_pallets
   total_pallets_at_time                            Int? // 总板数快照（创建/更新时的总板数，用于审计和历史追溯）
-  load_sheet_notes                                 String?                @db.VarChar(2000) // 装车单明细备注（操作员写给仓库）
-  bol_notes                                        String?                @db.VarChar(2000) // BOL 明细备注（操作员写给仓库）
-  ignore_unload_time_check                         Boolean?               @default(false) // 忽略：为 true 时柜号强制显示绿色，不参与拆柜时间与送货时间对比
-  estimated_window_period                          DateTime?              @db.Date // 预计窗口期（默认提柜日+3；人工修改后锁定不再随提柜变）
-  estimated_window_period_locked                   Boolean                @default(false) // true=已人工修改，不再随提柜日期自动更新
+  load_sheet_notes                                 String?               @db.VarChar(2000) // 装车单明细备注（操作员写给仓库）
+  bol_notes                                        String?               @db.VarChar(2000) // BOL 明细备注（操作员写给仓库）
+  ignore_unload_time_check                         Boolean?              @default(false) // 忽略：为 true 时柜号强制显示绿色，不参与拆柜时间与送货时间对比
+  estimated_window_period                          DateTime?             @db.Date // 预计窗口期（默认提柜日+3；人工修改后锁定不再随提柜变）
+  estimated_window_period_locked                   Boolean               @default(false) // true=已人工修改，不再随提柜日期自动更新
   // po 字段已移除，PO 应该从 order_detail.po 读取
   created_at                                       DateTime?             @default(now()) @db.Timestamptz(6)
   updated_at                                       DateTime?             @default(now()) @db.Timestamptz(6)
@@ -127,8 +127,8 @@ model calendar_dim {
 }
 
 model system_config {
-  config_key   String   @id @db.VarChar(100)
-  config_value String   @db.VarChar(500)
+  config_key   String    @id @db.VarChar(100)
+  config_value String    @db.VarChar(500)
   description  String?
   updated_at   DateTime? @default(now()) @db.Timestamptz(6)
   updated_by   BigInt?
@@ -159,7 +159,9 @@ model carrier_service_levels {
 
 model carriers {
   carrier_id                       BigInt                   @id @default(autoincrement())
-  carrier_code                     String?                  @unique @db.VarChar(50)
+  carrier_code                     String?                  @db.VarChar(50)
+  /// 多仓隔离维度：归属仓库（标量，无外键；默认 OAK=1000）
+  warehouse_id                     BigInt?
   name                             String                   @db.VarChar(200)
   carrier_type                     String?                  @db.VarChar(50)
   created_at                       DateTime?                @default(now()) @db.Timestamptz(6)
@@ -176,6 +178,8 @@ model carriers {
   vehicles                         vehicles[]
   freight_bills                    freight_bills[]
 
+  @@unique([warehouse_id, carrier_code], map: "carriers_warehouse_code_uniq")
+  @@index([warehouse_id], map: "idx_carriers_warehouse_id")
   @@schema("public")
 }
 
@@ -210,7 +214,9 @@ model contact_roles {
 
 model customers {
   id                                BigInt         @id @default(autoincrement())
-  code                              String         @unique @db.VarChar(50)
+  code                              String         @db.VarChar(50)
+  /// 多仓隔离维度：归属仓库（标量，无外键；默认 OAK=1000）
+  warehouse_id                      BigInt?
   name                              String         @db.VarChar(200)
   company_name                      String?        @db.VarChar(200)
   credit_limit                      Decimal?       @default(0) @db.Decimal(12, 2)
@@ -229,8 +235,10 @@ model customers {
   receivables                       receivables[]
   payments                          payments[]
   fee_scope                         fee_scope[]
-  fee_customer_rows                 fee[]       @relation("fee_customer_row")
+  fee_customer_rows                 fee[]          @relation("fee_customer_row")
 
+  @@unique([warehouse_id, code], map: "customers_warehouse_code_uniq")
+  @@index([warehouse_id], map: "idx_customers_warehouse_id")
   @@schema("public")
 }
 
@@ -254,27 +262,27 @@ model delivery_status_codes {
 // ============================================
 
 model invoices {
-  invoice_id                                    BigInt    @id @default(autoincrement())
-  invoice_type                                  String    @default("storage") @db.VarChar(30)   // 账单类型：direct_delivery 直送 / unload 拆柜 / penalty 负数账单(存库值 penalty) / storage 仓储
-  invoice_number                                String    @unique @db.VarChar(50)
-  customer_id                                   BigInt
-  order_id                                      BigInt?
-  total_amount                                  Decimal   @db.Decimal(12, 2)
-  tax_amount                                    Decimal?  @default(0) @db.Decimal(12, 2)
-  currency                                      String?   @default("USD") @db.VarChar(10)
-  invoice_date                                  DateTime  @db.Date
-  status                                        String?   @default("draft") @db.VarChar(20)
-  notes                                         String?
-  created_at                                    DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at                                    DateTime? @default(now()) @db.Timestamptz(6)
-  created_by                                    BigInt?
-  updated_by                                    BigInt?
-  customers                                     customers @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  orders                                        orders?   @relation(fields: [order_id], references: [order_id], onDelete: SetNull, onUpdate: NoAction)
-  users_invoices_created_byTousers              users?    @relation("invoices_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_invoices_updated_byTousers              users?    @relation("invoices_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  receivables                                   receivables[]
-  invoice_line_items                            invoice_line_items[]
+  invoice_id                       BigInt               @id @default(autoincrement())
+  invoice_type                     String               @default("storage") @db.VarChar(30) // 账单类型：direct_delivery 直送 / unload 拆柜 / penalty 负数账单(存库值 penalty) / storage 仓储
+  invoice_number                   String               @unique @db.VarChar(50)
+  customer_id                      BigInt
+  order_id                         BigInt?
+  total_amount                     Decimal              @db.Decimal(12, 2)
+  tax_amount                       Decimal?             @default(0) @db.Decimal(12, 2)
+  currency                         String?              @default("USD") @db.VarChar(10)
+  invoice_date                     DateTime             @db.Date
+  status                           String?              @default("draft") @db.VarChar(20)
+  notes                            String?
+  created_at                       DateTime?            @default(now()) @db.Timestamptz(6)
+  updated_at                       DateTime?            @default(now()) @db.Timestamptz(6)
+  created_by                       BigInt?
+  updated_by                       BigInt?
+  customers                        customers            @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders                           orders?              @relation(fields: [order_id], references: [order_id], onDelete: SetNull, onUpdate: NoAction)
+  users_invoices_created_byTousers users?               @relation("invoices_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_invoices_updated_byTousers users?               @relation("invoices_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  receivables                      receivables[]
+  invoice_line_items               invoice_line_items[]
 
   @@index([invoice_type], map: "idx_invoices_type")
   @@index([customer_id], map: "idx_invoices_customer")
@@ -285,33 +293,33 @@ model invoices {
 }
 
 model invoice_line_items {
-  id               BigInt    @id @default(autoincrement())
-  invoice_id       BigInt
-  fee_id           BigInt? // 可选；自动出账明细仅用快照字段，不依赖费用表
-  fee_code         String?   @db.VarChar(50)
-  fee_name         String?   @db.VarChar(200)
-  unit             String?   @db.VarChar(50)
-  line_notes       String? // 如分仓占比说明；与费用主数据无关
-  order_detail_id  BigInt?
+  id                                         BigInt        @id @default(autoincrement())
+  invoice_id                                 BigInt
+  fee_id                                     BigInt? // 可选；自动出账明细仅用快照字段，不依赖费用表
+  fee_code                                   String?       @db.VarChar(50)
+  fee_name                                   String?       @db.VarChar(200)
+  unit                                       String?       @db.VarChar(50)
+  line_notes                                 String? // 如分仓占比说明；与费用主数据无关
+  order_detail_id                            BigInt?
   /// 仓储出账：关联 oms.appointment_detail_lines.id（无外键，跨 schema）；用于与预约同步一一对应
-  appointment_detail_line_id BigInt? @unique(map: "invoice_line_items_appointment_detail_line_id_key")
+  appointment_detail_line_id                 BigInt?       @unique(map: "invoice_line_items_appointment_detail_line_id_key")
   /// 仓储明细：入库拆柜日（入库管理 planned_unload_at）
-  storage_in_at    DateTime? @db.Timestamptz(6)
+  storage_in_at                              DateTime?     @db.Timestamptz(6)
   /// 仓储明细：出库预约时间（预约 confirmed_start 或 requested_start）
-  storage_out_at   DateTime? @db.Timestamptz(6)
-  quantity         Decimal   @db.Decimal(12, 4)
-  unit_price       Decimal   @db.Decimal(12, 2)
-  total_amount     Decimal   @db.Decimal(12, 2)
-  sort_order       Int?      @default(0)
-  created_at       DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime? @default(now()) @db.Timestamptz(6)
-  created_by       BigInt?
-  updated_by       BigInt?
-  invoices         invoices  @relation(fields: [invoice_id], references: [invoice_id], onDelete: Cascade, onUpdate: NoAction)
-  fee              fee?      @relation(fields: [fee_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  order_detail     order_detail? @relation(fields: [order_detail_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  users_invoice_line_items_created_byTousers  users? @relation("invoice_line_items_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_invoice_line_items_updated_byTousers  users? @relation("invoice_line_items_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  storage_out_at                             DateTime?     @db.Timestamptz(6)
+  quantity                                   Decimal       @db.Decimal(12, 4)
+  unit_price                                 Decimal       @db.Decimal(12, 2)
+  total_amount                               Decimal       @db.Decimal(12, 2)
+  sort_order                                 Int?          @default(0)
+  created_at                                 DateTime?     @default(now()) @db.Timestamptz(6)
+  updated_at                                 DateTime?     @default(now()) @db.Timestamptz(6)
+  created_by                                 BigInt?
+  updated_by                                 BigInt?
+  invoices                                   invoices      @relation(fields: [invoice_id], references: [invoice_id], onDelete: Cascade, onUpdate: NoAction)
+  fee                                        fee?          @relation(fields: [fee_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  order_detail                               order_detail? @relation(fields: [order_detail_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  users_invoice_line_items_created_byTousers users?        @relation("invoice_line_items_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_invoice_line_items_updated_byTousers users?        @relation("invoice_line_items_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([invoice_id], map: "idx_invoice_line_items_invoice_id")
   @@index([fee_id], map: "idx_invoice_line_items_fee_id")
@@ -320,24 +328,24 @@ model invoice_line_items {
 }
 
 model receivables {
-  receivable_id                                 BigInt    @id @default(autoincrement())
-  invoice_id                                   BigInt
-  customer_id                                  BigInt
-  receivable_amount                            Decimal   @db.Decimal(12, 2)
-  allocated_amount                            Decimal?  @default(0) @db.Decimal(12, 2)
-  balance                                      Decimal?  @db.Decimal(12, 2)
-  due_date                                     DateTime? @db.Date
-  status                                       String?   @default("open") @db.VarChar(20)
-  notes                                        String?
-  created_at                                   DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at                                   DateTime? @default(now()) @db.Timestamptz(6)
-  created_by                                   BigInt?
-  updated_by                                   BigInt?
-  invoices                                     invoices  @relation(fields: [invoice_id], references: [invoice_id], onDelete: Cascade, onUpdate: NoAction)
-  customers                                    customers @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_receivables_created_byTousers          users?    @relation("receivables_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_receivables_updated_byTousers          users?    @relation("receivables_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  payment_allocations                          payment_allocations[]
+  receivable_id                       BigInt                @id @default(autoincrement())
+  invoice_id                          BigInt
+  customer_id                         BigInt
+  receivable_amount                   Decimal               @db.Decimal(12, 2)
+  allocated_amount                    Decimal?              @default(0) @db.Decimal(12, 2)
+  balance                             Decimal?              @db.Decimal(12, 2)
+  due_date                            DateTime?             @db.Date
+  status                              String?               @default("open") @db.VarChar(20)
+  notes                               String?
+  created_at                          DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at                          DateTime?             @default(now()) @db.Timestamptz(6)
+  created_by                          BigInt?
+  updated_by                          BigInt?
+  invoices                            invoices              @relation(fields: [invoice_id], references: [invoice_id], onDelete: Cascade, onUpdate: NoAction)
+  customers                           customers             @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_receivables_created_byTousers users?                @relation("receivables_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_receivables_updated_byTousers users?                @relation("receivables_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payment_allocations                 payment_allocations[]
 
   @@index([invoice_id], map: "idx_receivables_invoice")
   @@index([customer_id], map: "idx_receivables_customer")
@@ -347,24 +355,24 @@ model receivables {
 }
 
 model payments {
-  payment_id                                   BigInt    @id @default(autoincrement())
-  customer_id                                  BigInt
-  payment_date                                 DateTime  @db.Date
-  amount                                       Decimal   @db.Decimal(12, 2)
-  currency                                     String?   @default("USD") @db.VarChar(10)
-  payment_method                               String?   @db.VarChar(50)
-  bank_reference                               String?   @db.VarChar(100)
+  payment_id                       BigInt                @id @default(autoincrement())
+  customer_id                      BigInt
+  payment_date                     DateTime              @db.Date
+  amount                           Decimal               @db.Decimal(12, 2)
+  currency                         String?               @default("USD") @db.VarChar(10)
+  payment_method                   String?               @db.VarChar(50)
+  bank_reference                   String?               @db.VarChar(100)
   /// 销帐标记（收款是否已销帐）
-  write_off                                    Boolean   @default(false)
-  notes                                        String?
-  created_at                                   DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at                                   DateTime? @default(now()) @db.Timestamptz(6)
-  created_by                                   BigInt?
-  updated_by                                   BigInt?
-  customers                                    customers @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_payments_created_byTousers              users?    @relation("payments_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_payments_updated_byTousers              users?    @relation("payments_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  payment_allocations                          payment_allocations[]
+  write_off                        Boolean               @default(false)
+  notes                            String?
+  created_at                       DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at                       DateTime?             @default(now()) @db.Timestamptz(6)
+  created_by                       BigInt?
+  updated_by                       BigInt?
+  customers                        customers             @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_payments_created_byTousers users?                @relation("payments_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_payments_updated_byTousers users?                @relation("payments_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payment_allocations              payment_allocations[]
 
   @@index([customer_id], map: "idx_payments_customer")
   @@index([payment_date], map: "idx_payments_date")
@@ -372,14 +380,14 @@ model payments {
 }
 
 model payment_allocations {
-  id                                            BigInt    @id @default(autoincrement())
-  payment_id                                    BigInt
-  receivable_id                                 BigInt
-  allocated_amount                              Decimal   @db.Decimal(12, 2)
-  created_at                                    DateTime? @default(now()) @db.Timestamptz(6)
-  created_by                                    BigInt?
-  payments                                      payments  @relation(fields: [payment_id], references: [payment_id], onDelete: Cascade, onUpdate: NoAction)
-  receivables                                   receivables @relation(fields: [receivable_id], references: [receivable_id], onDelete: Cascade, onUpdate: NoAction)
+  id               BigInt      @id @default(autoincrement())
+  payment_id       BigInt
+  receivable_id    BigInt
+  allocated_amount Decimal     @db.Decimal(12, 2)
+  created_at       DateTime?   @default(now()) @db.Timestamptz(6)
+  created_by       BigInt?
+  payments         payments    @relation(fields: [payment_id], references: [payment_id], onDelete: Cascade, onUpdate: NoAction)
+  receivables      receivables @relation(fields: [receivable_id], references: [receivable_id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([payment_id, receivable_id], map: "payment_allocations_unique")
   @@index([payment_id], map: "idx_payment_allocations_payment")
@@ -389,29 +397,29 @@ model payment_allocations {
 
 // 费用主数据：默认价 + 按客户范围覆盖
 model fee {
-  id                                            BigInt      @id @default(autoincrement())
-  fee_code                                      String      @db.VarChar(50)   // 费用编码，同一种费用相同
-  fee_name                                      String      @db.VarChar(100)  // 费用名称（显示）
-  unit                                          String?     @db.VarChar(20)   // 单位（板/箱/票等）
-  unit_price                                    Decimal     @db.Decimal(12, 2)
-  currency                                      String?     @default("USD") @db.VarChar(10)
-  scope_type                                     String      @db.VarChar(20)   // 'all' 所有客户 | 'customers' 仅指定客户
-  container_type                                 String?     @db.VarChar(50)   // 柜型（如 20GP/40DH，与订单一致；空表示不限）
-  description                                    String?
-  sort_order                                    Int?        @default(0)
-  customer_id                                   BigInt?     // 空=默认/所有客户；有值=该客户专属费用行（名称见 customers 关联）
-  cloned_from_fee_id                            BigInt?     // 由「按客户复制默认费用」生成时，指向源模板 fee.id（用于按模板行去重，避免同编码+柜型多行被合并）
-  created_at                                    DateTime?   @default(now()) @db.Timestamptz(6)
-  updated_at                                    DateTime?   @default(now()) @db.Timestamptz(6)
-  created_by                                    BigInt?
-  updated_by                                    BigInt?
-  fee_scope                                     fee_scope[]
-  invoice_line_items                            invoice_line_items[]
-  customers                                     customers?  @relation("fee_customer_row", fields: [customer_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  fee_clone_source                              fee?        @relation("FeeCloneTemplate", fields: [cloned_from_fee_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  fee_clone_children                            fee[]       @relation("FeeCloneTemplate")
-  users_fee_created_byTousers                   users?      @relation("fee_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_fee_updated_byTousers                    users?      @relation("fee_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                          BigInt               @id @default(autoincrement())
+  fee_code                    String               @db.VarChar(50) // 费用编码，同一种费用相同
+  fee_name                    String               @db.VarChar(100) // 费用名称（显示）
+  unit                        String?              @db.VarChar(20) // 单位（板/箱/票等）
+  unit_price                  Decimal              @db.Decimal(12, 2)
+  currency                    String?              @default("USD") @db.VarChar(10)
+  scope_type                  String               @db.VarChar(20) // 'all' 所有客户 | 'customers' 仅指定客户
+  container_type              String?              @db.VarChar(50) // 柜型（如 20GP/40DH，与订单一致；空表示不限）
+  description                 String?
+  sort_order                  Int?                 @default(0)
+  customer_id                 BigInt? // 空=默认/所有客户；有值=该客户专属费用行（名称见 customers 关联）
+  cloned_from_fee_id          BigInt? // 由「按客户复制默认费用」生成时，指向源模板 fee.id（用于按模板行去重，避免同编码+柜型多行被合并）
+  created_at                  DateTime?            @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime?            @default(now()) @db.Timestamptz(6)
+  created_by                  BigInt?
+  updated_by                  BigInt?
+  fee_scope                   fee_scope[]
+  invoice_line_items          invoice_line_items[]
+  customers                   customers?           @relation("fee_customer_row", fields: [customer_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  fee_clone_source            fee?                 @relation("FeeCloneTemplate", fields: [cloned_from_fee_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  fee_clone_children          fee[]                @relation("FeeCloneTemplate")
+  users_fee_created_byTousers users?               @relation("fee_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_fee_updated_byTousers users?               @relation("fee_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([fee_code], map: "idx_fee_fee_code")
   @@index([scope_type], map: "idx_fee_scope_type")
@@ -421,12 +429,12 @@ model fee {
 }
 
 model fee_scope {
-  id                                            BigInt      @id @default(autoincrement())
-  fee_id                                        BigInt
-  customer_id                                   BigInt
-  created_at                                    DateTime?   @default(now()) @db.Timestamptz(6)
-  fee                                           fee         @relation(fields: [fee_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  customers                                     customers   @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id          BigInt    @id @default(autoincrement())
+  fee_id      BigInt
+  customer_id BigInt
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+  fee         fee       @relation(fields: [fee_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  customers   customers @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([fee_id, customer_id], map: "fee_scope_fee_customer_unique")
   @@index([fee_id], map: "idx_fee_scope_fee")
@@ -482,6 +490,8 @@ model drivers {
   driver_id                       BigInt                @id @default(autoincrement())
   carrier_id                      BigInt?
   driver_code                     String?               @unique @db.VarChar(50)
+  /// 多仓隔离维度：归属仓库（标量，无外键；默认 OAK=1000）
+  warehouse_id                    BigInt?
   license_number                  String?               @db.VarChar(100)
   license_plate                   String?               @db.VarChar(10)
   license_expiration              DateTime?             @db.Date
@@ -499,6 +509,7 @@ model drivers {
   delivery_management             delivery_management[]
   pickup_management               pickup_management[]
 
+  @@index([warehouse_id], map: "idx_drivers_warehouse_id")
   @@schema("public")
 }
 
@@ -528,7 +539,9 @@ model events_log {
 
 model locations {
   location_id                                                               BigInt                  @id @default(autoincrement())
-  location_code                                                             String?                 @unique @db.VarChar(50)
+  location_code                                                             String?                 @db.VarChar(50)
+  /// 多仓隔离维度：归属仓库（标量，无外键；默认 OAK=1000）
+  warehouse_id                                                              BigInt?
   name                                                                      String                  @db.VarChar(200)
   location_type                                                             String                  @db.VarChar(50)
   address_line1                                                             String?                 @db.VarChar(200)
@@ -553,8 +566,10 @@ model locations {
   warehouses                                                                warehouses[]
   orders_orders_port_location_idTolocations                                 orders[]                @relation("orders_port_location_idTolocations")
   orders_orders_delivery_location_idTolocations                             orders[]                @relation("orders_delivery_location_idTolocations")
-  order_detail_order_detail_delivery_location_idTolocations                order_detail[]          @relation("order_detail_delivery_location_idTolocations")
+  order_detail_order_detail_delivery_location_idTolocations                 order_detail[]          @relation("order_detail_delivery_location_idTolocations")
 
+  @@unique([warehouse_id, location_code], map: "locations_warehouse_code_uniq")
+  @@index([warehouse_id], map: "idx_locations_warehouse_id")
   @@schema("public")
 }
 
@@ -574,7 +589,7 @@ model order_detail {
   /// 私仓信息：GNG+年月日+四位随机数（仅 delivery_nature=私仓 时创建订单明细自动生成，不可改）
   private_warehouse_info                                      String?                    @unique @db.VarChar(20)
   volume_percentage                                           Decimal?                   @db.Decimal(5, 2)
-  delivery_location_id                                         BigInt?
+  delivery_location_id                                        BigInt?
   fba                                                         String?                    @db.VarChar(2000)
   notes                                                       String?
   po                                                          String?                    @db.VarChar(2000)
@@ -583,7 +598,7 @@ model order_detail {
   order_detail_item_order_detail_detail_idToorder_detail_item order_detail_item?         @relation("order_detail_detail_idToorder_detail_item", fields: [detail_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   orders                                                      orders?                    @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction)
   users_order_detail_updated_byTousers                        users?                     @relation("order_detail_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  locations_order_detail_delivery_location_idTolocations     locations?                 @relation("order_detail_delivery_location_idTolocations", fields: [delivery_location_id], references: [location_id], onDelete: SetNull, onUpdate: Cascade)
+  locations_order_detail_delivery_location_idTolocations      locations?                 @relation("order_detail_delivery_location_idTolocations", fields: [delivery_location_id], references: [location_id], onDelete: SetNull, onUpdate: Cascade)
   order_detail_item_order_detail_item_detail_idToorder_detail order_detail_item[]        @relation("order_detail_item_detail_idToorder_detail")
   inventory_lots                                              inventory_lots[]
   outbound_shipment_lines                                     outbound_shipment_lines[]
@@ -652,6 +667,8 @@ model orders {
   /// true = 订单 FIST 已在订单管理手改，不再随客户 fist 自动同步
   fist_manual                                      Boolean                   @default(false)
   warehouse_account                                String?                   @db.VarChar(100)
+  /// 多仓隔离维度：归属仓库（标量，无外键；默认 OAK=1000）
+  warehouse_id                                     BigInt?
   port_location                                    String?                   @db.VarChar(200)
   port_location_id                                 BigInt?
   operation_mode                                   String?                   @db.VarChar(50)
@@ -684,6 +701,7 @@ model orders {
   @@index([mbl_number], map: "idx_orders_mbl_number")
   @@index([port_location_id], map: "idx_orders_port_location_id")
   @@index([delivery_location_id], map: "idx_orders_delivery_location_id")
+  @@index([warehouse_id], map: "idx_orders_warehouse_id")
   @@schema("public")
 }
 
@@ -704,6 +722,8 @@ model trailers {
   trailer_id                       BigInt               @id @default(autoincrement())
   department_id                    BigInt?
   trailer_code                     String?              @unique @db.VarChar(50)
+  /// 多仓隔离维度：归属仓库（标量，无外键；默认 OAK=1000）
+  warehouse_id                     BigInt?
   trailer_type                     String?              @db.VarChar(50)
   length_feet                      Decimal?             @db.Decimal(5, 2)
   capacity_weight                  Decimal?             @db.Decimal(12, 2)
@@ -719,6 +739,7 @@ model trailers {
   users_trailers_updated_byTousers users?               @relation("trailers_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   outbound_shipments               outbound_shipments[]
 
+  @@index([warehouse_id], map: "idx_trailers_warehouse_id")
   @@schema("public")
 }
 
@@ -745,6 +766,8 @@ model users {
   department_id                                                       BigInt?
   role                                                                String?                    @default("employee") @db.VarChar(50)
   status                                                              String?                    @default("active") @db.VarChar(20)
+  /// 多仓：用户默认仓库（标量，无外键；切仓 cookie 缺失时兜底）
+  default_warehouse_id                                                BigInt?
   phone                                                               String?                    @db.VarChar(20)
   avatar_url                                                          String?
   created_at                                                          DateTime?                  @default(now()) @db.Timestamptz(6)
@@ -807,7 +830,7 @@ model users {
   freight_bills_freight_bills_updated_byTousers                       freight_bills[]            @relation("freight_bills_updated_byTousers")
   inbound_receipt_inbound_receipt_created_byTousers                   inbound_receipt[]          @relation("inbound_receipt_created_byTousers")
   inbound_receipt_inbound_receipt_received_byTousers                  inbound_receipt[]          @relation("inbound_receipt_received_byTousers")
-  inbound_receipt_inbound_receipt_unloaded_byTousers                   inbound_receipt[]          @relation("inbound_receipt_unloaded_byTousers")
+  inbound_receipt_inbound_receipt_unloaded_byTousers                  inbound_receipt[]          @relation("inbound_receipt_unloaded_byTousers")
   inbound_receipt_inbound_receipt_updated_byTousers                   inbound_receipt[]          @relation("inbound_receipt_updated_byTousers")
   inventory_lots_inventory_lots_created_byTousers                     inventory_lots[]           @relation("inventory_lots_created_byTousers")
   inventory_lots_inventory_lots_updated_byTousers                     inventory_lots[]           @relation("inventory_lots_updated_byTousers")
@@ -821,19 +844,19 @@ model users {
   wms_labor_logs_wms_labor_logs_created_byTousers                     wms_labor_logs[]           @relation("wms_labor_logs_created_byTousers")
   wms_labor_logs_wms_labor_logs_updated_byTousers                     wms_labor_logs[]           @relation("wms_labor_logs_updated_byTousers")
   wms_labor_logs_wms_labor_logs_user_idTousers                        wms_labor_logs[]           @relation("wms_labor_logs_user_idTousers")
-  table_views                                                          table_views[]              @relation("table_views_user_idTousers")
-  invoices_invoices_created_byTousers                                   invoices[]                @relation("invoices_created_byTousers")
-  invoices_invoices_updated_byTousers                                   invoices[]                @relation("invoices_updated_byTousers")
-  invoice_line_items_invoice_line_items_created_byTousers                invoice_line_items[]      @relation("invoice_line_items_created_byTousers")
-  invoice_line_items_invoice_line_items_updated_byTousers               invoice_line_items[]      @relation("invoice_line_items_updated_byTousers")
-  receivables_receivables_created_byTousers                             receivables[]             @relation("receivables_created_byTousers")
-  receivables_receivables_updated_byTousers                             receivables[]             @relation("receivables_updated_byTousers")
-  payments_payments_created_byTousers                                   payments[]                @relation("payments_created_byTousers")
-  payments_payments_updated_byTousers                                    payments[]                @relation("payments_updated_byTousers")
-  fee_fee_created_byTousers                                              fee[]                     @relation("fee_created_byTousers")
-  fee_fee_updated_byTousers                                             fee[]                     @relation("fee_updated_byTousers")
-  unload_bill_unload_bill_created_byTousers                               unload_bill[]             @relation("unload_bill_created_byTousers")
-  unload_bill_unload_bill_updated_byTousers                               unload_bill[]             @relation("unload_bill_updated_byTousers")
+  table_views                                                         table_views[]              @relation("table_views_user_idTousers")
+  invoices_invoices_created_byTousers                                 invoices[]                 @relation("invoices_created_byTousers")
+  invoices_invoices_updated_byTousers                                 invoices[]                 @relation("invoices_updated_byTousers")
+  invoice_line_items_invoice_line_items_created_byTousers             invoice_line_items[]       @relation("invoice_line_items_created_byTousers")
+  invoice_line_items_invoice_line_items_updated_byTousers             invoice_line_items[]       @relation("invoice_line_items_updated_byTousers")
+  receivables_receivables_created_byTousers                           receivables[]              @relation("receivables_created_byTousers")
+  receivables_receivables_updated_byTousers                           receivables[]              @relation("receivables_updated_byTousers")
+  payments_payments_created_byTousers                                 payments[]                 @relation("payments_created_byTousers")
+  payments_payments_updated_byTousers                                 payments[]                 @relation("payments_updated_byTousers")
+  fee_fee_created_byTousers                                           fee[]                      @relation("fee_created_byTousers")
+  fee_fee_updated_byTousers                                           fee[]                      @relation("fee_updated_byTousers")
+  unload_bill_unload_bill_created_byTousers                           unload_bill[]              @relation("unload_bill_created_byTousers")
+  unload_bill_unload_bill_updated_byTousers                           unload_bill[]              @relation("unload_bill_updated_byTousers")
 
   @@index([department_id], map: "idx_users_department")
   @@schema("public")
@@ -843,6 +866,8 @@ model vehicles {
   vehicle_id                       BigInt    @id @default(autoincrement())
   carrier_id                       BigInt?
   vehicle_code                     String?   @unique @db.VarChar(50)
+  /// 多仓隔离维度：归属仓库（标量，无外键；默认 OAK=1000）
+  warehouse_id                     BigInt?
   plate_number                     String?   @unique @db.VarChar(50)
   vehicle_type                     String?   @db.VarChar(50)
   vin                              String?   @db.VarChar(100)
@@ -858,6 +883,7 @@ model vehicles {
   users_vehicles_created_byTousers users?    @relation("vehicles_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users_vehicles_updated_byTousers users?    @relation("vehicles_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  @@index([warehouse_id], map: "idx_vehicles_warehouse_id")
   @@schema("public")
 }
 
@@ -906,7 +932,7 @@ model pickup_management {
   port_text                                 String?   @db.VarChar(10)
   shipping_line                             String?   @db.VarChar(10)
   driver_id                                 BigInt?
-  driver_name                               String?   @db.VarChar(100)   // 司机（文本框，弃用 driver_id 选择）
+  driver_name                               String?   @db.VarChar(100) // 司机（文本框，弃用 driver_id 选择）
   manual_sort_order                         Int?
   notes                                     String?
   created_at                                DateTime? @default(now()) @db.Timestamptz(6)
@@ -933,7 +959,7 @@ model delivery_management {
   appointment_id                              BigInt                @unique
   container_number                            String?               @db.VarChar(100) // 柜号（可编辑，直送时自动填入）
   driver_id                                   BigInt?
-  driver_name                                 String?               @db.VarChar(100)   // 送仓司机（文本框，弃用 driver_id 选择）
+  driver_name                                 String?               @db.VarChar(100) // 送仓司机（文本框，弃用 driver_id 选择）
   status                                      String?               @default("planned") @db.VarChar(50)
   notes                                       String?
   created_at                                  DateTime?             @default(now()) @db.Timestamptz(6)
@@ -1012,16 +1038,16 @@ model inbound_receipt {
 }
 
 model unload_bill {
-  unload_bill_id                       BigInt           @id @default(autoincrement())
-  inbound_receipt_id                   BigInt           @unique
-  amount                               Decimal          @db.Decimal(12, 2)
-  created_at                           DateTime         @default(now()) @db.Timestamptz(6)
-  updated_at                           DateTime         @default(now()) @db.Timestamptz(6)
-  created_by                           BigInt?
-  updated_by                           BigInt?
-  inbound_receipt                      inbound_receipt  @relation(fields: [inbound_receipt_id], references: [inbound_receipt_id], onDelete: Cascade, onUpdate: NoAction)
-  users_unload_bill_created_byTousers   users?           @relation("unload_bill_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_unload_bill_updated_byTousers  users?           @relation("unload_bill_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unload_bill_id                      BigInt          @id @default(autoincrement())
+  inbound_receipt_id                  BigInt          @unique
+  amount                              Decimal         @db.Decimal(12, 2)
+  created_at                          DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at                          DateTime        @default(now()) @db.Timestamptz(6)
+  created_by                          BigInt?
+  updated_by                          BigInt?
+  inbound_receipt                     inbound_receipt @relation(fields: [inbound_receipt_id], references: [inbound_receipt_id], onDelete: Cascade, onUpdate: NoAction)
+  users_unload_bill_created_byTousers users?          @relation("unload_bill_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_unload_bill_updated_byTousers users?          @relation("unload_bill_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([inbound_receipt_id], map: "idx_unload_bill_inbound_receipt_id")
   @@schema("wms")
@@ -1155,6 +1181,7 @@ model wms_labor_logs {
 
 model inventory_forecast_daily {
   forecast_id          BigInt    @id @default(autoincrement())
+  warehouse_id         BigInt? // 多仓：本预测数据所属仓库；NULL 表示「全部仓库」聚合
   location_id          BigInt?
   location_group       String    @db.VarChar(50)
   location_name        String    @db.VarChar(200)
@@ -1166,26 +1193,27 @@ model inventory_forecast_daily {
   calculated_at        DateTime? @default(now()) @db.Timestamptz(6)
   calculation_version  Int       @default(1)
 
-  @@unique([location_id, location_group, forecast_date], map: "unique_location_date")
+  @@unique([warehouse_id, location_id, location_group, forecast_date], map: "unique_location_date")
   @@index([location_id, location_group, forecast_date], map: "idx_forecast_location_date")
   @@index([forecast_date], map: "idx_forecast_date")
   @@index([location_group, forecast_date], map: "idx_forecast_location_group")
   @@index([calculated_at], map: "idx_forecast_calculated_at")
+  @@index([warehouse_id], map: "idx_forecast_warehouse_id")
   @@schema("analytics")
 }
 
 model inventory_forecast_weekly {
-  forecast_id          BigInt    @id @default(autoincrement())
-  location_id          BigInt?
-  location_group       String    @db.VarChar(50)
-  location_name        String    @db.VarChar(200)
-  week_start_date      DateTime  @db.Date
-  week_number          Int       // 第几周（1-8）
-  planned_inbound      Int       @default(0) // 本周入库板数（周汇总）
-  planned_outbound      Int       @default(0) // 本周出库板数（周汇总）
-  remaining_pallets    Int       @default(0) // 未出板数（入库 - 出库）
-  calculated_at        DateTime? @default(now()) @db.Timestamptz(6)
-  calculation_version  Int       @default(1)
+  forecast_id         BigInt    @id @default(autoincrement())
+  location_id         BigInt?
+  location_group      String    @db.VarChar(50)
+  location_name       String    @db.VarChar(200)
+  week_start_date     DateTime  @db.Date
+  week_number         Int // 第几周（1-8）
+  planned_inbound     Int       @default(0) // 本周入库板数（周汇总）
+  planned_outbound    Int       @default(0) // 本周出库板数（周汇总）
+  remaining_pallets   Int       @default(0) // 未出板数（入库 - 出库）
+  calculated_at       DateTime? @default(now()) @db.Timestamptz(6)
+  calculation_version Int       @default(1)
 
   @@unique([location_id, location_group, week_start_date], map: "unique_location_week")
   @@index([location_id, location_group, week_start_date], map: "idx_forecast_weekly_location_week")
@@ -1198,11 +1226,11 @@ model inventory_forecast_weekly {
 /// 表格视图配置（用户自定义的表格列显示/宽度/顺序配置）
 model table_views {
   id                BigInt   @id @default(autoincrement())
-  user_id           BigInt   // 用户ID
+  user_id           BigInt // 用户ID
   table_name        String   @db.VarChar(100) // 表名，如 "orders", "drivers"
   view_name         String   @db.VarChar(100) // 视图名称，如 "日常管理"
-  column_visibility Json     // 列可见性配置 {column_id: boolean}
-  column_sizing     Json?    // 列宽配置 {column_id: number}
+  column_visibility Json // 列可见性配置 {column_id: boolean}
+  column_sizing     Json? // 列宽配置 {column_id: number}
   column_order      String[] // 列顺序 [column_id, ...]
   is_default        Boolean  @default(false) // 是否为默认视图
   created_at        DateTime @default(now()) @db.Timestamptz(6)
@@ -1222,28 +1250,28 @@ model table_views {
 
 /// 邮件助手 — 柜号源预报 / 导入预报持久化缓存
 model mail_container_forecast {
-  container_number          String    @id @db.VarChar(32)
-  status                    String    @db.VarChar(32)
-  source_filename           String?   @db.Text
-  source_email_subject      String?   @db.Text
-  message_id                String?   @db.Text
-  thread_id                 String?   @db.Text
-  attachment_id             String?   @db.Text
-  source_download_url       String?   @db.Text
-  gmail_url                 String?   @db.Text
-  import_draft_download_url String?   @db.Text
-  resolve_reason            String?   @db.Text
-  ai_resolved               Boolean?  @default(false)
-  score                     Int?
+  container_number           String   @id @db.VarChar(32)
+  status                     String   @db.VarChar(32)
+  source_filename            String?  @db.Text
+  source_email_subject       String?  @db.Text
+  message_id                 String?  @db.Text
+  thread_id                  String?  @db.Text
+  attachment_id              String?  @db.Text
+  source_download_url        String?  @db.Text
+  gmail_url                  String?  @db.Text
+  import_draft_download_url  String?  @db.Text
+  resolve_reason             String?  @db.Text
+  ai_resolved                Boolean? @default(false)
+  score                      Int?
   import_draft_data          Bytes?
   /// 系统首次转换生成的导入表快照，用于与同事改后版本自动对比学习
   import_draft_baseline_data Bytes?
-  import_draft_warnings      String?   @db.Text
+  import_draft_warnings      String?  @db.Text
   /// 邮件助手 YG2025 明细行订单日期（yyyy-mm-dd），转换导入预报时写入订单日期列
-  yg_order_date_key          String?   @db.VarChar(10)
-  looked_up_at              DateTime  @default(now()) @db.Timestamptz(6)
-  created_at                DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at                DateTime  @default(now()) @db.Timestamptz(6)
+  yg_order_date_key          String?  @db.VarChar(10)
+  looked_up_at               DateTime @default(now()) @db.Timestamptz(6)
+  created_at                 DateTime @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([status, looked_up_at], map: "idx_mail_container_forecast_status_lookup")
   @@schema("public")
@@ -1251,18 +1279,18 @@ model mail_container_forecast {
 
 /// 邮件助手 — 源预报找错反馈（用于人工纠正与 AI 样例学习）
 model mail_forecast_feedback {
-  feedback_id       BigInt    @id @default(autoincrement())
-  container_number  String    @db.VarChar(20)
-  order_date_key    String?   @db.VarChar(10)
-  issue_type        String    @db.VarChar(30)
-  comment           String?
-  wrong_source_meta Json?
-  correct_filename  String?   @db.Text
-  correct_email_subject String? @db.Text
-  correct_file_data Bytes?
-  use_in_training   Boolean   @default(true)
-  created_by        BigInt?
-  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  feedback_id           BigInt   @id @default(autoincrement())
+  container_number      String   @db.VarChar(20)
+  order_date_key        String?  @db.VarChar(10)
+  issue_type            String   @db.VarChar(30)
+  comment               String?
+  wrong_source_meta     Json?
+  correct_filename      String?  @db.Text
+  correct_email_subject String?  @db.Text
+  correct_file_data     Bytes?
+  use_in_training       Boolean  @default(true)
+  created_by            BigInt?
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([container_number, created_at(sort: Desc)], map: "idx_mail_forecast_feedback_cn")
   @@schema("public")

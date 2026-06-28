@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import ExcelJS from "exceljs"
 import { generateOrderExportExcel, OrderExportData } from "@/lib/utils/order-export-excel"
 import { canImportOrders } from "@/lib/orders/order-import-permissions"
+import { useCurrentWarehouse } from "@/lib/warehouse/use-current-warehouse"
 
 export function OrdersPageClient({ userRole }: { userRole?: string | null }) {
   const [mounted, setMounted] = React.useState(false)
@@ -28,6 +29,8 @@ export function OrdersPageClient({ userRole }: { userRole?: string | null }) {
   const [currentSearchParams, setCurrentSearchParams] = React.useState<URLSearchParams>(new URLSearchParams())
   const [totalCount, setTotalCount] = React.useState(0) // 全部数据总数（固定值，只在初始加载时设置）
   const [filteredCount, setFilteredCount] = React.useState(0) // 当前筛选结果数
+  // 当前仓库：OAK(GG) 用邮件助手，其它仓库用批量导入
+  const { isOtherWarehouse } = useCurrentWarehouse()
 
   // 防止 hydration 错误
   React.useEffect(() => {
@@ -233,8 +236,8 @@ export function OrdersPageClient({ userRole }: { userRole?: string | null }) {
   }
 
   // 批量导入：与订单 create 权限一致（操作部门 oms_operator、仓库 wms_operator）
-  // 暂时隐藏入口（邮件助手「导入到订单」仍可用）；恢复时改 ORDER_BULK_IMPORT_ENABLED 为 true
-  const ORDER_BULK_IMPORT_ENABLED = false
+  // OAK(GG) 仍走邮件助手「导入到订单」，隐藏批量导入入口；切到其它仓库时邮件助手不可用，改为显示批量导入。
+  const ORDER_BULK_IMPORT_ENABLED = isOtherWarehouse
   const importConfig = {
     enabled: ORDER_BULK_IMPORT_ENABLED && canImportOrders(userRole),
     onImport: () => setImportDialogOpen(true),

@@ -13,6 +13,7 @@ import {
   driverImportRowSchema,
   DriverImportRow,
 } from '@/lib/validations/driver-import'
+import { resolveCurrentWarehouseId, DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 
 /**
  * 司机导入配置
@@ -88,14 +89,16 @@ const driverImportConfig: ImportConfig<DriverImportRow> = {
     data: DriverImportRow[],
     userId: bigint
   ): Promise<void> => {
+    // 导入到当前仓库（全部仓库视图下兜底为默认仓）
+    const importWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
     // 使用事务确保原子性
     await prisma.$transaction(async (tx) => {
       for (const row of data) {
-        // 查找承运商ID（如果提供了承运商代码）
+        // 查找承运商ID（限当前仓库内匹配）
         let carrierId: bigint | null = null
         if (row.carrier_code) {
           const carrier = await tx.carriers.findFirst({
-            where: { carrier_code: row.carrier_code },
+            where: { carrier_code: row.carrier_code, warehouse_id: importWarehouseId },
             select: { carrier_id: true },
           })
           if (!carrier) {
@@ -111,6 +114,7 @@ const driverImportConfig: ImportConfig<DriverImportRow> = {
             license_number: row.license_number,
             license_plate: row.license_plate,
             carrier_id: carrierId,
+            warehouse_id: importWarehouseId,
             contact_id: null, // 先不设置联系人
             license_expiration: row.license_expiration ? new Date(row.license_expiration) : null,
             status: row.status || 'active',

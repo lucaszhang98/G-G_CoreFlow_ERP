@@ -98,6 +98,8 @@ export const carrierConfig: EntityConfig = {
     delete: ['admin', 'tms_manager', 'oms_operator', 'wms_operator'],
   },
   
+  warehouseScoped: 'direct',
+
   prisma: {
     model: 'carriers',
     include: {

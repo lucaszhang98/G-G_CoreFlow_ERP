@@ -6,12 +6,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { formatDateString, addDaysToDateString } from '@/lib/utils/timezone'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 
 export async function GET(request: NextRequest) {
   try {
     const authResult = await checkAuth()
     if (authResult.error) return authResult.error
+
+    // 多仓：按「当前仓库」读取预测（NULL=全部仓库聚合桶）
+    const currentWarehouseId = await resolveCurrentWarehouseId()
+    const whAnalytics =
+      currentWarehouseId == null
+        ? Prisma.sql`warehouse_id IS NULL`
+        : Prisma.sql`warehouse_id = ${currentWarehouseId}`
 
     const { searchParams } = new URL(request.url)
     const startDateParam = searchParams.get('start_date')
@@ -38,10 +47,12 @@ export async function GET(request: NextRequest) {
           MIN(forecast_date) as min_date,
           MAX(forecast_date) as max_date
         FROM analytics.inventory_forecast_daily
-        WHERE calculated_at = (
-          SELECT MAX(calculated_at) 
-          FROM analytics.inventory_forecast_daily
-        )
+        WHERE ${whAnalytics}
+          AND calculated_at = (
+            SELECT MAX(calculated_at) 
+            FROM analytics.inventory_forecast_daily
+            WHERE ${whAnalytics}
+          )
       `
       
       if (latestCalculation[0]?.min_date) {
@@ -92,9 +103,11 @@ export async function GET(request: NextRequest) {
       FROM analytics.inventory_forecast_daily
       WHERE forecast_date >= ${queryStartDate}::DATE
         AND forecast_date <= ${queryEndDate}::DATE
+        AND ${whAnalytics}
         AND calculated_at = (
           SELECT MAX(calculated_at) 
           FROM analytics.inventory_forecast_daily
+          WHERE ${whAnalytics}
         )
       ORDER BY 
         CASE location_group
@@ -117,6 +130,14 @@ export async function GET(request: NextRequest) {
       calculated_at: row.calculated_at ? row.calculated_at.toISOString() : null,
     }))
 
+    // 多仓：拆柜经订单仓库过滤；送仓经预约关联订单仓库过滤（全部仓库时不过滤）
+    const whUnloadOrders =
+      currentWarehouseId == null ? Prisma.empty : Prisma.sql`AND o.warehouse_id = ${currentWarehouseId}`
+    const whDeliveryJoin =
+      currentWarehouseId == null
+        ? Prisma.empty
+        : Prisma.sql`INNER JOIN public.orders o2 ON o2.order_id = d.order_id AND o2.warehouse_id = ${currentWarehouseId}`
+
     // 合计拆柜：与入库管理一致，只统计关联订单 operation_mode='unload' 的入库单，按拆柜日期分组计数（柜数）
     const unloadByDate = await prisma.$queryRaw<Array<{ d: Date; total: string | number }>>`
       SELECT (r.planned_unload_at)::date AS d, COUNT(r.inbound_receipt_id)::bigint AS total
@@ -124,6 +145,7 @@ export async function GET(request: NextRequest) {
       INNER JOIN public.orders o ON o.order_id = r.order_id AND o.operation_mode = 'unload'
       WHERE r.planned_unload_at::date >= ${queryStartDate}::date
         AND r.planned_unload_at::date <= ${queryEndDate}::date
+        ${whUnloadOrders}
       GROUP BY (r.planned_unload_at)::date
     `
     // 合计送仓：预约管理自提/卡派；日期范围含 queryStartDate 到 queryEndDate+1，便于日视图「列 D 显示 D+1」且周视图「第k周」含当周一到周日
@@ -131,6 +153,7 @@ export async function GET(request: NextRequest) {
     const deliveryByDate = await prisma.$queryRaw<Array<{ d: Date; total: string | number }>>`
       SELECT (COALESCE(d.confirmed_start, d.requested_start))::date AS d, COUNT(d.appointment_id)::bigint AS total
       FROM oms.delivery_appointments d
+      ${whDeliveryJoin}
       WHERE d.delivery_method IN ('自提', '卡派')
         AND (d.confirmed_start IS NOT NULL OR d.requested_start IS NOT NULL)
         AND (COALESCE(d.confirmed_start, d.requested_start))::date >= ${queryStartDate}::date

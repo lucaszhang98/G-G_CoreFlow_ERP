@@ -349,6 +349,8 @@ export const orderConfig: EntityConfig = {
     delete: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'], // 对所有人开放删除
   },
   
+  warehouseScoped: 'direct',
+
   prisma: {
     model: 'orders',
     include: {

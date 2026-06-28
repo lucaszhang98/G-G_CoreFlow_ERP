@@ -129,6 +129,8 @@ export const customerConfig: EntityConfig = {
     delete: ['admin', 'oms_manager', 'oms_operator', 'wms_operator'],
   },
   
+  warehouseScoped: 'direct',
+
   prisma: {
     model: 'customers',
     include: {

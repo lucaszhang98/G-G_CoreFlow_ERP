@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth } from '@/lib/api/helpers'
 // 使用优化版计算服务
 import { calculateInventoryForecast } from '@/lib/services/inventory-forecast-service'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 
 // 设置函数最大执行时间（Netlify 免费版最大 26 秒）
 export const maxDuration = 26
@@ -38,7 +39,9 @@ export async function POST(request: NextRequest) {
     })
     
     try {
-      await calculateInventoryForecast(base_date, timestamp)
+      // 多仓：按管理员当前所在仓库计算（「全部仓库」视图 → 全局聚合，warehouse_id 存 NULL）
+      const currentWarehouseId = await resolveCurrentWarehouseId()
+      await calculateInventoryForecast(base_date, timestamp, currentWarehouseId)
       const duration = Date.now() - startTime
       console.log(`[库存预测-优化版] ✅ 手动计算完成，耗时: ${duration}ms (${(duration / 1000).toFixed(2)}秒)`)
 

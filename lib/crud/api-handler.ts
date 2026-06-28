@@ -18,6 +18,7 @@ import {
 } from '@/lib/api/helpers'
 import { applyTransform, applyTransformList } from '@/lib/api/transformers'
 import { resolveParams, withApiHandler } from '@/lib/api/middleware'
+import { resolveCurrentWarehouseId, DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 import { EntityConfig } from './types'
 import { getSchema } from './schema-loader'
 import { buildRelationFilterCondition } from './relation-filter-helper'
@@ -74,6 +75,43 @@ async function buildListSummary(
   return summary
 }
 
+function addWarehouseScopeToWhere(
+  where: Record<string, any>,
+  config: EntityConfig,
+  warehouseId: bigint | null
+) {
+  if (!config.warehouseScoped || warehouseId == null) return
+
+  if (config.warehouseScoped === 'direct') {
+    where.warehouse_id = warehouseId
+  } else if ('field' in config.warehouseScoped) {
+    where[config.warehouseScoped.field] = warehouseId
+  } else if (config.warehouseScoped.via) {
+    where.AND = [
+      ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+      {
+        [config.warehouseScoped.via]: {
+          warehouse_id: warehouseId,
+        },
+      },
+    ]
+  }
+}
+
+async function ensureScopedItemExists(
+  prismaModel: any,
+  config: EntityConfig,
+  idField: string,
+  id: bigint
+) {
+  const where: Record<string, any> = { [idField]: id }
+  addWarehouseScopeToWhere(where, config, await resolveCurrentWarehouseId())
+  return prismaModel.findFirst({
+    where,
+    select: { [idField]: true },
+  })
+}
+
 function getPrismaModel(config: EntityConfig) {
   const modelName = config.prisma?.model || config.name
   let prismaModel = (prisma as any)[modelName]
@@ -117,6 +155,28 @@ export function createListHandler(config: EntityConfig) {
 
       // 构建查询条件
       const where: any = {}
+
+      // 多仓过滤：按「当前仓库」限定（warehouseScoped 配置决定 direct / 经关联）
+      if (enhancedConfig.warehouseScoped) {
+        const currentWarehouseId = await resolveCurrentWarehouseId()
+        if (currentWarehouseId != null) {
+          if (enhancedConfig.warehouseScoped === 'direct') {
+            where.warehouse_id = currentWarehouseId
+          } else if ('field' in enhancedConfig.warehouseScoped) {
+            where[enhancedConfig.warehouseScoped.field] = currentWarehouseId
+          } else if (enhancedConfig.warehouseScoped.via) {
+            // 经关联表过滤：并入 AND，避免覆盖搜索/筛选已写入的同名关联条件
+            where.AND = [
+              ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+              {
+                [enhancedConfig.warehouseScoped.via]: {
+                  warehouse_id: currentWarehouseId,
+                },
+              },
+            ]
+          }
+        }
+      }
       
       // 简单搜索条件（模糊搜索）
       if (search) {
@@ -933,8 +993,10 @@ export function createDetailHandler(config: EntityConfig) {
 
       // 获取主键字段名（默认为 'id'）
       const idField = config.idField || 'id'
+      const where: Record<string, any> = { [idField]: BigInt(resolvedParams.id) }
+      addWarehouseScopeToWhere(where, config, await resolveCurrentWarehouseId())
       const queryOptions: any = {
-        where: { [idField]: BigInt(resolvedParams.id) },
+        where,
       }
 
       if (config.prisma?.include) {
@@ -943,7 +1005,7 @@ export function createDetailHandler(config: EntityConfig) {
         queryOptions.select = config.prisma.select
       }
 
-      const item = await prismaModel.findUnique(queryOptions)
+      const item = await prismaModel.findFirst(queryOptions)
 
       if (!item) {
         return NextResponse.json(
@@ -1272,6 +1334,20 @@ export function createCreateHandler(config: EntityConfig) {
       const { addSystemFields } = await import('@/lib/api/helpers')
       addSystemFields(processedData, permissionResult.user, true)
 
+      // 多仓：创建时打上当前仓库（全部仓库视图下兜底为默认仓）
+      if (config.warehouseScoped === 'direct' && processedData.warehouse_id == null) {
+        const wid = await resolveCurrentWarehouseId()
+        processedData.warehouse_id = wid ?? DEFAULT_WAREHOUSE_ID
+      } else if (
+        config.warehouseScoped &&
+        typeof config.warehouseScoped === 'object' &&
+        'field' in config.warehouseScoped &&
+        processedData[config.warehouseScoped.field] == null
+      ) {
+        const wid = await resolveCurrentWarehouseId()
+        processedData[config.warehouseScoped.field] = wid ?? DEFAULT_WAREHOUSE_ID
+      }
+
       const prismaModel = getPrismaModel(config)
       const item = await prismaModel.create({
         data: processedData,
@@ -1284,13 +1360,9 @@ export function createCreateHandler(config: EntityConfig) {
         item.status !== ORDER_STATUS_CANCELLED
       ) {
         try {
-          // 获取第一个可用的 warehouse_id，如果没有则使用 1000 作为默认值
-          const firstWarehouse = await prisma.warehouses.findFirst({
-            select: { warehouse_id: true },
-            orderBy: { warehouse_id: 'asc' },
-          })
-          
-          const warehouseId = firstWarehouse?.warehouse_id || BigInt(1000)
+          // 多仓：入库记录跟随订单自身仓库；缺失时兜底默认仓
+          const warehouseId =
+            (item as { warehouse_id?: bigint | null }).warehouse_id ?? DEFAULT_WAREHOUSE_ID
           
           // 检查是否已存在入库记录（理论上不应该存在，因为刚创建）
           const existingInboundReceipt = await prisma.inbound_receipt.findUnique({
@@ -1415,6 +1487,19 @@ export function createUpdateHandler(config: EntityConfig) {
 
       // 获取主键字段名（默认为 'id'）
       const idField = config.idField || 'id'
+      const prismaModel = getPrismaModel(config)
+      const scopedItem = await ensureScopedItemExists(
+        prismaModel,
+        config,
+        idField,
+        BigInt(resolvedParams.id)
+      )
+      if (!scopedItem) {
+        return NextResponse.json(
+          { error: `${config.displayName}不存在` },
+          { status: 404 }
+        )
+      }
 
       // 处理 BigInt 字段、boolean 字段和日期字段
       const processedData: any = {}
@@ -1525,14 +1610,12 @@ export function createUpdateHandler(config: EntityConfig) {
         processedData.write_off = shouldPaymentWriteOff(effectiveAmount, allocatedTotal)
       }
 
-      const prismaModel = getPrismaModel(config)
-      
       // 对于订单表，检查 operation_mode 是否变为"拆柜"（unload），如果是则自动创建入库记录（已取消不参与）
       if (config.prisma?.model === 'orders' && processedData.operation_mode === 'unload') {
         // 先获取当前订单，检查旧操作方式和是否已经有入库记录
         const currentOrder = await prismaModel.findUnique({
           where: { [idField]: BigInt(resolvedParams.id) },
-          select: { order_id: true, operation_mode: true, status: true },
+          select: { order_id: true, operation_mode: true, status: true, warehouse_id: true },
         })
         const effectiveStatus =
           processedData.status !== undefined ? processedData.status : currentOrder?.status
@@ -1549,13 +1632,7 @@ export function createUpdateHandler(config: EntityConfig) {
           // 如果不存在，则创建入库记录
           if (!existingInboundReceipt) {
             try {
-              // 获取第一个可用的 warehouse_id，如果没有则使用 1000 作为默认值
-              const firstWarehouse = await prisma.warehouses.findFirst({
-                select: { warehouse_id: true },
-                orderBy: { warehouse_id: 'asc' },
-              })
-              
-              const warehouseId = firstWarehouse?.warehouse_id || BigInt(1000)
+              const warehouseId = currentOrder.warehouse_id ?? DEFAULT_WAREHOUSE_ID
               
               // 获取订单的 pickup_date 和 eta_date 用于计算拆柜日期
               const orderForCalculation = await prisma.orders.findUnique({
@@ -1595,12 +1672,7 @@ export function createUpdateHandler(config: EntityConfig) {
           
           if (!existingInboundReceipt) {
             try {
-              const firstWarehouse = await prisma.warehouses.findFirst({
-                select: { warehouse_id: true },
-                orderBy: { warehouse_id: 'asc' },
-              })
-              
-              const warehouseId = firstWarehouse?.warehouse_id || BigInt(1000)
+              const warehouseId = currentOrder.warehouse_id ?? DEFAULT_WAREHOUSE_ID
               
               // 获取订单的 pickup_date 和 eta_date 用于计算拆柜日期
               const orderForCalculation = await prisma.orders.findUnique({
@@ -1867,6 +1939,18 @@ export function createDeleteHandler(config: EntityConfig) {
       
       // 获取主键字段名（默认为 'id'）
       const idField = config.idField || 'id'
+      const scopedItem = await ensureScopedItemExists(
+        prismaModel,
+        config,
+        idField,
+        BigInt(resolvedParams.id)
+      )
+      if (!scopedItem) {
+        return NextResponse.json(
+          { error: `${config.displayName}不存在` },
+          { status: 404 }
+        )
+      }
       
       // 对于订单表，使用软删除（更新状态为 'archived'）
       if (config.prisma?.model === 'orders' && config.fields.status) {

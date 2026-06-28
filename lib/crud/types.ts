@@ -207,4 +207,13 @@ export interface EntityConfig {
     include?: Record<string, any>
     select?: Record<string, boolean>
   }
+
+  /**
+   * 多仓过滤：列表/统计按「当前仓库」过滤。
+   * - 'direct'：本表自带 warehouse_id 列（如主数据 customers/locations）。
+   * - { field: 'default_warehouse_id' }：本表自带仓库列但列名非 warehouse_id（如 users）。
+   * - { via: 'orders' }：经关联关系的 warehouse_id 过滤（如 invoices.orders）。
+   * 不设置则不按仓过滤（如 warehouses 表本身、全局字典）。
+   */
+  warehouseScoped?: 'direct' | { via: string } | { field: string }
 }

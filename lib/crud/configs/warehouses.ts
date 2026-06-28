@@ -102,10 +102,11 @@ export const warehouseConfig: EntityConfig = {
   formFields: ['warehouse_code', 'name', 'location_id', 'capacity_cbm', 'contact_user_id', 'notes'],
   
   permissions: {
+    // list 保留给关系下拉使用；增删改仅 admin（仓库管理高于分仓）
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
-    create: ['admin', 'wms_manager', 'oms_operator', 'wms_operator'],
-    update: ['admin', 'wms_manager', 'oms_operator', 'wms_operator'],
-    delete: ['admin', 'wms_manager', 'oms_operator', 'wms_operator'],
+    create: ['admin'],
+    update: ['admin'],
+    delete: ['admin'],
   },
   
   prisma: {

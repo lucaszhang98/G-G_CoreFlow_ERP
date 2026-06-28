@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client'
 import { BaseImportService } from './import/base-import.service'
 import { ImportConfig, ImportError } from './import/types'
 import { feeImportRowSchema, FeeImportRow } from '@/lib/validations/fee-import'
+import { resolveCurrentWarehouseId, DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 
 async function executeCustomerFeeImport(
   data: FeeImportRow[],
@@ -17,8 +18,12 @@ async function executeCustomerFeeImport(
     throw new Error('客户费用导入：所有行的客户代码必须一致且不能为空')
   }
 
+  const importWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
   const customer = await prisma.customers.findFirst({
-    where: { code: { equals: codes[0], mode: 'insensitive' } },
+    where: {
+      code: { equals: codes[0], mode: 'insensitive' },
+      warehouse_id: importWarehouseId,
+    },
     select: { id: true, code: true },
   })
   if (!customer) {

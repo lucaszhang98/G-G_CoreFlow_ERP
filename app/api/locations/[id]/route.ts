@@ -8,6 +8,7 @@ import { locationConfig } from '@/lib/crud/configs/locations'
 import { checkAuth, checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers'
 import { locationUpdateSchema } from '@/lib/validations/location'
 import prisma from '@/lib/prisma'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 
 // 使用通用框架处理 GET, DELETE
 const baseDetailHandler = createDetailHandler(locationConfig)
@@ -95,7 +96,8 @@ export async function PUT(
       where: { location_id: BigInt(resolvedParams.id) },
     })
 
-    if (!existing) {
+    const currentWarehouseId = await resolveCurrentWarehouseId()
+    if (!existing || (currentWarehouseId != null && existing.warehouse_id !== currentWarehouseId)) {
       return NextResponse.json(
         { error: '位置不存在' },
         { status: 404 }
@@ -112,10 +114,14 @@ export async function PUT(
 
     const data = validationResult.data
 
-    // 如果修改了位置代码，检查是否冲突
+    // 如果修改了位置代码，检查是否冲突（仓库内唯一）
     if (data.location_code && data.location_code !== existing.location_code) {
-      const codeExists = await prisma.locations.findUnique({
-        where: { location_code: data.location_code },
+      const codeExists = await prisma.locations.findFirst({
+        where: {
+          location_code: data.location_code,
+          warehouse_id: existing.warehouse_id,
+          location_id: { not: existing.location_id },
+        },
       })
       if (codeExists) {
         return NextResponse.json(

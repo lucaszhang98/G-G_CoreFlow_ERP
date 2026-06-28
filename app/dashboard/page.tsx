@@ -26,6 +26,7 @@ import {
 import Link from "next/link"
 import prisma from "@/lib/prisma"
 import { isWmsFullAccessUsername } from "@/lib/auth/wms-full-access-users"
+import { resolveCurrentWarehouseId, warehouseWhere } from "@/lib/warehouse/current-warehouse"
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -444,6 +445,10 @@ async function getDashboardStats() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
+    // 多仓：按「当前仓库」过滤订单统计（全部仓库视图下不过滤）
+    const currentWarehouseId = await resolveCurrentWarehouseId()
+    const whFilter = warehouseWhere(currentWarehouseId)
+
     const [
       todayOrdersCount,
       totalOrdersCount,
@@ -457,13 +462,14 @@ async function getDashboardStats() {
       // 今日订单数
       prisma.orders.count({
         where: {
+          ...whFilter,
           order_date: {
             gte: today,
           },
         },
       }),
       // 总订单数
-      prisma.orders.count(),
+      prisma.orders.count({ where: { ...whFilter } }),
       // 总容器数（暂时使用0，等TMS模块实现后再连接真实数据）
       0,
       // 总仓库数
@@ -471,6 +477,7 @@ async function getDashboardStats() {
       // 待确认订单数
       prisma.orders.count({
         where: {
+          ...whFilter,
           status: "pending",
         },
       }),

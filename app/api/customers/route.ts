@@ -4,6 +4,7 @@ import { customerConfig } from '@/lib/crud/configs/customers';
 import { checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
 import { customerCreateSchema } from '@/lib/validations/customer';
 import prisma from '@/lib/prisma';
+import { resolveCurrentWarehouseId, DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse';
 
 // GET - 获取客户列表（使用统一框架）
 export const GET = createListHandler(customerConfig);
@@ -29,9 +30,12 @@ export async function POST(request: NextRequest) {
 
     const data = validationResult.data;
 
-    // 检查代码是否已存在
-    const existing = await prisma.customers.findUnique({
-      where: { code: data.code },
+    // 当前仓库（客户归属仓；全部仓库视图下兜底为默认仓）
+    const currentWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID;
+
+    // 检查代码是否已存在（仓库内唯一）
+    const existing = await prisma.customers.findFirst({
+      where: { code: data.code, warehouse_id: currentWarehouseId },
     });
     if (existing) {
       return NextResponse.json(
@@ -51,6 +55,7 @@ export async function POST(request: NextRequest) {
         status: data.status,
         fist: data.fist ?? false,
         contact_id: null, // 先设置为 null，创建联系人后再更新
+        warehouse_id: currentWarehouseId,
       };
       // 自动添加系统维护字段（在事务内部，跳过用户验证以避免嵌套查询）
       await addSystemFields(customerData, currentUser, true, true);

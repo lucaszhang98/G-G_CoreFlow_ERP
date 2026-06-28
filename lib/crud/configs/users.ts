@@ -11,6 +11,9 @@ export const userConfig: EntityConfig = {
   
   apiPath: '/api/users',
   detailPath: '/dashboard/users',
+
+  // 用户按仓隔离：用户归属仓库存于 default_warehouse_id；列表按当前仓过滤，创建时落到当前仓
+  warehouseScoped: { field: 'default_warehouse_id' },
   
   // Schema 名称，用于动态导入
   schemaName: 'user',

@@ -9,6 +9,7 @@
 import prisma from '@/lib/prisma'
 import { ordersWhereOperational } from '@/lib/orders/operational-order-lookup'
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
+import { DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 
 export interface InboundSyncResult {
   success: boolean
@@ -36,6 +37,7 @@ export async function syncInboundReceiptForOrder(
       select: {
         order_id: true,
         operation_mode: true,
+        warehouse_id: true,
         inbound_receipt: {
           select: { inbound_receipt_id: true },
         },
@@ -68,18 +70,8 @@ export async function syncInboundReceiptForOrder(
       }
     }
 
-    // 4. 获取默认仓库（取第一个可用仓库）
-    const defaultWarehouse = await prisma.warehouses.findFirst({
-      select: { warehouse_id: true },
-      orderBy: { warehouse_id: 'asc' },
-    })
-
-    if (!defaultWarehouse) {
-      return {
-        success: false,
-        error: '系统中没有可用的仓库，无法创建入库管理记录',
-      }
-    }
+    // 4. 多仓：入库记录跟随订单自身仓库；缺失时兜底默认仓
+    const targetWarehouseId = order.warehouse_id ?? DEFAULT_WAREHOUSE_ID
 
     // 5. 获取订单的 pickup_date 和 eta_date 用于计算拆柜日期
     const orderForCalculation = await prisma.orders.findUnique({
@@ -99,7 +91,7 @@ export async function syncInboundReceiptForOrder(
     const inboundReceipt = await prisma.inbound_receipt.create({
       data: {
         order_id: orderId,
-        warehouse_id: defaultWarehouse.warehouse_id,
+        warehouse_id: targetWarehouseId,
         status: 'pending',
         planned_unload_at: calculatedUnloadDate,
         unload_method_code: null,

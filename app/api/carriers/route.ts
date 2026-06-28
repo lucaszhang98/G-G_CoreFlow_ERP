@@ -8,6 +8,7 @@ import { carrierConfig } from '@/lib/crud/configs/carriers'
 import prisma from '@/lib/prisma'
 import { checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers'
 import { getSchema } from '@/lib/crud/schema-loader'
+import { resolveCurrentWarehouseId, DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 
 // 使用通用框架处理 GET
 const baseListHandler = createListHandler(carrierConfig)
@@ -40,9 +41,12 @@ export async function POST(request: NextRequest) {
 
     const data = validationResult.data as any
 
+    // 当前仓库（承运商归属仓；全部仓库视图下兜底为默认仓）
+    const currentWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
+
     if (data.carrier_code) {
-      const existing = await prisma.carriers.findUnique({
-        where: { carrier_code: data.carrier_code },
+      const existing = await prisma.carriers.findFirst({
+        where: { carrier_code: data.carrier_code, warehouse_id: currentWarehouseId },
       })
       if (existing) {
         return NextResponse.json(
@@ -83,6 +87,7 @@ export async function POST(request: NextRequest) {
       name: data.name,
       carrier_type: data.carrier_type,
       contact_id: contactId,
+      warehouse_id: currentWarehouseId,
     };
     // 自动添加系统维护字段
     await addSystemFields(carrierData, currentUser, true);

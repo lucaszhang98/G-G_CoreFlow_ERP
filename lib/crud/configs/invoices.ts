@@ -158,6 +158,8 @@ export const invoiceConfig: EntityConfig = {
     delete: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以删除账单
   },
 
+  warehouseScoped: { via: 'customers' },
+
   prisma: {
     model: 'invoices',
     include: {

@@ -13,6 +13,7 @@ import {
 import { computeInboundReceiptHeaderDeliveryProgress } from "@/lib/utils/inbound-delivery-progress"
 import { serializeBigInt } from "@/lib/api/helpers"
 import { ordersWhereRootExcludeArchived, parseIncludeArchived } from "@/lib/orders/order-visibility"
+import { resolveCurrentWarehouseId, warehouseWhere } from "@/lib/warehouse/current-warehouse"
 
 // 计算天数差（日期1 - 日期2，只比较日期部分，忽略时间）
 function calculateDays(date1: Date | string | null, date2: Date | string | null): number | null {
@@ -206,6 +207,10 @@ export async function GET(request: NextRequest) {
     if (!parseIncludeArchived(searchParams)) {
       Object.assign(where, ordersWhereRootExcludeArchived())
     }
+
+    // 多仓：按「当前仓库」过滤订单（全部仓库视图不过滤）
+    const currentWarehouseId = await resolveCurrentWarehouseId()
+    Object.assign(where, warehouseWhere(currentWarehouseId))
 
     // 查询订单及其关联数据
     const [orders, total] = await Promise.all([

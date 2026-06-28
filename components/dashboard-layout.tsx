@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import { Menu, LogOut, Bell, ChevronLeft, ChevronRight } from "lucide-react"
+import { WarehouseSwitcher } from "@/components/warehouse-switcher"
 import dynamic from "next/dynamic"
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
@@ -171,6 +172,9 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
 
             {/* 右侧：用户信息和操作 */}
             <div className="flex items-center gap-4">
+              {/* 当前仓库切换器（仅 admin 可见） */}
+              <WarehouseSwitcher />
+
               {/* 通知按钮 */}
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />

@@ -146,11 +146,11 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
   const processedDefaultValues = React.useMemo(() => {
     const defaults: any = data ? { ...data } : {}
     
-    // 如果是创建预约，设置起始地默认值为 GG（location_id=25）
-    // 直接使用硬编码的 location_id=25，因为查询可能失败
+    // 如果是创建预约，当前仓有 GG 时将起始地默认为 GG。
     if (!isEditing && config.name === 'delivery_appointments') {
-      // 优先使用已查询到的 ggLocationId，否则使用硬编码的 25
-      defaults.origin_location_id = ggLocationId || '25'
+      if (ggLocationId) {
+        defaults.origin_location_id = ggLocationId
+      }
     }
     
     // 处理location字段映射：如果有origin_location_id/destination_location_id，确保表单使用这些值
@@ -202,113 +202,30 @@ export function EntityForm<T = any>({ data, config, onSuccess, onCancel }: Entit
     defaultValues: processedDefaultValues,
   })
 
-  // 查询 GG 的 location_id（仅在创建预约时，需要在 useForm 之后）
-  // 根据图片显示，GG 的位置ID是 25，但为了通用性，还是通过查询获取
+  // 查询当前仓的 GG location_id（仅在创建预约时）。
   React.useEffect(() => {
     if (!isEditing && config.name === 'delivery_appointments' && !ggLocationId) {
-      // 方法1：先尝试直接通过 location_id=25 查询（如果已知）
-      // 方法2：如果失败，再通过搜索查询
       const tryFetchGG = async () => {
         try {
-          // 先尝试直接查询 location_id=25（根据图片显示）
-          const directResponse = await fetch('/api/locations/25')
-          if (directResponse.ok) {
-            const directData = await directResponse.json()
-            if (process.env.NODE_ENV === 'development') {
-              console.log('[EntityForm] 直接查询 location_id=25 结果:', directData)
-            }
-            // 处理返回数据格式（可能是 {data: {...}} 或直接是对象）
-            const locationData = directData.data || directData
-            if (locationData && locationData.location_code === 'GG') {
-              const locationIdStr = String(locationData.location_id)
-              if (process.env.NODE_ENV === 'development') {
-                console.log('[EntityForm] 通过直接查询找到 GG location_id:', locationIdStr, 'location_code:', locationData.location_code, 'location_type:', locationData.location_type)
-              }
-              setGgLocationId(locationIdStr)
-              // 立即设置表单值
-              setValue('origin_location_id', locationIdStr, { shouldValidate: false, shouldDirty: false })
-              // LocationSelect 组件会自动查询位置信息并加载对应类型的位置列表
-              // 延迟设置一次，确保 LocationSelect 组件已完全初始化
-              setTimeout(() => {
-                setValue('origin_location_id', locationIdStr, { shouldValidate: false, shouldDirty: false })
-              }, 500)
-              return
-            }
-          } else {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('[EntityForm] 直接查询 location_id=25 失败，状态码:', directResponse.status)
-            }
+          const response = await fetch('/api/locations/by-code?code=GG')
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`)
           }
-        } catch (error) {
-          // 直接查询失败，继续使用搜索方式
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[EntityForm] 直接查询失败，使用搜索方式:', error)
-          }
-        }
 
-        // 方法2：通过搜索查询（使用更大的 limit 确保能获取到）
-        try {
-          const searchResponse = await fetch('/api/locations?search=GG&limit=500')
-          if (!searchResponse.ok) {
-            throw new Error(`HTTP ${searchResponse.status}`)
-          }
-          const searchData = await searchResponse.json()
-          
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[EntityForm] 搜索 GG location 结果:', searchData)
-            if (searchData && searchData.data && Array.isArray(searchData.data)) {
-              console.log('[EntityForm] 返回的位置数量:', searchData.data.length)
-            }
-          }
-          
-          if (searchData && searchData.data && Array.isArray(searchData.data)) {
-            // 查找 location_code 精确匹配 'GG' 的位置
-            const ggLocation = searchData.data.find((loc: any) => {
-              const code = loc.location_code
-              // 精确匹配 'GG'（区分大小写）
-              return code === 'GG'
-            })
-            
-            if (ggLocation && ggLocation.location_id) {
-              const locationIdStr = String(ggLocation.location_id)
-              if (process.env.NODE_ENV === 'development') {
-                console.log('[EntityForm] 通过搜索找到 GG location_id:', locationIdStr, 'location_code:', ggLocation.location_code, 'name:', ggLocation.name)
-              }
-              setGgLocationId(locationIdStr)
-              setValue('origin_location_id', locationIdStr, { shouldValidate: false, shouldDirty: false })
-            } else {
-              // 如果搜索也没找到，使用硬编码的 location_id=25（根据图片显示）
-              if (process.env.NODE_ENV === 'development') {
-                console.warn('[EntityForm] 搜索未找到 GG，使用硬编码 location_id=25')
-              }
-              setGgLocationId('25')
-              // 延迟一点设置，确保 LocationSelect 组件已初始化
-              setTimeout(() => {
-                setValue('origin_location_id', '25', { shouldValidate: false, shouldDirty: false })
-              }, 200)
-            }
-          } else {
-            // 如果返回数据格式不对，使用硬编码
+          const result = await response.json()
+          const ggLocation = result?.data
+          if (!ggLocation?.location_id) {
             if (process.env.NODE_ENV === 'development') {
-              console.warn('[EntityForm] 返回数据格式异常，使用硬编码 location_id=25')
+              console.log('[EntityForm] 当前仓未找到 GG 默认起始地')
             }
-            setGgLocationId('25')
-            // 延迟一点设置，确保 LocationSelect 组件已初始化
-            setTimeout(() => {
-              setValue('origin_location_id', '25', { shouldValidate: false, shouldDirty: false })
-            }, 200)
+            return
           }
+
+          const locationIdStr = String(ggLocation.location_id)
+          setGgLocationId(locationIdStr)
+          setValue('origin_location_id', locationIdStr, { shouldValidate: false, shouldDirty: false })
         } catch (error) {
           console.error('[EntityForm] 查询 GG location_id 失败:', error)
-          // 查询失败时，使用硬编码的 location_id=25 作为后备方案
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('[EntityForm] 查询失败，使用硬编码 location_id=25 作为后备方案')
-          }
-          setGgLocationId('25')
-          // 延迟一点设置，确保 LocationSelect 组件已初始化
-          setTimeout(() => {
-            setValue('origin_location_id', '25', { shouldValidate: false, shouldDirty: false })
-          }, 200)
         }
       }
       

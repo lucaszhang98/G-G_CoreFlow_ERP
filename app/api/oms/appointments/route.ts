@@ -6,6 +6,7 @@ import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generato
 import { deliveryAppointmentConfig } from '@/lib/crud/configs/delivery-appointments';
 import prisma from '@/lib/prisma';
 import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled';
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse';
 
 /** 将条件并入 where.AND，避免与 mergeFilterConditions 生成的顶层 AND 并列再出现一个顶层 OR（Prisma/驱动下易 500） */
 function appendToWhereAnd(where: Record<string, any>, clause: unknown) {
@@ -125,6 +126,12 @@ export async function GET(request: NextRequest) {
         },
       },
     };
+
+    // 多仓：按当前仓库过滤（经关联订单 orders.warehouse_id）
+    const currentWarehouseId = await resolveCurrentWarehouseId()
+    if (currentWarehouseId != null) {
+      appendToWhereAnd(where, { orders: { warehouse_id: currentWarehouseId } })
+    }
 
     // 查询数据
     let items: any[] = [];

@@ -10,6 +10,7 @@ import {
   mergeOrdersRelationExcludeArchived,
   parseIncludeArchived,
 } from '@/lib/orders/order-visibility'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 import { findOrderDetailIdsByBookingStatus } from '@/lib/orders/order-detail-booking-status-filter'
 import {
   findOrderDetailIdsByEarliestAppointmentTime,
@@ -83,13 +84,18 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || ''
     const includeArchived = parseIncludeArchived(searchParams)
 
-    /** 历史：列表内联实际板数；现改为剩余板数草稿保存。保留默认仓库供其它流程创建批次 */
-    const defaultWarehouse = await prisma.warehouses.findFirst({
-      orderBy: { warehouse_id: 'asc' },
-      select: { warehouse_id: true },
-    })
-    const defaultWarehouseIdStr =
-      defaultWarehouse?.warehouse_id != null ? String(defaultWarehouse.warehouse_id) : null
+    /** 多仓：创建批次的默认仓库取「当前仓库」；全部仓库视图下兜底首个仓库 */
+    const currentWarehouseForDefault = await resolveCurrentWarehouseId()
+    let defaultWarehouseIdStr: string | null =
+      currentWarehouseForDefault != null ? String(currentWarehouseForDefault) : null
+    if (!defaultWarehouseIdStr) {
+      const defaultWarehouse = await prisma.warehouses.findFirst({
+        orderBy: { warehouse_id: 'asc' },
+        select: { warehouse_id: true },
+      })
+      defaultWarehouseIdStr =
+        defaultWarehouse?.warehouse_id != null ? String(defaultWarehouse.warehouse_id) : null
+    }
 
     // 构建查询条件
     const where: any = {
@@ -345,6 +351,15 @@ export async function GET(request: NextRequest) {
           },
         })
       }
+    }
+
+    // 多仓：按当前仓库过滤（经关联订单 orders.warehouse_id）
+    const currentWarehouseId = await resolveCurrentWarehouseId()
+    if (currentWarehouseId != null) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        { orders: { warehouse_id: currentWarehouseId } },
+      ]
     }
 
     const needsInMemoryProcessing = sortByStorageLocation && !hasIdsFilter

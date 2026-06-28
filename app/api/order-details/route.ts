@@ -11,6 +11,7 @@ import { scheduleDirectDeliveryInvoiceSync } from '@/lib/finance/direct-delivery
 import { scheduleContainerUnloadInvoiceSync } from '@/lib/finance/container-unload-sync'
 import { scheduleStorageInvoiceSync } from '@/lib/finance/storage-invoice-sync'
 import { resolvePrivateWarehouseInfoForCreate } from '@/lib/orders/private-warehouse-info'
+import { resolveCurrentWarehouseId, DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 
 // GET - 获取仓点明细列表（支持 orderId 查询参数）
 export async function GET(request: NextRequest) {
@@ -215,9 +216,10 @@ export async function POST(request: NextRequest) {
       if (/^\d+$/.test(locStr)) {
         validatedDeliveryLocationId = BigInt(locStr)
       } else {
-        // 如果是 location_code，查询对应的 location_id
+        // 如果是 location_code，查询对应的 location_id（限当前仓库内匹配）
+        const lookupWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
         const location = await prisma.locations.findFirst({
-          where: { location_code: locStr },
+          where: { location_code: locStr, warehouse_id: lookupWarehouseId },
           select: { location_id: true },
         })
         if (location) {

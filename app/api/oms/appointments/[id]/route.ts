@@ -11,6 +11,7 @@ import { deliveryAppointmentConfig } from '@/lib/crud/configs/delivery-appointme
 import { deliveryAppointmentUpdateSchema } from '@/lib/validations/delivery-appointment';
 import prisma from '@/lib/prisma';
 import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled';
+import { DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse';
 
 // GET - 获取单个预约管理记录
 export async function GET(
@@ -544,13 +545,21 @@ export async function PUT(
       }
     }
 
+    // 多仓：出库记录跟随预约关联订单的仓库（缺失时兜底默认仓）
+    const apptOrderForWarehouse = await prisma.delivery_appointments.findUnique({
+      where: { appointment_id: appointmentId },
+      select: { orders: { select: { warehouse_id: true } } },
+    });
+    const outboundWarehouseId =
+      apptOrderForWarehouse?.orders?.warehouse_id ?? DEFAULT_WAREHOUSE_ID;
+
     // 处理 outbound_shipments 的自动同步
     // 检查 delivery_method 是否改变
     if (originalDeliveryMethod !== newDeliveryMethod) {
       if (newDeliveryMethod && newDeliveryMethod !== '直送') {
         // 从直送改为非直送，或新建非直送：创建 outbound_shipments 记录
         try {
-          const defaultWarehouseId = BigInt(1000);
+          const defaultWarehouseId = outboundWarehouseId;
           // 先检查是否已存在（使用原始 SQL）
           const existing = await prisma.$queryRaw<Array<{ outbound_shipment_id: bigint }>>`
             SELECT outbound_shipment_id FROM wms.outbound_shipments WHERE appointment_id = ${appointmentId} LIMIT 1
@@ -596,7 +605,7 @@ export async function PUT(
     } else if (newDeliveryMethod && newDeliveryMethod !== '直送') {
       // delivery_method 没有改变，但仍然是非直送：确保 outbound_shipments 记录存在
       try {
-        const defaultWarehouseId = BigInt(1000);
+        const defaultWarehouseId = outboundWarehouseId;
         // 先检查是否已存在（使用原始 SQL）
         const existing = await prisma.$queryRaw<Array<{ outbound_shipment_id: bigint }>>`
           SELECT outbound_shipment_id FROM wms.outbound_shipments WHERE appointment_id = ${appointmentId} LIMIT 1

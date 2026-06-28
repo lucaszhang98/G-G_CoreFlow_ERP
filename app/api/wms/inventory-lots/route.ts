@@ -7,6 +7,7 @@ import {
   prismaDeliveryAppointmentNotDisabled,
 } from '@/lib/utils/delivery-appointment-enabled'
 import { basePalletCountForCalc } from '@/lib/utils/pallet-base';
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 import {
   computeInboundOrderDetailDeliveryState,
   resolveAppointmentsFromOrderDetail,
@@ -190,6 +191,12 @@ export async function GET(request: NextRequest) {
         { storage_location_code: { not: null } },
         { OR: searchConditions }
       ];
+    }
+
+    // 多仓：按当前仓库过滤（inventory_lots 自带 warehouse_id）
+    const currentWarehouseId = await resolveCurrentWarehouseId()
+    if (currentWarehouseId != null) {
+      where.warehouse_id = currentWarehouseId
     }
 
     // 排序

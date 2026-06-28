@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
 import { ORDER_STATUSES_EXCLUDED_FROM_OPERATIONAL_LISTS } from '@/lib/orders/order-visibility'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 
 // GET - 获取订单列表（用于选择柜号）
 export async function GET(request: NextRequest) {
@@ -15,6 +16,11 @@ export async function GET(request: NextRequest) {
     // 构建查询条件
     const where: any = {
       status: { notIn: [...ORDER_STATUSES_EXCLUDED_FROM_OPERATIONAL_LISTS] },
+    }
+
+    const currentWarehouseId = await resolveCurrentWarehouseId()
+    if (currentWarehouseId != null) {
+      where.warehouse_id = currentWarehouseId
     }
 
     // 模糊搜索订单号
@@ -53,4 +59,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-

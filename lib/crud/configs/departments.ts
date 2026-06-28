@@ -102,10 +102,11 @@ export const departmentConfig: EntityConfig = {
   formFields: ['code', 'name', 'parent_id', 'manager_id', 'description'],
   
   permissions: {
+    // list 保留给关系下拉使用；增删改仅 admin（部门管理高于分仓）
     list: ['admin', 'oms_manager', 'tms_manager', 'wms_manager', 'employee', 'user', 'oms_operator', 'wms_operator'],
-    create: ['admin', 'oms_operator', 'wms_operator'],
-    update: ['admin', 'oms_operator', 'wms_operator'],
-    delete: ['admin', 'oms_operator', 'wms_operator'],
+    create: ['admin'],
+    update: ['admin'],
+    delete: ['admin'],
   },
   
   prisma: {

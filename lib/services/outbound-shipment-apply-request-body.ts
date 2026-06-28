@@ -9,6 +9,7 @@ import {
   DELIVERY_APPOINTMENT_ACCOUNT_VALUE_SET,
   DELIVERY_APPOINTMENT_TYPE_VALUE_SET,
 } from '@/lib/crud/delivery-appointment-shared-selects'
+import { DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 
 export type ApplyOutboundShipmentError = { error: string; status: number }
 
@@ -101,7 +102,7 @@ export async function applyOutboundShipmentRequestBody(
     where: { appointment_id: BigInt(appointmentId) },
     include: {
       orders: {
-        select: { status: true },
+        select: { status: true, warehouse_id: true },
       },
     },
   })
@@ -136,7 +137,8 @@ export async function applyOutboundShipmentRequestBody(
   const oldTrailerCode = (outboundShipment as any)?.trailer_code
 
   if (!outboundShipment) {
-    const defaultWarehouseId = BigInt(1)
+    // 多仓：出库记录跟随预约关联订单的仓库；缺失时兜底默认仓
+    const defaultWarehouseId = appointment.orders?.warehouse_id ?? DEFAULT_WAREHOUSE_ID
     const createData: any = {
       appointment_id: BigInt(appointmentId),
       warehouse_id: defaultWarehouseId,

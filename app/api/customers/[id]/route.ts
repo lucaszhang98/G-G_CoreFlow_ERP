@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { mergeOrdersRelationExcludeArchived, parseIncludeArchived } from '@/lib/orders/order-visibility'
 import { syncOrdersFistAfterCustomerUpdate } from '@/lib/oms/sync-order-fist-from-customer';
 import { hasOwnPropertyKey } from '@/lib/crud/boolean-field';
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse';
 
 /**
  * GET /api/customers/:id
@@ -50,7 +51,8 @@ export async function GET(
       },
     });
 
-    if (!customer) {
+    const currentWarehouseId = await resolveCurrentWarehouseId();
+    if (!customer || (currentWarehouseId != null && customer.warehouse_id !== currentWarehouseId)) {
       return NextResponse.json(
         { error: '客户不存在' },
         { status: 404 }
@@ -87,7 +89,8 @@ export async function PUT(
       where: { id: BigInt(resolvedParams.id) },
     });
 
-    if (!existing) {
+    const currentWarehouseId = await resolveCurrentWarehouseId();
+    if (!existing || (currentWarehouseId != null && existing.warehouse_id !== currentWarehouseId)) {
       return NextResponse.json(
         { error: '客户不存在' },
         { status: 404 }
@@ -105,10 +108,14 @@ export async function PUT(
     const data = validationResult.data;
     const fistInBody = hasOwnPropertyKey(body, 'fist');
 
-    // 如果修改了代码，检查是否冲突
+    // 如果修改了代码，检查是否冲突（仓库内唯一）
     if (data.code && data.code !== existing.code) {
-      const codeExists = await prisma.customers.findUnique({
-        where: { code: data.code },
+      const codeExists = await prisma.customers.findFirst({
+        where: {
+          code: data.code,
+          warehouse_id: existing.warehouse_id,
+          id: { not: existing.id },
+        },
       });
       if (codeExists) {
         return NextResponse.json(
@@ -248,7 +255,8 @@ export async function DELETE(
       },
     });
 
-    if (!customer) {
+    const currentWarehouseId = await resolveCurrentWarehouseId();
+    if (!customer || (currentWarehouseId != null && customer.warehouse_id !== currentWarehouseId)) {
       return NextResponse.json(
         { error: '客户不存在' },
         { status: 404 }
@@ -321,4 +329,3 @@ export async function DELETE(
     return handleError(error, '删除客户失败');
   }
 }
-

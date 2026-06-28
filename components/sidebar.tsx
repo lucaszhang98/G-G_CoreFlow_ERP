@@ -30,7 +30,6 @@ import {
   MapPin,
   TrendingUp,
   TruckIcon,
-  Car,
   ClipboardCheck,
   UserCog,
   FileCheck,
@@ -46,6 +45,7 @@ import { isWmsFullAccessUsername } from "@/lib/auth/wms-full-access-users"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { useCurrentWarehouse } from "@/lib/warehouse/use-current-warehouse"
 import { useState, useEffect, useMemo } from "react"
 
 interface SidebarProps {
@@ -62,6 +62,8 @@ interface MenuItem {
   roles?: string[] // 允许访问的角色
   /** 标记为 WMS 子树，供白名单登录名（如 lin）仅放开仓库模块菜单 */
   menuGroup?: "wms"
+  /** 仅在 OAK(GG) 或「全部仓库」视图下显示；切到其它具体仓库时隐藏（如邮件助手） */
+  oakOnly?: boolean
 }
 
 // 菜单项定义（移到组件外部）
@@ -90,16 +92,18 @@ const menuItems: MenuItem[] = [
           roles: ["admin"],
         },
         {
+          // 仓库管理高于分仓，仅 admin 可见
           title: "仓库管理",
           icon: Building2,
           href: "/dashboard/warehouses",
-          roles: ["admin", "wms_manager", "tms_manager", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
+          roles: ["admin"],
         },
         {
+          // 部门管理高于分仓，仅 admin 可见
           title: "部门管理",
           icon: Building2,
           href: "/dashboard/settings/departments",
-          roles: ["admin", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
+          roles: ["admin"],
         },
         {
           title: "位置管理",
@@ -113,18 +117,7 @@ const menuItems: MenuItem[] = [
           href: "/dashboard/settings/carriers",
           roles: ["admin", "tms_manager", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
         },
-        {
-          title: "车辆管理",
-          icon: Car,
-          href: "/dashboard/settings/vehicles",
-          roles: ["admin", "tms_manager", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
-        },
-        {
-          title: "货柜管理",
-          icon: Container,
-          href: "/dashboard/settings/trailers",
-          roles: ["admin", "tms_manager", "wms_manager", "oms_operator", "wms_operator"], // 操作部门和仓库部门都可以访问
-        },
+        // 车辆管理、货柜管理暂未启用，已隐藏
       ],
     },
     {
@@ -313,6 +306,7 @@ const menuItems: MenuItem[] = [
         icon: Mail,
         href: "/dashboard/settings/mail-assistant",
         roles: ["admin", "oms_manager", "oms_operator"],
+        oakOnly: true, // 仅 OAK(GG)：邮件助手数据只属于 OAK，切到其它仓库隐藏
       },
       {
         title: "系统配置",
@@ -420,6 +414,8 @@ export function Sidebar({ userRole = "user", username }: SidebarProps) {
   const wmsFullAccessUser = isWmsFullAccessUsername(username)
   const pathname = usePathname()
   const router = useRouter()
+  // 当前仓库：切到非 OAK 的具体仓库时，隐藏 oakOnly 菜单（如邮件助手）
+  const { isOtherWarehouse } = useCurrentWarehouse()
   
   // 初始状态：只使用自动展开的菜单（确保服务器端和客户端一致）
   // 使用函数式初始化，基于当前 pathname 计算
@@ -513,6 +509,9 @@ export function Sidebar({ userRole = "user", username }: SidebarProps) {
   const renderMenuItem = (item: MenuItem, level: number = 0, inWmsBranch = false) => {
     const branch = inWmsBranch || item.menuGroup === "wms"
 
+    // oakOnly：仅 OAK(GG) / 全部仓库视图显示；切到其它具体仓库时隐藏
+    if (item.oakOnly && isOtherWarehouse) return null
+
     const isActive = item.href ? isPathActive(item.href, pathname) : false
     const hasChildren = item.children && item.children.length > 0
 
@@ -533,6 +532,9 @@ export function Sidebar({ userRole = "user", username }: SidebarProps) {
     })
 
     if (hasChildren) {
+      const renderedChildren = item.children!.map((child) => renderMenuItem(child, level + 1, branch))
+      // 子项全部被隐藏（角色/仓库过滤）时，不渲染空的父级菜单
+      if (!renderedChildren.some((c) => c !== null)) return null
       return (
         <Collapsible
           key={item.title}
@@ -560,7 +562,7 @@ export function Sidebar({ userRole = "user", username }: SidebarProps) {
             />
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-1 mt-1">
-            {item.children?.map((child) => renderMenuItem(child, level + 1, branch))}
+            {renderedChildren}
           </CollapsibleContent>
         </Collapsible>
       )

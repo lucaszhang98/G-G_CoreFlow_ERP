@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { serializeBigInt } from '@/lib/api/helpers'
 import { parseEstimatedWindowPeriodInput } from '@/lib/oms/estimated-window-period'
 import { basePalletCountForCalc } from '@/lib/utils/pallet-base'
+import { DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 
 function pickPreferredInventoryLot<T extends { inbound_receipt_id: bigint | null; inventory_lot_id: bigint }>(
   lots: T[]
@@ -150,19 +151,14 @@ export async function PUT(
         } else {
           const orderDetail = await tx.order_detail.findUnique({
             where: { id: orderDetailId },
-            select: { order_id: true },
+            select: { order_id: true, orders: { select: { warehouse_id: true } } },
           })
           if (!orderDetail?.order_id) {
             throw new Error('订单明细缺少 order_id，无法创建库存批次')
           }
 
-          const defaultWarehouse = await tx.warehouses.findFirst({
-            select: { warehouse_id: true },
-            orderBy: { warehouse_id: 'asc' },
-          })
-          if (!defaultWarehouse?.warehouse_id) {
-            throw new Error('系统中不存在仓库，无法创建库存批次')
-          }
+          // 多仓：库存批次跟随订单自身仓库；缺失时兜底默认仓
+          const targetWarehouseId = orderDetail.orders?.warehouse_id ?? DEFAULT_WAREHOUSE_ID
 
           const inboundReceipt = await tx.inbound_receipt.findFirst({
             where: { order_id: orderDetail.order_id },
@@ -174,7 +170,7 @@ export async function PUT(
             data: {
               order_id: orderDetail.order_id,
               order_detail_id: orderDetailId,
-              warehouse_id: defaultWarehouse.warehouse_id,
+              warehouse_id: targetWarehouseId,
               inbound_receipt_id: inboundReceipt?.inbound_receipt_id ?? null,
               storage_location_code: normalizedStorageLocation,
               pallet_count: null,

@@ -10,6 +10,7 @@
 import prisma from '@/lib/prisma'
 import { BaseImportService } from './import/base-import.service'
 import { ImportConfig, ImportError } from './import/types'
+import { resolveCurrentWarehouseId, DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 import {
   customerImportRowSchema,
   CustomerImportRow,
@@ -65,10 +66,11 @@ const customerImportConfig: ImportConfig<CustomerImportRow> = {
       })
     }
 
-    // 检查数据库中是否已存在
+    // 检查数据库中是否已存在（仅当前仓库内判重）
     if (errors.length === 0) {
+      const importWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
       const existingCustomers = await prisma.customers.findMany({
-        where: { code: { in: codes } },
+        where: { code: { in: codes }, warehouse_id: importWarehouseId },
         select: { code: true },
       })
 
@@ -94,6 +96,8 @@ const customerImportConfig: ImportConfig<CustomerImportRow> = {
     data: CustomerImportRow[],
     userId: bigint
   ): Promise<void> => {
+    // 导入到当前仓库（全部仓库视图下兜底为默认仓）
+    const importWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
     // 使用事务确保原子性（全部成功或全部失败）
     await prisma.$transaction(async (tx) => {
       for (const row of data) {
@@ -132,6 +136,7 @@ const customerImportConfig: ImportConfig<CustomerImportRow> = {
             status: row.status || 'active',
             credit_limit: row.credit_limit || 0,
             contact_id: contactId,
+            warehouse_id: importWarehouseId,
             created_by: userId,
             updated_by: userId,
           },

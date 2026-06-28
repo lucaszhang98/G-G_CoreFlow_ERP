@@ -92,7 +92,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const permissionResult = await checkPermission(['admin', 'wms_manager']);
+    const permissionResult = await checkPermission(['admin']);
     if (permissionResult.error) return permissionResult.error;
 
     const resolvedParams = await Promise.resolve(params);
@@ -200,4 +200,3 @@ export async function DELETE(
     return handleError(error, '删除仓库失败');
   }
 }
-

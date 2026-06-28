@@ -156,6 +156,8 @@ export const trailerConfig: EntityConfig = {
     delete: ['admin', 'tms_manager', 'wms_manager', 'oms_operator', 'wms_operator'],
   },
   
+  warehouseScoped: 'direct',
+
   prisma: {
     model: 'trailers',
     include: {

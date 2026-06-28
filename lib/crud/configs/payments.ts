@@ -117,6 +117,8 @@ export const paymentConfig: EntityConfig = {
     delete: ['admin', 'oms_manager', 'oms_operator'],
   },
 
+  warehouseScoped: { via: 'customers' },
+
   prisma: {
     model: 'payments',
     include: {

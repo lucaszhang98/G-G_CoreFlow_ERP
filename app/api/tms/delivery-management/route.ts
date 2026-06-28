@@ -8,6 +8,7 @@ import { applyArchivedFilterToDeliveryManagementWhere, parseIncludeArchived } fr
 import { buildDeliveryManagementOrderBy } from '@/lib/api/delivery-management-order-by'
 import { getDeliveryNearWindowUtcBounds } from '@/lib/utils/delivery-near-window'
 import { prismaDeliveryAppointmentNotDisabled } from '@/lib/utils/delivery-appointment-enabled'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 
 // GET - 获取送仓管理列表
 export async function GET(request: NextRequest) {
@@ -211,6 +212,15 @@ export async function GET(request: NextRequest) {
 
     // 默认排除完成留档订单关联的送仓记录（?includeArchived=true 查看历史）
     applyArchivedFilterToDeliveryManagementWhere(where, parseIncludeArchived(searchParams))
+
+    // 多仓：按当前仓库过滤（经预约关联订单 delivery_appointments.orders.warehouse_id）
+    const currentWarehouseId = await resolveCurrentWarehouseId()
+    if (currentWarehouseId != null) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        { delivery_appointments: { orders: { warehouse_id: currentWarehouseId } } },
+      ]
+    }
 
     // 查询总数
     const total = await prisma.delivery_management.count({ where })

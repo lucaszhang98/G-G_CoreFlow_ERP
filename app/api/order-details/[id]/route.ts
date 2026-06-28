@@ -5,6 +5,7 @@ import { serializeBigInt } from '@/lib/api/helpers'
 import { scheduleDirectDeliveryInvoiceSync } from '@/lib/finance/direct-delivery-sync'
 import { scheduleContainerUnloadInvoiceSync } from '@/lib/finance/container-unload-sync'
 import { scheduleStorageInvoiceSync } from '@/lib/finance/storage-invoice-sync'
+import { resolveCurrentWarehouseId, DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 
 // PUT - 更新仓点明细
 export async function PUT(
@@ -34,9 +35,10 @@ export async function PUT(
       if (/^\d+$/.test(locStr)) {
         validatedDeliveryLocationId = BigInt(locStr)
       } else {
-        // 如果是 location_code，查询对应的 location_id
+        // 如果是 location_code，查询对应的 location_id（限当前仓库内匹配）
+        const lookupWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
         const location = await prisma.locations.findFirst({
-          where: { location_code: locStr },
+          where: { location_code: locStr, warehouse_id: lookupWarehouseId },
           select: { location_id: true },
         })
         if (location) {

@@ -158,6 +158,8 @@ export const receivableConfig: EntityConfig = {
     delete: ['admin', 'oms_manager', 'oms_operator'], // 操作部门可以删除应收
   },
 
+  warehouseScoped: { via: 'customers' },
+
   prisma: {
     model: 'receivables',
     include: {

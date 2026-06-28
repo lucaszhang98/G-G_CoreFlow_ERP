@@ -168,6 +168,8 @@ export const locationConfig: EntityConfig = {
     delete: ['admin', 'oms_manager', 'tms_manager', 'oms_operator', 'wms_operator'],
   },
   
+  warehouseScoped: 'direct',
+
   prisma: {
     model: 'locations',
   },

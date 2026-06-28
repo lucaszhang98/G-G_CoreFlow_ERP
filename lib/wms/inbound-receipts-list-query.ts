@@ -14,6 +14,7 @@ import {
   parseIncludeArchived,
 } from '@/lib/orders/order-visibility'
 import { inboundReceiptConfig } from '@/lib/crud/configs/inbound-receipts'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 
 export type InboundReceiptListQueryMode =
   | { type: 'paged'; page: number; limit: number; sort: string; order: 'asc' | 'desc' }
@@ -316,6 +317,12 @@ export async function runInboundReceiptListQuery(
   }
 
   applyArchivedFilterToInboundReceiptWhere(where, parseIncludeArchived(searchParams))
+
+  // 多仓：按当前仓库过滤（inbound_receipt 自带 warehouse_id）
+  const currentWarehouseId = await resolveCurrentWarehouseId()
+  if (currentWarehouseId != null) {
+    where.warehouse_id = currentWarehouseId
+  }
 
   const queryOptions: any = {
     where,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkPermission, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers';
-import { warehouseCreateSchema, warehouseUpdateSchema } from '@/lib/validations/warehouse';
+import { warehouseCreateSchema } from '@/lib/validations/warehouse';
 import prisma from '@/lib/prisma';
 import { warehouseConfig } from '@/lib/crud/configs/warehouses';
 import { createListHandler } from '@/lib/crud/api-handler';
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const permissionResult = await checkPermission(['admin', 'wms_manager']);
+    const permissionResult = await checkPermission(['admin']);
     if (permissionResult.error) return permissionResult.error;
 
     const body = await request.json();
@@ -74,4 +74,3 @@ export async function POST(request: NextRequest) {
     return handleError(error, '创建仓库失败');
   }
 }
-

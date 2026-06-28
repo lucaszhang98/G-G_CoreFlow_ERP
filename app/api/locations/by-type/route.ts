@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth, serializeBigInt } from '@/lib/api/helpers';
 import prisma from '@/lib/prisma';
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse';
 
 /**
  * GET - 根据位置类型获取位置列表
@@ -28,6 +29,11 @@ export async function GET(request: NextRequest) {
     const where: any = {
       location_type: type,
     };
+
+    const currentWarehouseId = await resolveCurrentWarehouseId();
+    if (currentWarehouseId != null) {
+      where.warehouse_id = currentWarehouseId;
+    }
 
     // 如果有搜索条件，进行模糊搜索
     if (search && search.trim()) {
@@ -64,5 +70,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
 

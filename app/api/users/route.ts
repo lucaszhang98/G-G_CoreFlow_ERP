@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { checkPermission, handleValidationError, handleError, serializeBigInt } from '@/lib/api/helpers';
 import { userCreateSchema } from '@/lib/validations/user';
+import { resolveCurrentWarehouseId, DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse';
 
 // 使用通用框架处理 GET
 const baseListHandler = createListHandler(userConfig);
@@ -52,6 +53,9 @@ export async function POST(request: NextRequest) {
     // 哈希密码
     const passwordHash = await bcrypt.hash(data.password, 10);
 
+    // 用户归属仓库：落到当前仓（全部仓库视图下兜底为默认仓）
+    const currentWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID;
+
     // 创建用户
     const user = await prisma.users.create({
       data: {
@@ -66,6 +70,7 @@ export async function POST(request: NextRequest) {
         status: data.status,
         phone: data.phone,
         avatar_url: data.avatar_url,
+        default_warehouse_id: currentWarehouseId,
       },
       include: {
         departments_users_department_idTodepartments: {

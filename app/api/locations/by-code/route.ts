@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAuth, serializeBigInt } from '@/lib/api/helpers'
 import prisma from '@/lib/prisma'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 
 /**
  * GET - 根据 location_code 查询位置（返回 location_id 供表单使用）
@@ -17,9 +18,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '缺少 code 参数' }, { status: 400 })
     }
 
+    const currentWarehouseId = await resolveCurrentWarehouseId()
     const location = await prisma.locations.findFirst({
       where: {
         location_code: { equals: code, mode: 'insensitive' },
+        ...(currentWarehouseId != null ? { warehouse_id: currentWarehouseId } : {}),
       },
       select: {
         location_id: true,

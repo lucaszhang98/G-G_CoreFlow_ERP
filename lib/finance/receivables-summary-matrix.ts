@@ -69,10 +69,16 @@ function toNumber(v: unknown): number {
  * 有余额的应收行，按客户 × 发票开票月份（invoice_date 所在月）汇总余额。
  * 列：数据中出现的最小月至最大月（连续自然月）。
  */
-export async function buildReceivablesSummaryMatrix(): Promise<ReceivablesSummaryMatrix> {
+export async function buildReceivablesSummaryMatrix(
+  currentWarehouseId: bigint | null = null
+): Promise<ReceivablesSummaryMatrix> {
   const receivables = await prisma.receivables.findMany({
     where: {
       balance: { gt: 0 },
+      // 多仓：与应收列表一致，按客户归属仓过滤（全部仓库时不过滤）
+      ...(currentWarehouseId != null
+        ? { customers: { warehouse_id: currentWarehouseId } }
+        : {}),
     },
     select: {
       customer_id: true,

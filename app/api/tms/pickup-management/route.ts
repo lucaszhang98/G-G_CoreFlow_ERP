@@ -12,6 +12,7 @@ import {
   buildPickupManagementOrderBy,
 } from '@/lib/tms/pickup-management-order-by'
 import { findPickupManagementMany } from '@/lib/tms/pickup-management-list-query'
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse'
 
 // GET - 获取提柜管理列表
 export async function GET(request: NextRequest) {
@@ -161,6 +162,17 @@ export async function GET(request: NextRequest) {
       } else {
         where.orders = mergeOrdersRelationExcludeArchived(undefined)
       }
+    }
+
+    // 多仓：按当前仓库过滤（经关联订单 orders.warehouse_id）
+    // 注意：where.orders 可能已含 AND（排除归档等），一对一关联里不能让 AND 与标量字段平级，
+    // 否则 Prisma 报「Unknown argument AND」。这里统一用 AND 嵌套合并。
+    const currentWarehouseId = await resolveCurrentWarehouseId()
+    if (currentWarehouseId != null) {
+      const warehouseOrdersCond = { warehouse_id: currentWarehouseId }
+      where.orders = where.orders
+        ? { AND: [where.orders, warehouseOrdersCond] }
+        : warehouseOrdersCond
     }
 
     // 查询总数

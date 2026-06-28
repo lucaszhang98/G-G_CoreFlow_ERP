@@ -14,6 +14,7 @@
  */
 
 import prisma from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { formatDateString, addDaysToDateString, getMondayOfWeek } from '@/lib/utils/timezone'
 
 interface LocationRow {
@@ -123,12 +124,17 @@ export async function getAllLocationRows(): Promise<LocationRow[]> {
  */
 export async function calculateHistoricalInventoryBatch(
   locationRow: LocationRow,
-  beforeDateString: string
+  beforeDateString: string,
+  warehouseId: bigint | null = null
 ): Promise<number> {
   const date = formatDateString(beforeDateString)
   // 计算今天前7天的日期范围：从 (today - 7天) 到 (today - 1天)
   const sevenDaysAgo = addDaysToDateString(date, -6) // 如果 date 是 today-1，那么 sevenDaysAgo 是 today-7
   const endDate = date // beforeDateString 通常是 today-1
+
+  // 多仓：经 order_detail → orders 关联本仓库（全部仓库时不过滤）
+  const whJoin = warehouseId == null ? Prisma.empty : Prisma.sql`INNER JOIN public.orders ow ON ow.order_id = od.order_id`
+  const whCond = warehouseId == null ? Prisma.empty : Prisma.sql`AND ow.warehouse_id = ${warehouseId}`
 
   if (locationRow.location_group === 'private_warehouse') {
     // 私仓：按 delivery_nature 汇总，排除 UPS 和 FedEx（通过 location_code 开头匹配）
@@ -137,6 +143,7 @@ export async function calculateHistoricalInventoryBatch(
       SELECT COALESCE(SUM(il.remaining_pallet_count), 0)::INTEGER as sum
       FROM wms.inventory_lots il
       INNER JOIN order_detail od ON il.order_detail_id = od.id
+      ${whJoin}
       LEFT JOIN locations loc ON od.delivery_location_id = loc.location_id
       WHERE il.status = 'available'
         AND od.delivery_nature = '私仓'
@@ -144,6 +151,7 @@ export async function calculateHistoricalInventoryBatch(
         AND (loc.name IS NULL OR (loc.name NOT ILIKE 'ups%' AND loc.name NOT ILIKE 'fedex%'))
         AND il.received_date >= ${sevenDaysAgo}::DATE
         AND il.received_date <= ${endDate}::DATE
+        ${whCond}
     `
     return Number(result[0]?.sum || 0)
   }
@@ -155,10 +163,12 @@ export async function calculateHistoricalInventoryBatch(
       SELECT COALESCE(SUM(il.remaining_pallet_count), 0)::INTEGER as sum
       FROM wms.inventory_lots il
       INNER JOIN order_detail od ON il.order_detail_id = od.id
+      ${whJoin}
       WHERE il.status = 'available'
         AND od.delivery_nature = '扣货'
         AND il.received_date >= ${sevenDaysAgo}::DATE
         AND il.received_date <= ${endDate}::DATE
+        ${whCond}
     `
     return Number(result[0]?.sum || 0)
   }
@@ -174,6 +184,7 @@ export async function calculateHistoricalInventoryBatch(
       SELECT COALESCE(SUM(il.remaining_pallet_count), 0)::INTEGER as sum
       FROM wms.inventory_lots il
       INNER JOIN order_detail od ON il.order_detail_id = od.id
+      ${whJoin}
       INNER JOIN locations loc ON od.delivery_location_id = loc.location_id
       WHERE il.status = 'available'
         AND (
@@ -182,6 +193,7 @@ export async function calculateHistoricalInventoryBatch(
         )
         AND il.received_date >= ${sevenDaysAgo}::DATE
         AND il.received_date <= ${endDate}::DATE
+        ${whCond}
     `
     const sum = Number(result[0]?.sum || 0)
     console.log(`[库存预测] ${locationRow.location_group.toUpperCase()} 历史库存（前7天 ${sevenDaysAgo} 到 ${endDate}）: ${sum}`)
@@ -196,10 +208,12 @@ export async function calculateHistoricalInventoryBatch(
     SELECT COALESCE(SUM(il.remaining_pallet_count), 0)::INTEGER as sum
     FROM wms.inventory_lots il
     INNER JOIN order_detail od ON il.order_detail_id = od.id
+    ${whJoin}
     WHERE il.status = 'available'
       AND od.delivery_location_id = ${locationRow.location_id}
       AND il.received_date >= ${sevenDaysAgo}::DATE
       AND il.received_date <= ${endDate}::DATE
+      ${whCond}
   `
 
   return Number(result[0]?.sum || 0)
@@ -214,13 +228,17 @@ export async function calculateHistoricalInventoryBatch(
 export async function calculatePlannedInboundBatch(
   locationRow: LocationRow,
   startDate: string,
-  endDate: string
+  endDate: string,
+  warehouseId: bigint | null = null
 ): Promise<Map<string, number>> {
   const result = new Map<string, number>()
   
   // 计算查询的时间范围（确保能覆盖所有目标日期）
   const queryStartTimestamp = `${startDate}T00:00:00Z`
   const queryEndTimestamp = `${endDate}T23:59:59.999Z`
+
+  // 多仓：查询已 JOIN orders o，按本仓库过滤（全部仓库时不过滤）
+  const whCond = warehouseId == null ? Prisma.empty : Prisma.sql`AND o.warehouse_id = ${warehouseId}`
 
   if (locationRow.location_group === 'private_warehouse') {
     // 私仓：按 delivery_nature 汇总，排除 UPS 和 FedEx（通过 location_code 开头匹配）
@@ -246,6 +264,7 @@ export async function calculatePlannedInboundBatch(
         AND (loc.location_code IS NULL OR (loc.location_code NOT ILIKE 'ups%' AND loc.location_code NOT ILIKE 'fedex%'))
         AND (loc.name IS NULL OR (loc.name NOT ILIKE 'ups%' AND loc.name NOT ILIKE 'fedex%'))
         AND ir.status != 'cancelled'
+        ${whCond}
       GROUP BY DATE(ir.planned_unload_at)
     `
     
@@ -277,6 +296,7 @@ export async function calculatePlannedInboundBatch(
         AND ir.planned_unload_at <= ${queryEndTimestamp}::TIMESTAMPTZ
         AND od.delivery_nature = '扣货'
         AND ir.status != 'cancelled'
+        ${whCond}
       GROUP BY DATE(ir.planned_unload_at)
     `
     
@@ -316,6 +336,7 @@ export async function calculatePlannedInboundBatch(
           OR UPPER(loc.name) LIKE UPPER(${prefixPattern})
         )
         AND ir.status != 'cancelled'
+        ${whCond}
       GROUP BY DATE(ir.planned_unload_at)
     `
     
@@ -349,6 +370,7 @@ export async function calculatePlannedInboundBatch(
       AND ir.planned_unload_at <= ${queryEndTimestamp}::TIMESTAMPTZ
       AND od.delivery_location_id = ${locationRow.location_id}
       AND ir.status != 'cancelled'
+      ${whCond}
     GROUP BY DATE(ir.planned_unload_at)
   `
 
@@ -369,7 +391,8 @@ export async function calculatePlannedInboundBatch(
 export async function calculatePlannedOutboundBatch(
   locationRow: LocationRow,
   startDate: string,
-  endDate: string
+  endDate: string,
+  warehouseId: bigint | null = null
 ): Promise<Map<string, number>> {
   const result = new Map<string, number>()
   
@@ -381,6 +404,10 @@ export async function calculatePlannedOutboundBatch(
   const queryStartTimestamp = `${appointmentStartDate}T00:00:00Z`
   const queryEndTimestamp = `${appointmentEndDate}T00:00:00Z`
 
+  // 多仓：经 order_detail → orders 关联本仓库（全部仓库时不过滤）
+  const whJoin = warehouseId == null ? Prisma.empty : Prisma.sql`INNER JOIN public.orders ow ON ow.order_id = od.order_id`
+  const whCond = warehouseId == null ? Prisma.empty : Prisma.sql`AND ow.warehouse_id = ${warehouseId}`
+
   if (locationRow.location_group === 'private_warehouse') {
     // 私仓：按 delivery_nature 汇总，排除 UPS 和 FedEx（通过 location_code 开头匹配）；排除直送预约
     const rows = await prisma.$queryRaw<Array<{ date: Date; sum: bigint }>>`
@@ -389,6 +416,7 @@ export async function calculatePlannedOutboundBatch(
         COALESCE(SUM(adl.estimated_pallets), 0)::INTEGER as sum
       FROM oms.appointment_detail_lines adl
       INNER JOIN order_detail od ON adl.order_detail_id = od.id
+      ${whJoin}
       INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
       LEFT JOIN locations loc ON od.delivery_location_id = loc.location_id
       WHERE da.confirmed_start >= ${queryStartTimestamp}::TIMESTAMPTZ
@@ -400,6 +428,7 @@ export async function calculatePlannedOutboundBatch(
         AND (da.rejected = false OR da.rejected IS NULL)
         AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
         AND (da.enabled IS DISTINCT FROM false)
+        ${whCond}
       GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
     `
     
@@ -418,6 +447,7 @@ export async function calculatePlannedOutboundBatch(
         COALESCE(SUM(adl.estimated_pallets), 0)::INTEGER as sum
       FROM oms.appointment_detail_lines adl
       INNER JOIN order_detail od ON adl.order_detail_id = od.id
+      ${whJoin}
       INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
       WHERE da.confirmed_start >= ${queryStartTimestamp}::TIMESTAMPTZ
         AND da.confirmed_start < ${queryEndTimestamp}::TIMESTAMPTZ
@@ -426,6 +456,7 @@ export async function calculatePlannedOutboundBatch(
         AND (da.rejected = false OR da.rejected IS NULL)
         AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
         AND (da.enabled IS DISTINCT FROM false)
+        ${whCond}
       GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
     `
     
@@ -447,6 +478,7 @@ export async function calculatePlannedOutboundBatch(
         COALESCE(SUM(adl.estimated_pallets), 0)::INTEGER as sum
       FROM oms.appointment_detail_lines adl
       INNER JOIN order_detail od ON adl.order_detail_id = od.id
+      ${whJoin}
       INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
       INNER JOIN locations loc ON od.delivery_location_id = loc.location_id
       WHERE da.confirmed_start >= ${queryStartTimestamp}::TIMESTAMPTZ
@@ -459,6 +491,7 @@ export async function calculatePlannedOutboundBatch(
         AND (da.rejected = false OR da.rejected IS NULL)
         AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
         AND (da.enabled IS DISTINCT FROM false)
+        ${whCond}
       GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
     `
     
@@ -479,6 +512,7 @@ export async function calculatePlannedOutboundBatch(
       COALESCE(SUM(adl.estimated_pallets), 0)::INTEGER as sum
     FROM oms.appointment_detail_lines adl
     INNER JOIN order_detail od ON adl.order_detail_id = od.id
+    ${whJoin}
     INNER JOIN oms.delivery_appointments da ON adl.appointment_id = da.appointment_id
     WHERE da.confirmed_start >= ${queryStartTimestamp}::TIMESTAMPTZ
       AND da.confirmed_start < ${queryEndTimestamp}::TIMESTAMPTZ
@@ -487,6 +521,7 @@ export async function calculatePlannedOutboundBatch(
       AND (da.rejected = false OR da.rejected IS NULL)
       AND (da.delivery_method IS NULL OR da.delivery_method <> '直送')
       AND (da.enabled IS DISTINCT FROM false)
+      ${whCond}
     GROUP BY (da.confirmed_start - INTERVAL '1 day')::DATE
   `
 
@@ -505,15 +540,16 @@ async function calculateSingleLocation(
   locationRow: LocationRow,
   startDate: string,
   endDate: string,
-  calculatedTimestamp: Date
+  calculatedTimestamp: Date,
+  warehouseId: bigint | null = null
 ): Promise<void> {
   console.log(`[库存预测-优化版] 计算仓点: ${locationRow.location_name} (${locationRow.location_group})`)
 
   // 1. 批量获取所有入库和出库数据（3次查询，而不是 56×2=112 次）
   const [initialInventory, inboundMap, outboundMap] = await Promise.all([
-    calculateHistoricalInventoryBatch(locationRow, addDaysToDateString(startDate, -1)),
-    calculatePlannedInboundBatch(locationRow, startDate, endDate),
-    calculatePlannedOutboundBatch(locationRow, startDate, endDate),
+    calculateHistoricalInventoryBatch(locationRow, addDaysToDateString(startDate, -1), warehouseId),
+    calculatePlannedInboundBatch(locationRow, startDate, endDate, warehouseId),
+    calculatePlannedOutboundBatch(locationRow, startDate, endDate, warehouseId),
   ])
 
   console.log(`[库存预测-优化版] ${locationRow.location_name}: 初始库存=${initialInventory}, 入库日期数=${inboundMap.size}, 出库日期数=${outboundMap.size}`)
@@ -568,27 +604,21 @@ async function calculateSingleLocation(
     const batch = allRecords.slice(i, i + batchSize)
     
     // 构建 VALUES 列表
+    const warehouseIdStr = warehouseId == null ? 'NULL' : `${warehouseId}`
     const values = batch.map(r => {
       const locationIdStr = r.location_id ? `${r.location_id}` : 'NULL'
       // 使用 location_code 作为 location_name 存储（前端显示位置代码）
       const locationCodeEscaped = (r.location_code || r.location_name).replace(/'/g, "''")
-      return `(${locationIdStr}, '${r.location_group}', '${locationCodeEscaped}', '${r.forecast_date}'::DATE, ${r.historical_inventory}, ${r.planned_inbound}, ${r.planned_outbound}, ${r.forecast_inventory}, '${calculatedTimestamp.toISOString()}'::TIMESTAMPTZ, 1)`
+      return `(${warehouseIdStr}, ${locationIdStr}, '${r.location_group}', '${locationCodeEscaped}', '${r.forecast_date}'::DATE, ${r.historical_inventory}, ${r.planned_inbound}, ${r.planned_outbound}, ${r.forecast_inventory}, '${calculatedTimestamp.toISOString()}'::TIMESTAMPTZ, 1)`
     }).join(',')
     
+    // 已按仓库 DELETE 后再 INSERT，无需 ON CONFLICT（warehouse_id 为 NULL 时唯一键不去重）
     await prisma.$queryRawUnsafe(`
       INSERT INTO analytics.inventory_forecast_daily (
-        location_id, location_group, location_name, forecast_date,
+        warehouse_id, location_id, location_group, location_name, forecast_date,
         historical_inventory, planned_inbound, planned_outbound, 
         forecast_inventory, calculated_at, calculation_version
       ) VALUES ${values}
-      ON CONFLICT (location_id, location_group, forecast_date)
-      DO UPDATE SET
-        historical_inventory = EXCLUDED.historical_inventory,
-        planned_inbound = EXCLUDED.planned_inbound,
-        planned_outbound = EXCLUDED.planned_outbound,
-        forecast_inventory = EXCLUDED.forecast_inventory,
-        calculated_at = EXCLUDED.calculated_at,
-        location_name = EXCLUDED.location_name
     `)
   }
 
@@ -600,7 +630,8 @@ async function calculateSingleLocation(
  */
 export async function calculateInventoryForecast(
   baseDateString?: string,
-  timestampString?: string
+  timestampString?: string,
+  warehouseId: bigint | null = null
 ): Promise<void> {
   const startTime = Date.now()
   
@@ -630,8 +661,12 @@ export async function calculateInventoryForecast(
   console.log(`[库存预测-优化版] 🚀 开始批量并行计算`)
   console.log(`[库存预测-优化版] 基准日期: ${baseDate}, 范围: ${startDate} 至 ${endDate}`)
 
-  // 清空表
-  await prisma.$executeRaw`TRUNCATE TABLE analytics.inventory_forecast_daily`
+  // 多仓：只清空当前仓库的数据（NULL 表示「全部仓库」聚合桶），保留其他仓库已算结果
+  if (warehouseId == null) {
+    await prisma.$executeRaw`DELETE FROM analytics.inventory_forecast_daily WHERE warehouse_id IS NULL`
+  } else {
+    await prisma.$executeRaw`DELETE FROM analytics.inventory_forecast_daily WHERE warehouse_id = ${warehouseId}`
+  }
 
   // 获取所有仓点
   const locationRows = await getAllLocationRows()
@@ -640,7 +675,7 @@ export async function calculateInventoryForecast(
   // 🚀 并行计算所有仓点（使用 Promise.all）
   await Promise.all(
     locationRows.map(locationRow =>
-      calculateSingleLocation(locationRow, startDate, endDate, calculatedTimestamp)
+      calculateSingleLocation(locationRow, startDate, endDate, calculatedTimestamp, warehouseId)
     )
   )
 

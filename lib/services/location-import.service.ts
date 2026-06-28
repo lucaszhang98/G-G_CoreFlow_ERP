@@ -13,6 +13,7 @@ import {
   locationImportRowSchema,
   LocationImportRow,
 } from '@/lib/validations/location-import'
+import { resolveCurrentWarehouseId, DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 
 /**
  * 位置导入配置
@@ -60,10 +61,11 @@ const locationImportConfig: ImportConfig<LocationImportRow> = {
       })
     }
 
-    // 检查数据库中是否已存在
+    // 检查数据库中是否已存在（仅当前仓库内判重）
     if (errors.length === 0) {
+      const importWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
       const existingLocations = await prisma.locations.findMany({
-        where: { location_code: { in: codes } },
+        where: { location_code: { in: codes }, warehouse_id: importWarehouseId },
         select: { location_code: true },
       })
 
@@ -88,6 +90,8 @@ const locationImportConfig: ImportConfig<LocationImportRow> = {
     data: LocationImportRow[],
     userId: bigint
   ): Promise<void> => {
+    // 导入到当前仓库（全部仓库视图下兜底为默认仓）
+    const importWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
     // 使用事务确保原子性
     await prisma.$transaction(async (tx) => {
       for (const row of data) {
@@ -103,6 +107,7 @@ const locationImportConfig: ImportConfig<LocationImportRow> = {
             postal_code: row.postal_code,
             country: row.country,
             notes: row.notes,
+            warehouse_id: importWarehouseId,
             created_by: userId,
             updated_by: userId,
           },

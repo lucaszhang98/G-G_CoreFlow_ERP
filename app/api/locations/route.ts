@@ -8,6 +8,7 @@ import { locationConfig } from '@/lib/crud/configs/locations'
 import { checkAuth, checkPermission, handleValidationError, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers'
 import { locationCreateSchema } from '@/lib/validations/location'
 import prisma from '@/lib/prisma'
+import { resolveCurrentWarehouseId, DEFAULT_WAREHOUSE_ID } from '@/lib/warehouse/current-warehouse'
 
 // 使用通用框架处理 GET
 const baseListHandler = createListHandler(locationConfig)
@@ -90,10 +91,13 @@ export async function POST(request: NextRequest) {
 
     const data = validationResult.data
 
-    // 检查位置代码是否已存在
+    // 当前仓库（位置归属仓；全部仓库视图下兜底为默认仓）
+    const currentWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
+
+    // 检查位置代码是否已存在（仓库内唯一）
     if (data.location_code) {
-      const existing = await prisma.locations.findUnique({
-        where: { location_code: data.location_code },
+      const existing = await prisma.locations.findFirst({
+        where: { location_code: data.location_code, warehouse_id: currentWarehouseId },
       })
       if (existing) {
         return NextResponse.json(
@@ -128,6 +132,7 @@ export async function POST(request: NextRequest) {
       latitude: locationData.latitude,
       longitude: locationData.longitude,
       notes: data.notes || null,
+      warehouse_id: currentWarehouseId,
     }
 
     // 自动添加系统维护字段

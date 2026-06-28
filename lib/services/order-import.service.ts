@@ -19,6 +19,10 @@ import {
 import { calculateUnloadDate } from '@/lib/utils/calculate-unload-date'
 import { fetchCustomerFist } from '@/lib/oms/sync-order-fist-from-customer'
 import {
+  resolveCurrentWarehouseId,
+  DEFAULT_WAREHOUSE_ID,
+} from '@/lib/warehouse/current-warehouse'
+import {
   ORDER_STATUS_ARCHIVED,
   ORDER_STATUS_CANCELLED,
 } from '@/lib/orders/order-visibility'
@@ -75,13 +79,16 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
   // 3. 权限要求
   requiredRoles: [...ORDER_IMPORT_ROLES],
 
-  // 4. 预加载主数据
+  // 4. 预加载主数据（限当前仓库；编码已改为仓库内唯一，避免跨仓撞码）
   loadMasterData: async (): Promise<OrderMasterData> => {
+    const importWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
     const [customers, locations] = await Promise.all([
       prisma.customers.findMany({
+        where: { warehouse_id: importWarehouseId },
         select: { id: true, code: true, name: true },
       }),
       prisma.locations.findMany({
+        where: { warehouse_id: importWarehouseId },
         select: { location_id: true, location_code: true, name: true },
       }),
     ])
@@ -260,11 +267,8 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
       orderGroups.get(row.order_number)!.push(row)
     })
 
-    // 预查询默认仓库（避免在事务内重复查询，减轻 Neon 事务压力）
-    const defaultWarehouse = await prisma.warehouses.findFirst({
-      select: { warehouse_id: true },
-      orderBy: { warehouse_id: 'asc' },
-    })
+    // 多仓：导入归属「当前仓库」（全部仓库视图下兜底默认仓）
+    const importWarehouseId = (await resolveCurrentWarehouseId()) ?? DEFAULT_WAREHOUSE_ID
 
     // 使用事务批量导入（全部成功或全部失败）
     // 配置更长的事务超时（Neon 环境需要，默认 5 秒，这里设置 30 秒）
@@ -285,6 +289,7 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
             order_date: new Date(firstRow.order_date),
             status: firstRow.status,
             operation_mode: firstRow.operation_mode,
+            warehouse_id: importWarehouseId,
             delivery_location_id: locationMap.get(firstRow.delivery_location_code)!,
             total_amount: firstRow.total_amount,
             discount_amount: firstRow.discount_amount,
@@ -322,7 +327,7 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
         }
 
         // 如果 operation_mode = 'unload'（拆柜），自动创建入库管理记录
-        if (firstRow.operation_mode === 'unload' && defaultWarehouse) {
+        if (firstRow.operation_mode === 'unload') {
           // 计算拆柜日期（根据订单的 pickup_date 和 eta_date）
           const calculatedUnloadDate = calculateUnloadDate(
             order.pickup_date,
@@ -332,7 +337,7 @@ const orderImportConfig: ImportConfig<OrderImportRow> = {
           await tx.inbound_receipt.create({
             data: {
               order_id: order.order_id,
-              warehouse_id: defaultWarehouse.warehouse_id,
+              warehouse_id: importWarehouseId,
               status: 'pending',
               planned_unload_at: calculatedUnloadDate,
               unload_method_code: null,

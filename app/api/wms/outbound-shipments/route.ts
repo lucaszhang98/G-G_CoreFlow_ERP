@@ -5,6 +5,7 @@ import { withActiveDeliveryAppointmentsWhere } from '@/lib/utils/delivery-appoin
 import { outboundShipmentConfig } from '@/lib/crud/configs/outbound-shipments';
 import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper';
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
+import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse';
 
 // GET - 获取出库管理列表（从 outbound_shipments 表查询，关联 delivery_appointments 获取其他字段）
 export async function GET(request: NextRequest) {
@@ -138,6 +139,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // 多仓：按当前仓库过滤（经关联订单 orders.warehouse_id）
+    // 一对一关联里 AND 不能与标量字段平级，统一用 AND 嵌套合并，避免 Prisma 报错。
+    const currentWarehouseId = await resolveCurrentWarehouseId()
+    if (currentWarehouseId != null) {
+      const warehouseOrdersCond = { warehouse_id: currentWarehouseId }
+      appointmentWhere.orders = appointmentWhere.orders
+        ? { AND: [appointmentWhere.orders, warehouseOrdersCond] }
+        : warehouseOrdersCond
+    }
+
     const appointmentWhereActive = withActiveDeliveryAppointmentsWhere(appointmentWhere)
 
     try {
@@ -195,7 +206,7 @@ export async function GET(request: NextRequest) {
       ]);
     } catch (queryError: any) {
       console.error('Prisma 查询错误:', queryError);
-      console.error('查询条件:', JSON.stringify(appointmentWhere, null, 2));
+      console.error('查询条件:', JSON.stringify(appointmentWhere, (_k, v) => (typeof v === 'bigint' ? v.toString() : v), 2));
       return NextResponse.json(
         {
           error: '获取出库管理列表失败',
