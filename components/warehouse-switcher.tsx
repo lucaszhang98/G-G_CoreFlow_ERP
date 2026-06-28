@@ -20,13 +20,13 @@ type WarehouseOption = {
 const ALL = "all"
 
 /**
- * 顶部「当前仓库」切换器：仅 admin 可见（接口对非 admin 返回空列表）。
+ * 顶部「当前仓库」切换器：仅用户名 admin 可见。
  * 切换后写 cookie 并整页刷新，使所有列表/统计按新仓库重新拉取。
  */
 export function WarehouseSwitcher() {
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
   const [current, setCurrent] = useState<string>("")
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [canSwitchWarehouse, setCanSwitchWarehouse] = useState(false)
   const [loading, setLoading] = useState(true)
   const [switching, setSwitching] = useState(false)
 
@@ -36,7 +36,7 @@ export function WarehouseSwitcher() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!active || !d) return
-        setIsAdmin(!!d.isAdmin)
+        setCanSwitchWarehouse(!!d.canSwitchWarehouse)
         setWarehouses(d.warehouses || [])
         setCurrent(d.currentWarehouseId || "")
       })
@@ -68,8 +68,8 @@ export function WarehouseSwitcher() {
     }
   }
 
-  // 非 admin（warehouses 为空）或加载中：不显示切换器
-  if (loading || !isAdmin || warehouses.length === 0) return null
+  // 无切仓权限（warehouses 为空）或加载中：不显示切换器
+  if (loading || !canSwitchWarehouse || warehouses.length === 0) return null
 
   return (
     <Select value={current} onValueChange={onChange} disabled={switching}>

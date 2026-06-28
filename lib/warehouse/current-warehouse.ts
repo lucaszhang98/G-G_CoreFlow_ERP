@@ -11,6 +11,11 @@ import prisma from '@/lib/prisma'
 export const WAREHOUSE_COOKIE = 'cf_current_warehouse'
 export const ALL_WAREHOUSES = 'all'
 export const DEFAULT_WAREHOUSE_ID = BigInt(1000)
+export const WAREHOUSE_SWITCHER_USERNAME = 'admin'
+
+export function canSwitchWarehouse(username: string | null | undefined): boolean {
+  return username?.trim().toLowerCase() === WAREHOUSE_SWITCHER_USERNAME
+}
 
 async function fetchUserHomeWarehouse(uid: string): Promise<bigint | null> {
   try {
@@ -26,17 +31,17 @@ async function fetchUserHomeWarehouse(uid: string): Promise<bigint | null> {
 
 /**
  * 解析当前仓库 id。
- * - admin：cookie 选择 → 默认仓 → OAK；可选 'all'（全部仓库）。
- * - 非 admin：强制锁定在自己归属仓库（忽略 cookie / all），保证数据隔离。
- * @returns bigint = 指定仓库；null = 全部仓库（仅 admin）
+ * - 用户名 admin：cookie 选择 → 默认仓 → OAK；可选 'all'（全部仓库）。
+ * - 其他账号：强制锁定在自己归属仓库（忽略 cookie / all），保证数据隔离。
+ * @returns bigint = 指定仓库；null = 全部仓库（仅用户名 admin）
  */
 export async function resolveCurrentWarehouseId(): Promise<bigint | null> {
   const session = await auth().catch(() => null)
   const uid = session?.user?.id
-  const role = session?.user?.role
+  const username = session?.user?.username
 
-  // 非 admin：锁定归属仓库，不受 cookie 影响
-  if (role !== 'admin') {
+  // 非用户名 admin：锁定归属仓库，不受 cookie 影响
+  if (!canSwitchWarehouse(username)) {
     if (uid) {
       const home = await fetchUserHomeWarehouse(uid)
       if (home != null) return home
@@ -44,7 +49,7 @@ export async function resolveCurrentWarehouseId(): Promise<bigint | null> {
     return DEFAULT_WAREHOUSE_ID
   }
 
-  // admin：cookie → 默认仓 → OAK
+  // 用户名 admin：cookie → 默认仓 → OAK
   const store = await cookies()
   const raw = store.get(WAREHOUSE_COOKIE)?.value
   if (raw === ALL_WAREHOUSES) return null

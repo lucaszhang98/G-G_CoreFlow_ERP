@@ -1,6 +1,6 @@
 /**
  * 提柜管理客户端组件
- * 负责自动初始化提柜管理记录（仅在需要时）
+ * 提柜管理表格与批量操作
  */
 
 "use client"
@@ -38,12 +38,9 @@ export function PickupManagementClient() {
   const [pendingLfdInquiryActive, setPendingLfdInquiryActive] = React.useState(false)
   /** 现在位置含「查验」或「封闭区」，与 URL filter_pickup_location_inspection=yes 同步 */
   const [pickupInspectionActive, setPickupInspectionActive] = React.useState(false)
-  const [isInitializing, setIsInitializing] = React.useState(false)
   const [isSyncing, setIsSyncing] = React.useState(false)
   const [isSyncingAppointment, setIsSyncingAppointment] = React.useState(false)
   const [isSendingEmails, setIsSendingEmails] = React.useState(false)
-  const [hasInitialized, setHasInitialized] = React.useState(false)
-  const [showInitButton, setShowInitButton] = React.useState(false)
   const [selectedRows, setSelectedRows] = React.useState<any[]>([])
   const [summaryDialogOpen, setSummaryDialogOpen] = React.useState(false)
   const [refreshKey, setRefreshKey] = React.useState(0) // 用于强制刷新表格
@@ -306,64 +303,6 @@ export function PickupManagementClient() {
     // 更新 ref
     selectedIdsRef.current = currentSelectedIds
   }, [selectedRows])
-
-  // 检查是否需要初始化
-  React.useEffect(() => {
-    const checkInitialization = async () => {
-      try {
-        // 检查是否有提柜管理记录
-        const response = await fetch('/api/tms/pickup-management?limit=1')
-        if (!response.ok) {
-          throw new Error('请求失败')
-        }
-        const data = await response.json()
-        
-        // 如果没有记录，显示初始化按钮
-        if (data.total === 0) {
-          setShowInitButton(true)
-        } else {
-          setHasInitialized(true)
-        }
-      } catch (error) {
-        console.error('检查提柜管理记录失败:', error)
-        // 出错时也显示初始化按钮，让用户可以手动初始化
-        setShowInitButton(true)
-      }
-    }
-
-    // 延迟检查，避免与页面加载冲突
-    const timer = setTimeout(() => {
-      checkInitialization()
-    }, 500)
-
-    return () => clearTimeout(timer)
-  }, [])
-
-  // 初始化提柜管理记录（用于首次初始化）
-  const handleInitialize = async () => {
-    setIsInitializing(true)
-    try {
-      const response = await fetch('/api/tms/pickup-management/initialize', {
-        method: 'POST',
-      })
-      const data = await response.json()
-
-      if (data.success) {
-        toast.success(data.message || `成功为 ${data.created} 个订单创建了提柜管理记录`)
-        setHasInitialized(true)
-        setShowInitButton(false)
-        // 刷新页面以显示新数据
-        window.location.reload()
-      } else {
-        toast.error(data.error || '初始化失败')
-      }
-    } catch (error: any) {
-      console.error('初始化提柜管理记录失败:', error)
-      toast.error('初始化失败，请稍后重试')
-    } finally {
-      setIsInitializing(false)
-    }
-  }
 
   // 同步提柜管理记录（为缺失的订单创建记录）
   const handleSync = React.useCallback(async () => {
@@ -830,79 +769,39 @@ export function PickupManagementClient() {
     )
   }, [handleCopyContainerNumbers, handleSendEmails, handleExportSelected, isSendingEmails, orderedSelectedRows, selectedRows.length])
 
-  // 如果已经初始化或正在初始化，直接显示表格
-  if (hasInitialized || !showInitButton) {
-    return (
-      <>
-        <EntityTable
-          key={refreshKey}
-          config={pickupManagementConfig}
-          extraListParams={extraListParams}
-          fieldFuzzyLoadOptions={{
-            driver_name: loadDriverOptions,
-          }}
-          customActions={{
-            onView: null, // 禁用查看详情功能
-          }}
-          customFilterContent={customFilterContent}
-          customToolbarButtons={customToolbarButtons}
-          customBatchActions={customBatchActions}
-          onRowSelectionChange={setSelectedRows}
-          onSearchParamsChange={setCurrentSearchParams}
-          onTotalChange={handleTotalChange}
-          onFilteredTotalChange={handleFilteredTotalChange}
-        />
-
-        {/* 汇总信息对话框 */}
-        <PickupSummaryDialog
-          open={summaryDialogOpen}
-          onOpenChange={setSummaryDialogOpen}
-          selectedRecords={orderedSelectedRows}
-        />
-        {/* 批量导入对话框 */}
-        <PickupImportDialog
-          open={importDialogOpen}
-          onOpenChange={setImportDialogOpen}
-          onSuccess={() => setRefreshKey((k) => k + 1)}
-        />
-      </>
-    )
-  }
-
-  // 如果需要初始化，显示初始化按钮
   return (
-    <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-semibold">提柜管理未初始化</h2>
-        <p className="text-muted-foreground">
-          检测到订单管理中有订单，但提柜管理还没有对应的记录。
-          <br />
-          点击下方按钮为所有现有订单创建提柜管理记录。
-        </p>
-      </div>
-      <Button
-        onClick={handleInitialize}
-        disabled={isInitializing}
-        size="lg"
-        className="gap-2"
-      >
-        {isInitializing ? (
-          <>
-            <RefreshCw className="h-4 w-4 animate-spin" />
-            正在初始化...
-          </>
-        ) : (
-          <>
-            <RefreshCw className="h-4 w-4" />
-            初始化提柜管理记录
-          </>
-        )}
-      </Button>
-      {isInitializing && (
-        <p className="text-sm text-muted-foreground">
-          正在为所有订单创建提柜管理记录，请稍候...
-        </p>
-      )}
-    </div>
+    <>
+      <EntityTable
+        key={refreshKey}
+        config={pickupManagementConfig}
+        extraListParams={extraListParams}
+        fieldFuzzyLoadOptions={{
+          driver_name: loadDriverOptions,
+        }}
+        customActions={{
+          onView: null, // 禁用查看详情功能
+        }}
+        customFilterContent={customFilterContent}
+        customToolbarButtons={customToolbarButtons}
+        customBatchActions={customBatchActions}
+        onRowSelectionChange={setSelectedRows}
+        onSearchParamsChange={setCurrentSearchParams}
+        onTotalChange={handleTotalChange}
+        onFilteredTotalChange={handleFilteredTotalChange}
+      />
+
+      {/* 汇总信息对话框 */}
+      <PickupSummaryDialog
+        open={summaryDialogOpen}
+        onOpenChange={setSummaryDialogOpen}
+        selectedRecords={orderedSelectedRows}
+      />
+      {/* 批量导入对话框 */}
+      <PickupImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onSuccess={() => setRefreshKey((k) => k + 1)}
+      />
+    </>
   )
 }
