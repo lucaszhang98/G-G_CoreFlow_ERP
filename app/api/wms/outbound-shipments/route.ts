@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkAuth, handleError, serializeBigInt, addSystemFields } from '@/lib/api/helpers';
+import { checkAuth, serializeBigInt } from '@/lib/api/helpers';
 import prisma from '@/lib/prisma';
 import { withActiveDeliveryAppointmentsWhere } from '@/lib/utils/delivery-appointment-enabled';
 import { outboundShipmentConfig } from '@/lib/crud/configs/outbound-shipments';
-import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper';
+import { buildFilterConditions } from '@/lib/crud/filter-helper';
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
 import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse';
 import { buildDeliveryAppointmentWarehouseWhere } from '@/lib/oms/delivery-appointment-warehouse-where';
@@ -17,6 +17,24 @@ function appendToWhereAnd(where: Record<string, any>, clause: unknown) {
   } else {
     where.AND = [existing, clause];
   }
+}
+
+function mapOutboundAppointmentFilterCondition(condition: Record<string, any>) {
+  const mapped: Record<string, any> = {}
+
+  Object.entries(condition).forEach(([fieldName, value]) => {
+    if (fieldName === 'destination_location_id') {
+      mapped.location_id = value
+    } else if (fieldName === 'loaded_by') {
+      mapped.outbound_shipments = { is: { loaded_by: value } }
+    } else if (fieldName === 'trailer_code') {
+      mapped.outbound_shipments = { is: { trailer_code: value } }
+    } else {
+      mapped[fieldName] = value
+    }
+  })
+
+  return mapped
 }
 
 // GET - 获取出库管理列表（从 outbound_shipments 表查询，关联 delivery_appointments 获取其他字段）
@@ -35,49 +53,9 @@ export async function GET(request: NextRequest) {
     // 增强配置，确保 filterFields 已生成
     const enhancedConfig = enhanceConfigWithSearchFields(outboundShipmentConfig)
 
-    // 使用统一的筛选逻辑
+    // 出库管理实际查询 delivery_appointments；先把筛选字段映射到真实表结构，再统一 AND 合并
     const filterConditions = buildFilterConditions(enhancedConfig, searchParams)
-    
-    // 注意：出库管理实际查询的是 delivery_appointments 表，所以筛选条件应该直接应用到 appointmentWhere
-    // 分离主表字段和关联表字段的筛选条件
-    const appointmentsConditions: any = {}
-    let outboundShipmentsWhere: any = null // 用于存储 outbound_shipments 的筛选条件
-    
-    filterConditions.forEach((condition) => {
-      // buildRelationFilterCondition 返回的格式是 { [dbFieldName]: convertedValue }
-      // 对于 loaded_by_name，dbFieldName 是 'loaded_by'（因为 relationField 是 'loaded_by'）
-      // 所以 condition 可能是 { loaded_by: BigInt(...) }
-      
-      // 检查 condition 是否包含 loaded_by（说明这是 loaded_by_name 的筛选条件）
-      if ('loaded_by' in condition) {
-        // 这是 loaded_by_name 的筛选条件，需要通过 outbound_shipments 关联筛选
-        outboundShipmentsWhere = condition
-        console.log('[OutboundShipments] 检测到 loaded_by_name 筛选条件:', outboundShipmentsWhere)
-      } else {
-        // 其他字段的筛选条件
-        Object.keys(condition).forEach((fieldName) => {
-          // 所有字段都来自 delivery_appointments 表（因为实际查询的是 delivery_appointments）
-          // 需要映射字段名：
-          // - destination_location_id -> location_id
-          // - confirmed_start 和 requested_start 的日期筛选需要特殊处理
-          let mappedFieldName = fieldName
-          
-          if (fieldName === 'destination_location_id') {
-            mappedFieldName = 'location_id'
-            appointmentsConditions[mappedFieldName] = condition[fieldName]
-          } else if (fieldName === 'confirmed_start') {
-            // confirmed_start 是 datetime 类型，直接使用
-            appointmentsConditions[fieldName] = condition[fieldName]
-          } else if (fieldName === 'origin_location_id') {
-            // origin_location_id 直接使用
-            appointmentsConditions[fieldName] = condition[fieldName]
-          } else {
-            // 其他字段直接映射
-            appointmentsConditions[fieldName] = condition[fieldName]
-          }
-        })
-      }
-    })
+      .map((condition) => mapOutboundAppointmentFilterCondition(condition))
 
     // 排序
     const orderBy: any = {};
@@ -97,29 +75,9 @@ export async function GET(request: NextRequest) {
     
     // 先查询所有非直送的预约
     // 注意：由于实际查询的是 delivery_appointments 表，筛选条件应该直接应用到 appointmentWhere
-    const appointmentWhere: any = {
-      delivery_method: {
-        not: '直送',
-      },
-    };
-    
-    // 将筛选条件应用到 appointmentWhere（因为实际查询的是 delivery_appointments 表）
-    if (Object.keys(appointmentsConditions).length > 0) {
-      // 如果有多个条件，使用 AND 逻辑组合
-      const conditionKeys = Object.keys(appointmentsConditions)
-      if (conditionKeys.length === 1) {
-        // 只有一个条件，直接合并
-        Object.assign(appointmentWhere, appointmentsConditions)
-      } else {
-        // 多个条件，使用 AND 逻辑
-        appointmentWhere.AND = [
-          { delivery_method: { not: '直送' } },
-          ...conditionKeys.map(key => ({ [key]: appointmentsConditions[key] })),
-        ]
-        // 移除单独的 delivery_method 条件，因为已经在 AND 中
-        delete appointmentWhere.delivery_method
-      }
-    }
+    const appointmentWhere: any = {}
+    appendToWhereAnd(appointmentWhere, { delivery_method: { not: '直送' } })
+    filterConditions.forEach((condition) => appendToWhereAnd(appointmentWhere, condition))
     
     // 搜索条件
     if (search) {
@@ -143,14 +101,6 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // 如果有 loaded_by_name 筛选，需要在 where 条件中添加 outbound_shipments 关联筛选
-    if (outboundShipmentsWhere) {
-      // 使用 Prisma 的一对一关系查询语法：is 表示关联记录存在且满足条件
-      appointmentWhere.outbound_shipments = {
-        is: outboundShipmentsWhere
-      }
-    }
-
     // 多仓：预约可能通过主订单、明细订单、起始地或目的地归属仓库
     const currentWarehouseId = await resolveCurrentWarehouseId()
     if (currentWarehouseId != null) {
