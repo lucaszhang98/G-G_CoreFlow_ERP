@@ -6,6 +6,18 @@ import { outboundShipmentConfig } from '@/lib/crud/configs/outbound-shipments';
 import { buildFilterConditions, mergeFilterConditions } from '@/lib/crud/filter-helper';
 import { enhanceConfigWithSearchFields } from '@/lib/crud/search-config-generator';
 import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse';
+import { buildDeliveryAppointmentWarehouseWhere } from '@/lib/oms/delivery-appointment-warehouse-where';
+
+function appendToWhereAnd(where: Record<string, any>, clause: unknown) {
+  const existing = where.AND;
+  if (existing === undefined) {
+    where.AND = [clause];
+  } else if (Array.isArray(existing)) {
+    where.AND = [...existing, clause];
+  } else {
+    where.AND = [existing, clause];
+  }
+}
 
 // GET - 获取出库管理列表（从 outbound_shipments 表查询，关联 delivery_appointments 获取其他字段）
 export async function GET(request: NextRequest) {
@@ -139,14 +151,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 多仓：按当前仓库过滤（经关联订单 orders.warehouse_id）
-    // 一对一关联里 AND 不能与标量字段平级，统一用 AND 嵌套合并，避免 Prisma 报错。
+    // 多仓：预约可能通过主订单、明细订单、起始地或目的地归属仓库
     const currentWarehouseId = await resolveCurrentWarehouseId()
     if (currentWarehouseId != null) {
-      const warehouseOrdersCond = { warehouse_id: currentWarehouseId }
-      appointmentWhere.orders = appointmentWhere.orders
-        ? { AND: [appointmentWhere.orders, warehouseOrdersCond] }
-        : warehouseOrdersCond
+      appendToWhereAnd(
+        appointmentWhere,
+        buildDeliveryAppointmentWarehouseWhere(currentWarehouseId)
+      )
     }
 
     const appointmentWhereActive = withActiveDeliveryAppointmentsWhere(appointmentWhere)

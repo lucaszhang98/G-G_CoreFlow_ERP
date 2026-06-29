@@ -7,6 +7,7 @@ import { deliveryAppointmentConfig } from '@/lib/crud/configs/delivery-appointme
 import prisma from '@/lib/prisma';
 import { prismaAppointmentDetailLinesWhereParentAppointmentActive } from '@/lib/utils/delivery-appointment-enabled';
 import { resolveCurrentWarehouseId } from '@/lib/warehouse/current-warehouse';
+import { buildDeliveryAppointmentWarehouseWhere } from '@/lib/oms/delivery-appointment-warehouse-where';
 
 /** 将条件并入 where.AND，避免与 mergeFilterConditions 生成的顶层 AND 并列再出现一个顶层 OR（Prisma/驱动下易 500） */
 function appendToWhereAnd(where: Record<string, any>, clause: unknown) {
@@ -17,29 +18,6 @@ function appendToWhereAnd(where: Record<string, any>, clause: unknown) {
     where.AND = [...existing, clause];
   } else {
     where.AND = [existing, clause];
-  }
-}
-
-function buildAppointmentWarehouseWhere(warehouseId: bigint) {
-  return {
-    OR: [
-      { orders: { warehouse_id: warehouseId } },
-      {
-        appointment_detail_lines: {
-          some: {
-            order_detail: {
-              orders: { warehouse_id: warehouseId },
-            },
-          },
-        },
-      },
-      {
-        locations_delivery_appointments_origin_location_idTolocations: {
-          warehouse_id: warehouseId,
-        },
-      },
-      { locations: { warehouse_id: warehouseId } },
-    ],
   }
 }
 
@@ -164,7 +142,7 @@ export async function GET(request: NextRequest) {
     // 多仓：预约可能通过主订单、明细订单、起始地或目的地归属仓库
     const currentWarehouseId = await resolveCurrentWarehouseId()
     if (currentWarehouseId != null) {
-      appendToWhereAnd(where, buildAppointmentWarehouseWhere(currentWarehouseId))
+      appendToWhereAnd(where, buildDeliveryAppointmentWarehouseWhere(currentWarehouseId))
     }
 
     // 查询数据
