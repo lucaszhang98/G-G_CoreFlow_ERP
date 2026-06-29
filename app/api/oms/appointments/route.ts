@@ -20,6 +20,29 @@ function appendToWhereAnd(where: Record<string, any>, clause: unknown) {
   }
 }
 
+function buildAppointmentWarehouseWhere(warehouseId: bigint) {
+  return {
+    OR: [
+      { orders: { warehouse_id: warehouseId } },
+      {
+        appointment_detail_lines: {
+          some: {
+            order_detail: {
+              orders: { warehouse_id: warehouseId },
+            },
+          },
+        },
+      },
+      {
+        locations_delivery_appointments_origin_location_idTolocations: {
+          warehouse_id: warehouseId,
+        },
+      },
+      { locations: { warehouse_id: warehouseId } },
+    ],
+  }
+}
+
 // GET - 获取预约管理列表（不按订单归档/已取消隐藏；与出库等业务列表区分）
 export async function GET(request: NextRequest) {
   try {
@@ -67,6 +90,17 @@ export async function GET(request: NextRequest) {
         });
         searchConditions.push({
           orders: { order_number: { contains: q, mode: 'insensitive' as const } },
+        });
+        searchConditions.push({
+          appointment_detail_lines: {
+            some: {
+              order_detail: {
+                orders: {
+                  order_number: { contains: q, mode: 'insensitive' as const },
+                },
+              },
+            },
+          },
         });
         if (searchConditions.length > 0) {
           appendToWhereAnd(where, { OR: searchConditions });
@@ -127,10 +161,10 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // 多仓：按当前仓库过滤（经关联订单 orders.warehouse_id）
+    // 多仓：预约可能通过主订单、明细订单、起始地或目的地归属仓库
     const currentWarehouseId = await resolveCurrentWarehouseId()
     if (currentWarehouseId != null) {
-      appendToWhereAnd(where, { orders: { warehouse_id: currentWarehouseId } })
+      appendToWhereAnd(where, buildAppointmentWarehouseWhere(currentWarehouseId))
     }
 
     // 查询数据
@@ -534,4 +568,3 @@ export async function POST(request: NextRequest) {
     return handleError(error);
   }
 }
-
